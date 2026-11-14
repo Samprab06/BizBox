@@ -13,6 +13,12 @@ import {
   type MatterportSdk,
   type ShowcaseWindow,
 } from "./matterport-bridge";
+import {
+  CameraController,
+  connectMatterportCamera,
+  scanTargets,
+  type CameraSdk,
+} from "./camera";
 
 export type MatterportConfig = {
   sdkKey: string;
@@ -28,6 +34,8 @@ export default function MatterportView({
   employeeCount,
   selected,
   select,
+  seek,
+  onCamera,
 }: {
   config: MatterportConfig;
   run: DayResult;
@@ -35,6 +43,10 @@ export default function MatterportView({
   employeeCount?: number;
   selected: string;
   select: (id: string) => void;
+  /** The shared playback clock's setter, for the camera bridge's `seek`. */
+  seek?: (minute: number) => void;
+  /** Receives the agent's camera bridge once the scan connects, and null after. */
+  onCamera?: (camera: CameraController | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { hasBeenVisible } = useSceneVisibility(container);
@@ -58,11 +70,55 @@ export default function MatterportView({
     }),
     [run, minute, employeeCount, selected],
   );
-  const latest = useRef({ replay, select });
+  const latest = useRef({ replay, select, seek, onCamera });
+  const camera = useRef<CameraController | null>(null);
   useEffect(() => {
-    latest.current = { replay, select };
+    latest.current = { replay, select, seek, onCamera };
     session.current?.update(replay, config.placement);
-  }, [replay, select, config.placement]);
+    camera.current?.tick();
+  }, [replay, select, seek, onCamera, config.placement]);
+
+  useEffect(() => {
+    if (!sdk) return;
+    const bridge = connectMatterportCamera(sdk as CameraSdk, {
+      seek: (minute) => {
+        const setMinute = latest.current.seek;
+        if (!setMinute) throw new Error("Shared playback unavailable");
+        setMinute(minute);
+      },
+      onFounderInput: () => controller.founderInput(),
+    });
+    const motion =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+    const controller = new CameraController(bridge.port, {
+      targets: () =>
+        config.placement
+          ? scanTargets(latest.current.replay, config.placement)
+          : { stations: [], agents: new Map() },
+      reducedMotion: () => motion?.matches ?? false,
+    });
+    camera.current = controller;
+    latest.current.onCamera?.(controller);
+    // Scrubbing shared playback is founder input too; agent seeks fire no input event.
+    const scrub = (event: Event) => {
+      if (
+        event.isTrusted &&
+        event.target instanceof HTMLInputElement &&
+        event.target.type === "range"
+      )
+        controller.founderInput();
+    };
+    document.addEventListener("input", scrub, true);
+    return () => {
+      document.removeEventListener("input", scrub, true);
+      controller.dispose();
+      bridge.dispose();
+      camera.current = null;
+      latest.current.onCamera?.(null);
+    };
+  }, [sdk, config.placement]);
 
   useEffect(
     () => () => {
@@ -162,6 +218,7 @@ export default function MatterportView({
           type="button"
           onClick={() => {
             setFocusFailed(false);
+            camera.current?.founderInput();
             void focusServiceArea(sdk, config.viewpoint!).catch(() =>
               setFocusFailed(true),
             );
