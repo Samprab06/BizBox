@@ -19,10 +19,8 @@ import { createPostgresScenarioRepository } from "@/lib/scenario/repository";
 import { createPostgresScenarioRunner } from "@/lib/scenario/runtime";
 import { createPostgresCopilotTools } from "./copilot-tools-postgres";
 import { createCopilotInvestigationReads } from "./copilot-investigation-tools";
-import {
-  configuredCopilotDecisionModel,
-  type CopilotDecisionModel,
-} from "./copilot-model";
+import type { CopilotDecisionModel } from "./copilot-model";
+import { loadCopilotModelModule } from "./runtime-loader";
 import {
   createPostgresThreadStore,
   type ThreadSnapshot,
@@ -637,7 +635,8 @@ export function createCopilotRuntime({
           (entry) =>
             entry.id === input.proposalAction!.proposalId &&
             (entry.status === "pending" ||
-              (entry.status === "run_requested" && input.proposalAction?.action === "run")),
+              (entry.status === "run_requested" &&
+                input.proposalAction?.action === "run")),
         );
         if (
           !selected ||
@@ -806,11 +805,21 @@ export async function validatePostgresCopilotContext(
   signal.throwIfAborted();
 }
 
+/** The model SDKs load only when a decision is about to be made, so importing the
+ * route, validation and 404s never depend on them. A missing key reports the same
+ * "not configured" error as intake without loading the SDKs at all. */
+export const lazyCopilotDecisionModel: CopilotDecisionModel = async (input) => {
+  if (!process.env.OPENAI_API_KEY?.trim())
+    throw new Error("Intake model is not configured");
+  const { configuredCopilotDecisionModel } = await loadCopilotModelModule();
+  return configuredCopilotDecisionModel(input);
+};
+
 export function createPostgresCopilotRuntime() {
   return createCopilotRuntime({
     store: createPostgresThreadStore(),
     tools: createPostgresConsultantTools(),
-    choose: configuredCopilotDecisionModel,
+    choose: lazyCopilotDecisionModel,
     validateContext: validatePostgresCopilotContext,
   });
 }
