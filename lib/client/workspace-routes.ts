@@ -5,6 +5,7 @@ export const views = {
   site: "Site detail",
   comparison: "Comparison",
   replay: "Replay",
+  simulator: "Simulator",
 };
 
 export type View = keyof typeof views;
@@ -71,11 +72,9 @@ export const workspaceTasks: readonly WorkspaceTask[] = [
     entries: [
       { route: "comparison", label: views.comparison, step: "compare your shortlist" },
       { route: "replay", label: views.replay, step: "replay a day at the space" },
+      { route: "simulator", label: views.simulator, step: "watch the plan run in the city simulator" },
     ],
-    planned: [
-      { id: "sensitivity", label: "Sensitivity" },
-      { id: "simulator", label: "City simulator", ticket: "SIM-6" },
-    ],
+    planned: [{ id: "sensitivity", label: "Sensitivity" }],
   },
   {
     id: "decide",

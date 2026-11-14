@@ -1,0 +1,12 @@
+# Simulator visualization features
+
+The demo defaults to Balanced graphics; Detailed keeps the original rendering
+settings. See [performance controls and measured results](simulator-performance.md).
+
+| Feature | What it looks like | What it shows | Data source |
+| --- | --- | --- | --- |
+| Walkable catchment | Translucent 5- and 10-minute walking areas draped onto the neighborhood, with the café entrance pinned. | Which homes, workplaces, and transit stops can reach the door. Use a pedestrian network so the boundaries follow actual routes and crossings. | [Overture transportation data](https://docs.overturemaps.org/guides/transportation/) |
+| Demand by time of day | Soft pulses from offices, apartments, and transit stops. A morning-to-lunch scrubber changes which areas light up. | Where demand might originate and when it reaches the shop. Resident and worker counts inform the model. The pulses represent modeled trips. | [U.S. Census Bureau LODES](https://lehd.ces.census.gov/data/lehd-code-samples/sections/lodes.html) |
+| Competitors and demand anchors | Small markers for competing cafés, with different symbols for offices, schools, and transit stops. Selecting a competitor shows its walking distance and any modeled customer choice share. | Whether nearby activity creates an opportunity and where customers might go instead. | [Overture Places](https://docs.overturemaps.org/guides/places/) and the customer choice model |
+| Lease and storefront evidence | Highlight the selected footprint and pin the entrance. An expandable card shows suite size, asking rent, and any available floor plan or oblique image. | Why this space made the shortlist and which details came from property evidence or the founder’s plan. | CoStar listing, available property imagery, and the founder’s plan |
+| Queue pressure inside the café | As the camera moves inside, show a ribbon from the door to the counter that changes color as waiting builds. Pause on a customer to see the line they encountered and whether they joined or left. | Where the operation loses customers and whether the extra station fixes the bottleneck. | Simulator arrival, service, and abandonment events |

@@ -133,8 +133,8 @@ test.describe("keyboard and focus", () => {
 
       const labels = NAV_ORDER.map((route) => routeLabels[route]);
       const seen: string[] = [];
-      // The context bar sits before the nav and adds its own tab stops, so allow for them.
-      for (let i = 0; i < 25 && seen.length < NAV_ORDER.length; i++) {
+      // The context bar sits before the nav and adds its own tab stops: tab until every link is seen, with a generous safety bound.
+      for (let i = 0; i < 60 && seen.length < NAV_ORDER.length; i++) {
         await pressTab(page, browserName);
         const text = (await page.locator(":focus").textContent())?.trim() ?? "";
         if (labels.includes(text)) seen.push(text);
@@ -161,7 +161,7 @@ test.describe("keyboard and focus", () => {
     await gotoView("map");
     // Tab past the header, the context bar and the task links to the Next step.
     const focused = page.locator(":focus");
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 60; i++) {
       await pressTab(page, browserName);
       if ((await focused.getAttribute("data-next-step")) !== null) break;
     }
@@ -187,7 +187,7 @@ test.describe("keyboard and focus", () => {
       // there is no next step. The context bar adds its own stops before the nav.
       const lastText = nextStep(view) ? "Next:" : routeLabels.plan;
       let reachedLast = false;
-      for (let i = 0; i < 25 && !reachedLast; i++) {
+      for (let i = 0; i < 60 && !reachedLast; i++) {
         await pressTab(page, browserName);
         const focus = await focusedOutline(page);
         expect(focus, "something is focused").not.toBeNull();

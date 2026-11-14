@@ -212,7 +212,7 @@ test.describe("deep links", () => {
 test.describe("history", () => {
   test("back and forward move through the views in order", async ({ page, gotoView, projectId }) => {
     await gotoView("intake");
-    const visited: WorkspaceRoute[] = ["map", "site", "comparison", "replay", "plan"];
+    const visited: WorkspaceRoute[] = ["map", "site", "comparison", "replay", "simulator", "plan"];
     for (const view of visited) {
       await navLink(page, view).click();
       await expect(page.getByRole("heading", { level: 1, name: routeLabels[view] })).toBeVisible();

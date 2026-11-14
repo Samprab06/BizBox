@@ -269,3 +269,54 @@ describe("workspace context", () => {
     ).toEqual([search]);
   });
 });
+
+describe("simulator context", () => {
+  it("marks a failed stored load's displayed fallback as Example", () => {
+    const result = context("simulator", "comparison=missing&site=other", [
+      {
+        kind: "simulator",
+        phase: "example",
+        siteId: "montrose",
+        synthetic: true,
+      },
+    ]);
+    expect(result.example).toBe(true);
+    expect(result.status.text).toBe("Example data");
+    expect(result.location.text).toBe("Montrose storefront");
+    expect(result.qualifier).toBe("Modeled, not a forecast");
+  });
+  it("uses actual stored selection without borrowing a fixture address", () => {
+    const result = context("simulator", "comparison=cmp1", [
+      {
+        kind: "simulator",
+        phase: "ready",
+        siteId: "saved-site",
+        comparisonId: "cmp1",
+        synthetic: false,
+      },
+    ]);
+    expect(result.example).toBe(false);
+    expect(result.location.text).toBe("Site saved-site · address unavailable");
+    expect(result.status.text).toBe("Stored simulation");
+    expect(result.scenario.href).toContain("comparison=cmp1");
+  });
+  it("rejects stale comparison reports and does not infer provenance", () => {
+    expect(
+      context("simulator", "comparison=cmp2", [
+        {
+          kind: "simulator",
+          phase: "ready",
+          comparisonId: "cmp1",
+          siteId: "saved-site",
+          synthetic: false,
+        },
+      ]).status.text,
+    ).toBe("Loading context…");
+    const unknown = context("simulator", "", [
+      { kind: "simulator", phase: "ready", siteId: "saved-site" },
+    ]);
+    expect(unknown.example).toBe(false);
+    expect(unknown.status.text).toBe("Simulation provenance unavailable");
+    expect(context("simulator").location.text).toBe("Choose a location");
+  });
+});

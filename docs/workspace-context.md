@@ -49,9 +49,7 @@ in this branch. Data/status links lead to the selected site's existing evidence
 (or the map when no site is selected); known evidence anchors are preserved.
 Fixture evidence links use the existing `#listing-source` anchor.
 
-A future simulator route inside this project layout receives the same bar. Its
-controller must use the optional `useWorkspaceReport` adapter to publish its
-actual source/run state. An unknown route/controller remains **Loading context…**
+The simulator route `/projects/[projectId]/simulator` receives the same bar. Its controller uses `useWorkspaceReport` to publish the loaded stored run or the actual displayed Example fallback, including the selected site and synthetic provenance. A failed stored load remains Example even when its URL names a comparison. Stored project IDs outside the bundled preview use an empty project context rather than borrowing fixture facts. An unknown route/controller remains **Loading context…**
 until it supplies evidence; the shell never infers a live status. Future scenario
 switching should extend the context model when that contract exists.
 
