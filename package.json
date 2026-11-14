@@ -2,6 +2,7 @@
   "name": "hackprinceton",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22.0.0 <25"
@@ -36,7 +37,7 @@
     "@types/react-dom": "19.3.0",
     "dotenv": "18.0.10",
     "drizzle-kit": "0.31.11",
-    "eslint": "10.14.0",
+    "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",
     "postcss": "8.5.23",
     "prettier": "3.10.1",
