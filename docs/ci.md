@@ -6,15 +6,23 @@ The env-file guard rejects tracked .env files except for the root .env.example a
 
 The Playwright workflow is tracked in HAC-29 and runs separately. Vercel's GitHub integration handles preview and production builds. [Vercel environments](https://vercel.com/docs/environment-variables)
 
-| Variable                                         | Production                         | Preview                            | Development                      |
-| ------------------------------------------------ | ---------------------------------- | ---------------------------------- | -------------------------------- |
-| DATABASE_URL                                     | Production Neon                    | Isolated preview Neon              | Local or development Neon        |
-| OPENAI_API_KEY                                   | Runtime model provider             | Scoped test provider if enabled    | Optional developer credential    |
-| OPENAI_MODEL                                     | Optional compatible model override | Optional compatible model override | Optional; defaults to gpt-6-luna |
-| JEV_API_KEY (+ optional JEV_BASE_URL, JEV_MODEL) | Runtime panel if enabled           | Scoped test panel if enabled       | Optional for live panel tests    |
-| CENSUS_API_KEY                                   | Omit from app runtime              | Omit from app runtime              | Optional for data preparation    |
+| Variable                                         | Production                                | Preview                            | Development                      |
+| ------------------------------------------------ | ----------------------------------------- | ---------------------------------- | -------------------------------- |
+| DATABASE_URL                                     | Production Neon                           | Isolated preview Neon              | Local or development Neon        |
+| OPENAI_API_KEY                                   | Runtime model provider                    | Scoped test provider if enabled    | Optional developer credential    |
+| OPENAI_MODEL                                     | Optional compatible model override        | Optional compatible model override | Optional; defaults to gpt-6-luna |
+| JEV_API_KEY (+ optional JEV_BASE_URL, JEV_MODEL) | Runtime panel if enabled                  | Scoped test panel if enabled       | Optional for live panel tests    |
+| CENSUS_API_KEY                                   | Omit from app runtime                     | Omit from app runtime              | Optional for data preparation    |
+| MATTERPORT_SDK_KEY                               | Client-permitted Showcase key if approved | Optional for approved scan display | Optional; fixtures need none     |
+| MATTERPORT_API_TOKEN                             | Server-only; live adapter pending HAC-14  | Omit until access is approved      | Optional; fixtures need none     |
 
 Keep application secrets in the relevant Vercel environment or in local .env.local. Use separate preview and production credentials and keep credentials out of NEXT_PUBLIC_ variables.
+
+The bundle guard also checks configured server-only values, including
+`MATTERPORT_API_TOKEN`, without printing them. The Showcase key is explicitly
+client-permitted through a reviewed application response; this does not add a
+`NEXT_PUBLIC_` credential-name exception. Interior display remains closed until
+HAC-14 access/terms activation; see [interior-api.md](interior-api.md).
 
 ## Required checks for main
 

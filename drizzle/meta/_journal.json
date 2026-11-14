@@ -29,6 +29,13 @@
       "when": 1794670496035,
       "tag": "0003_scenarios",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794673232738,
+      "tag": "0004_matterport_models",
+      "breakpoints": true
     }
   ]
 }
