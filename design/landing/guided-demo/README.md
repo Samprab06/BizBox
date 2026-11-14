@@ -1,3 +1,5 @@
+> Latest mobile/count follow-up: [current handoff](refinement-v2.md#latest-follow-up-mobile-and-visible-checkout-count). Akshar resumed mobile scope; matching1/2checkout artwork and live customer queue are implemented.
+
 # BizBox guided product demo — HAC-117
 
 **Current revision:** see [consultant/sandbox refinement](refinement-v2.md). It uses a GPT 2D MacBook, the client Ferris-wheel photo, local Geist, clearer glass and moving location/exterior beats. The initial curated implementation and verification below are retained as history.

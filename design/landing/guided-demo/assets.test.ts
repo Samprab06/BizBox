@@ -3,8 +3,28 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import manifest from "../../../public/landing-assets/guided-demo/macbook-frame-v2.json";
 import provenance from "./assets.json";
+import mobileRevision from "./assets-v3.json";
+import { createHash } from "node:crypto";
 
 const root = resolve(import.meta.dirname, "../../..");
+describe("one-checkout artwork", () => {
+  it("ships the preserved edit at its native dimensions with prompt and provenance", () => {
+    const prompts = JSON.parse(
+      readFileSync(resolve(import.meta.dirname, "prompts-v3.json"), "utf8"),
+    );
+    for (const asset of mobileRevision.assets) {
+      const png = readFileSync(resolve(root, asset.asset));
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual(
+        asset.dimensions,
+      );
+      expect(createHash("sha256").update(png).digest("hex")).toBe(asset.sha256);
+      expect(prompts[asset.prompt.split("#")[1]]).toBeTruthy();
+      expect(
+        readFileSync(resolve(root, asset.editTarget)).length,
+      ).toBeGreaterThan(0);
+    }
+  });
+});
 describe("prepared guided demo media", () => {
   it("ships the native generated scene dimensions and their exact prompts", () => {
     const prompts = JSON.parse(

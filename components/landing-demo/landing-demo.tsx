@@ -165,14 +165,27 @@ export function LandingDemo({
     return () => document.removeEventListener("keydown", keys);
   }, [progress, reduced]);
 
-  const width = Math.min(
-    viewport.width * 1.37,
-    1000,
-    viewport.height * 0.6 * (macbook.width / macbook.height),
-  );
+  const phonePortrait = viewport.width <= 700 && viewport.height > 480;
+  const phoneLandscape = viewport.width <= 1000 && viewport.height <= 480;
+  const width = phoneLandscape
+    ? Math.min(
+        viewport.width * 0.5,
+        viewport.height * 0.8 * (macbook.width / macbook.height),
+      )
+    : Math.min(
+        viewport.width * (phonePortrait ? 0.96 : 1.37),
+        1000,
+        viewport.height * 0.6 * (macbook.width / macbook.height),
+      );
   const height = (width * macbook.height) / macbook.width;
-  const left = (viewport.width - width) / 2;
-  const top = viewport.height * 0.61 - height / 2;
+  const left = phoneLandscape
+    ? viewport.width * 0.73 - width / 2
+    : (viewport.width - width) / 2;
+  const top = phonePortrait
+    ? viewport.height * 0.36
+    : phoneLandscape
+      ? (viewport.height - height) / 2 + 24
+      : viewport.height * 0.61 - height / 2;
   const q = macbook.screenQuad;
   const initial = {
     left: left + q[0].x * width,

@@ -181,13 +181,20 @@ export function Workspace({
               opacity={frame.interiorOpacity}
             />
             <SceneImage
+              file="cafe-overhead-one-counter-v2.png"
+              alt="Illustrative overhead café with one staffed checkout"
+              opacity={choice === "current" ? frame.overheadOpacity : 0}
+              contain
+            />
+            <SceneImage
               file="cafe-overhead-v1.png"
-              alt="Illustrative overhead café experiment layout"
-              opacity={frame.overheadOpacity}
+              alt="Illustrative overhead café with two staffed checkouts"
+              opacity={choice === "proposed" ? frame.overheadOpacity : 0}
               contain
             />
             {experiment && (
               <CustomerFlow
+                key={choice}
                 proposed={choice === "proposed"}
                 running={running}
               />
@@ -409,6 +416,7 @@ function SceneImage({
   panY?: number;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   return (
     <div
       className={styles.sceneImage}
@@ -421,7 +429,9 @@ function SceneImage({
           src={`/landing-assets/guided-demo/${file}`}
           alt={alt}
           fill
+          loading="eager"
           sizes="(max-width: 700px) 100vw, 70vw"
+          onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
           style={{
             objectFit: contain ? "contain" : "cover",
@@ -432,6 +442,11 @@ function SceneImage({
       ) : (
         <div className={styles.sceneFallback} role="status">
           Illustrative view unavailable
+        </div>
+      )}
+      {!failed && !loaded && (
+        <div className={styles.sceneFallback} role="status">
+          Loading scene…
         </div>
       )}
     </div>

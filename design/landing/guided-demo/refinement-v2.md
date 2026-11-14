@@ -2,6 +2,21 @@
 
 Akshar approved this revision with “ok do this” after rejecting the static property-tour framing and opaque glass. The current `/landing-demo` now follows a consultant brief into a shortlist, selected building, starting assumptions and staffed-counter sandbox. This is the current handoff; the earlier README verification describes the first curated revision.
 
+## Latest follow-up: mobile and visible checkout count
+
+Akshar subsequently requested a mobile demo and explicitly resumed phone work for this landing. This supersedes the earlier desktop-only restriction for this task.
+
+- Portrait Mac fits96vw. Phone layout keeps consultant, scene, setup switch and results in one column with40–44px main controls.375×667 uses a local content scroller so results, costs and source details remain reachable; landscape retains three columns with scrollable rails. Desktop geometry remains unchanged.
+- One-counter selection now shows the new one-terminal GPT edit; two-counter selection shows the preserved original two-terminal room. Both images mount/load ahead of the experiment for immediate switching. Scene loading now has an explicit status instead of leaving customer markers over a blank room while a cold image request finishes.
+- The three fixed blue dots were permanently positioned queue decoration. Removed all fixed customer dots: all ten customers now traverse entrance, queue, service and exit paths. Queue progress is slower with one checkout. Purple staff use a person glyph and active checkout markers are numbered; counts agree with artwork and prepared results. Movement remains illustrative rather than individual seeded replay events.
+- Pause freezes the SVG clock; reduced motion, hidden document and leaving the experiment stop movement. The closing Mac retains selected art, checkout/staff count and actual modeled metrics, with miniature phone controls hidden in favor of the full-size Sandbox controls.
+
+New asset: `public/landing-assets/guided-demo/cafe-overhead-one-counter-v2.png` (1585×992), built-in GPT Image precise-object edit of preserved `cafe-overhead-v1.png`. Exact prompt: [prompts-v3.json](prompts-v3.json); source/dimensions/hash: [assets-v3.json](assets-v3.json). No new service or runtime image generation.
+
+Verification: lint, typecheck, production build and env/client-bundle checks pass. Full suite with `--maxWorkers=2`:1303 passed/40 skipped. Seven new regression cases cover1/2 visible staffed stations, motion attached to every customer, selected artwork through closing and media integrity. Chromium emulation checked390×844,375×667,844×390 and1440×900. All10customer positions changed under natural playback; pause kept the clock identical; reduced motion paused it;375 local scroll reached all results; closing retained proposed80served/6.8min/$144 with2visible station markers. These are browser-emulation checks, not physical iPhone or Safari verification.
+
+Implementation plan: [mobile counter demo](../../../docs/superpowers/plans/2026-11-14-landing-mobile-counter-demo.md). Current local preview remains `http://127.0.0.1:4195/landing-demo`. No push, new remote PR, merge or deployment.
+
 ## Visible changes
 
 - New independent GPT 2D MacBook cutout. No Blender-derived hardware or WebGL renderer in the current landing; earlier assets and the old `/story/v1` prototype remain intact. DOM is above the generated opaque screen, with measured aperture/notch clipping.
