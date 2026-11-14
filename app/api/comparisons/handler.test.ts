@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { SiteComparisonSchema, SiteRunSchema } from "@/lib/contracts";
-import type { EvaluationRequestInput, EvaluationSite } from "@/lib/contracts/evaluation";
+import { EvaluationRequestSchema, type EvaluationRequestInput, type EvaluationSite } from "@/lib/contracts/evaluation";
 import { COMPETITORS, FIXTURE_PERSONA_SET, SITE_A, SITE_B, makeBehaviorTable } from "@/lib/demand/fixtures";
 import { createMemoryComparisonStore } from "@/lib/evaluation/store";
+import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
+import { AssemblyError } from "@/lib/evaluation/assemble";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import { createSensitivityHandler } from "./[comparisonId]/sensitivity/handler";
 import { createComparisonReadHandler, createComparisonsHandler } from "./handler";
@@ -47,6 +49,123 @@ function setup() {
 }
 
 describe("POST /api/comparisons", () => {
+  it("loads a scoped saved profile, assembles candidate IDs and preserves origins/findings on rerun", async () => {
+    const store = createMemoryComparisonStore({ p1: 1 });
+    const profile = {
+      ...syntheticHoustonFixture.profile,
+      id: "profile-v1",
+      projectId: "p1",
+    };
+    const load = vi.fn(async () => profile);
+    const assembly = {
+      findings: [
+        {
+          code: "SITE_INPUT_UNKNOWN",
+          siteId: "203:303",
+          message: "Excluded: unknown rent.",
+        },
+      ],
+      assumptions: {
+        "sites.201:301.frontageFt": {
+          value: 20,
+          origin: "default" as const,
+          evidenceIds: ["scenario"],
+        },
+      },
+    };
+    const assemble = vi.fn(async () => ({
+      ...assembly,
+      request: EvaluationRequestSchema.parse(evaluationRequest()),
+    }));
+    let n = 0;
+    const handler = createComparisonsHandler({
+      store,
+      newId: () => `assembled_${++n}`,
+      profiles: { load },
+      assemble,
+    });
+    const response = await handler(
+      post({
+        projectId: "p1",
+        profileId: "profile-v1",
+        candidateIds: ["201:301", "203:303"],
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect(load).toHaveBeenCalledWith("p1", "profile-v1");
+    expect(assemble).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile,
+        profileVersion: 1,
+        demandSource: "huff",
+      }),
+    );
+    expect((await response.json()).assembly).toEqual(assembly);
+    expect(store.records.get("p1/assembled_1")?.evaluation.assembly).toEqual(
+      assembly,
+    );
+    const rerun = await handler(
+      post({ projectId: "p1", rerunComparisonId: "assembled_1" }),
+    );
+    expect((await rerun.json()).assembly).toEqual(assembly);
+    expect(assemble).toHaveBeenCalledTimes(1);
+    const read = createComparisonReadHandler({ store });
+    expect(
+      (
+        await (
+          await read(
+            new Request("http://test/api/comparisons/assembled_2?projectId=p1"),
+            "assembled_2",
+          )
+        ).json()
+      ).assembly,
+    ).toEqual(assembly);
+  });
+
+  it("rejects invalid shortcut IDs, missing scoped profiles and unusable sites without saving", async () => {
+    const store = createMemoryComparisonStore();
+    const load = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(syntheticHoustonFixture.profile);
+    const assemble = vi.fn(async () => {
+      throw new AssemblyError("No eligible sites", [
+        {
+          code: "SITE_INPUT_UNKNOWN",
+          message: "Excluded: unknown rent.",
+          siteId: "201:301",
+        },
+      ]);
+    });
+    const handler = createComparisonsHandler({
+      store,
+      newId: () => "never",
+      profiles: { load },
+      assemble,
+    });
+    const shortcut = {
+      projectId: "p1",
+      profileId: "profile-v1",
+      candidateIds: ["201:301"],
+    };
+    expect(
+      (await handler(post({ ...shortcut, candidateIds: ["bad"] }))).status,
+    ).toBe(422);
+    expect(
+      (
+        await handler(
+          post({ ...shortcut, candidateIds: ["201:301", "201:301"] }),
+        )
+      ).status,
+    ).toBe(422);
+    expect(load).not.toHaveBeenCalled();
+    expect((await handler(post(shortcut))).status).toBe(404);
+    const response = await handler(post(shortcut));
+    expect(response.status).toBe(422);
+    expect((await response.json()).findings[0].code).toBe("SITE_INPUT_UNKNOWN");
+    expect(store.records.size).toBe(0);
+  });
+
   it("evaluates, stores canonical records and returns the Huff-only ranking check", async () => {
     const { store, create } = setup();
     const response = await create(post(evaluationRequest()));
@@ -84,6 +203,17 @@ describe("POST /api/comparisons", () => {
     expect(body.result.demandSource).toBe("huff");
     expect(body.result.fallbackReason).toMatch(/unavailable/);
     expect(body.demandSourceCheck).toBeNull();
+  });
+
+  it("recognizes reproduced metrics after JSONB-style object key reordering", async () => {
+    const { store, create } = setup();
+    await create(post(evaluationRequest()));
+    const stored = store.records.get("p1/cmp_1")!;
+    stored.evaluation.result.sites = stored.evaluation.result.sites.map((site) =>
+      Object.fromEntries(Object.entries(site).reverse()) as typeof site,
+    );
+    const response = await create(post({ projectId: "p1", rerunComparisonId: "cmp_1" }));
+    expect((await response.json()).reproduces).toBe(true);
   });
 
   it("rejects invalid requests and unknown reruns", async () => {

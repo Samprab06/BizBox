@@ -5,11 +5,11 @@ import { comparisons, profiles, siteRuns } from "@/lib/db/schema";
 import type { ComparisonStore, StoredComparison } from "./store";
 
 /** Comparisons in Postgres: canonical SiteComparison in `data`, full evaluation in `evaluation`. */
-export function createPostgresComparisonStore(): ComparisonStore {
+export function createPostgresComparisonStore(database: typeof getDb = getDb): ComparisonStore {
   return {
     async save(record) {
       const { request } = record.evaluation;
-      await getDb().transaction(async (tx) => {
+      await database().transaction(async (tx) => {
         await tx.insert(comparisons).values({
           id: record.id,
           projectId: request.projectId,
@@ -36,7 +36,7 @@ export function createPostgresComparisonStore(): ComparisonStore {
     },
 
     async load(projectId, comparisonId) {
-      const db = getDb();
+      const db = database();
       const [row] = await db
         .select()
         .from(comparisons)
@@ -56,7 +56,7 @@ export function createPostgresComparisonStore(): ComparisonStore {
     },
 
     async currentProfileVersion(projectId) {
-      const [row] = await getDb()
+      const [row] = await database()
         .select({ version: max(profiles.version) })
         .from(profiles)
         .where(eq(profiles.projectId, projectId));
@@ -64,7 +64,7 @@ export function createPostgresComparisonStore(): ComparisonStore {
     },
 
     async saveSensitivity(projectId, comparisonId, record) {
-      await getDb()
+      await database()
         .update(comparisons)
         .set({ data: record.comparison, evaluation: record.evaluation })
         .where(and(eq(comparisons.projectId, projectId), eq(comparisons.id, comparisonId)));
