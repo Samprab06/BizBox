@@ -14,6 +14,22 @@ findings and numeric assumptions with origins. Sensitivity calls the existing
 comparison endpoint for rent ±10%, ticket, market share or price and shows ranking
 changes and the break-even point. These are scenario ranges, not a sales forecast.
 
+The saved comparison's decision header now precedes candidate selection. It uses
+the returned HAC-62 headline and its most influential condition without deriving
+new thresholds in the browser. **Change [assumption]** selects and focuses the
+matching sensitivity input (including visit frequency); it does not send a model
+request. Historical comparisons missing robustness explicitly say it is unavailable
+and link to evidence. Stale comparisons retain the prior answer with a visible
+warning and explicit rerun. New comparisons still require an explicit run.
+
+The shared header accepts a real scene slot for later simulator integration.
+Comparison currently retains its representative-run links; no scene is invented
+or fetched automatically. Simulator/DS-4 and shell/HAC-69 integration remain open
+HAC-71 acceptance dependencies. The two-site saved comparison passes the
+1280×800 and 375×800 decision/answer/action fit checks with **Decision evidence**
+closed. Its headline, modeled qualification and model disagreement remain visible.
+The full composition needs another viewport check when a real scene is mounted.
+
 `sitework:comparison:v1:<projectId>` stores the active comparison identity and the
 serialized intake signature used for its snapshot. Reload and replay use the
 stored comparison through its project-scoped GET endpoint. A changed local intake

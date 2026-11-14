@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type RefObject } from "react";
+import { DecisionHeader } from "@/components/decision/decision-header";
+import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import Link from "next/link";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import type {
@@ -30,6 +32,7 @@ const assumptions: { value: SensitivityAssumption; label: string }[] = [
   { value: "ticket_size", label: "Average ticket" },
   { value: "market_share_scale", label: "Market share" },
   { value: "price", label: "Price" },
+  { value: "visit_frequency", label: "Visit frequency" },
 ];
 
 export function LiveComparisonScreen({
@@ -42,7 +45,12 @@ export function LiveComparisonScreen({
   example: ReactNode;
 }) {
   const { phase, candidates, payload } = controller;
+  const [assumption, setAssumption] = useState<SensitivityAssumption>("rent");
+  const sensitivitySelect = useRef<HTMLSelectElement>(null);
   const busy = phase === "running";
+  const nextAssumption = assumptions.find(
+    ({ value }) => value === payload?.robustness?.mostInfluential?.assumption,
+  );
   const address = (siteId: string) =>
     candidates.find(({ candidate }) => candidate.id === siteId)?.candidate
       .address ?? siteId;
@@ -72,6 +80,76 @@ export function LiveComparisonScreen({
     );
   return (
     <div className="min-w-0 space-y-8 [overflow-wrap:anywhere]">
+      {payload && (
+        <DecisionHeader
+          decision="Which site should I shortlist under changing assumptions?"
+          answer={
+            payload.robustness
+              ? nameSites(payload.robustness.headline, payload, address)
+              : "Recommendation robustness is unavailable for this saved comparison."
+          }
+          qualification={
+            <>
+              <p>
+                <EvidenceBadge kind="Simulation" /> Modeled outcomes, not
+                observed sales or a sales forecast.
+              </p>
+              {payload.outdated && (
+                <p role="status" className="font-semibold text-warn">
+                  This comparison is outdated. The saved profile has changed;
+                  rerun to use the latest intake.
+                </p>
+              )}
+              {busy && (
+                <p role="status">
+                  A new comparison is running; the answer shown is from the
+                  saved comparison.
+                </p>
+              )}
+              {payload.robustness ? (
+                <RobustnessDetails payload={payload} />
+              ) : (
+                <p>
+                  Review the modeled ranges and assumptions before deciding.
+                </p>
+              )}
+            </>
+          }
+          nextAction={
+            payload.outdated ? (
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine disabled:opacity-50"
+                onClick={() => {
+                  void controller.run();
+                }}
+              >
+                Rerun with current intake
+              </button>
+            ) : nextAssumption ? (
+              <button
+                type="button"
+                disabled={busy || controller.sensitivity.loading}
+                className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine disabled:opacity-50"
+                onClick={() => {
+                  setAssumption(nextAssumption.value);
+                  sensitivitySelect.current?.focus();
+                }}
+              >
+                Change {nextAssumption.label.toLowerCase()}
+              </button>
+            ) : (
+              <a
+                href="#comparison-evidence"
+                className="font-semibold text-pine underline"
+              >
+                Open the evidence
+              </a>
+            )
+          }
+        />
+      )}
       <div>
         <h2 className="text-2xl font-semibold">Compare live candidate sites</h2>
         <p className="mt-2 text-sm text-muted">
@@ -170,15 +248,6 @@ export function LiveComparisonScreen({
       )}
       {payload && (
         <>
-          {payload.outdated && (
-            <p
-              role="status"
-              className="rounded-lg border border-line bg-paper p-3 font-semibold"
-            >
-              This comparison is outdated. The saved profile has changed; rerun
-              to use the latest intake.
-            </p>
-          )}
           <ComparisonResults
             projectId={project.id}
             payload={payload}
@@ -188,6 +257,9 @@ export function LiveComparisonScreen({
             controller={controller}
             address={address}
             disabled={busy}
+            assumption={assumption}
+            onAssumptionChange={setAssumption}
+            selectRef={sensitivitySelect}
           />
           <ComparisonEvidence payload={payload} />
           {!payload.outdated && (
@@ -217,55 +289,8 @@ function ComparisonResults({
   const rows = result.ranking
     .map((id) => result.sites.find((site) => site.siteId === id))
     .filter((site) => site !== undefined);
-  const robustness = payload.robustness;
-  // Server text names sites by ID; show the addresses the founder sees elsewhere.
-  const named = (text: string) =>
-    result.sites.reduce(
-      (t, site) => t.replaceAll(site.siteId, address(site.siteId)),
-      text,
-    );
   return (
     <>
-      {robustness && (
-        <section
-          aria-label="Recommendation robustness"
-          className="rounded-xl border-2 border-pine bg-mint p-4"
-        >
-          <h3 className="text-lg font-semibold">
-            {named(robustness.headline)}
-          </h3>
-          <ul className="mt-2 space-y-1 text-sm">
-            {robustness.jevHuffAgree !== null && (
-              <li>
-                {robustness.jevHuffAgree
-                  ? "The Jev and Huff demand models agree on the leader."
-                  : "The Jev and Huff demand models disagree on the leader: treat the ranking as uncertain."}
-              </li>
-            )}
-            {robustness.robustTo.length > 0 && (
-              <li>
-                The lead holds across the tested changes in{" "}
-                {robustness.robustTo
-                  .map((a) => a.replaceAll("_", " "))
-                  .join(", ")}
-                .
-              </li>
-            )}
-          </ul>
-          {robustness.missingInformation.length > 0 && (
-            <>
-              <h4 className="mt-3 text-sm font-semibold">
-                What would most improve this decision
-              </h4>
-              <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
-                {robustness.missingInformation.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ol>
-            </>
-          )}
-        </section>
-      )}
       <section
         aria-label="Comparison provenance"
         className="rounded-xl border border-line p-4 text-sm"
@@ -420,12 +445,17 @@ function Sensitivity({
   controller,
   address,
   disabled,
+  assumption,
+  onAssumptionChange,
+  selectRef,
 }: {
   controller: LiveComparisonController;
   address: (id: string) => string;
   disabled: boolean;
+  assumption: SensitivityAssumption;
+  onAssumptionChange: (value: SensitivityAssumption) => void;
+  selectRef: RefObject<HTMLSelectElement | null>;
 }) {
-  const [assumption, setAssumption] = useState<SensitivityAssumption>("rent");
   const { sensitivity } = controller;
   return (
     <section
@@ -441,11 +471,12 @@ function Sensitivity({
         <label className="grid gap-1 text-sm font-medium">
           Sensitivity assumption
           <select
+            ref={selectRef}
             className="max-w-full rounded-lg border border-line p-2"
             value={assumption}
             disabled={disabled || sensitivity.loading}
             onChange={(event) =>
-              setAssumption(event.target.value as SensitivityAssumption)
+              onAssumptionChange(event.target.value as SensitivityAssumption)
             }
           >
             {assumptions.map((option) => (
@@ -516,6 +547,8 @@ function ComparisonEvidence({ payload }: { payload: LiveComparisonPayload }) {
   const assembly = payload.assembly;
   return (
     <aside
+      id="comparison-evidence"
+      tabIndex={-1}
       aria-label="Comparison assumptions and findings"
       className="grid min-w-0 grid-cols-1 gap-4 border-t border-line pt-5 text-sm"
     >
@@ -561,5 +594,68 @@ function ComparisonEvidence({ payload }: { payload: LiveComparisonPayload }) {
         operating costs, and demand assumptions before a lease decision.
       </p>
     </aside>
+  );
+}
+
+function nameSites(
+  text: string,
+  payload: LiveComparisonPayload,
+  address: (id: string) => string,
+) {
+  // Replace longest IDs first so an ID that prefixes another cannot corrupt its label.
+  return payload.result.sites
+    .toSorted((a, b) => b.siteId.length - a.siteId.length)
+    .reduce(
+      (value, site) => value.replaceAll(site.siteId, address(site.siteId)),
+      text,
+    );
+}
+
+function RobustnessDetails({ payload }: { payload: LiveComparisonPayload }) {
+  const robustness = payload.robustness!;
+  return (
+    <>
+      <ul className="space-y-1">
+        {robustness.jevHuffAgree !== null && (
+          <li>
+            {robustness.jevHuffAgree
+              ? "The Jev and Huff demand models agree on the leader."
+              : "The Jev and Huff demand models disagree on the leader: treat the ranking as uncertain."}
+          </li>
+        )}
+      </ul>
+      {(robustness.robustTo.length > 0 ||
+        robustness.missingInformation.length > 0) && (
+        <details>
+          <summary className="cursor-pointer font-semibold text-pine">
+            Decision evidence
+          </summary>
+          <ul className="mt-2 space-y-1">
+            {" "}
+            {robustness.robustTo.length > 0 && (
+              <li>
+                The lead holds across the tested changes in{" "}
+                {robustness.robustTo
+                  .map((a) => a.replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </li>
+            )}
+          </ul>
+          {robustness.missingInformation.length > 0 && (
+            <>
+              <h4 className="mt-3 font-semibold">
+                What would most improve this decision
+              </h4>
+              <ol className="mt-1 list-decimal space-y-1 pl-5">
+                {robustness.missingInformation.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ol>
+            </>
+          )}
+        </details>
+      )}
+    </>
   );
 }

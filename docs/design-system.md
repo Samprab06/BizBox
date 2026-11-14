@@ -110,3 +110,30 @@ it is not newly accepted by any stored origin schema.
 Existing screens are unchanged by this foundation. Adopt these primitives in the
 later shell, comparison, replay and simulator tickets without changing the names,
 colors or provenance meaning.
+
+## Decision-first composition (HAC-71, comparison portion)
+
+`components/decision/decision-header.tsx` composes a specific `decision`, supplied
+`answer`, visible `qualification`, optional real `scene`, and `nextAction` in that
+reading order. It uses the solid `Card` surface and inherited tokens, wraps long
+addresses, and never clamps the answer or qualifications. The component does not
+compute results, fetch data, or start an experiment. Supply a scene only when a
+real replay or simulator is available; an absent slot invents no spatial evidence.
+
+Saved comparisons lead with the HAC-62 robustness headline before candidate setup.
+Keep provenance, Jev/Huff disagreement and stale-result warnings visible alongside
+the answer. Tested stable assumptions and missing-information items remain in the
+keyboard-operable **Decision evidence** disclosure.
+The next action selects and focuses the matching sensitivity control; running it
+is a separate explicit action. Unknown conditions or historical results without
+robustness lead to the evidence instead. Outdated results offer an explicit rerun.
+The synthetic example identifies its source and uses only its computed ranges;
+it does not imply that the live robustness sweep ran.
+
+The scene slot is an integration boundary for DS-4, not a completed simulator
+mount. HAC-69 owns the shell/navigation. The tested two-site saved comparison's
+decision, qualified answer and action fit at 1280×800 and 375×800 with the disclosure
+closed; the mobile action ends at approximately y787. Expanded evidence, stale
+warnings or longer multi-site summaries may need additional vertical space and
+must keep wrapping naturally. HAC-71 remains in development until real scenes
+mount on comparison/simulator and the complete composition is verified again.
