@@ -107,3 +107,15 @@ Timings are attached to the Playwright report against the comparison route's 60s
 local timings do not establish Vercel limits or hosted seeded Neon acceptance. The suite
 requires a loopback app URL; configure that app with the dedicated local database.
 Without `E2E_PIPELINE_DB=1` these database-writing tests skip explicitly.
+
+### Jev capabilities smoke check (HAC-101)
+
+`api/capabilities.spec.ts` checks `GET /api/comparisons/capabilities` returns a well-formed,
+secret-free body. It passes with or without a Jev key. To also assert `jevConfigured: true` on a
+deployment (Vercel Preview or Production), set `E2E_EXPECT_JEV=1`. The route only reports key
+presence and never calls Jev, so it costs nothing.
+
+```sh
+E2E_BASE_URL=https://<your-preview>.vercel.app E2E_EXPECT_JEV=1 \
+  pnpm exec playwright test api/capabilities --project=api
+```

@@ -1,9 +1,16 @@
 import type { Page } from "@playwright/test";
-import { views, workspaceHref, type View } from "../../lib/client/workspace-routes";
+import {
+  nextStep,
+  routeLabels,
+  workspaceHref,
+  workspaceSteps,
+  type WorkspaceRoute,
+} from "../../lib/client/workspace-routes";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 
-const VIEW_ORDER = Object.keys(views) as View[];
-const siteFor = (view: View) => (view === "site" ? "montrose" : undefined);
+// Every route the navigation links to, in task order.
+const NAV_ORDER: WorkspaceRoute[] = workspaceSteps.map((step) => step.route);
+const siteFor = (view: WorkspaceRoute) => (view === "site" ? "montrose" : undefined);
 
 /**
  * Moves keyboard focus forward once. macOS WebKit follows Safari's default and skips links on
@@ -30,12 +37,24 @@ async function focusedOutline(page: Page) {
 }
 
 test.describe("every view passes the axe scan", () => {
-  for (const view of VIEW_ORDER) {
+  for (const view of NAV_ORDER) {
     test(`${view} view`, async ({ page, gotoView }) => {
       await gotoView(view, siteFor(view));
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: routeLabels[view] })).toBeVisible();
       await expectNoA11yViolations(page);
     });
+  }
+
+  // The navigation reflows from three columns to a stack; scan both extremes.
+  for (const width of [375, 1280]) {
+    for (const view of NAV_ORDER) {
+      test(`${view} view at ${width}px`, async ({ page, gotoView }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await gotoView(view, siteFor(view));
+        await expect(page.getByRole("heading", { level: 1, name: routeLabels[view] })).toBeVisible();
+        await expectNoA11yViolations(page);
+      });
+    }
   }
 
   test("project unavailable state", async ({ page }) => {
@@ -52,12 +71,12 @@ test.describe("every view passes the axe scan", () => {
 });
 
 test.describe("page structure", () => {
-  for (const view of VIEW_ORDER) {
+  for (const view of NAV_ORDER) {
     test(`${view} view has one h1, one main landmark, a banner and a labelled nav`, async ({ page, gotoView }) => {
       await gotoView(view, siteFor(view));
 
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(views[view]);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(routeLabels[view]);
       await expect(page.getByRole("main")).toHaveCount(1);
       await expect(page.getByRole("banner")).toHaveCount(1);
       await expect(page.getByRole("navigation", { name: "Project views" })).toHaveCount(1);
@@ -98,7 +117,38 @@ test.describe("keyboard and focus", () => {
     expect(name).toMatch(/^(skip to|sitework$)/i);
   });
 
-  test("the project nav is reachable by Tab, in order, and Enter follows a link", async ({
+  for (const width of [375, 1280]) {
+    test(`the task links are reachable by Tab, in task order, and Enter follows a link at ${width}px`, async ({
+      page,
+      gotoView,
+      projectId,
+      browserName,
+    }) => {
+      test.skip(
+        browserName === "webkit" && process.platform === "win32",
+        "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
+      );
+      await page.setViewportSize({ width, height: 900 });
+      await gotoView("map");
+
+      const labels = NAV_ORDER.map((route) => routeLabels[route]);
+      const seen: string[] = [];
+      // The context bar sits before the nav and adds its own tab stops, so allow for them.
+      for (let i = 0; i < 25 && seen.length < NAV_ORDER.length; i++) {
+        await pressTab(page, browserName);
+        const text = (await page.locator(":focus").textContent())?.trim() ?? "";
+        if (labels.includes(text)) seen.push(text);
+      }
+      expect(seen).toEqual(labels);
+
+      // The last focused link is the plan: Enter activates it.
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(workspaceHref(projectId, "plan"));
+      await expect(page.getByRole("heading", { level: 1, name: "Location plan" })).toBeVisible();
+    });
+  }
+
+  test("the Next step is the last stop in the nav and Enter follows it", async ({
     page,
     gotoView,
     projectId,
@@ -109,23 +159,20 @@ test.describe("keyboard and focus", () => {
       "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
     );
     await gotoView("map");
-
-    const seen: string[] = [];
-    for (let i = 0; i < 10 && seen.length < VIEW_ORDER.length; i++) {
+    // Tab past the header, the context bar and the task links to the Next step.
+    const focused = page.locator(":focus");
+    for (let i = 0; i < 25; i++) {
       await pressTab(page, browserName);
-      const text = (await page.locator(":focus").textContent())?.trim() ?? "";
-      if (VIEW_ORDER.some((view) => views[view] === text)) seen.push(text);
+      if ((await focused.getAttribute("data-next-step")) !== null) break;
     }
-    expect(seen).toEqual(VIEW_ORDER.map((view) => views[view]));
-
-    // The last focused link is "Replay": Enter activates it.
+    await expect(focused).toHaveText(`Next: ${nextStep("map")!.step}`);
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(workspaceHref(projectId, "replay", "montrose"));
-    await expect(page.getByRole("heading", { level: 1, name: "Replay" })).toBeVisible();
+    await expect(page).toHaveURL(workspaceHref(projectId, "site", "montrose"));
+    await expect(page.getByRole("heading", { level: 1, name: "Site detail" })).toBeVisible();
   });
 
-  for (const view of VIEW_ORDER) {
-    test(`focus is visible on the header and nav links of the ${view} view`, async ({
+  for (const view of NAV_ORDER) {
+    test(`focus is visible on the header, context bar and nav links of the ${view} view`, async ({
       page,
       gotoView,
       browserName,
@@ -136,15 +183,20 @@ test.describe("keyboard and focus", () => {
       );
       await gotoView(view, siteFor(view));
 
-      // Header link plus the five nav links.
-      for (let i = 0; i < 1 + VIEW_ORDER.length; i++) {
+      // Walk every stop up to the last one in the nav: the Next step, or the plan link when
+      // there is no next step. The context bar adds its own stops before the nav.
+      const lastText = nextStep(view) ? "Next:" : routeLabels.plan;
+      let reachedLast = false;
+      for (let i = 0; i < 25 && !reachedLast; i++) {
         await pressTab(page, browserName);
         const focus = await focusedOutline(page);
         expect(focus, "something is focused").not.toBeNull();
         const hasIndicator =
           (focus!.outlineStyle !== "none" && focus!.outlineWidth > 0) || focus!.boxShadow !== "none";
         expect(hasIndicator, `focus indicator on "${focus!.text}": ${JSON.stringify(focus)}`).toBe(true);
+        reachedLast = focus!.text.startsWith(lastText);
       }
+      expect(reachedLast, "tabbing reaches the end of the nav").toBe(true);
     });
   }
 });
