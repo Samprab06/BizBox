@@ -296,6 +296,7 @@ export function createInvestigationPlanner({
 export function createConfiguredInvestigationPlanner(
   tools: InvestigationToolRegistry,
   env: Record<string, string | undefined> = process.env,
+  options: { now?: () => Date } = {},
 ): InvestigationStepPlanner {
   let configured: InvestigationDecisionModel | undefined;
   const choose: InvestigationDecisionModel = async (input) => {
@@ -317,5 +318,9 @@ export function createConfiguredInvestigationPlanner(
     }
     return configured(input);
   };
-  return createInvestigationPlanner({ tools, choose });
+  return createInvestigationPlanner({
+    tools,
+    choose,
+    ...(options.now ? { now: options.now } : {}),
+  });
 }

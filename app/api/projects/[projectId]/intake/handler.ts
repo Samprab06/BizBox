@@ -3,9 +3,10 @@ import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
   INTAKE_TIMEOUT_MS,
-  runConfiguredIntakeAgent,
+  loadIntakeRunner,
+  ModelRuntimeUnavailableError,
   type IntakeRunner,
-} from "@/lib/agent/runner";
+} from "@/lib/agent/runtime-loader";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const projectIdSchema = z.string().trim().min(1).max(200);
@@ -117,15 +118,28 @@ export function createIntakeHandler(dependencies: Dependencies) {
           onAbort = () => reject(new Error("Intake deadline exceeded"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
+        // The agent SDK loads only here, so validation never depends on it (HAC-58).
+        const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
         assistantMessage = await Promise.race([
-          (dependencies.runAgent ?? runConfiguredIntakeAgent)({
+          runAgent({
             session,
             message: input.message,
             signal,
           }),
           aborted,
         ]);
-      } catch {
+      } catch (error) {
+        if (error instanceof ModelRuntimeUnavailableError)
+          return json(
+            {
+              code: "MODEL_RUNTIME_UNAVAILABLE",
+              message:
+                "The intake model runtime could not load. Structured profile edits still work.",
+              field_errors: {},
+              detail: error.detail,
+            },
+            503,
+          );
         return unavailable();
       } finally {
         clearTimeout(timeout);

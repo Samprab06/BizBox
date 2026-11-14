@@ -298,7 +298,7 @@ describe("trusted investigation planner", () => {
   it("does not construct or call an unconfigured provider until a decision is requested", async () => {
     const f = setup();
     const job = await create(f);
-    const planner = createConfiguredInvestigationPlanner(f.tools, {});
+    const planner = createConfiguredInvestigationPlanner(f.tools, {}, { now: f.now });
     await expect(planner(plannerInput(job))).rejects.toThrow("not configured");
     expect(f.execute).not.toHaveBeenCalled();
   });
