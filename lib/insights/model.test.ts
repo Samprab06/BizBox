@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { buildFixtureInsights } from "./fixture";
 import { simulateDay } from "@/lib/sim/engine";
 import type { ArrivalSchedule, SiteConfigInput } from "@/lib/sim/contracts";
 import { aggregateHourly } from "@/lib/sim/hourly";
-import {
-  buildFixtureInsights,
-  buildInsightsDay,
-  distanceBand,
-  insightsForSite,
-} from "./model";
+import { buildInsightsDay, distanceBand, insightsForSite } from "./model";
 
 const config: SiteConfigInput = {
   hours: {

@@ -2,6 +2,8 @@
 
 `SiteEvaluation.insights` is optional versioned visualization data, persisted inside the existing `comparisons.evaluation` JSON. New evaluations compute it while every seed's weekday/weekend engine events are available. Existing economic metrics, simulation behavior, model version and canonical replay events remain unchanged. Legacy records are valid without insights; `insightsForSite` reports them unavailable and never reruns or fabricates bands from representative replay data.
 
+Runtime aggregation and availability helpers live in `lib/insights/model.ts`. Demo generation is separate: import `buildFixtureInsights` from `lib/insights/fixture.ts` in the server page or fixture tests. The evaluator's aggregation import does not pull in fixture schedules or category JSON, including when imported through the native browser-test runner.
+
 ## Statistical basis
 
 Each day contains 24 ordered hour buckets, its actual seed count and `mode: "aggregate"`. Numeric estimates are `{ mean, p5, p95 }`: equal-weight seed observations with nearest-rank empirical quantiles, not confidence intervals. A single seed has a degenerate empirical band; it does not measure uncertainty across different seeds.

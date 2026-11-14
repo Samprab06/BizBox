@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { buildFixtureInsights } from "./model";
+import { buildFixtureInsights } from "./fixture";
 import { generateCoreCallouts } from "./callouts";
 
 it("copies exact source-hour numbers and uses earliest ties deterministically", () => {
