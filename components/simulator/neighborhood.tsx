@@ -17,6 +17,13 @@ import {
 } from "./road-tiles";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { glass } from "./glass";
+import {
+  RENDER_SETTINGS,
+  createTimelineSampler,
+  resolutionScaleFor,
+  type RenderQuality,
+} from "./render-policy";
+import { useSceneVisibility } from "./use-scene-visibility";
 
 export default function Neighborhood({
   longitude,
@@ -24,18 +31,38 @@ export default function Neighborhood({
   tilesetUrl,
   minute,
   children,
+  quality = "balanced",
 }: {
   longitude: number;
   latitude: number;
   tilesetUrl: string;
   minute: number;
   children: ReactNode;
+  quality?: RenderQuality;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const { visible, hasBeenVisible } = useSceneVisibility(container);
   const timeRef = useRef(minute);
+  const qualityRef = useRef(quality);
+  const visibleRef = useRef(visible);
+  const viewerRef = useRef<Viewer | undefined>(undefined);
+  const updateScene = useRef<() => void>(() => {});
   useEffect(() => {
     timeRef.current = minute;
-  }, [minute]);
+    qualityRef.current = quality;
+    updateScene.current();
+  }, [minute, quality]);
+  useEffect(() => {
+    visibleRef.current = visible;
+    const viewer = viewerRef.current;
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.useDefaultRenderLoop = visible;
+    if (visible) {
+      viewer.resize();
+      updateScene.current();
+      viewer.scene.requestRender();
+    }
+  }, [visible]);
   const trafficEntities = useRef<(show: boolean) => void>(() => {});
   const [trafficVisible, setTrafficVisible] = useState(true);
   const [roadStatus, setRoadStatus] = useState<"loading" | "ready" | "failed">(
@@ -51,7 +78,13 @@ export default function Neighborhood({
     let viewer: Viewer | undefined;
     const roadRequests = new AbortController();
     const element = container.current;
-    if (!element) return;
+    if (!element || !hasBeenVisible) return;
+    const disposers: (() => void)[] = [];
+    const dispose = () => {
+      disposers.splice(0).forEach((stop) => stop());
+      if (viewer && !viewer.isDestroyed()) viewer.destroy();
+      if (viewerRef.current === viewer) viewerRef.current = undefined;
+    };
 
     async function load(target: HTMLDivElement) {
       Object.assign(window, { CESIUM_BASE_URL: "/cesium/" });
@@ -66,10 +99,11 @@ export default function Neighborhood({
         Sun,
         ClassificationType,
         Color,
-        CallbackProperty,
+        ConstantProperty,
         ColorMaterialProperty,
         JulianDate,
         Cesium3DTileStyle,
+        Expression,
         Math: CesiumMath,
       } = await import("cesium");
       if (closed) return;
@@ -79,6 +113,11 @@ export default function Neighborhood({
         skyBox: false,
         skyAtmosphere: false,
         useBrowserRecommendedResolution: false,
+        // Keep the input/update loop smooth without scanning every entity at 120 Hz.
+        targetFrameRate: 60,
+        useDefaultRenderLoop: visibleRef.current,
+        requestRenderMode: true,
+        maximumRenderTimeChange: Number.POSITIVE_INFINITY,
 
         baseLayerPicker: false,
         geocoder: false,
@@ -91,13 +130,29 @@ export default function Neighborhood({
         selectionIndicator: false,
         infoBox: false,
       });
+      viewerRef.current = viewer;
+      viewer.resolutionScale = resolutionScaleFor(
+        window.devicePixelRatio,
+        RENDER_SETTINGS[qualityRef.current].maxPixelRatio,
+      );
       viewer.scene.sun = new Sun();
+      // Keep Cesium's familiar bindings/collision protection, with less coasting
+      // and a wider input budget when a frame is delayed by tile loading.
+      const controls = viewer.scene.screenSpaceCameraController;
+      controls.inertiaSpin = 0.5;
+      controls.inertiaTranslate = 0.5;
+      controls.inertiaZoom = 0.4;
+      controls.zoomFactor = 8;
+      controls.maximumMovementRatio = 0.2;
+      const initialSettings = RENDER_SETTINGS[qualityRef.current];
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
-        maximumScreenSpaceError: 1,
+        maximumScreenSpaceError: initialSettings.tileError,
+        cacheBytes: initialSettings.cacheBytes,
+        maximumCacheOverflowBytes: initialSettings.maximumCacheOverflowBytes,
         shadows: ShadowMode.DISABLED,
         lightColor: new Cartesian3(0.22, 0.22, 0.22),
-        dynamicScreenSpaceError: false,
+        dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
       });
       if (closed) {
         tileset.destroy();
@@ -114,65 +169,65 @@ export default function Neighborhood({
       );
       viewer.scene.primitives.add(tileset);
       const city = viewer;
-      const createRoad = ({ roadClass, points, seed }: Road) =>
-        city.entities.add({
+      const roadColors = new Map<
+        Entity,
+        {
+          seed: number;
+          roadClass: string;
+          color: InstanceType<typeof ConstantProperty>;
+        }
+      >();
+      const createRoad = ({ roadClass, points, seed }: Road) => {
+        const color = new ConstantProperty(Color.GREEN.withAlpha(0.82));
+        const entity = city.entities.add({
           polyline: {
             positions: Cartesian3.fromDegreesArray(points),
             width: roadClass === "tertiary" ? 5 : 8,
-            material: new ColorMaterialProperty(
-              new CallbackProperty(() => {
-                const congestion = trafficLevel(
-                  timeRef.current,
-                  seed,
-                  roadClass,
-                );
-                return Color.fromCssColorString(
-                  congestion >= 0.7
-                    ? "#ff3e47"
-                    : congestion >= 0.38
-                      ? "#ffb522"
-                      : "#2fdf92",
-                ).withAlpha(0.82);
-              }, false),
-            ),
+            material: new ColorMaterialProperty(color),
             clampToGround: true,
             classificationType: ClassificationType.CESIUM_3D_TILE,
           },
         });
+        roadColors.set(entity, { seed, roadClass, color });
+        return entity;
+      };
+      const anchors: {
+        anchor: (typeof demandAnchors)[number];
+        radius: InstanceType<typeof ConstantProperty>;
+        color: InstanceType<typeof ConstantProperty>;
+      }[] = [];
       for (const anchor of demandAnchors) {
         const position = Cartesian3.fromDegrees(
           longitude + anchor.east,
           latitude + anchor.north,
         );
+        const radius = new ConstantProperty(
+          qualityRef.current === "balanced" ? 65 : 18,
+        );
+        const color = new ConstantProperty(Color.TRANSPARENT);
         city.entities.add({
           position,
           ellipse: {
-            semiMajorAxis: new CallbackProperty(
-              () => 18 + 47 * demandLevel(timeRef.current, anchor.peaks),
-              false,
-            ),
-            semiMinorAxis: new CallbackProperty(
-              () => 18 + 47 * demandLevel(timeRef.current, anchor.peaks),
-              false,
-            ),
+            semiMajorAxis: radius,
+            semiMinorAxis: radius,
             classificationType: ClassificationType.CESIUM_3D_TILE,
-            material: new ColorMaterialProperty(
-              new CallbackProperty(
-                () =>
-                  Color.fromCssColorString(anchor.color).withAlpha(
-                    0.05 + 0.45 * demandLevel(timeRef.current, anchor.peaks),
-                  ),
-                false,
-              ),
-            ),
+            material: new ColorMaterialProperty(color),
           },
         });
+        anchors.push({ anchor, radius, color });
       }
       const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
       city.clock.shouldAnimate = false;
       const { addVolumetricClouds } = await import("./volumetric-clouds");
       if (closed) return;
-      addVolumetricClouds(city.scene, () => timeRef.current);
+      // Balanced keeps the animated cloud-bank layer below without warming a
+      // fullscreen ray-marched shader. Detailed restores the original volume.
+      const createCloudStage = () =>
+        RENDER_SETTINGS[qualityRef.current].volumetricClouds
+          ? addVolumetricClouds(city.scene, () => timeRef.current)
+          : undefined;
+      let cloudStage = createCloudStage();
+      let appliedQuality = qualityRef.current;
       const lowClouds = new CloudCollection({ noiseDetail: 32 });
       city.scene.primitives.add(lowClouds);
       const cloudBanks = [
@@ -225,13 +280,84 @@ export default function Neighborhood({
       const twilightSky = Color.fromCssColorString("#ee9e83");
       const sky = new Color();
       let previousMinute = -1;
-      let previousCloudMinute = -1;
-      city.scene.preUpdate.addEventListener(() => {
+      const cloudTime = createTimelineSampler();
+      const lightingStyle = new Cesium3DTileStyle();
+      tileset.style = lightingStyle;
+      let previousTint = "";
+      const applyQuality = () => {
+        const settings = RENDER_SETTINGS[qualityRef.current];
+        const resolutionScale = resolutionScaleFor(
+          window.devicePixelRatio,
+          settings.maxPixelRatio,
+        );
+        if (city.resolutionScale !== resolutionScale) {
+          city.resolutionScale = resolutionScale;
+        }
+        // The tile-error setter also resets Cesium's memory-adjusted error;
+        // preserve that adaptive state during ordinary timeline updates.
+        if (tileset.maximumScreenSpaceError !== settings.tileError) {
+          tileset.maximumScreenSpaceError = settings.tileError;
+        }
+        if (
+          tileset.dynamicScreenSpaceError !== settings.dynamicScreenSpaceError
+        ) {
+          tileset.dynamicScreenSpaceError = settings.dynamicScreenSpaceError;
+        }
+        if (tileset.cacheBytes !== settings.cacheBytes) {
+          tileset.cacheBytes = settings.cacheBytes;
+        }
+        if (
+          tileset.maximumCacheOverflowBytes !==
+          settings.maximumCacheOverflowBytes
+        ) {
+          tileset.maximumCacheOverflowBytes =
+            settings.maximumCacheOverflowBytes;
+        }
+        if (appliedQuality !== qualityRef.current) {
+          if (cloudStage) city.scene.postProcessStages.remove(cloudStage);
+          cloudStage = createCloudStage();
+          appliedQuality = qualityRef.current;
+        }
+      };
+      const overlayTime = createTimelineSampler();
+      const updateOverlays = () => {
+        const minute = overlayTime.take(
+          timeRef.current,
+          RENDER_SETTINGS[qualityRef.current].overlayStepMinutes,
+        );
+        if (minute === undefined) return;
+        for (const { seed, roadClass, color } of roadColors.values()) {
+          const congestion = trafficLevel(minute, seed, roadClass);
+          color.setValue(
+            Color.fromCssColorString(
+              congestion >= 0.7
+                ? "#ff3e47"
+                : congestion >= 0.38
+                  ? "#ffb522"
+                  : "#2fdf92",
+            ).withAlpha(0.82),
+          );
+        }
+        for (const { anchor, radius, color } of anchors) {
+          const level = demandLevel(minute, anchor.peaks);
+          // A stable footprint avoids rebuilding classified ellipse geometry
+          // during playback. Detailed retains the original size pulse.
+          radius.setValue(
+            qualityRef.current === "balanced" ? 65 : 18 + 47 * level,
+          );
+          color.setValue(
+            Color.fromCssColorString(anchor.color).withAlpha(
+              0.05 + 0.45 * level,
+            ),
+          );
+        }
+      };
+      const updateLighting = () => {
         const minute = timeRef.current;
-        if (minute !== previousCloudMinute) {
-          previousCloudMinute = minute;
-          const progress = minute / 1440;
-          const cloudLight = daylight(minute);
+        const cloudMinute = cloudTime.take(minute, 1);
+        if (cloudMinute !== undefined) {
+          const progress = cloudMinute / 1440;
+          const cloudLight = daylight(cloudMinute);
           for (const { cloud, east, north, height, drift } of cloudPatches) {
             cloud.position = Cartesian3.fromDegrees(
               longitude + east + (progress - 0.4) * drift * 2.5,
@@ -268,10 +394,29 @@ export default function Neighborhood({
           1,
           brightness + 0.035 * (1 - light) - 0.05 * warm,
         );
-        tileset.style = new Cesium3DTileStyle({
-          color: `rgb(${Math.round(red * 255)}, ${Math.round(green * 255)}, ${Math.round(blue * 255)})`,
-        });
-      });
+        const tint = `rgb(${Math.round(red * 255)}, ${Math.round(green * 255)}, ${Math.round(blue * 255)})`;
+        if (tint !== previousTint) {
+          previousTint = tint;
+          lightingStyle.color = new Expression(tint);
+          tileset.makeStyleDirty();
+        }
+      };
+      updateScene.current = () => {
+        // The refs keep current playback state while offscreen; resume applies it once.
+        if (closed || city.isDestroyed() || !visibleRef.current) return;
+        applyQuality();
+        updateOverlays();
+        updateLighting();
+        if (visibleRef.current) city.scene.requestRender();
+      };
+      const resize = () => {
+        if (closed || city.isDestroyed()) return;
+        applyQuality();
+        if (visibleRef.current) city.scene.requestRender();
+      };
+      window.addEventListener("resize", resize);
+      disposers.push(() => window.removeEventListener("resize", resize));
+      updateScene.current();
 
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
@@ -280,14 +425,25 @@ export default function Neighborhood({
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
       let revision = 0;
-      let template: string | undefined;
+      let template: Promise<string> | undefined;
+      const pendingTiles = new Map<
+        string,
+        { controller: AbortController; promise: Promise<Road[]> }
+      >();
+      disposers.push(() => {
+        for (const pending of pendingTiles.values()) pending.controller.abort();
+        pendingTiles.clear();
+      });
       async function updateRoads() {
         const current = ++revision;
         setRoadStatus("loading");
         try {
-          const urlTemplate = (template ??= await getRoadTemplate(
+          const urlTemplate = await (template ??= getRoadTemplate(
             roadRequests.signal,
-          ));
+          ).catch((error) => {
+            template = undefined;
+            throw error;
+          }));
           if (closed || current !== revision) return;
           const canvas = city.scene.canvas;
           const picked = city.camera.pickEllipsoid(
@@ -298,21 +454,42 @@ export default function Neighborhood({
             : undefined;
           const tiles = nearbyRoadTiles(city.camera, center);
           const wanted = new Set(tiles.map(({ x, y }) => `${x}/${y}`));
+          for (const [id, pending] of pendingTiles) {
+            if (!wanted.has(id)) {
+              pending.controller.abort();
+              pendingTiles.delete(id);
+            }
+          }
           for (const [id, entities] of roadTiles) {
             if (wanted.has(id)) continue;
-            entities.forEach((entity) => city.entities.remove(entity));
+            entities.forEach((entity) => {
+              roadColors.delete(entity);
+              city.entities.remove(entity);
+            });
             roadTiles.delete(id);
           }
           const results = await Promise.allSettled(
             tiles.map(async ({ x, y }) => {
               const id = `${x}/${y}`;
               if (roadTiles.has(id)) return;
-              const roads = await loadRoadTile(
-                urlTemplate,
-                x,
-                y,
-                roadRequests.signal,
-              );
+              let pending = pendingTiles.get(id);
+              if (!pending) {
+                const controller = new AbortController();
+                const promise = loadRoadTile(
+                  urlTemplate,
+                  x,
+                  y,
+                  controller.signal,
+                );
+                pending = { controller, promise };
+                pendingTiles.set(id, pending);
+                const clear = () => {
+                  if (pendingTiles.get(id)?.promise === promise)
+                    pendingTiles.delete(id);
+                };
+                void promise.then(clear, clear);
+              }
+              const roads = await pending.promise;
               if (closed || current !== revision) return;
               roadTiles.set(
                 id,
@@ -325,6 +502,8 @@ export default function Neighborhood({
             }),
           );
           if (!closed && current === revision) {
+            overlayTime.reset();
+            updateScene.current();
             setRoadStatus(
               results.some((result) => result.status === "rejected")
                 ? "failed"
@@ -335,37 +514,49 @@ export default function Neighborhood({
           if (!closed && current === revision) setRoadStatus("failed");
         }
       }
-      city.camera.moveEnd.addEventListener(() => {
-        void updateRoads();
-      });
+      disposers.push(
+        city.camera.moveEnd.addEventListener(() => {
+          void updateRoads();
+        }),
+      );
       trafficEntities.current = (show) => {
         visible = show;
         for (const entities of roadTiles.values()) {
           for (const entity of entities) entity.show = show;
         }
         if (show) void updateRoads();
+        city.scene.requestRender();
       };
       void updateRoads();
       const stopWatching = tileset.tileVisible.addEventListener(() => {
         stopWatching();
-        setStatus("ready");
+        if (!closed) setStatus("ready");
       });
-      tileset.tileFailed.addEventListener(() => {
-        setStatus((current) => (current === "loading" ? "failed" : current));
-      });
+      disposers.push(stopWatching);
+      disposers.push(
+        tileset.tileFailed.addEventListener(() => {
+          if (!closed)
+            setStatus((current) =>
+              current === "loading" ? "failed" : current,
+            );
+        }),
+      );
       viewer.scene.requestRender();
     }
 
     void load(element).catch(() => {
       if (!closed) setStatus("failed");
+      roadRequests.abort();
+      dispose();
     });
     return () => {
       closed = true;
       roadRequests.abort();
       trafficEntities.current = () => {};
-      viewer?.destroy();
+      updateScene.current = () => {};
+      dispose();
     };
-  }, [longitude, latitude, tilesetUrl, attempt]);
+  }, [longitude, latitude, tilesetUrl, attempt, hasBeenVisible]);
 
   return (
     <div
