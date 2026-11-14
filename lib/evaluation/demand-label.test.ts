@@ -26,7 +26,10 @@ describe("siteDemandLabel", () => {
   });
   it("says nothing when Jev answered or Huff was requested", () => {
     expect(
-      siteDemandLabel({ requestedDemandSource: "jev", demandSource: "jev" }, {}),
+      siteDemandLabel(
+        { requestedDemandSource: "jev", demandSource: "jev" },
+        {},
+      ),
     ).toBeNull();
     expect(
       siteDemandLabel(
