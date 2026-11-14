@@ -394,6 +394,41 @@ describe("trusted investigation planner", () => {
     await expect(planner(plannerInput(job))).rejects.toThrow("not configured");
     expect(f.execute).not.toHaveBeenCalled();
   });
+
+  it("routes a configured planner decision to an OpenAI-compatible base URL", async () => {
+    const f = setup();
+    const job = await create(f);
+    const requests: Request[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(new Request(input, init));
+      return Response.json({
+        id: "chatcmpl-planner-test", object: "chat.completion", created: 1,
+        model: "glm-5.3-flash-free",
+        choices: [{ index: 0, finish_reason: "tool_calls", message: {
+          role: "assistant", content: null, tool_calls: [{
+            id: "decision-test", type: "function", function: {
+              name: "InvestigationDecision", arguments: JSON.stringify(decision("finish")),
+            },
+          }],
+        } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    }));
+    try {
+      const planner = createConfiguredInvestigationPlanner(f.tools, {
+        OPENAI_API_KEY: "test-provider-key",
+        OPENAI_BASE_URL: "https://opencode.ai/inference/openai/v1",
+        OPENAI_MODEL: "glm-5.3-flash-free",
+      }, { now: f.now });
+      const step = await planner(plannerInput(job));
+      expect(step?.tool).toBe("finish_investigation");
+      expect(requests).toHaveLength(1);
+      expect(requests[0]!.url).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
+      expect((await requests[0]!.json()).model).toBe("glm-5.3-flash-free");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 class ScriptedDeepModel extends BaseChatModel {

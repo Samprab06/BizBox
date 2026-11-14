@@ -1,153 +1,107 @@
-# HackPrinceton: where should my shop go?
+# BizBox
 
-People opening a new **service business** (a coffee shop, quick food, a salon or barber, a
-fitness studio) have to pick a retail space to lease, usually from gut feel and a broker's
-pitch. This app ranks real for-lease spaces in **Houston** and **Los Angeles** for one
-founder's business, and shows why each one ranks where it does.
+**Find the right storefront before you sign the lease.**
 
-For each candidate space, the app:
+BizBox helps someone opening a **service business** (a coffee shop, quick-service food,
+a salon or barber, or a fitness studio) choose a retail space to lease in **Houston** or
+**Los Angeles**. Instead of gut feel and a broker's pitch, it ranks real for-lease spaces
+for that founder's business and shows why each one ranks where it does.
 
-1. collects the founder's plan in an intake conversation (category, price, stations, budget);
-2. pulls for-lease retail spaces from CoStar;
-3. builds the space's catchment from public census, workplace and competitor data;
-4. polls a panel of simulated local customers (TypeSafe Jev) on where they'd go, how often and when;
-5. turns their answers into a demand model and seeded customer arrivals;
-6. runs a queue simulation of a day at the shop, then works out monthly economics;
-7. compares the spaces, tests how sensitive the ranking is to each assumption, and writes a
-   location plan grounded in those results.
+**Live app:** https://hackprincetonweb.vercel.app (built for HackPrinceton).
 
-The output is a **ranking with ranges, never a sales forecast**. Every number records where it
-came from: `costar`, `public`, `founder` or `default`.
+The output is a **ranking with ranges, never a sales forecast**. Every number records where
+it came from: `costar`, `public`, `founder` or `default`.
 
-**Demo flow:** Intake → Map of candidate spaces → Site detail → Comparison → Replay of a
-simulated day. Today the screens run on a fixture project, `houston-coffee`. Current scope and
-acceptance criteria live in the team's Linear tickets.
+## How it works
+
+1. **Onboarding.** A short guided flow, one question per screen, captures the founder's
+   concept, category, city, budget, price tier, customers, hours, staff and must-haves. The
+   intake agent can also take the brief in conversation, by text or voice.
+2. **Candidate spaces.** For-lease retail spaces come from the licensed CoStar dataset.
+3. **Catchment.** Each space gets a catchment built from public Census, LODES workplace and
+   Overture competitor data.
+4. **Customer panel.** A panel of simulated local customers (TypeSafe Jev) says where they would
+   go, how often and when. A Huff gravity model is the labelled fallback.
+5. **Demand and simulation.** Their answers become a demand model and seeded customer arrivals,
+   and a queue simulation plays out a day at the shop and its monthly economics.
+6. **Decision.** Spaces are compared with ranges and sensitivity tests, station and staffing
+   experiments are run, and a grounded location plan is written from the results.
+
+## What you can do in the app
+
+| Screen      | Route (`/projects/<projectId>/…`) | What it shows                                                                          |
+| ----------- | --------------------------------- | -------------------------------------------------------------------------------------- |
+| Onboarding  | `intake`                          | Guided BizBox setup; the detailed form is at `intake?mode=form`.                       |
+| Workspace   | `workspace`                       | City and budget header, the selected space, and the Text/Voice assistant.              |
+| Map         | `map`                             | Candidate spaces that fit the brief.                                                   |
+| Site detail | `sites/<siteId>`                  | One space: listing facts, catchment, customer insights and provenance.                 |
+| Comparison  | `comparison`                      | The decision-first ranking with ranges, robustness and the consultant's investigation. |
+| Replay      | `replay`                          | A simulated day at one space, customer by customer.                                    |
+| Simulator   | `simulator`                       | The 3D city view (Vexcel tiles) with customer trips, live stats and experiments.       |
+| Plan        | `plan`                            | A printable location plan built only from the stored comparison.                       |
+
+The example project is `houston-coffee`. Opening `/` redirects to its onboarding.
+
+## Landing design checkpoint
+
+The draft **BizBox** landing preview is available at `/landing-preview/index.html` when
+the app is running. It is separate from the homepage. See the
+[landing handoff](docs/landing/README.md) for the current prototype, content wireframe,
+pending UX decisions, and resume instructions.
 
 ## Stack
 
 - **Next.js** (App Router) in **TypeScript** `strict` mode, styled with **Tailwind CSS**,
-  hosted on **Vercel**. One app; no separate backend and no Python.
-- **Postgres with PostGIS** (Neon through Vercel), accessed with **Drizzle**.
-- **`deepagents`** (JavaScript) for the orchestrator agent.
-- **TypeSafe Jev** over its REST API for the simulated customer panel.
-- **Zod** for shared request and response types, **Vitest** for tests, **pnpm** for packages.
+  hosted on **Vercel**. One app: route handlers under `app/api/`, no separate backend, no Python.
+- **Postgres with PostGIS** on **Neon**, accessed with **Drizzle**.
+- **`deepagents`** with an OpenAI model for the intake agent and the consultant.
+- **TypeSafe Jev** for the simulated customer panel; **Capital One Nessie** (sandbox) for the
+  consultant's simulated cash-buffer check.
+- **Cesium + Vexcel** 3D tiles for the city simulator; **Three.js** for the replay floor plan.
+- **Zod** contracts in `lib/contracts/`, **Vitest** and **Playwright** for tests, **pnpm**.
+
+All simulation code is pure TypeScript and uses the seeded generator in `lib/sim/random.ts`,
+never `Math.random`, so the same inputs always give the same results.
 
 ## Quick start
 
-### Prerequisites
-
-- **Node.js 22 or 24**.
-- **pnpm 11.25.0**, matching `packageManager` in `package.json`. If you don't have it:
-
-  ```bash
-  npm install -g pnpm@11.25.0
-  ```
-
-### Install and run
+**Prerequisites:** Node.js 22 or 24, and pnpm 11.25.0 (`npm install -g pnpm@11.25.0`).
 
 ```bash
-git clone https://github.com/Samprab06/HackPrinceton.git
-```
-
-```bash
-cd HackPrinceton
-```
-
-```bash
+git clone https://github.com/Samprab06/BizBox.git
+cd BizBox
 pnpm install
-```
-
-```bash
 cp .env.example .env.local
-```
-
-```bash
 pnpm dev
 ```
 
-Open http://localhost:3000. It redirects to the intake screen of the `houston-coffee` fixture
-project.
+Open http://localhost:3000. The example screens, offline tests and the production build all run
+without any credentials or database.
 
 ### Environment variables
 
-Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example` lists the names.
+Put values in `.env.local`, which is gitignored. Never commit secrets. `.env.example` lists every name.
 
-| Variable          | Used by                                 | Needed for                                                                                                           |
-| ----------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`    | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations.                                       |
-| `JEV_API_KEY`     | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
-| `JEV_BASE_URL`    | `lib/panel/jev-client.ts`               | Optional. Defaults to `https://api.typesafe.ai` (`POST /v1/systemone`).                                              |
-| `JEV_MODEL`       | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
-| `OPENAI_API_KEY`  | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
-| `OPENAI_MODEL`    | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
-| `NESSIE_API_KEY`  | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the consultant’s simulated cash-buffer tool. Server only.                             |
-| `NESSIE_BASE_URL` | `lib/nessie/client.ts`                  | Optional; defaults to `https://v2-prod-api.nessieisreal.com`. Only this HTTPS origin is accepted.                    |
+| Variable                                                    | Needed for                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`                                              | Postgres with PostGIS: live listings, comparisons, investigations, scenarios. `/api/health` checks it. |
+| `OPENAI_API_KEY`                                            | The intake agent, consultant and voice. Structured form edits work without it.                         |
+| `OPENAI_MODEL`                                              | Optional model override (default `gpt-6-luna`).                                                        |
+| `OPENAI_REALTIME_MODEL`, `OPENAI_VOICE_TRANSCRIPTION_MODEL` | Optional voice model overrides.                                                                        |
+| `JEV_API_KEY`, `JEV_BASE_URL`, `JEV_MODEL`                  | Live Jev customer panel. Without a key, comparisons use the labelled Huff fallback.                    |
+| `VEXCEL_API_KEY`                                            | 3D city tiles in the simulator (served through a CDN-cached proxy).                                    |
+| `NESSIE_API_KEY`, `NESSIE_BASE_URL`                         | The consultant's read-only simulated cash-buffer tool ([details](docs/integrations/nessie.md)).        |
+| `MATTERPORT_SDK_KEY`, `MATTERPORT_API_TOKEN`                | Interior scans (fixture-first; licensed display stays off until data terms are cleared).               |
+| `SCENARIO_RUN_BUDGET_UNITS`                                 | Per-project scenario run budget per rolling 24 h (default 1200).                                       |
+| `CENSUS_API_KEY`, `DUCKDB_BIN`                              | Data-loading scripts only.                                                                             |
+| `POSTGRES_*`, `CONTAINER_*`                                 | The local Docker/Podman PostGIS setup.                                                                 |
 
-The fixture screens, offline tests and production build run without these credentials.
-The optional live Jev test needs its configured endpoint and API key. The OpenAI live
-intake test additionally requires explicit opt-in; Census variables are for data loading.
-
-### Nessie consultant tool
-
-Sign in with GitHub at [Nessie v2](https://v2.nessieisreal.com/account), place the
-v2 key in `NESSIE_API_KEY` in ignored `.env.local`, and restart the dev server.
-For cash-buffer or site-affordability questions, the consultant can call
-`read_nessie_cash_buffer` during its normal investigation. Users do not put keys
-or Nessie-specific commands into their prompt.
-
-The tool reads simulated checking/savings accounts, available cash, completed
-cash movements over the last 30 days and upcoming bills. With a current
-investigation comparison and site, the server combines that evidence with the
-site's stored modeled upfront buildout and monthly operating contribution. A
-read-only cash-buffer card appears inside **Consultant activity** after the
-completed tool call. It is saved investigation evidence, not a separate banking
-form or a fresh browser request to Nessie.
-
-These are **simulated accounts**, not an actual owner's bank connection. A sole
-cash account can be identified explicitly as the only demo choice; if several
-exist, the consultant asks which to use rather than adding them together or
-assuming ownership. Deposits are not sales, transfers and rewards are excluded
-from the cash-flow totals, and credit-card limits are not cash. Recent movements
-and upcoming bills are context only; they are not matched to site costs. The
-scenario uses available cash minus modeled upfront buildout plus modeled monthly
-operating contribution. It does not change demand, rankings or CoStar evidence.
-
-The app and consultant never create accounts, move money, or seed/reset a sandbox.
-Missing configuration, an empty sandbox or a provider error becomes an explicit
-consultant limitation, with no fabricated cash recommendation. A 401 means the
-saved key is not accepted by v2; get a valid v2 key rather than using the older
-`?key=` authentication. The read-only `/api/integrations/nessie` endpoint remains
-available for integration diagnostics. Setup, contracts and verification:
-[Nessie integration spec](docs/integrations/nessie.md).
-
-### Populate the Nessie demo sandbox manually
-
-The consultant is read-only. A separate opt-in CLI can create one fictional
-BizBox demo customer and one checking account with **$50,000 of simulated
-starting cash**:
-
-```sh
-pnpm nessie:seed --dry-run
-# After approval to create mock data in the configured sandbox:
-pnpm nessie:seed --confirm
-```
-
-Use the existing local `NESSIE_API_KEY`; never put it in a command or chat. The
-script refuses CI, requires confirmation, restricts the v2 origin, and reuses
-its exact demo records on later runs. It never resets an existing balance or
-creates transactions/bills. Do not run it concurrently from multiple machines.
-The output identifies the demo account, not the key. Run the consultant again
-after seeding; a previously saved empty milestone stays historical evidence.
+All keys are server-only; none are exposed to the browser.
 
 ### Database
 
-The fixture screens run without a database. The Drizzle schema and initial PostGIS migration
-are included. Set `DATABASE_URL` to an approved development database, then run
-`pnpm db:migrate` to apply migrations. `pnpm db:generate` generates a migration after schema
-changes. Migrations change the target database; confirm the target before running them.
-
-`GET /api/health` checks database and PostGIS readiness and returns 503 when they are unavailable.
-Hosted Neon setup and Vercel deployment still require configuration and verification.
+Set `DATABASE_URL`, then run `pnpm db:migrate`. `pnpm db:generate` creates a migration after a
+schema change. Migrations change the target database, so confirm the target first.
 
 ### Run locally with Docker
 
@@ -169,53 +123,62 @@ datasets enter app images. `pnpm db:down` preserves the named volume; destructiv
 `pnpm db:reset --confirm` requires explicit confirmation. Full setup, Podman
 support and native alternatives: [Local PostGIS](docs/local-postgis.md).
 
+To create the fictional Nessie demo account (one customer, $50,000 of simulated cash), run
+`pnpm nessie:seed --dry-run` and then `pnpm nessie:seed --confirm`. It refuses to run in CI and
+reuses its records on later runs.
+
 ## Scripts
 
-| Command          | What it does                                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`       | Starts the Next.js dev server with hot reload, on port 3000 by default.                                          |
-| `pnpm lint`      | Runs ESLint over the repo with the Next.js config (`eslint.config.mjs`).                                         |
-| `pnpm typecheck` | Generates Next.js route types (`next typegen`), then type-checks everything with `tsc --noEmit`.                 |
-| `pnpm test`      | Runs Vitest once. Tests run offline by default; the optional live Jev test is skipped without its configuration. |
-| `pnpm build`     | Builds the production app, the same build Vercel runs.                                                           |
-| `pnpm start`     | Serves the production build from `pnpm build`.                                                                   |
+| Command                          | What it does                                                         |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `pnpm dev` / `pnpm start`        | Dev server with hot reload / serve the production build.             |
+| `pnpm build`                     | Production build, the same one Vercel runs.                          |
+| `pnpm lint`, `pnpm typecheck`    | ESLint; Next.js route types plus `tsc --noEmit`.                     |
+| `pnpm test`                      | Vitest, offline by default.                                          |
+| `pnpm test:e2e`                  | Playwright (chromium, webkit, mobile-chrome and API projects).       |
+| `pnpm format` / `format:check`   | Prettier.                                                            |
+| `pnpm db:*`                      | Migrations, local PostGIS up/down/reset, data load and verification. |
+| `pnpm jev:record`, `nessie:seed` | Key-gated helpers for recording Jev examples and seeding Nessie.     |
 
 Every PR must pass `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
 
-## CI and deployment
+## Deployment
 
-See [CI and deployment](docs/ci.md) for required checks, secret scanning, and Vercel environments.
+Vercel deploys **production from `main` only**; PR branches don't deploy. Functions run in
+`iad1`, next to the Neon database. A push to `main` that only changes docs or tests skips the
+build. See [CI and deployment](docs/ci.md) for required checks and secret scanning.
 
 ## Repo layout
 
 ```
-app/                  Next.js routes (App Router)
-  (pages)/projects/[projectId]/
-                      intake, map, sites/[siteId], comparison, replay screens
-  api/health/         database and PostGIS readiness route
-components/           React components (intake screen, workspace view)
+app/
+  (pages)/projects/[projectId]/  intake, workspace, map, sites, comparison, replay, simulator, plan
+  api/                            route handlers: sites, comparisons, investigations, projects
+                                  (intake, scenarios, station experiments), voice, vexcel, integrations
+components/                      screens: onboarding, intake, workspace-screen, map, site,
+                                  comparison, decision, insights, replay, simulator, city, plan, voice
 lib/
-  contracts/          shared Zod schemas for requests and responses
-  db/                 server-only database client and Drizzle schema
-  sim/                queue engine, monthly economics, the shared seeded RNG (random.ts)
-  demand/             demand model: Jev behaviour table or Huff fallback, then seeded arrivals
-  panel/              persona builder and the Jev customer panel client
-  client/             browser-side API client and workspace routes
-fixtures/             synthetic contract fixtures
-drizzle/              generated database migrations
-AGENTS.md             rules for every contributor, human or agent
+  contracts/     shared Zod schemas
+  agent/         intake agent, consultant planner and tools
+  data/          CoStar and public-data loaders
+  panel/         personas and the Jev client (with a Postgres cache)
+  demand/        Jev behaviour table or Huff fallback, seeded arrivals
+  sim/           queue engine, economics, seeded RNG
+  evaluation/    comparison, sensitivity and robustness
+  scenario/      immutable scenarios and budgeted runs
+  insights/, layout/, interior/, nessie/, voice/, export/, db/, client/
+drizzle/         migrations
+docs/            design notes and integration specs
+tests/           Playwright specs (tests/e2e) and manual computer-use scripts (tests/manual)
+AGENTS.md        rules for every contributor, human or agent
 ```
-
-All simulation code in `lib/` is pure TypeScript and uses the seeded generator in
-`lib/sim/random.ts`, never `Math.random`, so the same inputs always give the same results.
 
 ## Contributing
 
-Read [`AGENTS.md`](AGENTS.md) before you start. In short:
+Read [`AGENTS.md`](AGENTS.md) first. Work is planned in **Linear** (team **HAC**), one ticket per
+task, and agents coordinate on the Agent Board (ticket **HAC-6**). Branch from a fresh `main`
+using the ticket's branch name, and open a PR titled `[HAC-n] <ticket title>` with `Fixes HAC-n`
+in the body. Never force-push to `main`.
 
-- Work is planned in **Linear**, team **HAC**. Each ticket is labelled `agent:<name>` for its owner.
-- Agents coordinate on the **Agent Board**, the comments on Linear ticket **HAC-6**.
-- Branch from a fresh `main` using the ticket's branch name, which contains the ticket ID
-  (for example `hac-12-...`).
-- Open a PR titled `[HAC-12] <ticket title>` with `Fixes HAC-12` in the body. Keep PRs small, and
-  never force-push to `main`.
+CoStar data comes from the licensed hackathon kit and is never committed; only aggregate
+counts appear in docs.

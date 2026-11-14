@@ -91,6 +91,11 @@ export default async function Page({
   const tilesetUrl = process.env.VEXCEL_API_KEY?.trim()
     ? "/api/vexcel/3d/tileset"
     : undefined;
+  // A browser SDK key is domain-restricted and intentionally client-permitted.
+  // The API key/token never cross this server-component boundary. The public
+  // cafe scan is a demonstration reference, never a stored candidate site, so it
+  // is passed to the labelled example only.
+  const sdkKey = process.env.MATTERPORT_SDK_KEY?.trim();
   const stored = await loadStored(projectId, search);
   if (!stored && !getPreviewProject(projectId) && !one(search.comparison))
     return <WorkspaceView projectId={projectId} view="simulator" />;
@@ -156,6 +161,25 @@ export default async function Page({
           data={makeDemo()}
           plan={demoPlan}
           coordinates={coordinates}
+          matterport={
+            sdkKey
+              ? {
+                  sdkKey,
+                  modelId: "qfmMbTLt4Bo",
+                  // Proposed service-area overlay, registered against the public
+                  // scan's floor intersections; not a measured business layout.
+                  placement: {
+                    origin: { x: 17.1, y: 0.04, z: 10.3 },
+                    rotationY: Math.PI,
+                    scale: 0.5,
+                  },
+                  viewpoint: {
+                    sweepId: "y0xe63ayfyepf8cg51cua77hb",
+                    rotation: { x: -17, y: 168 },
+                  },
+                }
+              : undefined
+          }
         />
       </WorkspaceView>
     </SimulatorContext>

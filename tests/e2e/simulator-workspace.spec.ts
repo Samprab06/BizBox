@@ -70,7 +70,7 @@ test("simulator fits phone, tablet and desktop and expands with the keyboard", a
   for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(
-      page.getByRole("heading", { name: "Baseline", exact: true }),
+      page.getByRole("heading", { name: "One staffed counter", exact: true }),
     ).toBeVisible();
     expect(
       await page.evaluate(
@@ -79,7 +79,7 @@ test("simulator fits phone, tablet and desktop and expands with the keyboard", a
     ).toBe(true);
   }
   const expand = page.getByRole("button", {
-    name: "Expand Baseline modeled café",
+    name: "Expand One staffed counter modeled café",
     exact: true,
   });
   await expand.focus();
@@ -87,7 +87,7 @@ test("simulator fits phone, tablet and desktop and expands with the keyboard", a
   if (browserName === "chromium") {
     await expect(
       page.getByRole("button", {
-        name: "Collapse Baseline modeled café",
+        name: "Collapse One staffed counter modeled café",
         exact: true,
       }),
     ).toBeVisible();

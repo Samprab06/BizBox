@@ -1,0 +1,374 @@
+/* Content-sized, translucent neutral glass. Approved dark-glass file stays intact. */
+:root,
+body[data-theme="night"],
+body[data-theme="day"] {
+  --glass: rgba(12, 13, 18, 0.24);
+  --field: rgba(8, 9, 14, 0.27);
+  --stroke: rgba(255, 255, 255, 0.36);
+  --line: rgba(255, 255, 255, 0.18);
+}
+.la-scene {
+  background-image: var(--city-photo, url("photos/la-real.jpg"));
+  background-position: center 40%;
+  filter: saturate(0.75) brightness(0.72) contrast(1.03);
+}
+body[data-theme="night"] .la-scene {
+  filter: saturate(0.72) brightness(0.68) contrast(1.04);
+}
+.glass-refraction {
+  background-image: var(--city-photo, url("photos/la-real.jpg"));
+  background-position: center 40%;
+  padding: 7px;
+  opacity: 0.36;
+}
+body[data-theme="night"] .glass-refraction {
+  opacity: 0.36;
+}
+.onboard-card,
+body[data-theme="night"] .onboard-card,
+body[data-theme="day"] .onboard-card {
+  background: var(--glass);
+  backdrop-filter: blur(13px) saturate(0.82);
+  -webkit-backdrop-filter: blur(13px) saturate(0.82);
+  border-color: var(--stroke);
+  box-shadow:
+    0 22px 65px -25px #0008,
+    inset 0 1px 1px #ffffff65;
+}
+.onboard-card:before {
+  padding: 1px;
+  opacity: 0.68;
+}
+.onboard-card:after {
+  opacity: 0.45;
+}
+.glass-light {
+  background: linear-gradient(
+    118deg,
+    #ffffff08,
+    transparent 23%,
+    transparent 78%,
+    #ffffff04
+  );
+}
+.question-card {
+  min-height: 0;
+  max-height: calc(100dvh - 126px);
+}
+.question-card .card-top {
+  padding: 21px 34px 0;
+}
+.question-card .card-content {
+  min-height: 0;
+  padding: 23px 34px 26px;
+  background: linear-gradient(180deg, #08091000, #08091012);
+}
+.question-card .card-content h1 {
+  font-size: 32px;
+  line-height: 1.18;
+  margin-bottom: 21px;
+  max-width: 590px;
+  text-shadow: 0 1px 3px #0003;
+}
+.question-card .intro {
+  margin-top: -9px;
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+.question-card .card-footer {
+  min-height: 0;
+  padding: 15px 34px 18px;
+  background: #ffffff02;
+}
+.question-card .choice-grid {
+  gap: 10px;
+}
+.question-card .choice {
+  min-height: 66px;
+  padding: 14px 16px;
+  font-size: 14px;
+  border-radius: 15px;
+  background: #ffffff06;
+}
+.question-card .price-choices .choice {
+  min-height: 66px;
+}
+.question-card .choice svg {
+  width: 23px;
+  height: 23px;
+}
+.question-answer textarea {
+  min-height: 96px;
+  max-height: 170px;
+  font-size: 18px;
+  padding: 14px 16px;
+}
+.question-answer input {
+  min-height: 58px;
+  font-size: 18px;
+  padding: 13px 16px;
+}
+.question-answer .currency input {
+  min-height: 70px;
+  font-size: 31px;
+  padding-left: 38px;
+}
+.question-answer .currency > span {
+  top: 16px;
+  left: 17px;
+  font-size: 23px;
+}
+.question-card .field-hint {
+  margin-top: 9px;
+  font-size: 11px;
+}
+.question-card .primary {
+  min-height: 44px;
+  padding: 10px 23px;
+  font-size: 13px;
+}
+.question-card .back {
+  padding: 10px 0;
+  font-size: 12px;
+}
+.question-card .cities {
+  gap: 12px;
+}
+.question-card .city-choice {
+  border-radius: 17px;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  background: #ffffff05;
+}
+.question-card .city-photo {
+  height: 124px;
+  overflow: hidden;
+  background: #ffffff08;
+}
+.city-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.city-photo img[data-photo-city="Los Angeles"] {
+  object-position: center 40%;
+}
+.question-card .city-label {
+  padding: 13px 15px;
+  font-size: 15px;
+}
+.question-card .city-choice[aria-pressed="true"] {
+  background: #ffffff16;
+  border-color: #ffffffc2;
+}
+.coming-soon-cities {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin-top: 12px;
+}
+.coming-city {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid #ffffff26;
+  border-radius: 13px;
+  background: #ffffff04;
+  padding: 13px 14px;
+  color: #eeeef5;
+  opacity: 0.62 !important;
+  cursor: not-allowed;
+}
+.coming-city strong {
+  font-size: 12px;
+  font-weight: 450;
+}
+.coming-city span {
+  font-size: 10px;
+  color: #d5d5df;
+  white-space: nowrap;
+}
+.question-card .review {
+  min-height: 0;
+}
+.question-card .card-content.review {
+  padding-top: 23px;
+  padding-bottom: 22px;
+  max-height: 470px;
+}
+.question-card .review-concept {
+  margin-bottom: 12px;
+}
+.question-card .review-row {
+  padding: 8px 0;
+}
+.review-tools {
+  pointer-events: auto;
+}
+.photo-credit {
+  color: #f3f3fa;
+  text-decoration: none;
+  text-shadow: 0 1px 4px #0009;
+  font-size: 10px;
+}
+.photo-credit:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.glass-edge-wave {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: linear-gradient(
+    120deg,
+    transparent 28%,
+    #ffffff08 37%,
+    #ffffffd9 49%,
+    #ffffff26 55%,
+    transparent 67%
+  );
+  background-size: 220% 220%;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  filter: blur(0.25px);
+}
+.liquid-flight,
+.liquid-membrane,
+.liquid-ripple,
+.selection-liquid {
+  display: none !important;
+}
+@media (min-width: 1500px) {
+  .question-card .card-content {
+    min-height: 0;
+  }
+}
+@media (max-width: 720px) {
+  .question-card {
+    min-height: 0;
+    max-height: calc(100dvh - 142px);
+  }
+  .question-card .card-top {
+    padding: 19px 22px 0;
+  }
+  .question-card .card-content {
+    min-height: 0;
+    padding: 21px 22px 23px;
+  }
+  .question-card .card-content h1 {
+    font-size: 27px;
+    margin-bottom: 19px;
+  }
+  .question-card .intro {
+    font-size: 12px;
+    margin-bottom: 17px;
+  }
+  .question-card .card-footer {
+    min-height: 0;
+    padding: 13px 22px 17px;
+  }
+  .question-card .choice {
+    min-height: 59px;
+    font-size: 12px;
+    padding: 13px 9px;
+  }
+  .question-card .price-choices {
+    grid-template-columns: 1fr;
+  }
+  .question-card .price-choices .choice {
+    min-height: 46px;
+  }
+  .question-card .choice svg {
+    width: 20px;
+    height: 20px;
+  }
+  .question-answer input,
+  .question-answer textarea {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+  .question-answer textarea {
+    min-height: 92px;
+  }
+  .question-answer input {
+    min-height: 54px;
+  }
+  .question-answer .currency input {
+    min-height: 65px;
+    font-size: 27px;
+  }
+  .question-answer .currency > span {
+    font-size: 21px;
+    top: 17px;
+  }
+  .question-card .city-photo {
+    height: 86px;
+  }
+  .question-card .city-label {
+    font-size: 13px;
+    padding: 12px;
+  }
+  .question-card .cities {
+    gap: 10px;
+  }
+  .coming-soon-cities {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .coming-city {
+    padding: 10px 8px;
+    gap: 5px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .coming-city strong {
+    font-size: 10px;
+  }
+  .coming-city span {
+    font-size: 8px;
+  }
+  .question-card .card-content.review {
+    min-height: 0;
+    max-height: none;
+    padding: 21px 22px;
+  }
+  .question-card .review-row {
+    padding: 8px 0;
+  }
+  .photo-credit {
+    font-size: 8px;
+  }
+  .glass-refraction {
+    padding: 6px;
+    opacity: 0.3;
+  }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .onboard-card,
+  body[data-theme="night"] .onboard-card,
+  body[data-theme="day"] .onboard-card {
+    background: rgba(18, 19, 25, 0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-edge-wave {
+    display: none !important;
+  }
+}
+.photo-credit {
+  pointer-events: auto;
+}
+.photo-credit:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+  border-radius: 2px;
+}

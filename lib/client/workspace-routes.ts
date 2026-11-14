@@ -10,12 +10,16 @@ export const views = {
 
 export type View = keyof typeof views;
 
-/** Every workspace URL that exists today: the views plus the printable plan (`/plan`). */
-export type WorkspaceRoute = View | "plan";
+/**
+ * Every workspace URL that exists today: the views plus the printable plan (`/plan`) and the
+ * BizBox workspace screen (`/workspace`, HAC-128), which render their own pages.
+ */
+export type WorkspaceRoute = View | "plan" | "workspace";
 
 export const routeLabels: Record<WorkspaceRoute, string> = {
   ...views,
   plan: "Location plan",
+  workspace: "Workspace",
 };
 
 export function workspaceHref(projectId: string, view: WorkspaceRoute, siteId?: string) {
@@ -61,6 +65,7 @@ export const workspaceTasks: readonly WorkspaceTask[] = [
     label: "Find a location",
     entries: [
       { route: "intake", label: views.intake, step: "describe your business" },
+      { route: "workspace", label: routeLabels.workspace, step: "review a space with the BizBox assistant" },
       { route: "map", label: views.map, step: "browse candidate spaces" },
       { route: "site", label: views.site, step: "inspect a space" },
     ],

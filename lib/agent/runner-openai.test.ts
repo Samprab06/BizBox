@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createIntakeSession } from "./intake";
-import { runConfiguredIntakeAgent } from "./runner";
+import { modelConfiguration, runConfiguredIntakeAgent } from "./runner";
 
 vi.mock("server-only", () => ({}));
 afterEach(() => {
@@ -9,6 +9,39 @@ afterEach(() => {
 });
 
 describe("configured OpenAI intake", () => {
+  it("uses an optional OpenAI-compatible base URL without changing the default", () => {
+    expect(modelConfiguration({})).toEqual({ timeout: 10_000, maxRetries: 0 });
+    expect(modelConfiguration({ OPENAI_BASE_URL: " https://opencode.ai/inference/openai/v1 " })).toEqual({
+      timeout: 10_000,
+      maxRetries: 0,
+      baseURL: "https://opencode.ai/inference/openai/v1",
+    });
+  });
+
+  it("sends a tool-calling turn to the configured compatible endpoint", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "test-provider-key");
+    vi.stubEnv("OPENAI_BASE_URL", "https://opencode.ai/inference/openai/v1");
+    vi.stubEnv("OPENAI_MODEL", "glm-5.3-flash-free");
+    const requests: Request[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push(new Request(input, init));
+      return Response.json({
+        id: "chatcmpl-compatible-test", object: "chat.completion", created: 1,
+        model: "glm-5.3-flash-free",
+        choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "Which city?" } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      });
+    }));
+    await runConfiguredIntakeAgent({
+      session: createIntakeSession("p1"),
+      message: "I want a coffee shop",
+      signal: new AbortController().signal,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.url).toBe("https://opencode.ai/inference/openai/v1/chat/completions");
+    expect((await requests[0]!.json()).model).toBe("glm-5.3-flash-free");
+  });
+
   it("requires a private key before any model request", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     const fetch = vi.fn();
