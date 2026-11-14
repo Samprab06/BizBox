@@ -10,6 +10,7 @@ local-docs
 .next/
 .vercel/
 coverage/
+data/public/
 *.tsbuildinfo
 
 next-env.d.ts
