@@ -87,3 +87,15 @@ Don't fix the bug inside a test PR unless it's a one-line test-hook or `aria-lab
   Against the hosted DB use `E2E_BASE_URL=<deployment> E2E_PROJECT_ID=houston-coffee`; it writes test
   profiles and comparisons, so prefer local.
 - `E2E_MODEL=1` also advances an investigation through the configured model.
+
+### Jev capabilities smoke check (HAC-101)
+
+`api/capabilities.spec.ts` checks `GET /api/comparisons/capabilities` returns a well-formed,
+secret-free body. It passes with or without a Jev key. To also assert `jevConfigured: true` on a
+deployment (Vercel Preview or Production), set `E2E_EXPECT_JEV=1`. The route only reports key
+presence and never calls Jev, so it costs nothing.
+
+```sh
+E2E_BASE_URL=https://<your-preview>.vercel.app E2E_EXPECT_JEV=1 \
+  pnpm exec playwright test api/capabilities --project=api
+```

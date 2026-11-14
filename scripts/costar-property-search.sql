@@ -15,6 +15,8 @@ SELECT id, jsonb_build_object(
   'propertyRetail', jsonb_build_object('frontage', data->'propertyRetail'->'frontage'),
   'parking', data->'parking',
   'parkingRatio', data->'parkingRatio',
+  -- HAC-76: the scene API reads stories here instead of detoasting the full property blob.
+  'numStoriesAboveGrade', data->'numStoriesAboveGrade',
   'provenance', jsonb_strip_nulls(jsonb_build_object(
     'city', data->'provenance'->'city',
     'latitude', data->'provenance'->'latitude',

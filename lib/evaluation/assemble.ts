@@ -692,14 +692,19 @@ export async function assembleEvaluation(
     ]);
     for (const site of sites) {
       const table = tables.find((t) => t.siteId === optionId(site.siteId));
-      if (
-        !table ||
-        table.failedPersonaIds.length ||
-        table.personas.length !== personaSet.personas.length
-      ) {
+      const personaCount = personaSet.personas.length;
+      // Personas still unanswered after the panel's own retry; a missing table counts them all.
+      const failedPersonaCount = table
+        ? Math.max(
+            table.failedPersonaIds.length,
+            personaCount - table.personas.length,
+          )
+        : personaCount;
+      site.jevPanel = { personaCount, failedPersonaCount };
+      if (!table || failedPersonaCount > 0) {
         finding(
           "JEV_INCOMPLETE",
-          "Jev table incomplete; all-site Huff fallback will be used.",
+          `Jev failed for ${failedPersonaCount} of ${personaCount} personas after one retry; all-site Huff fallback will be used.`,
           site.siteId,
         );
         continue;
