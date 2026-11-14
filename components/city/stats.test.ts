@@ -51,6 +51,40 @@ describe("city playback statistics", () => {
     }
   });
 
+  it("matches cumulative hourly buckets at each hour boundary", () => {
+    for (const run of runs) {
+      const hours = hourlySeries(run.events, run.metrics);
+      const { openMin, closeMin } = run.metrics;
+      for (let minute = openMin + 60; minute < closeMin; minute += 60) {
+        const completedHours = hours.filter(
+          ({ hour }) => (hour + 1) * 60 <= minute,
+        );
+        // Hourly buckets are half-open, while replay includes events at the seek time.
+        const atBoundary = run.events.filter(
+          (event) => event.type === "completion" && event.timeMin === minute,
+        );
+        const stats = statsAt([run], minute);
+        expect(stats.served).toBe(
+          completedHours.reduce(
+            (sum, hour) => sum + hour.served,
+            atBoundary.length,
+          ),
+        );
+        expect(stats.revenueUsd).toBeCloseTo(
+          completedHours.reduce(
+            (sum, hour) => sum + hour.revenueUsd,
+            atBoundary.reduce(
+              (sum, event) =>
+                sum + (event.type === "completion" ? event.revenueUsd : 0),
+              0,
+            ),
+          ),
+          10,
+        );
+      }
+    }
+  });
+
   it("reports actual elapsed queue waits, not future service wait or a daily average", () => {
     const run = runs[0];
     const minute = run.events.find((e) => e.type === "queue_entry")!.timeMin;
