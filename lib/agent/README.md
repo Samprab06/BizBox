@@ -53,21 +53,29 @@ disable caching.
 
 `runner.ts` binds `save_profile` to the installed JavaScript `deepagents` graph.
 The runner exposes only that tool, with no filesystem or delegation tools.
-Natural-language requests require `ANTHROPIC_API_KEY` in private server environment
+Natural-language requests require `OPENAI_API_KEY` in private server environment
 configuration. Structured patches do not require a model key.
 
-The configured model is [`claude-sonnet-4-6`](https://platform.claude.com/docs/en/models/sonnet-4-6/overview), with a 1,500-token response cap, no
-provider retries, at most three save calls and a graph recursion limit of six.
+The default model is [`gpt-6-luna`](https://developers.openai.com/api/docs/models/gpt-6-luna),
+confirmed in official OpenAI documentation on November 14, 2026. `OPENAI_MODEL`
+optionally selects another compatible tool-calling model. Reasoning is set to
+`none` so temperature 0 is supported. The runner keeps a 1,500-token response cap,
+no provider retries, at most three save calls and a graph recursion limit of six.
 Requests have a 20-second intake deadline; the route allows 30 seconds. No paid
 provider fallback is selected. These bounds limit each request's work; they do not
 establish a monthly spending limit.
 
 The provider runner is guarded by `server-only`. `next.config.ts` loads
-`deepagents`, `@langchain/core` and `@langchain/anthropic` as
+`deepagents`, `@langchain/core` and `@langchain/openai` as
 [server external packages](https://nextjs.org/docs/app/api-reference/config/next-config-js/serverExternalPackages).
 This keeps optional SDK sandbox imports out of Turbopack's bundle; no sandbox or
 WebSocket dependency is needed by this intake tool.
 
 The tests use scripted founder answers and a scripted chat model against the real
-compiled deepagents graph. They require no provider calls. Live Anthropic, hosted
+compiled deepagents graph and the real OpenAI SDK with a stubbed fetch transport.
+They require no provider calls. Live OpenAI, hosted
 Postgres and Vercel preview verification remain separate from these offline tests.
+
+To opt into the synthetic paid smoke test, privately export `OPENAI_API_KEY`, then
+run `RUN_OPENAI_LIVE=1 pnpm exec vitest run lib/agent/runner-live.test.ts`. A key
+alone does not enable paid calls during the routine test suite.

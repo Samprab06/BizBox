@@ -2,7 +2,6 @@ import { pathToFileURL } from "node:url";
 
 export const serverEnvNames = [
   "DATABASE_URL",
-  "ANTHROPIC_API_KEY",
   "JEV_API_KEY",
   "CENSUS_API_KEY",
   "OPENAI_API_KEY",

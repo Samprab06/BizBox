@@ -6,12 +6,13 @@ The env-file guard rejects tracked .env files except for the root .env.example a
 
 The Playwright workflow is tracked in HAC-29 and runs separately. Vercel's GitHub integration handles preview and production builds. [Vercel environments](https://vercel.com/docs/environment-variables)
 
-| Variable | Production | Preview | Development |
-| --- | --- | --- | --- |
-| DATABASE_URL | Production Neon | Isolated preview Neon | Local or development Neon |
-| ANTHROPIC_API_KEY or OPENAI_API_KEY | Runtime provider if enabled | Scoped test provider if enabled | Optional developer credential |
-| JEV_API_KEY and JEV_BASE_URL | Runtime panel if enabled | Scoped test panel if enabled | Optional for live panel tests |
-| CENSUS_API_KEY | Omit from app runtime | Omit from app runtime | Optional for data preparation |
+| Variable                     | Production                         | Preview                            | Development                      |
+| ---------------------------- | ---------------------------------- | ---------------------------------- | -------------------------------- |
+| DATABASE_URL                 | Production Neon                    | Isolated preview Neon              | Local or development Neon        |
+| OPENAI_API_KEY               | Runtime model provider             | Scoped test provider if enabled    | Optional developer credential    |
+| OPENAI_MODEL                 | Optional compatible model override | Optional compatible model override | Optional; defaults to gpt-6-luna |
+| JEV_API_KEY and JEV_BASE_URL | Runtime panel if enabled           | Scoped test panel if enabled       | Optional for live panel tests    |
+| CENSUS_API_KEY               | Omit from app runtime              | Omit from app runtime              | Optional for data preparation    |
 
 Keep application secrets in the relevant Vercel environment or in local .env.local. Use separate preview and production credentials and keep credentials out of NEXT_PUBLIC_ variables.
 
