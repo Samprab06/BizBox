@@ -146,7 +146,7 @@ test.describe("site detail", () => {
 
   for (const siteId of SITE_IDS) {
     test(`${siteId}: every number names its origin as costar, public, founder or default`, async ({ page, gotoView }) => {
-      test.fixme(true, "HAC-21 labels numbers with 'listing' and 'catchment' sources, not the costar/public/founder/default origins");
+      test.fixme(true, "HAC-21 scope: HAC-21 labels numbers with 'listing' and 'catchment' sources, not the costar/public/founder/default origins");
       await gotoView("site", siteId);
       const values = page.getByRole("definition").filter({ hasText: /\d/ });
       const count = await values.count();
@@ -157,7 +157,7 @@ test.describe("site detail", () => {
     });
 
     test(`${siteId}: demand and economics are shown as ranges`, async ({ page, gotoView }) => {
-      test.fixme(true, "HAC-21 site detail has no demand or economics section yet");
+      test.fixme(true, "HAC-21 scope: HAC-21 site detail has no demand or economics section yet");
       await gotoView("site", siteId);
       const demand = page.getByRole("region", { name: /demand|economics/i });
       await expect(demand).toBeVisible();
@@ -166,7 +166,7 @@ test.describe("site detail", () => {
   }
 
   test("a failing site request shows an error with retry", async ({ page }) => {
-    test.fixme(true, "HAC-21 renders site detail from a hard-coded fixture: no data request to fail, no error or retry UI");
+    test.fixme(true, "HAC-21 scope: HAC-21 renders site detail from a hard-coded fixture: no data request to fail, no error or retry UI");
     await page.route("**/api/**/sites/**", (route) => route.fulfill({ status: 500, body: "boom" }));
     await page.goto("/projects/houston-coffee/sites/montrose");
     await expect(page.getByRole("alert")).toBeVisible();

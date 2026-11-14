@@ -136,7 +136,7 @@ test.describe("map", () => {
   test("has no serious or critical accessibility violations", async ({ page, gotoView }) => {
     test.fixme(
       true,
-      "axe: each site marker is a react-map-gl role=button aria-label='Map marker' wrapping a focusable link " +
+      "HAC-42: axe: each site marker is a react-map-gl role=button aria-label='Map marker' wrapping a focusable link " +
         "(nested-interactive, label-content-name-mismatch), components/map/candidate-map.tsx",
     );
     await gotoView("map", "montrose");
@@ -147,7 +147,7 @@ test.describe("map", () => {
   // ---- Behaviour the ticket describes that HAC-21 did not ship -----------------------
 
   test("selecting a marker or a list row selects the site, sets ?site= and highlights it in both", async ({ page, gotoView }) => {
-    test.fixme(true, "HAC-21 navigates straight to /sites/<id> on click: no select state, no highlight, ?site= is not set by clicking");
+    test.fixme(true, "HAC-21 scope: HAC-21 navigates straight to /sites/<id> on click: no select state, no highlight, ?site= is not set by clicking");
     await gotoView("map");
     const list = page.getByRole("list", { name: "Candidate sites" });
 
@@ -163,14 +163,14 @@ test.describe("map", () => {
   });
 
   test("a zero-site project shows an empty state", async ({ page }) => {
-    test.fixme(true, "HAC-21 reads sites from a hard-coded fixture: nothing to mock, no empty state exists");
+    test.fixme(true, "HAC-21 scope: HAC-21 reads sites from a hard-coded fixture: nothing to mock, no empty state exists");
     await page.route("**/api/**/sites*", (route) => route.fulfill({ json: { sites: [] } }));
     await page.goto("/projects/houston-coffee/map");
     await expect(page.getByText(/no (candidate )?(sites|spaces)/i)).toBeVisible();
   });
 
   test("a failing sites request shows an error with retry", async ({ page }) => {
-    test.fixme(true, "HAC-21 makes no data request on the map: nothing to fail, no error or retry UI exists");
+    test.fixme(true, "HAC-21 scope: HAC-21 makes no data request on the map: nothing to fail, no error or retry UI exists");
     await page.route("**/api/**/sites*", (route) => route.fulfill({ status: 500, body: "boom" }));
     await page.goto("/projects/houston-coffee/map");
     await expect(page.getByRole("alert")).toBeVisible();
