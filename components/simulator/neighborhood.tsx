@@ -9,6 +9,7 @@ import {
   demandLevel,
   trafficLevel,
 } from "./day-cycle";
+import { NeighborhoodSky } from "./neighborhood-sky";
 import roads from "./montrose-roads.json";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
@@ -63,6 +64,8 @@ export default function Neighborhood({
         globe: false,
         skyBox: false,
         skyAtmosphere: false,
+        useBrowserRecommendedResolution: false,
+        contextOptions: { webgl: { alpha: true } },
         baseLayerPicker: false,
         geocoder: false,
         animation: false,
@@ -74,8 +77,11 @@ export default function Neighborhood({
         selectionIndicator: false,
         infoBox: false,
       });
+      viewer.scene.backgroundColor = Color.TRANSPARENT;
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
+        maximumScreenSpaceError: 1,
+        dynamicScreenSpaceError: false,
       });
       if (closed) {
         tileset.destroy();
@@ -140,10 +146,6 @@ export default function Neighborhood({
       }
       const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
       city.clock.shouldAnimate = false;
-      const nightSky = Color.fromCssColorString("#10182e");
-      const daySky = Color.fromCssColorString("#87bce6");
-      const twilightSky = Color.fromCssColorString("#ee9e83");
-      const sky = new Color();
       let previousMinute = -1;
       city.scene.preUpdate.addEventListener(() => {
         const step = Math.floor(timeRef.current / 5) * 5;
@@ -159,13 +161,6 @@ export default function Neighborhood({
           0,
           1 - Math.min(Math.abs(step - 410), Math.abs(step - 1040)) / 75,
         );
-        Color.lerp(nightSky, daySky, Math.sqrt(light), sky);
-        city.scene.backgroundColor = Color.lerp(
-          sky,
-          twilightSky,
-          warm * 0.85,
-          sky,
-        );
         const brightness = 0.37 + 0.63 * light + warm * 0.2;
         const red = Math.min(1, brightness + 0.15 * warm);
         const blue = Math.min(1, brightness + 0.1 * (1 - light) - 0.1 * warm);
@@ -175,8 +170,8 @@ export default function Neighborhood({
       });
 
       viewer.camera.setView({
-        destination: Cartesian3.fromDegrees(longitude, latitude - 0.0018, 195),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(-40), roll: 0 },
+        destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
+        orientation: { heading: 0, pitch: CesiumMath.toRadians(-17), roll: 0 },
       });
       trafficEntities.current = (show) => {
         for (const entity of entities) entity.show = show;
@@ -203,6 +198,7 @@ export default function Neighborhood({
 
   return (
     <div id="neighborhood" className="relative h-dvh w-full bg-ink">
+      <NeighborhoodSky minute={minute} />
       <div
         className="absolute inset-0"
         ref={container}
