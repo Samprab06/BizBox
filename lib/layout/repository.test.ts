@@ -17,7 +17,7 @@ import {
 
 vi.mock("server-only", () => ({}));
 
-it("rejects malformed geometry before opening a database", async () => {
+it("validates geometry and exact scope before opening a database", async () => {
   const repo = createPostgresLayoutRepository(() => {
     throw new Error("database must remain unopened");
   });
@@ -34,6 +34,12 @@ it("rejects malformed geometry before opening a database", async () => {
   await expect(repo.get("", layout.layoutId)).rejects.toBeInstanceOf(
     LayoutInputError,
   );
+  await expect(repo.get(" project ", layout.layoutId)).rejects.toBeInstanceOf(
+    LayoutInputError,
+  );
+  await expect(
+    repo.get("project", ` ${layout.layoutId}`),
+  ).rejects.toBeInstanceOf(LayoutInputError);
 });
 
 const enabled =

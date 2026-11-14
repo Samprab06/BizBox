@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { projects } from "@/lib/db/schema";
+import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
 
 export const runtime = "nodejs";
@@ -17,3 +18,5 @@ export const POST = createIntakeHandler({
     return rows.length === 1;
   },
 });
+
+export const GET = createIntakeCapabilitiesHandler();

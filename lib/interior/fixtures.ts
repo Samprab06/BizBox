@@ -3,8 +3,10 @@ import {
   type InteriorResponse,
   type InteriorProvenance,
 } from "../contracts/interior";
+import publicDemo from "./__fixtures__/public-demo.json";
 
 export const interiorFixtureIds = [
+  "interior-public-demo",
   "interior-fixture-scan",
   "interior-fixture-floorplan",
   "interior-fixture-modeled",
@@ -25,6 +27,26 @@ const provenance: InteriorProvenance = {
 export function getInteriorFixture(
   siteId: string,
 ): InteriorResponse | undefined {
+  if (siteId === "interior-public-demo")
+    return InteriorResponseSchema.parse({
+      kind: "scan",
+      modelId: publicDemo.modelId,
+      provenance: {
+        origin: "public",
+        provider: "matterport",
+        mode: "recorded",
+        scope: "demo",
+        sourceUrl: publicDemo.sourceUrl,
+        retrievedAt: publicDemo.retrievedAt,
+        description:
+          "Captured official public-demo documentation metadata; not a recorded Model API response",
+        limitations: [
+          "Public example model, not the selected candidate space",
+          "No approved public-demo geometry recording is available; dimensions are absent",
+          "Showcase SDK connection requires an approved domain SDK key",
+        ],
+      },
+    });
   if (siteId === "interior-fixture-scan")
     return InteriorResponseSchema.parse({
       kind: "scan",

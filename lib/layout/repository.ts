@@ -47,7 +47,11 @@ export async function loadLayoutDiffHook(
   const byId = new Map(snapshots);
   return createLayoutDiffHook((id) => byId.get(id) ?? null);
 }
-const Scope = z.string().trim().min(1).max(200);
+const Scope = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((id) => id.trim() === id, "IDs must match their exact stored scope");
 function scope(input: unknown, path: string): string {
   const parsed = Scope.safeParse(input);
   if (!parsed.success)

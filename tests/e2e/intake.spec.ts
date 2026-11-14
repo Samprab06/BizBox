@@ -49,7 +49,13 @@ async function answerAll(page: Page, count: number = ANSWERS.length) {
   for (const { text } of ANSWERS.slice(0, count)) await answer(page, text);
 }
 
-test.beforeEach(async ({ clearIntakeStorage }) => {
+test.beforeEach(async ({ page, clearIntakeStorage }) => {
+  // These specs cover the offline fixture; pin it even where the server has a model (HAC-66).
+  await page.route("**/api/projects/*/intake", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { modelConfigured: false } })
+      : route.fallback(),
+  );
   await clearIntakeStorage();
 });
 
