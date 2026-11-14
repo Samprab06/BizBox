@@ -2,6 +2,8 @@
 
 The hardware and live platform-screen adapter are prepared locally. The default MacBook review embeds `/landing-workspace`, composing the platform's actual Cesium/Vexcel 3D neighborhood, viewport controls and consultant component. See [screen-source.md](screen-source.md). This is an additive handoff for the later landing choreography. No existing checkpoint, application page, navigation or asset was removed.
 
+**Canonical UI dependency:** the team subsequently announced HAC-128, implementing the final Text/Voice workspace at `/projects/[id]/workspace` from HAC-112. That work belongs to its existing owner. This landing adapter is a bridge using current shared components, not the accepted final workspace design. Once the canonical UI and its real 3D map surface are available, point the MacBook at that supported route/composition. A city photograph from the workspace reference is not a substitute for the requested 3D map. HAC-115's final canonical-UI acceptance remains open until that integration is verified.
+
 ## Source and attribution
 
 - Original: [macbook pro M3 16 inch 2024](https://sketchfab.com/3d-models/macbook-pro-m3-16-inch-2024-8e34fc2b303144f78490007d91ff57c4) by [jackbaeten](https://sketchfab.com/jackbaeten).

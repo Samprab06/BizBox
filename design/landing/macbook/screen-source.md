@@ -2,6 +2,8 @@
 
 ## Current screen: live actual-platform adapter
 
+This bridge reuses current platform components. The later board announcement assigns the canonical final Text/Voice workspace to **HAC-128** at `/projects/[id]/workspace`; use that owner's supported UI/3D-map composition once ready. Do not present this bridge layout as the final accepted product UI or substitute the reference's city photograph for a geographic map. Final canonical screen parity remains an integration dependency.
+
 The intended MacBook display is now the **live `/landing-workspace` route**, not the retained 2D PNG below. The route composes the platform's existing components:
 
 - `components/simulator/neighborhood.tsx`: the actual Cesium/Vexcel 3D neighborhood used in `/projects/houston-coffee/simulator`.
