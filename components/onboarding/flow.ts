@@ -8,7 +8,7 @@
  */
 import { operatingHours } from "@/lib/client/intake-business-profile";
 import { fields, missingFields, profileValidationMessage, type Profile } from "@/components/intake/profile";
-import { DEFAULT_RANGE, formatHoursValue, parseHoursValue } from "./clock-dial-math";
+import { DEFAULT_RANGE, formatHoursValue, formatTime, parseHoursValue } from "./clock-dial-math";
 
 export type FieldKey = (typeof fields)[number]["key"];
 
@@ -210,6 +210,10 @@ export function reviewValue(step: QuestionStep, value: string): string {
   if (step === "price") return priceChoices.find((choice) => choice.value === value)?.label ?? value;
   if ((step === "rent" || step === "buildout") && /^\d+$/.test(value)) return money(Number(value));
   if (step === "staff" && /^\d+$/.test(value)) return `${value} on shift`;
+  if (step === "hours") {
+    const range = parseHoursValue(value);
+    if (range) return `${formatTime(range.open)} – ${formatTime(range.close)}`;
+  }
   return value;
 }
 

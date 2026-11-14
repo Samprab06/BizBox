@@ -76,7 +76,11 @@ export function ClockDial({
   function startDrag(target: Handle | "arc", event: PointerEvent<HTMLElement | SVGElement>) {
     if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // A pointer the browser no longer tracks cannot be captured; the drag still works on the target.
+    }
     if (target !== "arc") (event.currentTarget as HTMLElement).focus({ preventScroll: true });
     setDrag({ id: event.pointerId, target, startMinute: dialMinute(event), startRange: value });
   }

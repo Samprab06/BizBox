@@ -112,6 +112,8 @@ describe("resume and defaults", () => {
     expect(stepError("hours", initialValue("hours", initialSession.profile))).toBeUndefined();
     expect(initialValue("hours", updateProfile(initialSession.profile, "hours", "11am – 11pm"))).toBe("11am – 11pm");
     expect(initialValue("hours", updateProfile(initialSession.profile, "hours", "evenings"))).toBe("09:00–17:00");
+    expect(reviewValue("hours", "09:00–22:15")).toBe("9:00 AM – 10:15 PM");
+    expect(reviewValue("hours", "whenever")).toBe("whenever");
     // The default is not founder input until Continue saves it.
     expect(initialSession.profile.hours).toBeUndefined();
   });
