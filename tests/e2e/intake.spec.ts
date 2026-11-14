@@ -27,7 +27,7 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 // The chat box is labelled "Your answer · <field>"; the profile fields are labelled
 // with just the field name (plus a "Default" badge on pre-filled ones).
 const chatBox = (page: Page) => page.getByRole("textbox", { name: /^Your answer/ });
-const conversation = (page: Page) => page.getByRole("log", { name: "Conversation" });
+const conversation = (page: Page) => page.getByRole("list", { name: "Conversation" });
 // The app's own alert; Next.js also renders an empty role="alert" route announcer.
 const saveAlert = (page: Page) => page.getByRole("alert").filter({ hasText: "could not save your changes" });
 const stillNeeded = (page: Page) => page.getByText(/^Still needed:/);

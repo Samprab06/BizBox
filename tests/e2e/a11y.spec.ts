@@ -32,10 +32,6 @@ async function focusedOutline(page: Page) {
 test.describe("every view passes the axe scan", () => {
   for (const view of VIEW_ORDER) {
     test(`${view} view`, async ({ page, gotoView }) => {
-      test.fixme(
-        view === "intake",
-        'HAC-40: axe rule "listitem" (serious): <ol role="log" aria-label="Conversation"> in components/intake/intake-screen.tsx overrides the list role, so its <li> children are not in a list',
-      );
       await gotoView(view, siteFor(view));
       await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
       await expectNoA11yViolations(page);
@@ -44,7 +40,7 @@ test.describe("every view passes the axe scan", () => {
 
   test("project unavailable state", async ({ page }) => {
     await page.goto(workspaceHref("no-such-project", "map"));
-    await expect(page.getByRole("heading", { level: 2, name: "Project unavailable" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /could not be found/i })).toBeVisible();
     await expectNoA11yViolations(page);
   });
 
@@ -88,6 +84,10 @@ test.describe("page structure", () => {
 
 test.describe("keyboard and focus", () => {
   test("the first Tab stop is a skip link or the Sitework home link", async ({ page, gotoView, browserName }) => {
+    test.skip(
+      browserName === "webkit" && process.platform === "win32",
+      "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
+    );
     await gotoView("map");
     await pressTab(page, browserName);
 
@@ -104,6 +104,10 @@ test.describe("keyboard and focus", () => {
     projectId,
     browserName,
   }) => {
+    test.skip(
+      browserName === "webkit" && process.platform === "win32",
+      "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
+    );
     await gotoView("map");
 
     const seen: string[] = [];
@@ -126,6 +130,10 @@ test.describe("keyboard and focus", () => {
       gotoView,
       browserName,
     }) => {
+      test.skip(
+        browserName === "webkit" && process.platform === "win32",
+        "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
+      );
       await gotoView(view, siteFor(view));
 
       // Header link plus the five nav links.

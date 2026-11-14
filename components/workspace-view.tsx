@@ -21,7 +21,7 @@ export function WorkspaceView({ projectId, view, siteId, children }: { projectId
     <>
       <nav aria-label="Project views" className="flex flex-wrap gap-1 border-b border-line pb-3">
         {(Object.keys(views) as View[]).map((item) => (
-          <Link key={item} href={workspaceHref(projectId, item, selectedId)}
+          <Link key={item} href={workspaceHref(projectId, item, selectedId)} prefetch={false}
             aria-current={item === view ? "page" : undefined}
             className="rounded-lg px-4 py-2 text-sm font-medium text-muted hover:bg-white aria-[current=page]:bg-pine aria-[current=page]:text-white">
             {views[item]}
