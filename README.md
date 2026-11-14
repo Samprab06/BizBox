@@ -14,7 +14,7 @@ pnpm test
 pnpm build
 ```
 
-These offline checks must work without provider credentials. The homepage is a bootstrap placeholder; product screens belong to their feature tickets. ESLint 9.39.5 is pinned to satisfy the current Next.js lint plugins' peer ranges; npm reports its upstream support deprecation. Upgrade the plugin set together before moving to ESLint 10. Drizzle Kit also brings deprecated esbuild-kit transitive dependencies; no peer conflicts are being suppressed.
+These offline checks must work without provider credentials. The product UI already merged on main is preserved; this change adds the shared platform foundation. ESLint 9.39.5 is pinned to satisfy the current Next.js lint plugins' peer ranges; npm reports its upstream support deprecation. Upgrade the plugin set together before moving to ESLint 10. Drizzle Kit also brings deprecated esbuild-kit transitive dependencies; no peer conflicts are being suppressed.
 
 ## Database and hosted setup
 

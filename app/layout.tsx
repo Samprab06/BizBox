@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
-import "./globals.css";
+import "./workspace.css";
 
-export const metadata: Metadata = {
-  title: "HackPrinceton",
-  description: "Service-business location planning workspace",
-};
+export const metadata: Metadata = { title: "Sitework", description: "Explore locations for your service business." };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="en"><body>{children}</body></html>;
 }
