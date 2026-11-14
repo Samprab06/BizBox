@@ -23,11 +23,23 @@ export type InteriorSite = {
 export type InteriorSiteReader = (
   siteId: string,
 ) => Promise<InteriorSite | null>;
+export type InteriorModelMapping = {
+  modelId: string;
+  propertyId: string;
+  spaceId: string | null;
+};
+export type InteriorDimensionsProvider = (
+  mapping: InteriorModelMapping,
+) => Promise<InteriorDimensions | undefined>;
 
 export async function resolveInterior(
   siteId: string,
   read: InteriorSiteReader,
-  options: { allowLicensedAssets?: boolean; sdkKey?: string } = {},
+  options: {
+    allowLicensedAssets?: boolean;
+    sdkKey?: string;
+    dimensionsProvider?: InteriorDimensionsProvider;
+  } = {},
 ): Promise<InteriorResponse> {
   const fixture = getInteriorFixture(siteId);
   if (fixture) return fixture;
@@ -46,6 +58,18 @@ export async function resolveInterior(
           a.modelId.localeCompare(b.modelId),
       )[0];
     if (model) {
+      let dimensions = model.dimensions ?? undefined;
+      if (!dimensions && options.dimensionsProvider) {
+        try {
+          dimensions = await options.dimensionsProvider({
+            modelId: model.modelId,
+            propertyId: site.propertyId,
+            spaceId: model.spaceId,
+          });
+        } catch {
+          /* A scan remains displayable without provider geometry. */
+        }
+      }
       const scope = model.spaceId === null ? "property" : "space";
       const scopeLimitations =
         model.spaceId === null
@@ -53,21 +77,26 @@ export async function resolveInterior(
               "Parent-property scan is not verified suite geometry; do not derive suite capacity from it",
             ]
           : [];
+      const geometryLimitations = dimensions
+        ? []
+        : [
+            "Dimensions unavailable: no complete approved room metrics and boundary cache",
+          ];
       return InteriorResponseSchema.parse({
         kind: "scan",
         modelId: model.modelId,
         ...(options.sdkKey?.trim()
           ? { showcaseParams: { sdkKey: options.sdkKey.trim() } }
           : {}),
-        ...(model.dimensions
+        ...(dimensions
           ? {
               dimensions: {
-                ...model.dimensions,
+                ...dimensions,
                 provenance: {
-                  ...model.dimensions.provenance,
+                  ...dimensions.provenance,
                   scope,
                   limitations: [
-                    ...model.dimensions.provenance.limitations,
+                    ...dimensions.provenance.limitations,
                     ...scopeLimitations,
                   ],
                 },
@@ -77,7 +106,11 @@ export async function resolveInterior(
         provenance: {
           ...model.source,
           scope,
-          limitations: [...model.source.limitations, ...scopeLimitations],
+          limitations: [
+            ...model.source.limitations,
+            ...scopeLimitations,
+            ...geometryLimitations,
+          ],
         },
       });
     }

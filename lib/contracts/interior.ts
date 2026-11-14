@@ -3,12 +3,15 @@ import { OriginSchema } from "./index";
 
 export const InteriorProvenanceSchema = z
   .object({
-    origin: OriginSchema,
+    // Local extension only; simulation/global origins remain owned by SIM-14.
+    origin: z.union([OriginSchema, z.literal("matterport")]),
     provider: z.enum(["matterport", "costar", "modeled"]),
     mode: z.enum(["synthetic", "recorded", "live"]),
     scope: z.enum(["demo", "space", "property"]),
     description: z.string().trim().min(1),
     limitations: z.array(z.string().trim().min(1)),
+    sourceUrl: z.url().optional(),
+    retrievedAt: z.iso.datetime().optional(),
   })
   .strict();
 export type InteriorProvenance = z.infer<typeof InteriorProvenanceSchema>;

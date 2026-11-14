@@ -1,16 +1,38 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { isMain, isSensitiveName, serverEnvNames } from "./env-policy";
+import {
+  isMain,
+  isSensitiveName,
+  serverEnvNames,
+  clientPermittedEnvNames,
+} from "./env-policy";
 
 const credentialPattern =
   /(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|(?:postgres(?:ql)?|mysql|redis):\/\/[^\s:/]+:[^\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
 
 export function publicEnvIssues(env: Record<string, string | undefined>) {
-  const serverValues = serverEnvNames.map((name) => env[name]).filter(Boolean);
+  const serverValues = serverEnvNames.flatMap((name) => {
+    const value = env[name];
+    return value?.trim()
+      ? [
+          value,
+          ...(name === "MATTERPORT_API_TOKEN"
+            ? [Buffer.from(value).toString("base64")]
+            : []),
+        ]
+      : [];
+  });
   return Object.entries(env).flatMap(([name, value]) => {
-    if (!name.startsWith("NEXT_PUBLIC_") || !value?.trim()) return [];
+    const clientPermitted = (
+      clientPermittedEnvNames as readonly string[]
+    ).includes(name);
     if (
-      isSensitiveName(name) ||
+      (!name.startsWith("NEXT_PUBLIC_") && !clientPermitted) ||
+      !value?.trim()
+    )
+      return [];
+    if (
+      (isSensitiveName(name) && !clientPermitted) ||
       credentialPattern.test(value) ||
       serverValues.includes(value)
     ) {
@@ -33,7 +55,16 @@ export function scanClientBundle(
       const issues = contents.includes(name)
         ? [`${path}: found server-only name ${name}`]
         : [];
-      if (env[name]?.trim() && contents.includes(env[name]!))
+      const value = env[name];
+      const variants = value?.trim()
+        ? [
+            value,
+            ...(name === "MATTERPORT_API_TOKEN"
+              ? [Buffer.from(value).toString("base64")]
+              : []),
+          ]
+        : [];
+      if (variants.some((secret) => contents.includes(secret)))
         issues.push(`${path}: found server-only value for ${name}`);
       return issues;
     });
