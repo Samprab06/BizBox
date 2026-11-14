@@ -76,7 +76,7 @@ export const ArrivalScheduleSchema = z
     demandSource: z.enum(["jev", "huff"]),
     stayCurves: z.array(StayCurveSchema),
     customers: z.array(CustomerSchema),
-    params: z.record(SourcedNumberSchema),
+    params: z.record(z.string(), SourcedNumberSchema),
   })
   .superRefine((s, ctx) => {
     if (s.closeMin <= s.openMin) {
