@@ -1,8 +1,48 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
+import { Component, useSyncExternalStore, type ReactNode } from "react";
 
-export default function FloorPlan({
+const FALLBACK = "The 3D layout needs WebGL. Customer details are available below.";
+const fallback = <p className="p-4">{FALLBACK}</p>;
+
+let webglSupport: boolean | undefined;
+/** True when this browser can create a WebGL context (checked once). */
+function hasWebGL() {
+  if (webglSupport === undefined) {
+    try {
+      const canvas = document.createElement("canvas");
+      webglSupport = Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
+    } catch {
+      webglSupport = false;
+    }
+  }
+  return webglSupport;
+}
+const subscribe = () => () => {};
+
+/** HAC-103: a renderer that still fails (lost context, driver error) shows the fallback, not the route error page. */
+class WebGLBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? fallback : this.props.children;
+  }
+}
+
+export default function FloorPlan(props: Parameters<typeof FloorPlanCanvas>[0]) {
+  const supported = useSyncExternalStore(subscribe, hasWebGL, () => false);
+  if (!supported) return fallback;
+  return (
+    <WebGLBoundary>
+      <FloorPlanCanvas {...props} />
+    </WebGLBoundary>
+  );
+}
+
+function FloorPlanCanvas({
   waiting,
   serving,
   stations,
@@ -31,11 +71,7 @@ export default function FloorPlan({
     <Canvas
       orthographic
       camera={{ position: [0, 11, 8], zoom: 37 }}
-      fallback={
-        <p className="p-4">
-          The 3D layout needs WebGL. Customer details are available below.
-        </p>
-      }
+      fallback={fallback}
     >
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[9, 7]} />

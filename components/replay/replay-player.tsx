@@ -91,7 +91,9 @@ export function ReplayPlayer({
             ))}
           </select>
         </label>
-        <span className="ml-auto font-mono">{clock(time)}</span>
+        <span className="ml-auto font-mono" aria-label="Simulated time">
+          {clock(time)}
+        </span>
       </div>
       <label className="grid gap-1 text-sm font-medium">
         Seek to simulated time
@@ -108,7 +110,7 @@ export function ReplayPlayer({
           }}
         />
       </label>
-      <p className="text-sm text-muted">
+      <p className="text-sm text-muted" aria-label="Replay counts">
         {frame.waiting.length} waiting · {frame.serving.length} in service ·{" "}
         {frame.served} served · {frame.left} left
       </p>
