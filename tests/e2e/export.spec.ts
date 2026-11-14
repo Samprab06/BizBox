@@ -379,8 +379,11 @@ test("printing twice preserves deterministic HTML and readable print tables", as
     body: before,
     contentType: "text/html",
   });
-  await testInfo.attach("print-media.png", {
-    body: await page.screenshot({ fullPage: true }),
+  // The complete plan remains checked above and attached as HTML (plus Chromium
+  // PDF). Bound the visual artifact: WebKit CI rejects images above 32767px.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await testInfo.attach("print-media-viewport-top.png", {
+    body: await page.screenshot({ fullPage: false }),
     contentType: "image/png",
   });
   // PDF generation is Chromium-only; native pagination/viewer checks remain manual.

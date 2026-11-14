@@ -92,6 +92,9 @@ test.describe("map", () => {
     gotoView,
   }) => {
     await gotoView("map");
+    await expect(
+      page.getByRole("combobox", { name: "Catchment layer", exact: true }),
+    ).toBeVisible();
     const list = page.getByRole("list", { name: "Candidate sites" });
     await list.getByRole("link", { name: /Montrose storefront/ }).click();
 

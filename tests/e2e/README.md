@@ -61,7 +61,9 @@ HTML and print-media overflow at mobile/intermediate/desktop widths. It observes
 the `window.print()` callback; the current app has no automatic download or
 app-selected filename. Grounded plans export saved low/high intervals, while the
 comparison screen also shows means. Chromium attaches a generated PDF alongside
-the printable HTML and print-media screenshot; WebKit checks the HTML/print flow.
+the complete printable HTML and a viewport-sized print-media screenshot; WebKit
+checks the HTML/print flow. The visual artifact captures the top of the plan and
+avoids WebKit's 32767px image limit; content assertions still cover every row.
 Native Save as PDF, pagination, Preview and Chrome PDF viewer checks are tracked
 separately in `tests/manual/plan-export.md` and remain unexecuted until recorded.
 
