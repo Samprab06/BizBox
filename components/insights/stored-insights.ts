@@ -12,7 +12,14 @@ const payloadSchema = z.object({
   comparisonId: z.string().min(1),
   outdated: z.boolean(),
   result: EvaluationResultSchema,
-  comparison: z.object({ synthetic: z.boolean() }).optional(),
+  comparison: z
+    .object({
+      synthetic: z.boolean(),
+      id: z.string().optional(),
+      projectId: z.string().optional(),
+      profileId: z.string().optional(),
+    })
+    .optional(),
 });
 
 /** This reader never imports the server fixture builder or simulation engine. */
@@ -56,6 +63,12 @@ export function parseStoredInsights(
   if (
     payload.comparisonId !== identity.comparisonId ||
     result.projectId !== identity.projectId ||
+    (payload.comparison?.id !== undefined &&
+      payload.comparison.id !== identity.comparisonId) ||
+    (payload.comparison?.projectId !== undefined &&
+      payload.comparison.projectId !== identity.projectId) ||
+    (payload.comparison?.profileId !== undefined &&
+      payload.comparison.profileId !== result.profileId) ||
     (identity.reference &&
       (result.profileId !== identity.reference.profileId ||
         result.profileVersion !== identity.reference.profileVersion))

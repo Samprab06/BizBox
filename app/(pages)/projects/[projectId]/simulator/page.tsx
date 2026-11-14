@@ -7,6 +7,8 @@ import { demoPlan, makeDemo } from "@/components/simulator/fixture";
 import { storedSimulator } from "@/components/simulator/stored";
 import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
+import { parseStoredInsights } from "@/components/insights/stored-insights";
+import type { SiteInsights } from "@/lib/contracts/insights";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +37,37 @@ async function loadStored(projectId: string, search: Search) {
         : {}),
       ...(one(search.site) ? { siteId: one(search.site) } : {}),
     });
+    let insights: SiteInsights | undefined;
+    let insightsUnavailableReason: string | undefined;
+    if (simulator) {
+      try {
+        insights = parseStoredInsights(
+          {
+            comparisonId: stored.id,
+            outdated: false,
+            result: stored.evaluation.result,
+            comparison: stored.comparison,
+          },
+          {
+            projectId,
+            comparisonId: stored.id,
+            siteId: simulator.data[0].run.siteId,
+          },
+        ).site.insights;
+      } catch {
+        // An insights mismatch must not replace an otherwise valid recorded scene.
+        insightsUnavailableReason =
+          "Retained insights could not be verified for this selected saved site and scenario.";
+      }
+    }
     return simulator
       ? {
           ...simulator,
           synthetic: stored.comparison.synthetic,
           robustness: stored.evaluation.robustness ?? null,
+          insights,
+          insightsUnavailableReason,
+          profileVersion: stored.evaluation.result.profileVersion,
           profileVersionUnknown: currentProfileVersion === null,
           outdated:
             currentProfileVersion !== null &&
@@ -92,6 +120,9 @@ export default async function Page({
             robustness={stored.robustness}
             outdated={stored.outdated}
             profileVersionUnknown={stored.profileVersionUnknown}
+            insights={stored.insights}
+            insightsUnavailableReason={stored.insightsUnavailableReason}
+            profileVersion={stored.profileVersion}
             coordinates={
               tilesetUrl ? { ...stored.coordinates, tilesetUrl } : undefined
             }

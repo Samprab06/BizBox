@@ -20,6 +20,8 @@ import type { WorkspaceObservation } from "@/lib/client/workspace-context";
 import { SimulatorViewport } from "./viewport";
 import { customerLabel } from "./customer-label";
 import type { RenderQuality } from "./render-policy";
+import type { SiteInsights } from "@/lib/contracts/insights";
+import { InsightsDrawer } from "@/components/insights/insights-drawer";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
 const Scene = dynamic(() => import("./scene"), { ssr: false });
@@ -58,11 +60,17 @@ export function SimulatorDemo({
   robustness,
   outdated = false,
   profileVersionUnknown = false,
+  insights,
+  insightsUnavailableReason,
+  profileVersion,
 }: {
   projectId: string;
   robustness?: RobustnessSummary | null;
   outdated?: boolean;
   profileVersionUnknown?: boolean;
+  insights?: SiteInsights;
+  insightsUnavailableReason?: string;
+  profileVersion?: number;
   context: Extract<WorkspaceObservation, { kind: "simulator" }>;
   data: DemoData;
   plan: typeof demoPlan;
@@ -141,6 +149,22 @@ export function SimulatorDemo({
     Math.max(previewRun.metrics.openMin, minute),
   );
   const previewFrame = replayAt(previewRun.events, previewMinute);
+  const insightsControl = (
+    <InsightsDrawer
+      siteId={context.siteId ?? base.run.siteId}
+      comparisonId={context.comparisonId}
+      data={context.phase === "ready" ? insights : undefined}
+      unavailableReason={
+        context.phase === "example"
+          ? "This simulator example retains one seeded day, not the multi-seed insights dataset. Cross-seed insights are unavailable for this example."
+          : insightsUnavailableReason
+      }
+      onOpen={() => setPlaying(false)}
+      outdated={outdated}
+      profileVersionUnknown={profileVersionUnknown}
+      profileVersion={profileVersion}
+    />
+  );
 
   return (
     <div className="min-w-0 space-y-5">
@@ -330,20 +354,23 @@ export function SimulatorDemo({
             quality={quality}
             locationLabel={context.siteId ?? "Selected location"}
             controls={
-              <label className="flex flex-wrap items-center gap-2 text-xs">
-                Graphics
-                <select
-                  aria-label="Graphics quality"
-                  value={quality}
-                  onChange={(event) =>
-                    setQuality(event.target.value as RenderQuality)
-                  }
-                  className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
-                >
-                  <option value="balanced">Balanced</option>
-                  <option value="detailed">Detailed</option>
-                </select>
-              </label>
+              <div>
+                <label className="flex flex-wrap items-center gap-2 text-xs">
+                  Graphics
+                  <select
+                    aria-label="Graphics quality"
+                    value={quality}
+                    onChange={(event) =>
+                      setQuality(event.target.value as RenderQuality)
+                    }
+                    className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
+                  >
+                    <option value="balanced">Balanced</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </label>
+                {insightsControl}
+              </div>
             }
           >
             <Timeline
@@ -375,6 +402,7 @@ export function SimulatorDemo({
             3D neighborhood unavailable. The modeled operating replay is
             available below.
           </p>
+          {insightsControl}
         </Card>
       )}
 

@@ -21,6 +21,9 @@ for (const width of [375, 768, 1280]) {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
     await page.goto(path + "montrose");
     const panel = page.getByRole("region", { name: "Insights", exact: true });
     await expect(panel).toContainText("Authored synthetic service example");
@@ -242,3 +245,108 @@ test("actual chart SVG colors and keyboard tooltips stay legible on both surface
     await expectNoA11yViolations(page);
   }
 });
+
+for (const width of [375, 1280]) {
+  test(`city Insights drawer preserves native focus, provenance and playback at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/api/vexcel/**", (route) =>
+      route.fulfill({ status: 503, body: "Offline imagery fixture" }),
+    );
+    await page.route("https://tiles.openfreemap.org/**", (route) =>
+      route.abort(),
+    );
+    await page.route("**/api/projects/*/intake", (route) =>
+      route.fulfill({ json: { modelConfigured: false } }),
+    );
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST") writes.push(request.url());
+    });
+    await page.goto("/projects/houston-coffee/simulator");
+    const controls = page.getByRole("group", {
+      name: "Shared playback",
+      exact: true,
+    });
+    await controls.getByRole("button", { name: "Play", exact: true }).click();
+    await expect(
+      controls.getByRole("button", { name: "Pause", exact: true }),
+    ).toBeVisible();
+    const trigger = page.getByRole("button", {
+      name: "Open site insights",
+      exact: true,
+    });
+    const city = page.getByRole("region", {
+      name: "3D neighborhood",
+      exact: true,
+    });
+    if (await city.count())
+      await expect(
+        city.getByRole("button", { name: "Open site insights", exact: true }),
+      ).toBeVisible();
+    else
+      await expect(
+        page.getByText(
+          "3D neighborhood unavailable. The modeled operating replay is available below.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", {
+      name: "Site insights",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Selected site: montrose");
+    await expect(dialog).toContainText(
+      "Cross-seed insights are unavailable for this example",
+    );
+    await expect(dialog.locator(".recharts-wrapper")).toHaveCount(0);
+    await expect(controls.locator('button[aria-label="Play"]')).toHaveCount(1);
+    for (let n = 0; n < 3; n++) {
+      await page.keyboard.press("Tab");
+      expect(
+        await dialog.evaluate(
+          (element) =>
+            element.matches(":modal") &&
+            (element.contains(document.activeElement) ||
+              document.activeElement === document.body),
+        ),
+      ).toBe(true);
+    }
+    // Native dialogs permit browser-chrome focus, but the city stays inert.
+    await dialog.getByRole("button", { name: "Close insights" }).focus();
+    await trigger.evaluate((element) => element.focus());
+    await expect(
+      dialog.getByRole("button", { name: "Close insights" }),
+    ).toBeFocused();
+    expect(
+      await dialog.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await expectNoA11yViolations(page);
+    await testInfo.attach(`city-insights-${width}`, {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+    await page.screenshot({
+      path: `/tmp/hac94-evidence/city-drawer-${width}-${testInfo.project.name}.png`,
+    });
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Enter");
+    await dialog.getByRole("button", { name: "Close insights" }).click();
+    await expect(trigger).toBeFocused();
+    expect(writes).toEqual([]);
+  });
+}

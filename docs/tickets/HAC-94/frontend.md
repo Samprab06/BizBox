@@ -79,16 +79,46 @@ Narrow verification passed: owned ESLint, TypeScript, seven component/parser
 checks, and seven Chromium browser cases. Browser cases exercise 375/768/1280 px,
 weekday/weekend and revenue toggles, keyboard table/chart interaction, exact peak
 callout values, saved/outdated/legacy/retry/profile states, reduced motion, serious
-and critical axe violations, actual SVG tick contrast >=4.5:1 and line contrast
+and critical axe violations, actual SVG tick contrast at least 4.5:1 and line contrast
+at least 3:1 on both paper and viewport surfaces. At 375, panel width is 277px, each plot
+235px and body width 375px with no horizontal overflow; at 1280, panel width 902px,
+full plots 860px and paired plots 399px. Screenshots are in
+`/tmp/hac94-evidence/` (`panel-375-paper.png`, `panel-375-viewport.png`,
+`panel-1280-paper.png`, `panel-1280-viewport.png`, plus demand chart crops).
 
-> =3:1 on both paper and viewport surfaces. At 375, panel width is 277px, each plot
-> 235px and body width 375px with no horizontal overflow; at 1280, panel width 902px,
-> full plots 860px and paired plots 399px. Screenshots are in
-> `/tmp/hac94-evidence/` (`panel-375-paper.png`, `panel-375-viewport.png`,
-> `panel-1280-paper.png`, `panel-1280-viewport.png`, plus demand chart crops).
+## City integration checkpoint
 
-The city drawer is still pending the manager's fixed71 integration and is not
-claimed complete. It will read the selected stored site's retained insights; the
-simulator's different one-seed fixture will explicitly report unavailable rather
-than borrowing this example aggregate. Final four repository checks and the full
-browser-engine matrix follow that integration.
+The actual `SimulatorDemo` neighborhood controls now open `InsightsDrawer`; the
+existing no-imagery fallback card exposes the same action. No neighborhood or
+scene implementation changed. The server forwards only the selected stored
+site's validated aggregate; invalid or absent insights leave a valid saved scene
+intact. The one-day simulator fixture explicitly reports unavailable rather than
+borrowing the unrelated 12-seed authored example.
+
+The native modal keeps the city inert, supports Close/Escape and focus return,
+and pauses playback on open. Chart code loads only when a matching retained
+aggregate is opened. The dialog repeats saved profile version and stale or
+unknown-current-version qualifiers, including them in its accessible description;
+those warnings remain visible while the outer page is inert.
+
+Narrow checks passed: owned lint, TypeScript and 18 frontend/server-boundary tests.
+Nine Chromium cases pass, including the actual city drawer at 375/1280 px with
+imagery requests intercepted, keyboard/background-inert/focus-return behavior,
+playback pause, unavailable provenance, axe and no model writes. Native Chrome
+permits browser-chrome focus between its sole modal Close control; tests verify
+that the modal remains active and background focus attempts are blocked rather
+than asserting an artificial custom focus trap.
+
+A console guard caught cross-engine floating-point differences in authored hex
+projection during hydration. SVG coordinates now round to 0.001px; the unrounded
+contract values remain unchanged. Fixture flows now assert no console or page
+errors as well as no page overflow. City drawer screenshots are
+`/tmp/hac94-evidence/city-drawer-{375,1280}-chromium.png`.
+
+The final four checks and Chromium/WebKit/mobile matrix follow this checkpoint.
+Without a local database seed, the stored-city server boundary is covered by
+real seeded-record tests and modal warning markup tests; stored aggregates and
+stale reads are browser-tested on the actual site detail route through canonical
+GET fixtures. The city route browser tests cover its explicit example-unavailable
+state and actual controls/fallback integration. No database, model, tile service,
+or paid call is required for these tests.

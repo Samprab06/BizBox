@@ -95,7 +95,8 @@ export function OriginMap({ day }: { day: InsightsDay }) {
             points={cell.polygon
               .map((point) => {
                 const p = xy(point);
-                return p.x + "," + p.y;
+                // Subpixel rounding also stabilizes SSR across JS math engines.
+                return p.x.toFixed(3) + "," + p.y.toFixed(3);
               })
               .join(" ")}
             fill="var(--sw-baseline)"
@@ -126,7 +127,7 @@ export function OriginMap({ day }: { day: InsightsDay }) {
           N ↑
         </text>
         <text x="16" y="255" fill="var(--sw-muted)" fontSize="11">
-          Mean served per cell · darker = more
+          Mean served per cell · stronger fill = more
         </text>
       </svg>
     </InsightFigure>
