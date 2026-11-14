@@ -16,6 +16,7 @@ import {
   type Road,
 } from "./road-tiles";
 import "cesium/Build/Cesium/Widgets/widgets.css";
+import { glass } from "./glass";
 
 export default function Neighborhood({
   longitude,
@@ -288,96 +289,134 @@ export default function Neighborhood({
   }, [longitude, latitude, tilesetUrl, attempt]);
 
   return (
-    <div id="neighborhood" className="relative h-dvh w-full bg-ink">
+    <div
+      id="neighborhood"
+      className="relative h-dvh w-full overflow-hidden bg-[#06080d] text-white"
+    >
       <div
         className="absolute inset-0"
         ref={container}
         aria-label="Vexcel 3D neighborhood"
       />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.55))]"
+      />
+
+      <header className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3 sm:inset-x-6 sm:top-6">
+        <div
+          className={`${glass} flex items-center gap-2.5 rounded-full py-2 pr-4 pl-3 text-sm`}
+        >
+          <span
+            className={`size-2 rounded-full ${status === "failed" ? "bg-rose-400" : status === "ready" ? "bg-emerald-400 shadow-[0_0_10px] shadow-emerald-400" : "animate-pulse bg-white/50"}`}
+          />
+          <span className="font-medium">Montrose</span>
+          <span className="text-white/40">Houston</span>
+          {status === "failed" && (
+            <button
+              type="button"
+              className="ml-1 text-xs text-white/60 underline-offset-2 hover:text-white hover:underline"
+              onClick={() => {
+                setTrafficVisible(true);
+                setStatus("loading");
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+        <a
+          href="#operating-plan"
+          className={`${glass} rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/[0.12]`}
+        >
+          Operating plan
+        </a>
+      </header>
+
       {status !== "ready" && (
         <div
           role="status"
-          className="absolute left-3 top-3 rounded bg-white px-3 py-2"
+          className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-white/60"
         >
           {status === "loading" ? (
-            "Loading Vexcel 3D mesh…"
+            <span className="flex items-center gap-3">
+              <span className="size-4 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+              Loading 3D neighborhood
+            </span>
           ) : (
-            <>
-              Vexcel tiles could not load.
-              <button
-                className="ml-3 underline"
-                onClick={() => {
-                  setTrafficVisible(true);
-                  setStatus("loading");
-                  setAttempt((value) => value + 1);
-                }}
-              >
-                Retry
-              </button>
-            </>
+            "Vexcel tiles could not load."
           )}
         </div>
       )}
-      <aside className="absolute left-3 top-16 max-w-[calc(100%-1.5rem)] rounded-lg bg-ink/90 p-3 text-sm text-white">
-        <label className="flex items-center gap-2 font-semibold">
-          <input
-            type="checkbox"
-            checked={trafficVisible}
-            onChange={(event) => {
-              const show = event.target.checked;
+
+      <aside
+        className={`${glass} absolute top-20 left-4 z-10 w-52 p-4 sm:top-24 sm:left-6`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-white/80">Traffic</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={trafficVisible}
+            aria-label="Traffic heatmap"
+            onClick={() => {
+              const show = !trafficVisible;
               setTrafficVisible(show);
               trafficEntities.current(show);
             }}
-          />
-          Traffic heatmap
-        </label>
-        {trafficVisible && (
-          <>
-            <p className="mt-1 text-xs">
-              Sample congestion · OpenStreetMap via OpenFreeMap
-            </p>
-            {roadStatus !== "ready" && (
-              <p role="status" className="mt-1 text-xs">
-                {roadStatus === "loading"
-                  ? "Loading nearby roads…"
-                  : "Some roads could not load. Move the map or toggle traffic to retry."}
-              </p>
-            )}
-            <p className="mt-2 flex flex-wrap gap-3 text-xs">
-              <span className="text-[#2fdf92]">● Free flow</span>
-              <span className="text-[#ffb522]">● Slow</span>
-              <span className="text-[#ff6b72]">● Heavy</span>
-            </p>
-          </>
+            className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
+          >
+            <span
+              className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
+            />
+          </button>
+        </div>
+        <div
+          className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
+        />
+
+        {trafficVisible && roadStatus !== "ready" && (
+          <p role="status" className="mt-2 text-[11px] text-white/45">
+            {roadStatus === "loading"
+              ? "Loading nearby roads…"
+              : "Some roads didn’t load. Move the map or toggle to retry."}
+          </p>
         )}
+
+        <div className="mt-5 hidden sm:block">
+          <span className="text-xs font-medium text-white/80">Demand</span>
+          <ul className="mt-2.5 space-y-2">
+            {demandAnchors.map((anchor) => {
+              const level = demandLevel(minute, anchor.peaks);
+              return (
+                <li
+                  key={anchor.label}
+                  className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-white/50"
+                  title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
+                >
+                  {anchor.label}
+                  <span className="h-1 overflow-hidden rounded-full bg-white/10">
+                    <span
+                      className="block h-full rounded-full transition-[width] duration-300"
+                      style={{
+                        width: `${Math.max(3, level * 100)}%`,
+                        backgroundColor: anchor.color,
+                      }}
+                    />
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </aside>
-      <aside className="absolute right-3 top-16 hidden rounded-lg bg-ink/90 p-3 text-xs text-white sm:block">
-        <strong>Modeled demand</strong>
-        {demandAnchors.map((anchor) => {
-          const level = demandLevel(minute, anchor.peaks);
-          return (
-            <div key={anchor.label} className="mt-1 flex items-center gap-2">
-              <span
-                className="size-2 rounded-full"
-                style={{ backgroundColor: anchor.color }}
-              />
-              {anchor.label} ·{" "}
-              {level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}
-            </div>
-          );
-        })}
-      </aside>
+
       {children}
-      <p className="absolute bottom-1 right-3 rounded bg-white px-2 text-xs">
-        Imagery © Vexcel Imaging US, Inc. · © Microsoft Corporation · ©
-        OpenStreetMap contributors
+
+      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-white/30 sm:right-6">
+        © Vexcel Imaging · © Microsoft · © OpenStreetMap via OpenFreeMap
       </p>
-      <a
-        href="#operating-plan"
-        className="absolute right-3 top-3 rounded bg-pine px-3 py-2 text-sm text-white"
-      >
-        Open café operating plan
-      </a>
     </div>
   );
 }

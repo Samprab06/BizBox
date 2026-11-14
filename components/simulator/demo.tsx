@@ -2,8 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import type { DemoData, demoPlan } from "./fixture";
+import { glass } from "./glass";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
 const Scene = dynamic(() => import("./scene"), { ssr: false });
@@ -12,6 +14,13 @@ const usd = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
+const speeds = [0.5, 1, 2, 4];
+
+function clock(minute: number) {
+  const total = Math.floor(minute) % 1440;
+  const hour = Math.floor(total / 60);
+  return `${hour % 12 || 12}:${String(total % 60).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+}
 
 export function SimulatorDemo({
   data,
@@ -48,123 +57,129 @@ export function SimulatorDemo({
     return () => cancelAnimationFrame(request);
   }, [running, end, speed, coordinates]);
 
-  const time = `${Math.floor(minute / 60)}:${String(Math.floor(minute % 60)).padStart(2, "0")}`;
   const arrivals = replayAt(data[0].run.events, minute).arrivals;
+  const [base, alternative] = data;
+  const gain = alternative
+    ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
+    : 0;
+  const kept = alternative
+    ? base.run.metrics.abandoned - alternative.run.metrics.abandoned
+    : 0;
+  const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
+
   return (
-    <>
+    <div className="relative min-h-dvh bg-[#06080d] text-white antialiased">
       {coordinates ? (
         <Neighborhood {...coordinates} minute={minute}>
-          <section
-            aria-label="Neighborhood timeline"
-            className="absolute bottom-10 left-3 right-3 z-10 rounded-xl bg-ink/95 p-3 text-white sm:left-1/2 sm:w-[min(46rem,95vw)] sm:-translate-x-1/2"
-          >
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                className="rounded bg-white px-4 py-2 font-semibold text-ink"
-                onClick={() => {
-                  if (minute >= end) setMinute(start);
-                  setPlaying(!running);
-                }}
-              >
-                {running ? "Pause" : minute >= end ? "Replay" : "Play"}
-              </button>
-              <strong className="font-mono">{time} Houston</strong>
-              <label className="ml-auto text-sm">
-                Speed{" "}
-                <select
-                  className="rounded bg-ink"
-                  value={speed}
-                  onChange={(event) => setSpeed(Number(event.target.value))}
-                >
-                  {[0.5, 1, 2, 4].map((rate) => (
-                    <option key={rate} value={rate}>
-                      {rate}×
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <input
-              className="mt-2 w-full accent-emerald-300"
-              type="range"
-              min={start}
-              max={end}
-              step={1}
-              value={Math.floor(minute)}
-              aria-label="Time of day"
-              aria-valuetext={time}
-              onChange={(event) => {
-                setPlaying(false);
-                setMinute(Number(event.target.value));
-              }}
-            />
-            <div className="flex justify-between text-xs text-emerald-100">
-              <span>Midnight</span>
-              <span>6 a.m.</span>
-              <span>Noon</span>
-              <span>6 p.m.</span>
-              <span>Midnight</span>
-            </div>
-          </section>
+          <Timeline
+            label="Neighborhood timeline"
+            className="absolute inset-x-4 bottom-8 z-10 sm:inset-x-auto sm:left-1/2 sm:w-[min(40rem,calc(100vw-3rem))] sm:-translate-x-1/2"
+            minute={minute}
+            min={start}
+            max={end}
+            step={1}
+            running={running}
+            ended={minute >= end}
+            speed={speed}
+            onSpeed={setSpeed}
+            onToggle={() => {
+              if (minute >= end) setMinute(start);
+              setPlaying(!running);
+            }}
+            onSeek={(value) => {
+              setPlaying(false);
+              setMinute(value);
+            }}
+          />
         </Neighborhood>
       ) : (
         <p
           role="status"
-          className="m-4 rounded-xl border border-line bg-white p-4"
+          className="mx-auto max-w-5xl px-6 pt-8 text-sm text-white/50"
         >
-          Vexcel neighborhood unavailable. The operating replay is below.
+          3D neighborhood unavailable. The operating replay is below.
         </p>
       )}
+
       <main
         id="operating-plan"
-        className="mx-auto max-w-7xl space-y-6 p-5 sm:p-8"
+        className="relative isolate mx-auto max-w-5xl scroll-mt-4 px-5 py-16 sm:px-6 sm:py-24"
       >
-        {coordinates && (
-          <a
-            href="#neighborhood"
-            className="text-sm font-semibold text-pine underline"
-          >
-            Back to neighborhood
-          </a>
-        )}
-        <header>
-          <p className="text-sm text-muted">
-            Houston coffee shop · Synthetic operating scenario
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+        >
+          <div className="absolute -top-20 left-[10%] size-[28rem] rounded-full bg-emerald-500/15 blur-[120px]" />
+          <div className="absolute top-[40%] right-[5%] size-[30rem] rounded-full bg-indigo-500/15 blur-[130px]" />
+        </div>
+
+        <header className="max-w-2xl">
+          <p className="text-xs font-medium tracking-[0.18em] text-white/40 uppercase">
+            Houston coffee shop
           </p>
-          <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">
-            Does a second service station pay off?
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
+            Does a second station pay off?
           </h1>
-          <p className="mt-2 text-muted">
-            Both scenarios use the same 110 customer arrivals and draws. The
-            alternative adds one staffed station and $6,000 in modeled buildout.
+          <p className="mt-4 text-white/50 text-pretty">
+            Same 110 customers, same draws. One extra staffed station and{" "}
+            {usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more
+            buildout.
           </p>
         </header>
-        <section className="rounded-xl border border-line bg-white p-4">
-          <h2 className="text-xl font-semibold">Operating plan</h2>
-          <p className="mt-2">
-            {plan.concept} · {plan.area.toLocaleString("en-US")} sq ft · 8 a.m.
-            to noon
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Illustrative inputs: {usd.format(plan.rentPerSquareFoot)}/sq ft/year
-            asking rent, {usd.format(plan.ticket)} average ticket,{" "}
-            {usd.format(plan.wage)}/hour labor, and{" "}
-            {usd.format(plan.baselineBuildout)} versus{" "}
-            {usd.format(plan.alternativeBuildout)} buildout.
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            CoStar listing and approved project plan are unavailable in this
-            worktree.
-          </p>
-        </section>
-        <section
-          aria-label="Shared playback"
-          className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-white p-4"
-        >
-          <button
-            className="rounded bg-pine px-4 py-2 text-white"
-            onClick={() => {
+
+        {alternative && (
+          <dl
+            className={`${glass} mt-12 grid divide-white/10 sm:grid-cols-3 sm:divide-x`}
+          >
+            <Stat
+              label="Monthly gain"
+              value={`${gain >= 0 ? "+" : "−"}${usd.format(Math.abs(gain))}`}
+              accent={gain >= 0}
+            />
+            <Stat
+              label="Customers kept / day"
+              value={`${kept >= 0 ? "+" : "−"}${Math.abs(kept)}`}
+              accent={kept >= 0}
+            />
+            <Stat
+              label="Extra buildout"
+              value={usd.format(
+                plan.alternativeBuildout - plan.baselineBuildout,
+              )}
+            />
+          </dl>
+        )}
+
+        <ul className="mt-4 flex flex-wrap gap-2 text-xs text-white/50">
+          {[
+            `${plan.area.toLocaleString("en-US")} sq ft`,
+            `${clock(openMin)} – ${clock(closeMin)}`,
+            `${usd.format(plan.rentPerSquareFoot)}/sq ft/yr rent`,
+            `${usd.format(plan.ticket)} ticket`,
+            `${usd.format(plan.wage)}/hr labor`,
+          ].map((chip) => (
+            <li
+              key={chip}
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1"
+            >
+              {chip}
+            </li>
+          ))}
+        </ul>
+
+        <div className="sticky top-4 z-20 mt-12 flex flex-wrap items-center gap-2">
+          <Timeline
+            label="Shared playback"
+            className="min-w-0 flex-1"
+            minute={shopMinute}
+            min={openMin}
+            max={closeMin}
+            step={0.01}
+            running={running}
+            ended={minute >= closeMin}
+            speed={speed}
+            onSpeed={setSpeed}
+            onToggle={() => {
               if (minute >= closeMin || minute < openMin) {
                 setMinute(openMin);
                 setPlaying(true);
@@ -172,62 +187,40 @@ export function SimulatorDemo({
               }
               setPlaying(!running);
             }}
+            onSeek={(value) => {
+              setPlaying(false);
+              setMinute(value);
+            }}
+          />
+          <button
+            type="button"
+            aria-pressed={cutaway}
+            onClick={() => setCutaway(!cutaway)}
+            className={`${glass} self-stretch rounded-full px-5 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
           >
-            {running ? "Pause" : minute >= closeMin ? "Replay" : "Play"}
-          </button>
-          <label>
-            Speed{" "}
-            <select
-              value={speed}
-              onChange={(event) => setSpeed(Number(event.target.value))}
-            >
-              {[0.5, 1, 2, 4].map((rate) => (
-                <option value={rate} key={rate}>
-                  {rate}×
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex min-w-40 flex-1 items-center gap-2">
-            Time{" "}
-            <input
-              className="flex-1"
-              type="range"
-              min={openMin}
-              max={closeMin}
-              step={0.01}
-              value={Math.min(closeMin, Math.max(openMin, minute))}
-              aria-valuetext={time}
-              onChange={(event) => {
-                setPlaying(false);
-                setMinute(Number(event.target.value));
-              }}
-            />{" "}
-            {time}
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={cutaway}
-              onChange={(event) => setCutaway(event.target.checked)}
-            />{" "}
             Focus on shop
-          </label>
-        </section>
-        <div className="grid gap-4 lg:grid-cols-2">
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {data.map(({ run, monthly }, index) => {
             const frame = replayAt(run.events, minute);
             const customer = frame.arrivals.get(selected);
             return (
-              <section
-                key={run.metrics.stations}
-                className="overflow-hidden rounded-xl border border-line bg-white"
-              >
-                <h2 className="px-4 py-3 text-lg font-semibold">
-                  {index === 0 ? "Current plan" : "Alternative"} ·{" "}
-                  {run.metrics.stations} {index === 0 ? "station" : "stations"}
-                </h2>
-                <div className="h-80" aria-label="Modeled block and café">
+              <section key={run.metrics.stations} className={`${glass} p-2`}>
+                <header className="flex items-baseline justify-between px-4 pt-3 pb-3">
+                  <h2 className="font-medium">
+                    {index === 0 ? "Current" : "Alternative"}
+                  </h2>
+                  <span className="text-xs text-white/40">
+                    {run.metrics.stations}{" "}
+                    {run.metrics.stations === 1 ? "station" : "stations"}
+                  </span>
+                </header>
+                <div
+                  className="h-72 overflow-hidden rounded-xl bg-black/20"
+                  aria-label="Modeled block and café"
+                >
                   <Scene
                     run={run}
                     minute={minute}
@@ -236,56 +229,224 @@ export function SimulatorDemo({
                     select={select}
                   />
                 </div>
-                <div className="space-y-2 p-4 text-sm">
-                  <p>
-                    {frame.served} served · {frame.waiting.length} waiting ·{" "}
-                    {frame.left} left
-                  </p>
-                  <p>
-                    Day-end: {run.metrics.served} served ·{" "}
-                    {run.metrics.abandoned} left ·{" "}
-                    {usd.format(run.metrics.revenueUsd)} revenue
-                  </p>
-                  <p>
-                    Modeled month: {usd.format(monthly.revenueUsd)} revenue ·{" "}
-                    {usd.format(monthly.costs.totalUsd)} included costs ·{" "}
-                    <strong>
-                      {usd.format(monthly.contributionUsd)} after included costs
-                    </strong>
-                  </p>
-                  {selected && (
-                    <p>
-                      {selected}:{" "}
-                      {customer
-                        ? `${customer.lineLength} waiting at arrival · ${Math.round(customer.stayProbability * 100)}% modeled join probability · ${customer.decision === "join" ? "joined" : "left"}`
-                        : "Approaching or has yet to arrive"}
-                    </p>
-                  )}
+                <div className="grid grid-cols-3 px-4 pt-5 pb-1">
+                  <Live label="Served" value={frame.served} />
+                  <Live label="Waiting" value={frame.waiting.length} />
+                  <Live label="Left" value={frame.left} warn={frame.left > 0} />
                 </div>
+                <dl className="space-y-2 px-4 pt-4 pb-4 text-sm">
+                  <Row
+                    label="Day-end"
+                    value={`${run.metrics.served} served · ${run.metrics.abandoned} left`}
+                  />
+                  <Row
+                    label="Monthly revenue"
+                    value={usd.format(monthly.revenueUsd)}
+                  />
+                  <Row
+                    label="After costs"
+                    value={usd.format(monthly.contributionUsd)}
+                    strong
+                  />
+                </dl>
+                {selected && (
+                  <p className="mx-2 mb-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-white/50">
+                    <span className="text-white/80">{selected}</span> ·{" "}
+                    {customer
+                      ? `${customer.lineLength} in line · ${Math.round(customer.stayProbability * 100)}% join · ${customer.decision === "join" ? "joined" : "left"}`
+                      : "not arrived yet"}
+                  </p>
+                )}
               </section>
             );
           })}
         </div>
-        <label className="block">
-          Inspect a customer{" "}
+
+        <div className="mt-4 flex justify-end">
           <select
-            className="rounded border border-line bg-white p-2"
+            aria-label="Inspect a customer"
+            className={`${glass} cursor-pointer rounded-full px-4 py-2 text-sm text-white/70 outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&>option]:bg-[#11141b]`}
             value={arrivals.has(selected) ? selected : ""}
             onChange={(event) => select(event.target.value)}
           >
-            <option value="">Choose an arrival</option>
+            <option value="">
+              {arrivals.size ? "Inspect a customer" : "No arrivals yet"}
+            </option>
             {[...arrivals.keys()].map((id) => (
               <option key={id}>{id}</option>
             ))}
           </select>
-        </label>
-        <p className="text-sm text-muted">
-          The block and vehicle movement are illustrative. Walking paths
-          visualize scheduled arrivals. Monthly totals repeat the representative
-          weekday 22 times and include ingredients, labor, rent, and buildout
-          amortization. Taxes and other overhead are excluded.
+        </div>
+
+        <p className="mt-16 max-w-2xl text-xs leading-relaxed text-white/30">
+          Illustrative block and vehicles. Monthly totals repeat one weekday 22
+          times and include ingredients, labor, rent and buildout amortization;
+          taxes and other overhead are excluded. Buildout{" "}
+          {usd.format(plan.baselineBuildout)} vs.{" "}
+          {usd.format(plan.alternativeBuildout)}. CoStar listing not connected
+          yet.
         </p>
       </main>
-    </>
+    </div>
+  );
+}
+
+function Timeline({
+  label,
+  className,
+  minute,
+  min,
+  max,
+  step,
+  running,
+  ended,
+  speed,
+  onSpeed,
+  onToggle,
+  onSeek,
+}: {
+  label: string;
+  className: string;
+  minute: number;
+  min: number;
+  max: number;
+  step: number;
+  running: boolean;
+  ended: boolean;
+  speed: number;
+  onSpeed: (speed: number) => void;
+  onToggle: () => void;
+  onSeek: (minute: number) => void;
+}) {
+  const time = clock(minute);
+  const action = running ? "Pause" : ended ? "Replay" : "Play";
+  return (
+    <section
+      aria-label={label}
+      className={`${glass} flex items-center gap-4 rounded-full p-2 pr-3 ${className}`}
+    >
+      <button
+        type="button"
+        aria-label={action}
+        title={action}
+        onClick={onToggle}
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-95"
+      >
+        <svg
+          aria-hidden
+          viewBox="0 0 20 20"
+          className="size-4"
+          fill="currentColor"
+        >
+          {running ? (
+            <path d="M5.5 4h3v12h-3zM11.5 4h3v12h-3z" />
+          ) : ended ? (
+            <path
+              d="M4.5 10a5.5 5.5 0 1 0 1.8-4.1M4.5 3.5v3h3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ) : (
+            <path d="M6.5 4v12l9.5-6z" />
+          )}
+        </svg>
+      </button>
+      <span className="w-[4.75rem] shrink-0 text-sm font-medium tabular-nums">
+        {time}
+      </span>
+      <input
+        className="sim-range min-w-0 flex-1"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={minute}
+        style={
+          {
+            "--fill": `${((minute - min) / (max - min)) * 100}%`,
+          } as CSSProperties
+        }
+        aria-label="Time of day"
+        aria-valuetext={time}
+        onChange={(event) => onSeek(Number(event.target.value))}
+      />
+      <button
+        type="button"
+        aria-label={`Speed ${speed}×`}
+        title="Change speed"
+        onClick={() =>
+          onSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length])
+        }
+        className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium text-white/60 tabular-nums transition hover:bg-white/10 hover:text-white"
+      >
+        {speed}×
+      </button>
+    </section>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="px-6 py-5">
+      <dt className="text-xs text-white/40">{label}</dt>
+      <dd
+        className={`mt-1.5 text-3xl font-semibold tracking-tight tabular-nums ${accent ? "text-emerald-300" : ""}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Live({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: number;
+  warn?: boolean;
+}) {
+  return (
+    <div>
+      <p
+        className={`text-2xl font-semibold tabular-nums ${warn ? "text-rose-300" : ""}`}
+      >
+        {value}
+      </p>
+      <p className="text-[11px] text-white/40">{label}</p>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-white/40">{label}</dt>
+      <dd
+        className={`tabular-nums ${strong ? "font-semibold" : "text-white/75"}`}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

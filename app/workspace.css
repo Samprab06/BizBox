@@ -12,3 +12,12 @@
 
 body { @apply bg-paper font-sans text-ink antialiased; }
 a:focus-visible, button:focus-visible { @apply outline-2 outline-offset-4 outline-pine; }
+
+/* Simulator timeline slider */
+.sim-range { @apply h-5 cursor-pointer appearance-none bg-transparent; --track: linear-gradient(to right, rgb(255 255 255 / 0.9) var(--fill, 0%), rgb(255 255 255 / 0.12) var(--fill, 0%)); }
+.sim-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--track); }
+.sim-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--track); }
+.sim-range::-webkit-slider-thumb { appearance: none; margin-top: -5px; width: 14px; height: 14px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12), 0 2px 6px rgb(0 0 0 / 0.4); transition: box-shadow 0.15s; }
+.sim-range::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 999px; background: #fff; box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12); }
+.sim-range:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px rgb(255 255 255 / 0.18), 0 2px 6px rgb(0 0 0 / 0.4); }
+.sim-range:focus-visible { @apply rounded-full outline-2 outline-offset-4 outline-white/40; }

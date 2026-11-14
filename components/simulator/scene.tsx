@@ -65,13 +65,12 @@ export default function Scene({
       camera={{ position: [0, 16, 20], zoom: cutaway ? 41 : 22 }}
       dpr={[1, 1.5]}
       fallback={
-        <p className="p-4">
+        <p className="p-4 text-sm text-white/50">
           3D requires WebGL. The clock, totals, and event inspector are
           available below.
         </p>
       }
     >
-      <color attach="background" args={["#e7e9e0"]} />
       <ambientLight intensity={1.65} />
       <directionalLight position={[4, 10, 7]} intensity={2} />
       <Block at={[0, -0.16, 0]} size={[32, 0.2, 23]} color="#cdd3c2" />
