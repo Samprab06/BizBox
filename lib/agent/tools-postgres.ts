@@ -1,5 +1,6 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
+import { createNessieConsultantReader } from "@/lib/nessie/consultant";
 import { loadSiteInventory } from "@/app/api/sites/inventory";
 import { getDb } from "@/lib/db/client";
 import { comparisons, siteRuns } from "@/lib/db/schema";
@@ -54,6 +55,7 @@ export function createPostgresInvestigationToolDependencies(): InvestigationTool
   const store = createPostgresComparisonStore();
   return {
     jevConfigured: Boolean(process.env.JEV_API_KEY?.trim()),
+    readNessieCashBuffer: createNessieConsultantReader(),
     loadProfile: (projectId, profileId) =>
       profileStore.load(projectId, profileId),
     async saveProfile(projectId, profile, key, signal) {

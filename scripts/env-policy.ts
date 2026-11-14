@@ -5,6 +5,7 @@ export const serverEnvNames = [
   "JEV_API_KEY",
   "CENSUS_API_KEY",
   "OPENAI_API_KEY",
+  "NESSIE_API_KEY",
   "MATTERPORT_API_TOKEN",
 ] as const;
 
