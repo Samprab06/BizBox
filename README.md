@@ -105,6 +105,10 @@ Hosted Neon setup and Vercel deployment still require configuration and verifica
 
 Every PR must pass `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
 
+## CI and deployment
+
+See [CI and deployment](docs/ci.md) for required checks, secret scanning, and Vercel environments.
+
 ## Repo layout
 
 ```
