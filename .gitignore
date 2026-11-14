@@ -6,8 +6,12 @@ __pycache__/
 costar-hackathon-kit
 local-docs
 .claude
-
+.env*
 .next/
+.vercel/
+coverage/
+*.tsbuildinfo
+
 next-env.d.ts
 .env*.local
-*.tsbuildinfo
+!.env.example
