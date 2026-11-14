@@ -33,6 +33,28 @@ Known synthetic stored records retain Example provenance; nonsynthetic stored
 records do not. Missing/failed stored records fall back to the labelled example.
 No data persistence, API contracts, simulation inputs, or dependencies change.
 
+## Decision-first integration (HAC-71)
+
+The shared `DecisionHeader` leads with the operating question, qualified answer,
+real operating scene and next action. The existing neighborhood and larger replay
+remain available below. The top scene is 160 px high, uses the existing engine run,
+and its time state is shared with the replay. The scenario selector chooses an
+actual run and uses that day's own opening hours. Fullscreen and **Full replay**
+provide larger views; its optional camera fit leaves other scene defaults intact.
+
+Saved comparisons forward the stored HAC-62 robustness summary unchanged. Its
+model disagreement remains visible, and its influential condition opens the exact
+comparison sensitivity control without automatically running a model. Historical
+records without a summary say robustness is unavailable. The existing profile
+version lookup identifies outdated data; failed freshness checks keep the saved
+scene and show an unknown-freshness qualification instead of substituting examples.
+
+The seeded fixture answers from its actual additional served customers and
+contribution direction, with **One seeded example; demand robustness has not been
+tested** beside it. Example and stored weekday/weekend labels retain their existing
+meaning. The next action opens the real assumptions/evidence when no matching
+saved sensitivity condition exists.
+
 ## Remaining integration checks
 
 HAC-69 still owns the three-task navigation layout. This change provides the

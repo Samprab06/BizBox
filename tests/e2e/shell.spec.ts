@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { views, workspaceHref, type View } from "../../lib/client/workspace-routes";
-import { expect, test } from "./fixtures";
+import { expect, viewHeading, test } from "./fixtures";
 
 // Selection used by the nav when the page itself carries no `?site=`: the first
 // example site (components/workspace-view.tsx falls back to project.sites[0]).
@@ -48,7 +48,7 @@ test.describe("navigation", () => {
       await navLink(page, view).click();
       const expectedHref = workspaceHref(projectId, view, DEFAULT_SITE);
       await expect(page).toHaveURL((url) => url.pathname + url.search === expectedHref);
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
 
       // Exactly one link is current, and it is the one for this view.
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
@@ -71,7 +71,7 @@ test.describe("deep links", () => {
     test(`loading the ${view} URL directly renders that view`, async ({ page, gotoView }) => {
       await gotoView(view, view === "site" ? DEFAULT_SITE : undefined);
 
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
       await expect(page.getByRole("region", { name: views[view], exact: true })).toBeVisible();
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     });
@@ -145,7 +145,7 @@ test.describe("history", () => {
     const visited: View[] = ["map", "site", "comparison", "replay"];
     for (const view of visited) {
       await navLink(page, view).click();
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
     }
 
     // The first entry was opened without a site; every nav link carries the default one.
@@ -155,14 +155,14 @@ test.describe("history", () => {
 
     for (const view of trail.slice(0, -1).reverse()) {
       await page.goBack();
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
       await expect(page).toHaveURL((url) => url.pathname + url.search === pathFor(view));
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     }
 
     for (const view of trail.slice(1)) {
       await page.goForward();
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
       await expect(page).toHaveURL((url) => url.pathname + url.search === pathFor(view));
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     }
@@ -181,7 +181,14 @@ test.describe("bad input", () => {
         return;
       }
 
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
+      if (view === "simulator") {
+        // DS-4 preserves saved-project URLs and visibly falls back to Example data.
+        await expect(page.getByRole("complementary", { name: "Project context", exact: true })).toContainText("Example");
+        await page.getByRole("banner").getByRole("link").click();
+        await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+        return;
+      }
       await expect(page.getByRole("heading", { level: 2, name: "Project unavailable" })).toBeVisible();
       await expect(page.getByText(/\bat\s+\S+\s+\(.*:\d+:\d+\)/)).toHaveCount(0);
 
@@ -274,7 +281,7 @@ test.describe("responsive layout", () => {
       }, testInfo) => {
         await page.setViewportSize({ width, height: 900 });
         await gotoView(view, siteId);
-        await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
 
         // No horizontal page scroll.
         const { scrollWidth, innerWidth } = await page.evaluate(() => ({
@@ -286,7 +293,6 @@ test.describe("responsive layout", () => {
         // Every nav link can be scrolled to, is inside the viewport horizontally, and is clickable.
         const links = projectNav(page).getByRole("link");
         await expect(links).toHaveCount(VIEW_ORDER.length);
-        const boxes: { x: number; y: number; width: number; height: number }[] = [];
         for (const link of await links.all()) {
           await link.scrollIntoViewIfNeeded();
           await expect(link).toBeVisible();
@@ -294,9 +300,13 @@ test.describe("responsive layout", () => {
           expect(box, "nav link has a box").not.toBeNull();
           expect(box!.x).toBeGreaterThanOrEqual(0);
           expect(box!.x + box!.width).toBeLessThanOrEqual(innerWidth);
-          boxes.push(box!);
         }
 
+        // Compare boxes in one scroll frame after proving every destination is reachable.
+        const boxes = await links.evaluateAll((elements) => elements.map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }));
         // Nav links do not overlap each other, and the nav sits above the page heading.
         for (let i = 0; i < boxes.length; i++) {
           for (let j = i + 1; j < boxes.length; j++) {
@@ -330,7 +340,7 @@ test.describe("console", () => {
     test(`the ${view} view logs no errors, warnings or hydration problems`, async ({ page, gotoView }) => {
       const problems = trackConsole(page);
       await gotoView(view, view === "site" ? DEFAULT_SITE : undefined);
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
       // Let hydration finish before asserting (the nav link still works afterwards).
       await page.waitForLoadState("networkidle");
       expect(problems).toEqual([]);
@@ -342,7 +352,7 @@ test.describe("console", () => {
     await gotoView("intake");
     for (const view of VIEW_ORDER) {
       await navLink(page, view).click();
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
     }
     expect(problems).toEqual([]);
   });

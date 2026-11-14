@@ -143,10 +143,21 @@ its navigation scrolls horizontally within the page at narrow widths and remains
 keyboard reachable. It removes duplicate project-name text, large title spacing
 and nested content-card padding. Other views keep their default wrapper.
 
-The simulator scene slot remains an integration boundary for DS-4.
-HAC-69 owns the remaining shell/navigation. The tested two-site saved comparison's
-decision, qualified answer and action fit at 1280×800 and 375×800 with the disclosure
-closed; the mobile action ends at approximately y787. Expanded evidence, stale
-warnings or longer multi-site summaries may need additional vertical space and
-must keep wrapping naturally. HAC-71 remains in development until real scenes
-mount on comparison/simulator and the complete composition is verified again.
+The simulator mounts the same header before the neighborhood and full replay.
+Its decision scene uses the existing run-backed 3D operating scene in a 160 px
+viewport, with scenario/time controls, native fullscreen and a full-replay link.
+The compact scene's optional `cameraZoom` fits the shop; default scene zoom,
+quality budgets and visibility suspension stay unchanged elsewhere.
+
+Stored simulator answers use the actual saved HAC-62 headline and most-influential
+condition. Model disagreement stays visible. The loader uses the existing profile
+version read to identify stale snapshots; a failed freshness read retains the valid
+stored run and visibly says freshness is unknown. Example answers report the
+computed service difference and contribution direction for the existing seeded
+station experiment, explicitly identifying untested demand robustness. They never
+pretend to have a saved robustness sweep or show a single sales forecast.
+
+Decision-page acceptance checks cover the complete decision, answer, real scene and
+next action at 1280×800, 820×800 and 375×800. Supporting evidence uses disclosures;
+longer summaries, stale/unknown warnings and expanded evidence keep wrapping rather
+than clipping. The expanded viewer and full evidence remain scrollable.

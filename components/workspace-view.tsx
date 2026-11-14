@@ -76,7 +76,6 @@ export function WorkspaceView({
           }
         >
           {title ?? views[view]}
-
         </h1>
       </header>
       <section

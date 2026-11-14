@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { views, workspaceHref, type View } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import { expect, expectNoA11yViolations, test, viewHeading } from "./fixtures";
 
 const VIEW_ORDER = Object.keys(views) as View[];
 const siteFor = (view: View) => (view === "site" ? "montrose" : undefined);
@@ -33,7 +33,7 @@ test.describe("every view passes the axe scan", () => {
   for (const view of VIEW_ORDER) {
     test(`${view} view`, async ({ page, gotoView }) => {
       await gotoView(view, siteFor(view));
-      await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: viewHeading(view) })).toBeVisible();
       await expectNoA11yViolations(page);
     });
   }
@@ -57,7 +57,7 @@ test.describe("page structure", () => {
       await gotoView(view, siteFor(view));
 
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText(views[view]);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(viewHeading(view));
       await expect(page.getByRole("main")).toHaveCount(1);
       await expect(page.getByRole("banner")).toHaveCount(1);
       await expect(page.getByRole("navigation", { name: "Project views" })).toHaveCount(1);
@@ -111,17 +111,19 @@ test.describe("keyboard and focus", () => {
     await gotoView("map");
 
     const seen: string[] = [];
-    for (let i = 0; i < 10 && seen.length < VIEW_ORDER.length; i++) {
+    const maxStops = await page.locator('a[href], button, input, select, summary, [tabindex="0"]').count() + 1;
+    for (let i = 0; i < maxStops && seen.length < VIEW_ORDER.length; i++) {
       await pressTab(page, browserName);
       const text = (await page.locator(":focus").textContent())?.trim() ?? "";
       if (VIEW_ORDER.some((view) => views[view] === text)) seen.push(text);
     }
     expect(seen).toEqual(VIEW_ORDER.map((view) => views[view]));
 
-    // The last focused link is "Replay": Enter activates it.
+    // Activate the actual final destination, including the simulator added by DS-4.
+    const lastView = VIEW_ORDER[VIEW_ORDER.length - 1];
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(workspaceHref(projectId, "replay", "montrose"));
-    await expect(page.getByRole("heading", { level: 1, name: "Replay" })).toBeVisible();
+    await expect(page).toHaveURL(workspaceHref(projectId, lastView, "montrose"));
+    await expect(page.getByRole("heading", { level: 1, name: viewHeading(lastView) })).toBeVisible();
   });
 
   for (const view of VIEW_ORDER) {
@@ -136,14 +138,20 @@ test.describe("keyboard and focus", () => {
       );
       await gotoView(view, siteFor(view));
 
-      // Header link plus the five nav links.
-      for (let i = 0; i < 1 + VIEW_ORDER.length; i++) {
-        await pressTab(page, browserName);
+      const navLinks = page.getByRole("navigation", { name: "Project views" }).getByRole("link");
+      await pressTab(page, browserName);
+      await page.getByRole("banner").getByRole("link").focus();
+      const home = await focusedOutline(page);
+      expect(home).not.toBeNull();
+      expect((home!.outlineStyle !== "none" && home!.outlineWidth > 0) || home!.boxShadow !== "none").toBe(true);
+      await navLinks.first().focus();
+      for (let i = 0; i < VIEW_ORDER.length; i++) {
         const focus = await focusedOutline(page);
-        expect(focus, "something is focused").not.toBeNull();
-        const hasIndicator =
-          (focus!.outlineStyle !== "none" && focus!.outlineWidth > 0) || focus!.boxShadow !== "none";
-        expect(hasIndicator, `focus indicator on "${focus!.text}": ${JSON.stringify(focus)}`).toBe(true);
+        expect(focus, "nav destination has focus").not.toBeNull();
+        expect(focus!.text).toBe(views[VIEW_ORDER[i]]);
+        const hasIndicator = (focus!.outlineStyle !== "none" && focus!.outlineWidth > 0) || focus!.boxShadow !== "none";
+        expect(hasIndicator, `focus indicator on "${focus!.text}"`).toBe(true);
+        if (i < VIEW_ORDER.length - 1) await pressTab(page, browserName);
       }
     });
   }

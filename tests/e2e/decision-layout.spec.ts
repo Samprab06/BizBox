@@ -200,7 +200,12 @@ test("invalid stored scene identity fails honestly without substituting another 
 }) => {
   await mockLiveComparison(page);
   await page.route("**/api/site-runs/*?*", (route) =>
-    route.fulfill({ status: 200, json: { run: { id: "wrong-run" } } }),
+    route.fulfill({
+      status: 200,
+      json: {
+        run: { ...liveComparisonRecord.runs[0], siteId: "different-site" },
+      },
+    }),
   );
   await page.goto("/projects/houston-coffee/comparison");
   await page
@@ -223,6 +228,19 @@ test("an explicit simulator sensitivity link selects and focuses the matching co
   page,
 }) => {
   await mockLiveComparison(page);
+  let releaseCandidates!: () => void;
+  const candidatesGate = new Promise<void>((resolve) => {
+    releaseCandidates = resolve;
+  });
+  await page.route("**/api/sites", async (route) => {
+    await candidatesGate;
+    await route.fallback();
+  });
+  const savedResponse = page.waitForResponse((response) =>
+    response
+      .url()
+      .includes(`/api/comparisons/${liveComparisonPayload.comparisonId}?`),
+  );
   const writes: string[] = [];
   page.on("request", (request) => {
     if (
@@ -236,6 +254,13 @@ test("an explicit simulator sensitivity link selects and focuses the matching co
   await page.goto(
     `/projects/houston-coffee/comparison?comparison=${liveComparisonPayload.comparisonId}&sensitivity=price#comparison-sensitivity`,
   );
+  await (await savedResponse).finished();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Loading comparison and candidate sites" }),
+  ).toBeVisible();
+  releaseCandidates();
   await expect(page.getByLabel("Sensitivity assumption")).toHaveValue("price");
   await expect(page.getByLabel("Sensitivity assumption")).toBeFocused();
   expect(writes).toEqual([]);

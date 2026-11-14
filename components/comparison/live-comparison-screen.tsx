@@ -74,9 +74,9 @@ export function LiveComparisonScreen({
   );
   const readyComparisonId = payload?.comparisonId;
   useEffect(() => {
-    if (requestedAssumption && readyComparisonId && !busy)
+    if (requestedAssumption && readyComparisonId && phase === "ready")
       sensitivitySelect.current?.focus();
-  }, [requestedAssumption, readyComparisonId, busy]);
+  }, [requestedAssumption, readyComparisonId, phase]);
   const address = (siteId: string) =>
     candidates.find(({ candidate }) => candidate.id === siteId)?.candidate
       .address ?? siteId;
@@ -492,7 +492,6 @@ function Sensitivity({
   const { sensitivity } = controller;
   return (
     <section
-      id="comparison-sensitivity"
       aria-label="Sensitivity"
       className="min-w-0 rounded-xl border border-line p-4"
     >
@@ -506,6 +505,7 @@ function Sensitivity({
           Sensitivity assumption
           <select
             ref={selectRef}
+            id="comparison-sensitivity"
             className="max-w-full rounded-lg border border-line p-2"
             value={assumption}
             disabled={disabled || sensitivity.loading}

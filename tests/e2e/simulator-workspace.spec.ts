@@ -33,7 +33,10 @@ test("legacy simulator links retain replay state inside the workspace", async ({
     exact: true,
   });
   await expect(
-    context.getByText("Example", { exact: true }).first(),
+    context
+      .getByText("Example", { exact: true })
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible();
   await expect(
     page.getByText("Modeled monthly contribution change", { exact: true }),

@@ -22,13 +22,20 @@ request. Historical comparisons missing robustness explicitly say it is unavaila
 and link to evidence. Stale comparisons retain the prior answer with a visible
 warning and explicit rerun. New comparisons still require an explicit run.
 
-The shared header accepts a real scene slot for later simulator integration.
-Comparison currently retains its representative-run links; no scene is invented
-or fetched automatically. Simulator/DS-4 and shell/HAC-69 integration remain open
-HAC-71 acceptance dependencies. The two-site saved comparison passes the
-1280×800 and 375×800 decision/answer/action fit checks with **Decision evidence**
-closed. Its headline, modeled qualification and model disagreement remain visible.
-The full composition needs another viewport check when a real scene is mounted.
+The shared header includes the leader's real stored weekday scene, read through
+the existing project-scoped site-run endpoint. Project, profile, site, run and day
+identity must match before rendering. A manual schematic replay uses canonical
+events (`served` starts service; `departed` completes it), with an accessible time
+slider, counts and full-replay link. Loading/failure/retry states do not substitute
+another run. Fixture comparisons reuse the existing seeded engine events.
+
+Simulator actions carrying a known influential condition use
+`?sensitivity=<supported assumption>#comparison-sensitivity`. The comparison
+validates that intent, selects and focuses its matching control after the saved
+result loads, and never sends a sensitivity/model request until the founder
+explicitly chooses **Run sensitivity**. Unsupported conditions lead to evidence.
+Both decision pages opt into the compact wrapper while preserving context,
+navigation destinations and h1 names; other screens keep their default wrapper.
 
 `sitework:comparison:v1:<projectId>` stores the active comparison identity and the
 serialized intake signature used for its snapshot. Reload and replay use the

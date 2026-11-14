@@ -1,6 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { test as base, expect, type Page } from "@playwright/test";
-import { workspaceHref, type View } from "../../lib/client/workspace-routes";
+import { workspaceHref, views, type View } from "../../lib/client/workspace-routes";
+
+/** The simulator's explicit page title differs from its task-oriented navigation label. */
+export const viewHeading = (view: View) => view === "simulator" ? "Simulator" : views[view];
 
 export const PROJECT_ID = "houston-coffee";
 

@@ -6,6 +6,12 @@ import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
+import { DecisionHeader } from "@/components/decision/decision-header";
+import { simulatorAnswer } from "@/components/decision/simulator-answer";
+import {
+  SENSITIVITY_ASSUMPTIONS,
+  type RobustnessSummary,
+} from "@/lib/contracts/evaluation";
 import { Card } from "@/components/ui/card";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { GlassControl } from "@/components/ui/glass-control";
@@ -49,8 +55,14 @@ export function SimulatorDemo({
   story = EXAMPLE_STORY,
   projectId,
   context,
+  robustness,
+  outdated = false,
+  profileVersionUnknown = false,
 }: {
   projectId: string;
+  robustness?: RobustnessSummary | null;
+  outdated?: boolean;
+  profileVersionUnknown?: boolean;
   context: Extract<WorkspaceObservation, { kind: "simulator" }>;
   data: DemoData;
   plan: typeof demoPlan;
@@ -62,7 +74,11 @@ export function SimulatorDemo({
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
   const end = coordinates ? 1440 : closeMin;
-  const [minute, setMinute] = useState(coordinates ? 360 : openMin);
+  const [minute, setMinute] = useState(
+    data[0].run.events.find((event) => event.type === "service_start")
+      ?.timeMin ?? openMin,
+  );
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
@@ -119,24 +135,189 @@ export function SimulatorDemo({
     ? base.run.metrics.abandoned - alternative.run.metrics.abandoned
     : 0;
   const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
+  const previewRun = data[previewIndex].run;
+  const previewMinute = Math.min(
+    previewRun.metrics.closeMin,
+    Math.max(previewRun.metrics.openMin, minute),
+  );
+  const previewFrame = replayAt(previewRun.events, previewMinute);
 
   return (
     <div className="min-w-0 space-y-5">
-      <header>
-        <p className="text-sm text-muted">Test the plan · Simulator</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-          {story.title}
-        </h2>
-        <p className="mt-2 text-sm text-muted">{story.eyebrow}</p>
-        <p className="mt-3 max-w-2xl text-muted">
+      <DecisionHeader
+        compact
+        decision={
+          story.compare
+            ? "Does a second staffed station pay off?"
+            : "Which site holds its lead?"
+        }
+        answer={simulatorAnswer({
+          example: context.phase === "example",
+          additionalServed: alternative
+            ? alternative.run.metrics.served - base.run.metrics.served
+            : 0,
+          contributionChange: gain,
+          robustness,
+        })}
+        qualification={
+          <>
+            <p>
+              <EvidenceBadge kind="Simulation" />{" "}
+              {context.phase === "ready" && context.synthetic
+                ? "Example · "
+                : ""}
+              {story.eyebrow} · Modeled, not a forecast.
+            </p>
+            {context.phase === "example" && (
+              <p>One seeded example; demand robustness has not been tested.</p>
+            )}
+            {profileVersionUnknown && (
+              <p role="status" className="text-warn">
+                The current profile version could not be checked; this answer
+                uses a saved snapshot.
+              </p>
+            )}
+            {outdated && (
+              <p role="status" className="font-semibold text-warn">
+                Outdated comparison: these conditions use an earlier profile
+                snapshot.
+              </p>
+            )}
+            {robustness?.jevHuffAgree === false && (
+              <p>Jev and Huff disagree on the leader; ranking is uncertain.</p>
+            )}
+            {robustness && (
+              <details>
+                <summary className="cursor-pointer font-semibold text-pine">
+                  Decision evidence
+                </summary>
+                {robustness.robustTo.length > 0 && (
+                  <p>
+                    The lead holds across tested changes in{" "}
+                    {robustness.robustTo
+                      .map((value) => value.replaceAll("_", " "))
+                      .join(", ")}
+                    .
+                  </p>
+                )}
+                <ul>
+                  {robustness.missingInformation.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        }
+        scene={
+          <section aria-label="Decision scene" className="min-w-0 space-y-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <select
+                aria-label="Decision replay scenario"
+                value={previewIndex}
+                onChange={(event) => {
+                  const index = Number(event.target.value);
+                  setPreviewIndex(index);
+                  setPlaying(false);
+                  setMinute(
+                    data[index].run.events.find(
+                      (item) => item.type === "service_start",
+                    )?.timeMin ?? data[index].run.metrics.openMin,
+                  );
+                }}
+                className="min-w-0 rounded border border-muted bg-surface p-1 text-xs text-ink"
+              >
+                {data.map((_, index) => (
+                  <option key={index} value={index}>
+                    {story.compare
+                      ? story.scenarioLabels[index]
+                      : `Baseline · ${story.scenarioLabels[index]}`}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Decision operating replay time"
+                aria-valuetext={clock(previewMinute)}
+                type="range"
+                min={previewRun.metrics.openMin}
+                max={previewRun.metrics.closeMin}
+                value={previewMinute}
+                step="0.01"
+                className="min-w-0 flex-1 accent-pine"
+                onChange={(event) => {
+                  setPlaying(false);
+                  setMinute(Number(event.target.value));
+                }}
+              />
+              <a
+                href="#operating-plan"
+                className="shrink-0 text-xs font-semibold text-pine underline"
+              >
+                Full replay
+              </a>
+            </div>
+            <SimulatorViewport
+              label="Decision operating replay"
+              className="h-40"
+            >
+              <Scene
+                quality={quality}
+                run={data[previewIndex].run}
+                minute={previewMinute}
+                cutaway
+                cameraZoom={22}
+                selected={selected}
+                select={select}
+              />
+            </SimulatorViewport>
+            <p className="text-xs text-muted">
+              Schematic replay · {clock(previewMinute)} ·{" "}
+              {previewFrame.waiting.length} waiting ·{" "}
+              {previewFrame.serving.length} in service
+            </p>
+          </section>
+        }
+        nextAction={
+          context.comparisonId &&
+          robustness?.mostInfluential &&
+          SENSITIVITY_ASSUMPTIONS.some(
+            (value) => value === robustness.mostInfluential!.assumption,
+          ) &&
+          !outdated ? (
+            <a
+              className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine"
+              href={`/projects/${encodeURIComponent(projectId)}/comparison?${new URLSearchParams({ comparison: context.comparisonId, sensitivity: robustness.mostInfluential.assumption, ...(context.siteId ? { site: context.siteId } : {}) })}#comparison-sensitivity`}
+            >
+              Change{" "}
+              {
+                (
+                  {
+                    market_share_scale: "market share",
+                    visit_frequency: "visit frequency",
+                    ticket_size: "average ticket",
+                    rent: "rent",
+                    price: "price",
+                  } as Record<string, string>
+                )[robustness.mostInfluential.assumption]
+              }
+            </a>
+          ) : (
+            <a
+              href="#simulator-decision-evidence"
+              className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine"
+            >
+              Open assumptions and evidence
+            </a>
+          )
+        }
+      />
+      <Card id="simulator-decision-evidence" tabIndex={-1}>
+        <p className="text-sm text-muted">
           {story.intro ||
             `Same 110 modeled customers, same draws. One extra staffed station and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
         </p>
-        <p className="mt-3 text-sm text-muted">
-          <EvidenceBadge kind="Simulation" />{" "}
-          <span className="ml-2">Modeled, not a forecast</span>
-        </p>
-      </header>
+        <p className="mt-2 text-xs text-muted">{story.footnote}</p>
+      </Card>
 
       {coordinates ? (
         <SimulatorViewport
