@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { IntakeScreen } from "@/components/intake/intake-screen";
+import { MapPreview } from "@/components/map/map-preview";
+import { SiteDetail } from "@/components/site/site-detail";
 import { workspaceHref, views, type View } from "@/lib/client/workspace-routes";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
@@ -58,25 +60,9 @@ function PreviewContent({ view, project, site }: {
     case "intake":
       return <IntakeScreen projectId={project.id} />;
     case "map":
-      return (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {project.sites.map((entry) => (
-            <li key={entry.id}>
-              <Link href={workspaceHref(project.id, "site", entry.id)} className="block rounded-xl border border-line p-5 hover:bg-mint">
-                <strong>{entry.address}</strong>
-                <span className="mt-1 block text-sm text-muted">{entry.neighborhood}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      );
+      return <MapPreview project={project} selectedId={site?.id} />;
     case "site":
-      return site && (
-        <div>
-          <h2 className="text-xl font-semibold">{site.address}</h2>
-          <p className="mt-2 text-muted">{site.neighborhood} · {site.squareFeet.toLocaleString("en-US")} sq ft</p>
-        </div>
-      );
+      return site && <SiteDetail project={project} site={site} />;
     case "comparison":
       return (
         <div className="overflow-x-auto">
