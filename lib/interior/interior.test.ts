@@ -29,6 +29,37 @@ const site = {
 };
 
 describe("interior selection", () => {
+  it("loads missing geometry only for an approved selected scan and explains provider absence", async () => {
+    let calls = 0;
+    const dimensionsProvider = async () => {
+      calls++;
+      return undefined;
+    };
+    await resolveInterior("12:34", async () => site, { dimensionsProvider });
+    expect(calls).toBe(0);
+    const result = await resolveInterior("12:34", async () => site, {
+      allowLicensedAssets: true,
+      dimensionsProvider,
+    });
+    expect(calls).toBe(1);
+    expect(result.kind).toBe("scan");
+    expect(result).not.toHaveProperty("dimensions");
+    expect(result.provenance.limitations.join(" ")).toMatch(
+      /dimensions unavailable/i,
+    );
+  });
+  it("serves official public-demo metadata without inventing dimensions or calling the provider", async () => {
+    const result = await resolveInterior("interior-public-demo", async () => {
+      throw new Error("must stay offline");
+    });
+    expect(result).toMatchObject({
+      kind: "scan",
+      modelId: "SxQL3iGyoDo",
+      provenance: { origin: "public", mode: "recorded", scope: "demo" },
+    });
+    expect(result).not.toHaveProperty("dimensions");
+    expect(result.provenance.description).toMatch(/metadata/i);
+  });
   it.each(["scan", "floorplan", "modeled"] as const)(
     "serves an explicitly synthetic %s without data access",
     async (kind) => {

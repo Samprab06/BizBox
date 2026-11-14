@@ -63,3 +63,38 @@ test("detects Matterport API names and values while allowing the SDK key", () =>
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("detects the Basic-encoded Matterport credential without printing it", () => {
+  const directory = mkdtempSync(join(tmpdir(), "matterport-basic-env-"));
+  const bundle = join(directory, "chunk.js");
+  const token = "synthetic-id:synthetic-secret";
+  try {
+    writeFileSync(
+      bundle,
+      `const auth='Basic ${Buffer.from(token).toString("base64")}'`,
+    );
+    expect(
+      scanClientBundle(directory, { MATTERPORT_API_TOKEN: token }),
+    ).toEqual([`${bundle}: found server-only value for MATTERPORT_API_TOKEN`]);
+    expect(
+      publicEnvIssues({
+        MATTERPORT_API_TOKEN: token,
+        NEXT_PUBLIC_CONFIG: Buffer.from(token).toString("base64"),
+      }),
+    ).toEqual(["NEXT_PUBLIC_CONFIG appears to contain a credential"]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("allows a genuine SDK value but rejects accidental reuse of the private credential in its public slot", () => {
+  expect(publicEnvIssues({ MATTERPORT_SDK_KEY: "synthetic-sdk-key" })).toEqual(
+    [],
+  );
+  expect(
+    publicEnvIssues({
+      MATTERPORT_API_TOKEN: "id:private-secret",
+      MATTERPORT_SDK_KEY: "id:private-secret",
+    }),
+  ).toEqual(["MATTERPORT_SDK_KEY appears to contain a credential"]);
+});
