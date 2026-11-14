@@ -1,5 +1,8 @@
 "use client";
 
+import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
+import { VoicePanel } from "@/components/voice/voice-panel";
+import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { assumptionRows, formFromDraft, IntakeResponseSchema, patchFromForm } from "./live";
 import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, profileValidationMessage, updateProfile, type IntakeSession } from "./profile";
@@ -53,6 +56,9 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
   const live = useLiveIntake(projectId);
   // The latest session for async callbacks; save() and the storage listener keep it current.
   const latest = useRef(session);
+  const requests = useRef<Promise<unknown>>(Promise.resolve());
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const missing = missingFields(session.profile);
   const next = missing[0];
 
@@ -72,6 +78,7 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
     setSession(updated);
     try {
       localStorage.setItem(storageKey, JSON.stringify(updated));
+      window.dispatchEvent(new CustomEvent(INTAKE_UPDATED_EVENT, { detail: { key: storageKey } }));
       setStorageError(false);
     } catch {
       setStorageError(true);
@@ -79,11 +86,21 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
   }
 
   /** Sends the founder's message (or only pending form edits) with the round-tripped state. */
-  async function send(text: string | undefined, appendFounder: boolean) {
+  function enqueue(action: () => Promise<string | null>): Promise<string | null> {
+    const result = requests.current.then(() => mounted.current ? action() : null);
+    requests.current = result.catch(() => null);
+    return result;
+  }
+
+  function send(text: string | undefined, appendFounder: boolean): Promise<string | null> {
+    return enqueue(() => sendLive(text, appendFounder));
+  }
+
+  async function sendLive(text: string | undefined, appendFounder: boolean): Promise<string | null> {
     const current = latest.current;
     const pending = current.pending ?? [];
     const patch = patchFromForm(current.profile, pending);
-    if (!text && !patch) return;
+    if (!text && !patch) return null;
     const before = appendFounder && text ? { ...current, messages: [...current.messages, { role: "founder" as const, text }] } : current;
     save(before);
     setBusy(true);
@@ -99,14 +116,15 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
         const error = body as { message?: unknown } | null;
         const reason = typeof error?.message === "string" ? error.message : "Intake is temporarily unavailable. Please try again.";
         setFailure({ message: `${reason} Your profile edits still work.`, retry: response.status >= 500 ? text ?? "" : undefined });
-        return;
+        return null;
       }
       const parsed = IntakeResponseSchema.safeParse(body);
       if (!parsed.success) {
         setFailure({ message: "The intake service sent an unexpected reply. Please try again.", retry: text ?? "" });
-        return;
+        return null;
       }
       const result = parsed.data;
+      if (!mounted.current) return null;
       const now = latest.current;
       // Form edits made while the request was in flight stay newer than the reply.
       const sent = new Set(pending);
@@ -123,8 +141,10 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
         live: { state: { draft: result.draft, assumptions: result.assumptions }, missingRequiredFields: result.missingRequiredFields, findings: result.findings },
         messages: text ? [...now.messages, { role: "agent", text: result.assistantMessage }] : now.messages,
       });
+      return result.assistantMessage;
     } catch {
-      setFailure({ message: "Could not reach the intake service. Your profile edits still work.", retry: text ?? "" });
+      if (mounted.current) setFailure({ message: "Could not reach the intake service. Your profile edits still work.", retry: text ?? "" });
+      return null;
     } finally {
       setBusy(false);
     }
@@ -135,6 +155,33 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
     // A pending retry carries these edits with it, so it is not pre-empted.
     if (live && !busy && failure?.retry === undefined && latest.current.pending?.length) void send(undefined, false);
   }
+
+  const currentPrompt = () => missingFields(latest.current.profile)[0]?.label ?? "Review your profile";
+
+  /** Typed and spoken messages share this existing-state action queue. */
+  function submitMessage(raw: string, expectedPrompt?: string): Promise<string | null> {
+    const text = raw.trim();
+    if (!text) return Promise.resolve(null);
+    return enqueue(async () => {
+      if (expectedPrompt !== undefined && expectedPrompt !== currentPrompt()) {
+        setFailure({ message: "Your intake changed before this voice answer could be applied. Please repeat it or keep typing." });
+        return null;
+      }
+      if (live) return sendLive(text, true);
+      const current = latest.current;
+      const prompt = missingFields(current.profile)[0];
+      const updated = answerPrompt(current, text);
+      if (updated === current || updated.messages.length <= current.messages.length) return null;
+      if (prompt && updated.profile !== current.profile) setDrafts(drafts => ({ ...drafts, [prompt.key]: undefined }));
+      save(updated);
+      return updated.messages.at(-1)?.role === "agent" ? updated.messages.at(-1)!.text : null;
+    });
+  }
+
+  const voiceAdapter: VoiceAdapter = {
+    readContext: () => ({ projectId, mode: "intake", prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
+    submitTranscript: text => submitMessage(text, currentPrompt()),
+  };
 
   const assumptions = session.live ? assumptionRows(session.live.state.assumptions) : [];
 
@@ -164,13 +211,14 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
               )}
             </div>
           )}
+          <VoicePanel adapter={voiceAdapter} />
           {live ? (
             <form onSubmit={(event) => {
               event.preventDefault();
               const text = message.trim();
               if (!text || busy) return;
               setMessage("");
-              void send(text, true);
+              void submitMessage(text);
             }}>
               <label className="block text-sm font-medium" htmlFor="intake-live-message">Message the intake agent</label>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -185,11 +233,7 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
           <form onSubmit={(event) => {
             event.preventDefault();
             if (!message.trim()) return;
-            const updated = answerPrompt(session, message);
-            if (next && updated.profile !== session.profile) {
-              setDrafts((current) => ({ ...current, [next.key]: undefined }));
-            }
-            save(updated);
+            void submitMessage(message);
             setMessage("");
           }}>
             <label className="block text-sm font-medium" htmlFor={next ? "intake-message" : undefined}>
