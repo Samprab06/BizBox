@@ -251,3 +251,26 @@ export const DEFAULT_SENSITIVITY_VALUES: Record<
   rent: [0.9, 0.95, 1, 1.05, 1.1],
   price: [],
 };
+
+/** HAC-62: how robust the recommendation is (headline of a comparison). */
+export const RobustnessSummarySchema = z.object({
+  headline: z.string().min(1),
+  leaderSiteId: z.string().min(1),
+  tiedSiteIds: z.array(z.string()),
+  mostInfluential: z
+    .object({
+      assumption: z.string(),
+      breakEven: z.number().finite(),
+      unit: z.enum(["multiplier", "usd"]),
+      /** |break-even − current| / current: how far the assumption must move to flip the lead. */
+      relativeDistance: z.number().nonnegative(),
+      fromSiteId: z.string(),
+      toSiteId: z.string(),
+    })
+    .nullable(),
+  /** Assumptions whose tested range never changed the leader. */
+  robustTo: z.array(z.string()),
+  jevHuffAgree: z.boolean().nullable(),
+  missingInformation: z.array(z.string()),
+});
+export type RobustnessSummary = z.infer<typeof RobustnessSummarySchema>;

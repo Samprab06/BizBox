@@ -320,6 +320,52 @@ test("shows the Huff-only ranking check returned with a Jev comparison", async (
   await expect(page.getByText(/Huff order:/)).toBeVisible();
 });
 
+test("leads with the robustness headline, naming sites by address (HAC-62)", async ({
+  page,
+}) => {
+  await mockLiveComparison(page, { jevConfigured: true });
+  const [leader, other] = liveComparisonPayload.result.ranking;
+  const payload = {
+    ...structuredClone(liveComparisonPayload),
+    robustness: {
+      headline: `${leader} leads under current assumptions; ${other} leads if demand (market share) falls below 0.70× its current level.`,
+      leaderSiteId: leader,
+      tiedSiteIds: [],
+      mostInfluential: {
+        assumption: "market_share_scale",
+        breakEven: 0.7,
+        unit: "multiplier",
+        relativeDistance: 0.3,
+        fromSiteId: other,
+        toSiteId: leader,
+      },
+      robustTo: ["rent"],
+      jevHuffAgree: false,
+      missingInformation: [
+        "Your own sales or visitor counts from another location, to calibrate demand.",
+      ],
+    },
+  };
+  await page.route("**/api/comparisons", (route) =>
+    route.fulfill({ status: 201, json: payload }),
+  );
+  await page.goto("/projects/houston-coffee/comparison");
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  const headline = page.getByRole("region", {
+    name: "Recommendation robustness",
+  });
+  await expect(headline.getByRole("heading", { level: 3 })).toContainText(
+    "leads under current assumptions",
+  );
+  await expect(headline.getByRole("heading", { level: 3 })).not.toContainText(
+    leader!,
+  );
+  await expect(headline).toContainText("disagree on the leader");
+  await expect(headline).toContainText("calibrate demand");
+});
+
 test("failed sensitivity keeps the saved ranking and can retry", async ({
   page,
 }) => {

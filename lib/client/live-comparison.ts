@@ -5,6 +5,8 @@ import { z } from "zod";
 import { BusinessProfileSchema, type BusinessProfile } from "@/lib/contracts";
 import {
   EvaluationResultSchema,
+  RobustnessSummarySchema,
+  type RobustnessSummary,
   SensitivityResultSchema,
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
@@ -22,6 +24,7 @@ export type LiveComparisonPayload = {
   comparisonId: string;
   outdated: boolean;
   result: EvaluationResult;
+  robustness?: RobustnessSummary | null;
   assembly?: AssemblyMetadata;
   /** Huff-only ranking check, returned only for fresh Jev comparisons. */
   demandSourceCheck?: {
@@ -65,6 +68,8 @@ const PayloadSchema = z.object({
   comparisonId: z.string().min(1),
   outdated: z.boolean(),
   result: EvaluationResultSchema,
+  /** HAC-62 headline; null/absent for comparisons stored before it existed. */
+  robustness: RobustnessSummarySchema.nullable().optional(),
   /** Huff-only rerun of the same request (returned for fresh Jev comparisons only). */
   demandSourceCheck: z
     .object({
