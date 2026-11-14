@@ -4,9 +4,13 @@ import { createRootScenario } from "./model";
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
 import { FIXTURE_PERSONA_SET, SITE_A } from "@/lib/demand/fixtures";
-import type { AssembleEvaluationInput } from "@/lib/evaluation/assemble";
+import type {
+  AssembleEvaluationInput,
+  AssemblyMetadata,
+} from "@/lib/evaluation/assemble";
 import type { Layout } from "@/lib/contracts/layout";
 import { layoutFixture } from "@/lib/layout/layout.fixture";
+import { applyLayoutOp } from "@/lib/layout";
 
 const metric = (value: number, unit: string) => ({
   value,
@@ -52,7 +56,7 @@ function setup() {
       sites: [{ siteId: SITE_A.id, storefront: SITE_A, config }],
     }),
     findings: [],
-    assumptions: {},
+    assumptions: {} as AssemblyMetadata["assumptions"],
   }));
   const loadProfile = vi.fn(async () => profile);
   const loadLayout = vi.fn(async (): Promise<Layout | null> => null);
@@ -120,7 +124,7 @@ describe("scenario evaluation preparation", () => {
     });
     expect(profile.economics.averageTicketCents.value).toBe(650);
     expect(
-      result.assumptions[`${SITE_A.id}.config.hours.weekday.openMin`],
+      result.assumptions[`sites.${SITE_A.id}.config.hours.weekday.openMin`],
     ).toMatchObject({ value: 420, origin: "founder" });
   });
   it("refuses a missing/wrong profile snapshot before assembling", async () => {
@@ -138,20 +142,79 @@ describe("scenario evaluation preparation", () => {
     ).rejects.toMatchObject({ code: "not_found" });
   });
   it("rejects layout category mismatches and snapshots derived capacity provenance", async () => {
-    const { prepare, loadLayout } = setup();
+    const { prepare, loadLayout, assemble } = setup();
     const layout = layoutFixture("selected", SITE_A.id);
     loadLayout.mockResolvedValueOnce({ ...layout, category: "fitness" });
     const s = { ...scenario(), layoutId: layout.layoutId };
     await expect(prepare(s, "huff")).rejects.toMatchObject({ code: "invalid" });
     loadLayout.mockResolvedValueOnce(layout);
+    const assembled = await assemble({
+      projectId: "p1",
+      profileId: profile.id,
+      profileVersion: 1,
+      profile,
+      candidateIds: [SITE_A.id],
+    });
+    assembled.assumptions[`sites.${SITE_A.id}.config.stations.planned`] = {
+      value: 2,
+      origin: "costar",
+      evidenceIds: ["old-listing"],
+    };
+    assemble.mockResolvedValueOnce(assembled);
     const result = await prepare(s, "huff");
     expect(result.request.sites[0].config).toMatchObject({
       queueCapacity: 9,
       stations: { planned: 1 },
     });
     expect(
-      result.assumptions[`${SITE_A.id}.config.queueCapacity`],
+      result.assumptions[`sites.${SITE_A.id}.config.queueCapacity`],
     ).toMatchObject({ value: 9, origin: "default" });
     expect(result.scenario?.layout).toEqual(layout);
+    expect(
+      result.assumptions[`sites.${SITE_A.id}.config.stations.planned`],
+    ).toMatchObject({ value: 1, origin: "default" });
+    expect(result.assumptions).not.toHaveProperty(
+      `${SITE_A.id}.config.stations.planned`,
+    );
+  });
+  it("uses the selected layout capacity instead of rejecting it against the listing proxy", async () => {
+    const { prepare, loadLayout, assemble } = setup();
+    const baseLayout = layoutFixture("one", SITE_A.id);
+    const layout = applyLayoutOp(
+      baseLayout,
+      {
+        op: "add_station",
+        station: {
+          id: "station-two",
+          type: "espresso",
+          footprint: { x: 24, y: 20, width: 2, depth: 2 },
+          origin: "agent-proposed",
+          evidenceIds: ["layout-evidence"],
+        },
+      },
+      { layoutId: "two" },
+    );
+    const assembled = await assemble({
+      projectId: "p1",
+      profileId: profile.id,
+      profileVersion: 1,
+      profile,
+      candidateIds: [SITE_A.id],
+    });
+    assembled.request.sites[0].config.stations = {
+      planned: 1,
+      usableSf: 100,
+      sfPerStation: 100,
+    };
+    assemble.mockResolvedValueOnce(assembled);
+    loadLayout.mockResolvedValueOnce(layout);
+    const result = await prepare(
+      {
+        ...scenario({ plannedStations: metric(2, "stations") }),
+        layoutId: layout.layoutId,
+      },
+      "huff",
+    );
+    expect(result.request.sites[0].config.stations.planned).toBe(2);
   });
 });

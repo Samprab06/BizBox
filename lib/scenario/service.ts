@@ -5,7 +5,11 @@ import {
   type Scenario,
 } from "@/lib/contracts/scenario";
 import type { ScenarioRepository } from "./repository";
-import { createRootScenario, diffScenarios, type LayoutDiffHook } from "./model";
+import {
+  createRootScenario,
+  diffScenarios,
+  type LayoutDiffHook,
+} from "./model";
 
 const id = z.string().trim().min(1).max(200);
 const fields = {
@@ -65,7 +69,10 @@ export function createScenarioService({
   >;
   newId: () => string;
   now?: () => Date;
-  layoutDiff?: (projectId: string, layoutIds: readonly (string | null)[]) => Promise<LayoutDiffHook>;
+  layoutDiff?: (
+    projectId: string,
+    layoutIds: readonly (string | null)[],
+  ) => Promise<LayoutDiffHook>;
 }) {
   const identity = (projectId: string) => id.parse(projectId);
   async function get(projectId: string, scenarioId: string): Promise<Scenario> {
@@ -125,7 +132,9 @@ export function createScenarioService({
         get(projectId, fromId),
         get(projectId, toId),
       ]);
-      const hook = layoutDiff ? await layoutDiff(projectId, [from.layoutId, to.layoutId]) : undefined;
+      const hook = layoutDiff
+        ? await layoutDiff(projectId, [from.layoutId, to.layoutId])
+        : undefined;
       return diffScenarios(from, to, hook);
     },
     async revert(

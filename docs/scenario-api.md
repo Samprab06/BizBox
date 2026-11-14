@@ -1,55 +1,106 @@
-# Scenario API: history slice (HAC-81)
+# Scenario history and execution API (HAC-81)
 
-This local first slice exposes immutable scenario history through the existing
-HAC-80 repository. HAC-81 remains In Development: evaluation, persisted resumable
-run checkpoints, cache reuse and atomic project-budget enforcement are not yet
-implemented. There is deliberately no run endpoint that could bypass those checks.
+History operations use the immutable HAC-80 repository. Executions use HAC-22's
+resumable evaluator, with durable checkpoints and budget reservations in
+`scenario_runs`. No new runtime dependency or authentication policy is introduced.
 
-## Routes
+## History
 
 - `POST /api/projects/:projectId/scenarios`: create a root with `siteIds`,
   `profileVersion`, `label`, optional `overrides` and `layoutId`; or fork with
-  `{ fromId, patch }`. `author` defaults to `founder`; agent changes require
-  `author: "agent"` and a rationale and retain the existing provenance restrictions.
+  `{ fromId, patch }`. Author defaults to founder. Agent changes require a
+  rationale and preserve the scenario model's provenance validation.
 - `GET /api/projects/:projectId/scenarios`: `{ tree: [{ scenario, children }] }`.
-- `GET /api/projects/:projectId/scenarios/:id`: `{ scenario }`; with `?against=:id`,
-  also returns the existing field-level diff from `against` to the requested version.
-- `POST /api/projects/:projectId/scenarios/:id/revert-to`: `{ targetId, author?, rationale? }`.
-  Creates a new child of the current version with the target's contents. History is
-  retained, including the current version and the target.
+- `GET /api/projects/:projectId/scenarios/:id`: `{ scenario }`; `?against=:id`
+  adds the diff from that version to this one, including a scoped layout diff.
+- `POST .../scenarios/:id/revert-to`: `{ targetId, author?, rationale? }` creates a
+  new child with the target's contents. Both previous versions remain intact.
 
-IDs and timestamps are server generated. All reads and mutations are scoped to the
-project in the URL; forks, diffs and reverts cannot cross projects. Patch fields are
-strictly allowlisted and replace the full overrides object, matching HAC-80's model.
-There is no PATCH or DELETE route. Database foreign keys continue to enforce project
-and profile-version existence. This preserves the existing application's project
-scoping; it adds no authentication policy.
+IDs and timestamps are server generated. Forks, diffs, layout lookup and reverts
+cannot cross projects. Patch fields are allowlisted and replace the whole overrides
+object. There is no PATCH or DELETE route. Database foreign keys enforce project,
+profile-version and selected-layout scope.
 
-Bodies are limited to 64 KiB; malformed JSON and invalid values return 422. Missing
-scenarios/projects/profile versions return 404, identity conflicts 409, and storage
-failures a sanitized 503. Responses use `Cache-Control: private, no-store`.
+## Runs
 
-## Remaining execution work
+`POST /api/projects/:projectId/scenarios/:id/run` accepts an optional JSON body:
 
-Before exposing `POST .../:id/run`, persist a server-side, project-scoped execution
-record with request identity, site-by-site checkpoints and fenced leases. Reserve
-site × seed × day-type work units atomically before assembling or running anything.
-An over-budget request must return `needs_confirmation` and do no work; a request
-cannot self-authorize an arbitrary budget increase. Repeated requests and cached
-equivalent forks must not duplicate simulation or consume budget twice.
+```json
+{
+  "confirm": false,
+  "demandSource": "huff",
+  "idempotencyKey": "optional-client-request-id"
+}
+```
 
-Use the existing `evaluateSitesResumable` and its completed-site callback. Preserve
-the exact scenario profile version and every supported override, including explicit
-seed sets, and store the scenario-run/comparison linkage. Do not silently ignore a
-layout or seed set that is not yet supported. Agree the project-budget policy with
-the lead before choosing a hardcoded execution allowance. These requirements are
-not covered by the history routes' current tests.
+Huff is the default and makes no Jev call. Jev is an explicit opt-in through the
+existing provider/cache path; missing Jev inputs retain the honest Huff fallback.
+The exact saved profile version is loaded, not the latest profile. Hours, staffing,
+average ticket, price tier, stations, demand scale and exact seed sets retain their
+provenance. A selected layout controls station/queue capacity only at its own
+shortlisted site. Wrong-category, wrong-site, missing layouts and conflicting
+explicit station overrides are rejected. The stored assembly includes the immutable
+scenario/layout snapshots; derived capacity is a model assumption with layout evidence.
 
-## Checks
+Completed responses (201) include status succeeded, runId, scenarioId, comparisonId,
+representative runIds, cached, costUnits and completedSiteIds. Metrics and events
+remain on the existing comparison/site-run endpoints. Partial responses are 202.
 
-Targeted history-service and HTTP tests cover root/fork/revert immutability, tree and
-diff shape, cross-project rejection, strict patches, author/provenance restrictions,
-input limits, and sanitized storage errors. Required repository checks remain
-lint, typecheck, full Vitest and production build. Remote preview and database
-checks require the normal approved review flow; no remote mutation is needed to run
-the offline tests.
+- `GET .../scenarios/:id/runs/:runId` returns status.
+- `POST .../scenarios/:id/runs/:runId/advance` resumes, with no body or `{}`.
+
+Advancement uses a fenced lease and revision, checkpoints each completed site and
+starts no new site after its 45-second work deadline. Routes have maxDuration 60.
+A later advancement skips finished sites. A deterministic comparison ID lets a
+retry after a comparison commit reuse it rather than write it twice.
+
+Without an explicit idempotency key, immutable effective inputs supply a stable
+key, so a transient failure can retry the same reservation. Equivalent active
+repeats return the current run's status. Explicit keys distinguish client requests.
+An equivalent completed parent/fork reuses its comparison at zero additional cost.
+Labels, author, rationale and lineage do not invalidate an otherwise identical
+execution; project, profile version, sites, overrides, layout and demand source do.
+
+## Approved work budget
+
+The lead's HAC-6 decision on 2026-11-14 sets these rules:
+
+- Default 1,200 units per project, overridable by server environment variable
+  `SCENARIO_RUN_BUDGET_UNITS` (nonnegative decimal integer, at most 10,000,000).
+- Cost = sites × seeds × two day types. Default seed count is 30.
+- Count reservations for non-cached scenario_runs in the rolling past 24 hours.
+  Cache hits cost zero. Legacy rows default to zero; no historical cost is inferred.
+- Before assembly or simulation, a transaction locks the project, deduplicates the
+  request, checks the cache and atomically reserves the work units.
+- Over-budget requests return 200 with
+  `{ status: "needs_confirmation", costUnits, remainingUnits }` and do no work.
+- Resending with confirm true permits execution and records its full cost. It does
+  not change the budget. Reservations, including failed attempts, stay in the rolling
+  count. Resuming a run is not charged again. Equivalent pending forks cannot start
+  duplicate work.
+
+Bodies are limited to 64 KiB. Invalid values/JSON return 422, missing scoped
+resources 404, ownership conflicts 409 and unavailable dependencies a sanitized 503.
+Status never returns credentials or raw checkpoints. Responses are private/no-store.
+
+## Database and verification
+
+Migration order: 0004_matterport_models → 0005_layouts → 0006_scenario-executions.
+Migration 0006 adds reservation, cache, request, checkpoint and lease fields and
+constraints/indexes. The lead applies hosted migrations after merge.
+
+Offline tests cover immutability, scope, overrides/layouts, provenance, exact seeds,
+cache reuse, confirmation/no-work behavior, retry and completed-site resume. SQL
+integration tests cover concurrent reservations, rolling counts, revisions, leases
+and scoped reads. Use an explicitly disposable loopback PostgreSQL with PostGIS:
+
+```sh
+RUN_SCENARIO_EXECUTION_DB_TESTS=1 \
+SCENARIO_EXECUTION_TEST_DATABASE_URL=postgres://role:synthetic@127.0.0.1:5432/hac96_test \
+pnpm exec vitest run lib/scenario/run-store-postgres.test.ts --maxWorkers=1
+```
+
+The role needs CREATEDB. Tests create/drop only their own random hac81_test database.
+The Scenario database checks workflow supplies a fresh PostGIS 17 service and runs
+scenario/layout/interior SQL tests without production secrets or data. The ordinary
+lint, typecheck, full Vitest, build and client-bundle gates still apply.

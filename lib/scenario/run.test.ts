@@ -6,6 +6,7 @@ import { createMemoryComparisonStore } from "@/lib/evaluation/store";
 import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
 import { FIXTURE_PERSONA_SET, SITE_A, SITE_B } from "@/lib/demand/fixtures";
 import { evaluateSitesResumable } from "@/lib/evaluation/evaluate";
+import { LayoutInputError } from "@/lib/layout";
 
 const config = {
   hours: {
@@ -222,5 +223,17 @@ describe("scenario execution", () => {
       costUnits: 8,
     });
     expect((await executions.get("p1", "execution-1"))?.costUnits).toBe(8);
+  });
+  it("terminalizes deterministic layout errors while preserving their field errors", async () => {
+    const { runner, prepare, executions } = setup();
+    const invalid = new LayoutInputError({
+      "scenario.overrides.plannedStations": ["Conflicts with selected layout"],
+    });
+    prepare.mockRejectedValueOnce(invalid);
+    await expect(runner.start("p1", "s1", {})).rejects.toBe(invalid);
+    expect((await executions.get("p1", "execution-1"))?.status).toBe("failed");
+    expect(await runner.get("p1", "s1", "execution-1")).toMatchObject({
+      status: "failed",
+    });
   });
 });

@@ -9,6 +9,11 @@ import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 import { createRootScenario } from "./model";
 import { createPostgresScenarioRepository } from "./repository";
 import { createPostgresScenarioExecutionStore } from "./run-store-postgres";
+import { createScenarioRunner } from "./run";
+import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
+import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
+import { FIXTURE_PERSONA_SET, SITE_A } from "@/lib/demand/fixtures";
+import { evaluateSitesResumable } from "@/lib/evaluation/evaluate";
 
 vi.mock("server-only", () => ({}));
 const enabled =
@@ -69,13 +74,21 @@ describe.skipIf(!enabled)(
           id: scenarioId,
           projectId,
           siteIds: ["site-a"],
+          overrides: {
+            seedSet: {
+              value: [1, 2, 3, 4],
+              unit: "seeds",
+              origin: "default",
+              evidenceIds: ["fixture"],
+            },
+          },
           profileVersion: 1,
           label: "Test",
           author: "founder",
           createdAt: now.toISOString(),
         }),
       );
-      return { projectId, scenarioId };
+      return { projectId, scenarioId, profile };
     }
     function input(
       scope: { projectId: string; scenarioId: string },
@@ -193,6 +206,112 @@ describe.skipIf(!enabled)(
           ),
         ),
       ).rejects.toMatchObject({ code: "not_found" });
+    });
+    it("recovers a comparison-commit crash and serves an unchanged fork from SQL cache", async () => {
+      const scope = await seed();
+      const repository = createPostgresScenarioRepository(() => db);
+      let failCompletion = true;
+      const prepare = vi.fn(async () => ({
+        findings: [],
+        assumptions: {},
+        request: EvaluationRequestSchema.parse({
+          projectId: scope.projectId,
+          profileId: scope.profile.id,
+          profileVersion: 1,
+          synthetic: true,
+          city: "houston",
+          category: "coffee",
+          priceTier: "mid",
+          personaSet: FIXTURE_PERSONA_SET,
+          demandSource: "huff",
+          seeds: 4,
+          seedSet: [1, 2, 3, 4],
+          sites: [
+            {
+              siteId: "site-a",
+              storefront: SITE_A,
+              config: {
+                hours: {
+                  weekday: { openMin: 360, closeMin: 1080 },
+                  weekend: { openMin: 360, closeMin: 1080 },
+                },
+                stations: { planned: 2, usableSf: 1800, sfPerStation: 100 },
+                prices: { avgTicketUsd: 6.5 },
+                staff: { headcount: 2, wageUsdPerHour: 16 },
+                costs: { cogsPctOfRevenue: 0.28 },
+                lease: {
+                  sf: 1800,
+                  askingRentUsdPerSfYear: 24,
+                  tripleNet: false,
+                  buildoutUsd: 30000,
+                  leaseTermMonths: 60,
+                },
+                calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
+              },
+            },
+          ],
+        }),
+      }));
+      const evaluate = vi.fn(evaluateSitesResumable);
+      const runner = createScenarioRunner({
+        scenarios: repository,
+        comparisons: createPostgresComparisonStore(() => db),
+        executions: {
+          ...executions,
+          async save(execution, token, at) {
+            if (execution.status === "succeeded" && failCompletion) {
+              failCompletion = false;
+              throw new Error("simulated interruption after comparison commit");
+            }
+            return executions.save(execution, token, at);
+          },
+        },
+        prepare,
+        evaluate,
+        now: () => now,
+        newId: () => `sql_${randomUUID()}`,
+        budgetUnits: 8,
+      });
+      await expect(
+        runner.start(scope.projectId, scope.scenarioId, {}),
+      ).rejects.toThrow("simulated interruption");
+      const parent = await runner.start(scope.projectId, scope.scenarioId, {});
+      expect(parent.status).toBe("succeeded");
+      const child = await repository.appendVersion(
+        scope.projectId,
+        scope.scenarioId,
+        { label: "Unchanged fork" },
+        {
+          id: `child_${randomUUID()}`,
+          createdAt: now.toISOString(),
+          author: "founder",
+        },
+      );
+      const cached = await runner.start(scope.projectId, child.id, {});
+      expect(cached).toMatchObject({
+        status: "succeeded",
+        cached: true,
+        costUnits: 0,
+      });
+      expect(
+        "comparisonId" in cached &&
+          "comparisonId" in parent &&
+          cached.comparisonId,
+      ).toBe("comparisonId" in parent && parent.comparisonId);
+      expect(prepare).toHaveBeenCalledTimes(1);
+      expect(evaluate).toHaveBeenCalledTimes(1);
+      expect(
+        await db
+          .select()
+          .from(schema.comparisons)
+          .where(eq(schema.comparisons.projectId, scope.projectId)),
+      ).toHaveLength(1);
+      const runs = await db
+        .select()
+        .from(schema.scenarioRuns)
+        .where(eq(schema.scenarioRuns.projectId, scope.projectId));
+      expect(runs).toHaveLength(2);
+      expect(runs.reduce((sum, run) => sum + run.costUnits, 0)).toBe(8);
     });
   },
 );
