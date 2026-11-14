@@ -45,8 +45,24 @@ export const test = base.extend<Fixtures>({
 
 export { expect };
 
+/**
+ * Waits for finite CSS animations and transitions to finish. axe computes color contrast from
+ * the rendered opacity, so a scan taken inside the onboarding's 120ms question fade flagged
+ * `.border-white` text as low contrast on slower runners (WebKit in CI). Looping animations
+ * are ignored.
+ */
+export async function waitForAnimationsToSettle(page: Page) {
+  await page.evaluate(async () => {
+    const finite = document
+      .getAnimations()
+      .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity);
+    await Promise.allSettled(finite.map((a) => a.finished));
+  });
+}
+
 /** Fails the test on serious or critical accessibility violations. */
 export async function expectNoA11yViolations(page: Page) {
+  await waitForAnimationsToSettle(page);
   const { violations } = await new AxeBuilder({ page }).analyze();
   const blocking = violations.filter(
     (v) => v.impact === "serious" || v.impact === "critical",

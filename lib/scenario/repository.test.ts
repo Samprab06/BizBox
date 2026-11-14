@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as schema from "@/lib/db/schema";
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 import { createRootScenario } from "./model";
+import { createScenarioService } from "./service";
 import {
   createPostgresScenarioRepository,
   ScenarioRepositoryError,
@@ -20,8 +21,13 @@ describe("scenario repository source", () => {
   it("never updates or deletes the scenarios table", () => {
     expect(source).not.toMatch(/\.update\(\s*scenarios\s*\)/);
     expect(source).not.toMatch(/\.delete\(\s*scenarios\s*\)/);
-    const names = source.match(/^\s{4}async (\w+)\(/gm)?.map((m) => m.trim()) ?? [];
-    expect(names.filter((n) => /async (update|edit|patch|set)\w*Scenario\b/i.test(n))).toEqual([]);
+    const names =
+      source.match(/^\s{4}async (\w+)\(/gm)?.map((m) => m.trim()) ?? [];
+    expect(
+      names.filter((n) =>
+        /async (update|edit|patch|set)\w*Scenario\b/i.test(n),
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -86,15 +92,22 @@ describe.skipIf(!enabled)("scenario Postgres adapter [local]", () => {
       projectId,
       "sc-1",
       { label: "Later close" },
-      { id: "sc-2", createdAt: at(2), author: "agent", rationale: "Probe closing time" },
+      {
+        id: "sc-2",
+        createdAt: at(2),
+        author: "agent",
+        rationale: "Probe closing time",
+      },
     );
     expect(child.parentId).toBe("sc-1");
     expect((await repository.get(projectId, "sc-1"))?.label).toBe("Base");
-    expect((await repository.lineage(projectId, "sc-2")).map((s) => s.id)).toEqual([
+    expect(
+      (await repository.lineage(projectId, "sc-2")).map((s) => s.id),
+    ).toEqual(["sc-1", "sc-2"]);
+    expect((await repository.list(projectId)).map((s) => s.id)).toEqual([
       "sc-1",
       "sc-2",
     ]);
-    expect((await repository.list(projectId)).map((s) => s.id)).toEqual(["sc-1", "sc-2"]);
   });
 
   it("rejects any in-place UPDATE at the database", async () => {
@@ -109,13 +122,20 @@ describe.skipIf(!enabled)("scenario Postgres adapter [local]", () => {
 
   it("enforces scoping and the author rules in the database", async () => {
     await expect(
-      repository.insert(createRootScenario({ ...rootInput, id: "sc-bad", profileVersion: 9 })),
+      repository.insert(
+        createRootScenario({ ...rootInput, id: "sc-bad", profileVersion: 9 }),
+      ),
     ).rejects.toMatchObject({ code: "not_found" });
     await expect(
       repository.insert(createRootScenario({ ...rootInput })),
     ).rejects.toMatchObject({ code: "conflict" });
     await expect(
-      repository.appendVersion(projectId, "missing", {}, { id: "sc-9", createdAt: at(3), author: "founder" }),
+      repository.appendVersion(
+        projectId,
+        "missing",
+        {},
+        { id: "sc-9", createdAt: at(3), author: "founder" },
+      ),
     ).rejects.toBeInstanceOf(ScenarioRepositoryError);
     await expect(
       client`INSERT INTO scenarios (id, project_id, site_ids, profile_version, overrides, label, author)
@@ -134,27 +154,138 @@ describe.skipIf(!enabled)("scenario Postgres adapter [local]", () => {
 
   it("tracks runs and the active scenario per project", async () => {
     await client`INSERT INTO comparisons (id, project_id, profile_id, data) VALUES ('cmp-1', ${projectId}, ${profile.id}, '{}')`;
-    const run = await repository.createRun({ id: "run-1", projectId, scenarioId: "sc-2", now: new Date(at(3)) });
-    expect(run).toMatchObject({ status: "queued", comparisonId: null, runIds: [] });
+    const run = await repository.createRun({
+      id: "run-1",
+      projectId,
+      scenarioId: "sc-2",
+      now: new Date(at(3)),
+    });
+    expect(run).toMatchObject({
+      status: "queued",
+      comparisonId: null,
+      runIds: [],
+    });
     const done = await repository.updateRun(projectId, "run-1", {
       status: "succeeded",
       comparisonId: "cmp-1",
       runIds: ["sr-1", "sr-2"],
       now: new Date(at(4)),
     });
-    expect(done).toMatchObject({ status: "succeeded", comparisonId: "cmp-1", runIds: ["sr-1", "sr-2"] });
+    expect(done).toMatchObject({
+      status: "succeeded",
+      comparisonId: "cmp-1",
+      runIds: ["sr-1", "sr-2"],
+    });
     expect(await repository.listRuns(projectId, "sc-2")).toHaveLength(1);
     await expect(
-      repository.createRun({ id: "run-x", projectId, scenarioId: "nope", now: new Date(at(3)) }),
+      repository.createRun({
+        id: "run-x",
+        projectId,
+        scenarioId: "nope",
+        now: new Date(at(3)),
+      }),
     ).rejects.toMatchObject({ code: "not_found" });
 
     expect(await repository.getActive(projectId)).toBeNull();
     await repository.setActive(projectId, "sc-1", new Date(at(3)));
-    const active = await repository.setActive(projectId, "sc-2", new Date(at(4)));
+    const active = await repository.setActive(
+      projectId,
+      "sc-2",
+      new Date(at(4)),
+    );
     expect(active.scenarioId).toBe("sc-2");
     expect((await repository.getActive(projectId))?.scenarioId).toBe("sc-2");
-    await expect(repository.setActive(projectId, "nope", new Date(at(4)))).rejects.toMatchObject({
+    await expect(
+      repository.setActive(projectId, "nope", new Date(at(4))),
+    ).rejects.toMatchObject({
       code: "not_found",
     });
+  });
+
+  it("allows inherited founder wrappers but rejects forged founder children at the database", async () => {
+    const overrides = {
+      staffHeadcount: {
+        value: 2,
+        unit: "people",
+        origin: "founder" as const,
+        evidenceIds: ["founder-answer"],
+      },
+    };
+    await repository.insert(
+      createRootScenario({ ...rootInput, id: "founder-parent", overrides }),
+    );
+    const child = await repository.appendVersion(
+      projectId,
+      "founder-parent",
+      { label: "Proposal" },
+      {
+        id: "inherited-child",
+        createdAt: at(4),
+        author: "agent",
+        rationale: "Preserve supplied staff",
+      },
+    );
+    expect(child.overrides).toEqual(overrides);
+    await expect(client`INSERT INTO scenarios (id,project_id,parent_id,site_ids,profile_version,overrides,label,author,rationale)
+      VALUES ('forged-child',${projectId},'founder-parent','["site-a","site-b"]',1,
+      '{"staffHeadcount":{"value":3,"unit":"people","origin":"founder","evidenceIds":["founder-answer"]}}','x','agent','why')`).rejects.toThrow(
+      /Agent cannot introduce or change founder provenance/,
+    );
+    await expect(client`INSERT INTO scenarios (id,project_id,parent_id,site_ids,profile_version,overrides,label,author,rationale)
+      VALUES ('invented-child',${projectId},'sc-1','["site-a","site-b"]',1,
+      '{"staffHeadcount":{"value":2,"unit":"people","origin":"founder","evidenceIds":["founder-answer"]}}','x','agent','why')`).rejects.toThrow(
+      /Agent cannot introduce or change founder provenance/,
+    );
+  });
+
+  it("does not bypass the raw SQL founder guard through missing evidence or nested arrays", async () => {
+    const attempts = [
+      { staffHeadcount: { value: 3, origin: "founder" } },
+      {
+        unexpected: [
+          {
+            nested: { value: 3, origin: "founder", evidenceIds: ["invented"] },
+          },
+        ],
+      },
+    ];
+    for (const [index, overrides] of attempts.entries()) {
+      await expect(client`INSERT INTO scenarios (id,project_id,parent_id,site_ids,profile_version,overrides,label,author,rationale)
+        VALUES (${`malformed-founder-${index}`},${projectId},'sc-1','["site-a","site-b"]',1,${JSON.stringify(overrides)}::jsonb,'x','agent','why')`).rejects.toThrow(
+        /Agent cannot introduce or change founder provenance/,
+      );
+    }
+  });
+
+  it("recovers concurrent durable action retries through mapped Postgres conflicts", async () => {
+    const one = createScenarioService({ repository, newId: randomUUID });
+    const two = createScenarioService({ repository, newId: randomUUID });
+    const request = {
+      fromId: "sc-1",
+      patch: { label: "One accepted action" },
+      author: "agent",
+      rationale: "Retry safely",
+    };
+    const [a, b] = await Promise.all([
+      one.create(projectId, request, { idempotencyKey: "durable-action" }),
+      two.create(projectId, request, { idempotencyKey: "durable-action" }),
+    ]);
+    expect(a).toEqual(b);
+    expect(
+      (await repository.list(projectId)).filter((row) => row.id === a.id),
+    ).toHaveLength(1);
+    const restarted = createScenarioService({ repository, newId: randomUUID });
+    expect(
+      await restarted.create(projectId, request, {
+        idempotencyKey: "durable-action",
+      }),
+    ).toEqual(a);
+    await expect(
+      restarted.create(
+        projectId,
+        { ...request, patch: { label: "Different action" } },
+        { idempotencyKey: "durable-action" },
+      ),
+    ).rejects.toMatchObject({ code: "invalid" });
   });
 });
