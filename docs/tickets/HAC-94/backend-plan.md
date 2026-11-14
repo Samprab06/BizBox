@@ -1,6 +1,6 @@
 # HAC-94 backend design and plan
 
-Approved scope: pure hourly insights and factual callouts, plus an optional persisted evaluation field. Frontend owns charts, mount points, Recharts and package files. HAC-102 owns station experiments separately. No schema, services, auth or automatic reruns.
+Approved scope: pure hourly insights and factual callouts, plus an optional persisted evaluation field. Frontend owns charts, mount points, Recharts and package files. HAC-102 owns station experiments separately. No database migration, services, auth or automatic reruns.
 
 New evaluations retain `SiteEvaluation.insights` version `hac94-v1` while all seed days are in memory. Reuse `hourlySeries`/`aggregateHourly`: equal-weight seeds, nearest-rank p5/p95, completed-customer waits assigned to service-start hour. Customer p90 and uncertainty across seeds are distinct. Compute cumulative revenue within each seed before its quantiles. Capacity uses resolved stations × actual open minutes / known service mean; unknown inputs stay explicit.
 
@@ -13,4 +13,4 @@ Peak callout: largest positive mean arrivals among open hours, earliest tie. Qui
 - [x] Add typed schemas and tests for seed aggregation, cumulative revenue and total walk-away covariance, null waits, partial-hour capacity, mix boundaries and explicit origin availability. Manager review requested the per-seed total walk-away band; its anti-correlated regression was observed failing before implementation.
 - [x] Implement pure model and deterministic multi-seed fixture export; add factual callout tests and implementation. Geographic field is `servedOriginMap`, distinct from evidence provenance.
 - [x] Add optional evaluation output and aggregate before seed days are discarded; test persisted optional output, legacy parsing and rerun reproduction. Relevant evaluator baseline/model/evidence checks passed; latest focused model/contract checks: 37 passed; comparison handler: 13 passed. Owned-file lint and project typecheck passed during UI integration. No broad checks until the manager grants the shared CPU window.
-- [ ] Run targeted tests, then coordinated four checks and update documentation/evidence.
+- [x] Run targeted tests, coordinated four checks and documentation/evidence. Final source c0ec85d passes lint, typecheck, build and full suite (945 passed /40 gated skips), env/client guards, migration-chain and diff checks. Frontend browser matrix:27 passed across Chromium/WebKit/mobile. Manager and independent backend review have no unresolved findings.

@@ -122,3 +122,9 @@ stale reads are browser-tested on the actual site detail route through canonical
 GET fixtures. The city route browser tests cover its explicit example-unavailable
 state and actual controls/fallback integration. No database, model, tile service,
 or paid call is required for these tests.
+
+## Final local verification
+
+Source candidate c0ec85db58b4f7b18fd0b8b01c96a283e10600a4 passes frozen-lock installation, lint, typecheck, production build, full single-worker suite (945 passed /40 environment-gated skips), environment/client-bundle guards, migration-chain and diff checks. The final nine-case browser file passes all27 Chromium/WebKit/mobile cases with the default loader. Manager inspected both dark mobile charts and native drawer screenshots; independent backend review found no unresolved issues. Recharts3.10.1 and react-is19.3.1 are the only new direct dependencies beyond inherited HAC-70 pins. No existing package versions were upgraded.
+
+This is a local verified implementation, not a published PR. HAC-102 recommendation selection remains separate and blocked on the lead decision. Live origin maps require retained explicit origins; legacy runs and the simulator single-seed example remain honestly unavailable. No new paid/provider calls, hosted writes or deployment were made. Logs: `/tmp/hac94-c0ec85d-*.log`; screenshots: `/tmp/hac94-evidence/`.
