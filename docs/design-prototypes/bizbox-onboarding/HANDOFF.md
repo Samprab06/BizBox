@@ -8,6 +8,31 @@ clear to translucent. Do not restore those effects. Preserve the concise individ
 questions, Other category, real city photography, disabled preview cities and
 GetA5-inspired rulers. See [README.md](README.md) for preview commands and edit points.
 
+## Final screen revision
+
+The workspace now uses one city/budget header, one selected-location panel and one
+assistant panel. Duplicate brief controls, inert secondary pins and fake interior
+view controls were removed. Selected-space details expand in place. The real city
+photograph remains a preview, not a geographic map or the listing's own photograph.
+
+Text and Voice are keyboard-accessible tabs over the same in-memory conversation,
+composer draft and pending staffing proposal. Switching modes keeps those values
+and selected-space disclosure state. Voice history expands on demand, replacing
+the static orb, rather than squeezing another conversation below it. Keep/Revert
+stays visible and applies to the same preview profile in either mode.
+
+The microphone button is disabled and labelled as disconnected. No audio session,
+permissions, model requests or second chat store is added. The final voice surface
+is placement guidance for HAC-111's reusable component, not a substitute client.
+Chat drafts are not saved as onboarding profile fields. Drafts/messages remain
+transient across reloads, as in the original scripted prototype.
+
+Checked the revised Text/Voice UI at 1366×768, 1024×768, 820×1180 and 390×844:
+no horizontal overflow, mode tabs and composer within their panel. Actual UI checks
+covered typed draft retention, shared history, pending proposals across modes,
+Keep/Revert, location detail retention, arrow-key tab switching/focus, Edit brief
+and reduced motion. The photo/assistant stack scrolls vertically on phones.
+
 ## Integration seams
 
 The actual intake lives in `components/intake/intake-screen.tsx`, with profile and

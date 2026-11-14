@@ -416,7 +416,9 @@ function bind() {
       }),
   );
   main
-    .querySelectorAll("input[name],textarea[name],select[name]")
+    .querySelectorAll(
+      "#onboard-form input[name],#onboard-form textarea[name],#onboard-form select[name]",
+    )
     .forEach((el) => {
       el.addEventListener("input", () => {
         data[el.name] = el.value;
@@ -508,84 +510,153 @@ function bind() {
 }
 let chatMessages = [];
 let alternativeStaff = null;
-let viewMode = "Neighborhood";
+let chatMode = "text";
+let chatDraft = "";
+let locationExpanded = false;
+let voiceHistoryOpen = false;
+const chatIcon =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M16.5 9.5a6.5 6.5 0 0 1-6.5 6.5H4l-2 2V9.5a7.25 7.25 0 0 1 14.5 0Z"/><path d="M6 8h7M6 11h4" stroke-linecap="round"/></svg>';
+const micIcon =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="7" y="2" width="6" height="10" rx="3"/><path d="M4.5 9a5.5 5.5 0 0 0 11 0M10 14.5V18m-3 0h6" stroke-linecap="round"/></svg>';
+const pinIcon =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 18s6-6 6-11A6 6 0 0 0 4 7c0 5 6 11 6 11Z"/><circle cx="10" cy="7" r="2"/></svg>';
+function conversationHTML() {
+  return `<div class="conversation" role="log" aria-label="Conversation" aria-live="polite"><p class="assistant-message">What would you like to know about this space?</p>${chatMessages.length ? "" : `<button class="suggestion" id="staff-suggestion">Add a staff member<span aria-hidden="true">+</span></button>`}${chatMessages.map((m) => `<p class="${m.role === "user" ? "user-message" : "assistant-message"}">${esc(m.text)}</p>`).join("")}</div>`;
+}
+function changeChatMode(mode, focus = false) {
+  if (!["text", "voice"].includes(mode) || chatMode === mode) return;
+  chatMode = mode;
+  renderWorkspace();
+  if (focus)
+    document.querySelector(`#mode-${mode}`).focus({ preventScroll: true });
+}
 function renderWorkspace() {
+  const currentDetails = document.querySelector("#selected-location");
+  const currentHistory = document.querySelector(".voice-history");
+  if (currentDetails) locationExpanded = currentDetails.open;
+  if (currentHistory) voiceHistoryOpen = currentHistory.open;
   const selectedSite =
     data.city === "Houston" ? "Montrose storefront" : "Silver Lake storefront";
-  const secondSite =
-    data.city === "Houston" ? "Heights storefront" : "Culver City storefront";
-  main.innerHTML = `<div class="workspace-layout"><section class="map-area" aria-label="City workspace layout concept"><div class="map-toolbar"><div class="map-title"><h1 tabindex="-1">${esc(data.category)} in ${esc(data.city)}</h1><p>Explore locations for your business.</p></div><button class="icon-control" id="edit-profile" aria-label="Edit business profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m14 5 5 5M4 20l4-1 12-12-3-3L5 16l-1 4Z"/></svg></button></div><div class="map-second-pin">${secondSite}</div><div class="map-pin"><button id="select-site"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M10 18s6-6 6-11A6 6 0 0 0 4 7c0 5 6 11 6 11Z"/><circle cx="10" cy="7" r="2"/></svg>${selectedSite}</button><span class="pin-stem"></span><span class="pin-ground"></span></div><article class="scene-card"><span class="glass-refraction" aria-hidden="true"></span><header><h2>${selectedSite}</h2><span class="sample-badge">Example</span></header><p>Corner space · walkable neighborhood</p><dl class="site-stats"><div><dt>Monthly asking rent</dt><dd>$3,867</dd></div><div><dt>Available space</dt><dd>1,450 <span style="font-size:11px">sq ft</span></dd></div></dl><button class="primary" id="inspect">Inspect this space${arrow}</button></article><div class="map-controls" role="group" aria-label="View"><button aria-pressed="${viewMode === "Neighborhood"}" data-view="Neighborhood">Neighborhood</button><button aria-pressed="${viewMode === "Interior"}" data-view="Interior">Interior</button></div></section><aside class="chat-panel" aria-label="Business assistant"><span class="glass-refraction" aria-hidden="true"></span><header class="chat-header"><span class="assistant-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/></svg></span><div><h2>Your business brief</h2><p>BizBox assistant</p></div><button class="chat-edit" id="chat-edit">Edit brief</button></header><div class="conversation" aria-live="polite"><div><p class="chat-context"><span></span>Starting with your brief</p><p class="assistant-message">A <strong>${esc(data.category.toLowerCase())}</strong> in <strong>${esc(data.city)}</strong>, with rent under <strong>${money(data.rent)}/month</strong>.<br><br>This example space fits that rent limit. Select it to inspect the listing, or try a change below.</p><button class="suggestion" id="staff-suggestion">What if I add one more employee?${arrow}</button></div>${chatMessages.map((m) => `<p class="${m.role === "user" ? "user-message" : "assistant-message"}">${esc(m.text)}</p>`).join("")}${alternativeStaff ? `<div class="diff-card"><p class="diff-title">Alternative staffing</p><div class="diff-values">${esc(data.staff)} staff ${arrow}<strong>${alternativeStaff} staff</strong></div><p style="font-size:11px;color:var(--muted);margin-bottom:12px">Demo change only. No simulation has run.</p><div class="diff-actions"><button class="keep" id="keep">Keep change</button><button id="revert">Revert</button></div></div>` : ""}</div><div class="chat-compose"><form id="chat-form"><input name="message" aria-label="Message BizBox assistant" placeholder="Ask about this location…" maxlength="300" required><button aria-label="Send message"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></form><p>Scripted preview · no live agent or simulation</p></div></aside></div>`;
+  const category = data.category === "Other" ? "Your business" : data.category;
+  const transcript = conversationHTML();
+  main.innerHTML = `
+    <div class="workspace-layout">
+      <header class="workspace-topbar">
+        <div><h1 tabindex="-1">${esc(data.city)}</h1><p>${esc(category)}<span aria-hidden="true"> / </span><span>${money(data.rent)}/mo limit</span></p></div>
+        <button class="brief-button" id="edit-profile">Edit brief<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="m12 4 4 4M3 17l4-1L17 6l-3-3L4 13l-1 4Z"/></svg></button>
+      </header>
+      <div class="workspace-body">
+        <section class="location-panel" aria-label="Selected location preview">
+          <div class="location-photo" aria-hidden="true"></div>
+          <span class="city-preview-label">City preview</span>
+          <button class="selected-pin" id="select-site" aria-label="Show selected space details" aria-controls="selected-location" aria-expanded="${locationExpanded}">${pinIcon}</button>
+          <details class="location-summary" id="selected-location" ${locationExpanded ? "open" : ""}>
+            <summary><div class="location-name"><h2>${selectedSite}</h2><span class="sample-badge">Example</span></div>
+              <dl class="location-stats"><div><dt>Monthly rent</dt><dd>$3,867</dd></div><div><dt>Area</dt><dd>1,450 <span>sq ft</span></dd></div></dl>
+              <span class="location-disclosure"><span>Details</span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></span>
+            </summary>
+            <p class="location-description">Corner space with street frontage and room for seating. Example listing; the photograph shows the city.</p>
+          </details>
+        </section>
+        <aside class="chat-panel" data-mode="${chatMode}" aria-label="Business assistant">
+          <header class="chat-header"><div class="assistant-heading"><h2>Assistant</h2><span class="preview-badge" title="Scripted design preview">Preview</span></div>
+            <div class="chat-mode" role="tablist" aria-label="Chat mode">${["text", "voice"].map((mode) => `<button id="mode-${mode}" role="tab" aria-selected="${chatMode === mode}" aria-controls="chat-interaction" tabindex="${chatMode === mode ? "0" : "-1"}" data-chat-mode="${mode}">${mode === "text" ? chatIcon : micIcon}${mode === "text" ? "Text" : "Voice"}</button>`).join("")}</div>
+          </header>
+          <div class="chat-interaction" id="chat-interaction" role="tabpanel" aria-labelledby="mode-${chatMode}">
+            ${chatMode === "text" ? transcript : `<div class="voice-stage"><div class="voice-orb" aria-hidden="true"><span></span></div><p>Microphone not connected</p><button class="voice-mic" disabled aria-label="Voice is not connected in this design preview">${micIcon}</button></div><details class="voice-history" ${voiceHistoryOpen ? "open" : ""}><summary>Conversation<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></summary>${transcript}</details>`}
+          </div>
+          ${alternativeStaff ? `<section class="diff-card" aria-label="Proposed staffing change"><div class="staffing-change"><h3>Staffing</h3><p>${esc(data.staff)} ${arrow} <strong>${alternativeStaff}</strong><span>on shift</span></p></div><p class="change-note">Preview · no simulation run</p><div class="diff-actions"><button class="keep" id="keep">Keep change</button><button id="revert">Revert</button></div></section>` : ""}
+          ${chatMode === "text" ? `<div class="chat-compose"><form id="chat-form"><input name="message" aria-label="Message BizBox assistant" placeholder="Ask about this space…" maxlength="300" value="${esc(chatDraft)}" required><button aria-label="Send message"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></form></div>` : ""}
+        </aside>
+      </div>
+    </div>`;
   bind();
   document.querySelector("#edit-profile").onclick = () => navigate("review");
-  document.querySelector("#chat-edit").onclick = () => navigate("review");
-  document.querySelector("#select-site").onclick = () =>
-    toast(selectedSite + " selected · example listing");
-  document.querySelector("#inspect").onclick = () => {
-    viewMode = "Interior";
-    renderWorkspace();
-    toast("Interior view is a placeholder in this flow study.");
+  const locationDetails = document.querySelector("#selected-location");
+  const selectedPin = document.querySelector("#select-site");
+  selectedPin.onclick = () => {
+    locationDetails.open = !locationDetails.open;
   };
-  document.querySelectorAll("[data-view]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        viewMode = button.dataset.view;
-        renderWorkspace();
-        if (viewMode === "Interior")
-          toast("Interior view is a placeholder in this flow study.");
-      }),
+  locationDetails.addEventListener("toggle", () =>
+    selectedPin.setAttribute("aria-expanded", String(locationDetails.open)),
   );
-  document.querySelector("#staff-suggestion").onclick = () =>
-    sendChat("What if I add one more employee?");
-  document.querySelector("#chat-form").onsubmit = (event) => {
-    event.preventDefault();
-    const input = event.target.elements.message;
-    if (input.value.trim()) sendChat(input.value.trim());
-  };
+  document.querySelectorAll("[data-chat-mode]").forEach((button) => {
+    button.onclick = () => changeChatMode(button.dataset.chatMode, true);
+    button.onkeydown = (event) => {
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        changeChatMode(
+          event.key === "Home"
+            ? "text"
+            : event.key === "End"
+              ? "voice"
+              : chatMode === "text"
+                ? "voice"
+                : "text",
+          true,
+        );
+      }
+    };
+  });
+  document
+    .querySelector("#staff-suggestion")
+    ?.addEventListener("click", () => sendChat("Add one staff member."));
+  const chatForm = document.querySelector("#chat-form");
+  if (chatForm) {
+    chatForm.elements.message.addEventListener("input", (event) => {
+      chatDraft = event.target.value;
+    });
+    chatForm.onsubmit = (event) => {
+      event.preventDefault();
+      const text = chatDraft.trim();
+      if (text) {
+        chatDraft = "";
+        sendChat(text);
+        document
+          .querySelector("#chat-form input")
+          ?.focus({ preventScroll: true });
+      }
+    };
+  }
   if (alternativeStaff) {
     document.querySelector("#keep").onclick = () => {
       data.staff = String(alternativeStaff);
       alternativeStaff = null;
       chatMessages.push({
         role: "assistant",
-        text: `Kept ${data.staff} staff in this preview. A real run would calculate the effect on waits and costs.`,
+        text: `Kept ${data.staff} staff in this preview.`,
       });
       persist();
       renderWorkspace();
+      document
+        .querySelector(`#mode-${chatMode}`)
+        .focus({ preventScroll: true });
     };
     document.querySelector("#revert").onclick = () => {
       alternativeStaff = null;
       chatMessages.push({
         role: "assistant",
-        text: "Kept your original staffing. Your brief is unchanged.",
+        text: "Kept your original staffing.",
       });
       renderWorkspace();
+      document
+        .querySelector(`#mode-${chatMode}`)
+        .focus({ preventScroll: true });
     };
   }
-  document.querySelector(".conversation").scrollTop =
-    document.querySelector(".conversation").scrollHeight;
+  const conversation = document.querySelector(".conversation");
+  if (conversation) conversation.scrollTop = conversation.scrollHeight;
 }
 function sendChat(text) {
   chatMessages.push({ role: "user", text });
-  if (/staff|employee|hire/i.test(text)) {
+  if (/staff|employee|hire/i.test(text))
     alternativeStaff = Number(data.staff) + 1;
-  } else {
+  else
     chatMessages.push({
       role: "assistant",
-      text: "This is a scripted flow preview. Try “add one more employee” to see a proposed change with Keep and Revert.",
+      text: "This preview supports staffing changes. Try “add one employee”.",
     });
-  }
   renderWorkspace();
-}
-let toastTimer;
-function toast(text) {
-  document.querySelector(".toast")?.remove();
-  clearTimeout(toastTimer);
-  const node = document.createElement("div");
-  node.className = "toast";
-  node.setAttribute("role", "status");
-  node.textContent = text;
-  document.body.append(node);
-  toastTimer = setTimeout(() => node.remove(), 3600);
 }
 
 window.bizboxMockup = {
@@ -594,6 +665,9 @@ window.bizboxMockup = {
     theme,
     data: { ...data },
     alternativeStaff,
+    chatMode,
+    chatDraft,
+    chatMessages: chatMessages.map((message) => ({ ...message })),
     isTransitioning,
   }),
   navigate,

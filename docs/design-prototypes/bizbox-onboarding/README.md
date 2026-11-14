@@ -6,6 +6,12 @@ any Next.js routes, shared contracts, services, dependencies, or application tok
 
 ![Static dark-glass onboarding with the budget ruler](preview.png)
 
+The final screen now separates the city/selected space from the assistant, with a
+shared Text / Voice toggle. Voice is a visual preview with no connected microphone.
+
+![Structured final screen in Text mode](workspace-text.png)
+![Final screen in Voice mode](workspace-voice.png)
+
 ## Run and adjust
 
 From the repository root:
@@ -15,13 +21,15 @@ python3 -m http.server 4176 --bind 127.0.0.1 --directory docs/design-prototypes/
 ```
 
 Open [the first question](http://127.0.0.1:4176/?step=category&theme=night) or
-[the rent ruler](http://127.0.0.1:4176/?step=rent&theme=night). Use another port if
+[the rent ruler](http://127.0.0.1:4176/?step=rent&theme=night), or
+[the final screen](http://127.0.0.1:4176/?step=workspace&theme=night). Use another port if
 4176 is occupied. Any static HTTP server works; there is no install/build step for
 this reference. Python is an optional local preview command, not an app service.
 
 | File                                          | Adjust here                                                                              |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `app.js`                                      | Question order/copy, options, validation, session state, review, scripted workspace/chat |
+| `workspace.css`                               | Final screen layout, selected-space dock, Text / Voice tabs, static voice preview        |
 | `simple.css`                                  | Final static glass, radius, blur and motion overrides                                    |
 | `pool.css`                                    | Current compact form layout and ruler appearance; the name is historical                 |
 | `tactile.js`                                  | Direct ruler dragging, bounded release momentum, detents and keyboard controls           |
@@ -31,7 +39,7 @@ this reference. Python is an optional local preview command, not an app service.
 
 The remaining CSS layers preserve the reviewed prototype's layout and appearance.
 Their filenames reflect earlier iterations; **the old pool, spring and distortion
-JavaScript is not included or loaded**. Keep `simple.css` last. Consolidating the
+JavaScript is not included or loaded**. Keep `simple.css` after the onboarding layers; `workspace.css` follows it for the final screen. Consolidating the
 styles is a possible follow-up, not required to view or edit this handoff.
 
 ## Current direction
