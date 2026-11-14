@@ -5,6 +5,7 @@ export const views = {
   site: "Site detail",
   comparison: "Comparison",
   replay: "Replay",
+  simulator: "Simulator",
 };
 
 export type View = keyof typeof views;
@@ -17,9 +18,14 @@ export const routeLabels: Record<WorkspaceRoute, string> = {
   plan: "Location plan",
 };
 
-export function workspaceHref(projectId: string, view: WorkspaceRoute, siteId?: string) {
+export function workspaceHref(
+  projectId: string,
+  view: WorkspaceRoute,
+  siteId?: string,
+) {
   const base = `/projects/${encodeURIComponent(projectId)}`;
-  if (view === "site") return `${base}/sites/${encodeURIComponent(siteId ?? "unselected")}`;
+  if (view === "site")
+    return `${base}/sites/${encodeURIComponent(siteId ?? "unselected")}`;
   if (view === "plan") return `${base}/plan`;
   return `${base}/${view}${siteId ? `?site=${encodeURIComponent(siteId)}` : ""}`;
 }
@@ -69,25 +75,43 @@ export const workspaceTasks: readonly WorkspaceTask[] = [
     id: "test",
     label: "Test the plan",
     entries: [
-      { route: "comparison", label: views.comparison, step: "compare your shortlist" },
-      { route: "replay", label: views.replay, step: "replay a day at the space" },
+      {
+        route: "comparison",
+        label: views.comparison,
+        step: "compare your shortlist",
+      },
+      {
+        route: "replay",
+        label: views.replay,
+        step: "replay a day at the space",
+      },
+      {
+        route: "simulator",
+        label: views.simulator,
+        step: "test the operating plan",
+      },
     ],
-    planned: [
-      { id: "sensitivity", label: "Sensitivity" },
-      { id: "simulator", label: "City simulator", ticket: "SIM-6" },
-    ],
+    planned: [{ id: "sensitivity", label: "Sensitivity" }],
   },
   {
     id: "decide",
     label: "Make the decision",
-    entries: [{ route: "plan", label: routeLabels.plan, step: "build your location plan" }],
+    entries: [
+      {
+        route: "plan",
+        label: routeLabels.plan,
+        step: "build your location plan",
+      },
+    ],
     planned: [{ id: "findings", label: "Findings" }],
   },
 ];
 
 /** Available entries in the order a founder moves through them. */
-export const workspaceSteps: readonly (AvailableEntry & { task: WorkspaceTask })[] = workspaceTasks.flatMap(
-  (task) => task.entries.map((entry) => ({ ...entry, task })),
+export const workspaceSteps: readonly (AvailableEntry & {
+  task: WorkspaceTask;
+})[] = workspaceTasks.flatMap((task) =>
+  task.entries.map((entry) => ({ ...entry, task })),
 );
 
 export function taskForRoute(route: WorkspaceRoute): WorkspaceTask {
