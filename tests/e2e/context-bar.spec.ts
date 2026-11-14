@@ -60,7 +60,7 @@ test("incomplete and complete founder intake do not silently select a fixture", 
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   const bar = contextBar(page);
   await expect(
     bar.getByRole("link", {

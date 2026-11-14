@@ -43,7 +43,7 @@ export const comparisonResponse = z.object({
 
 /** No API mocking: every answer goes through the real browser form. */
 export async function enterPipelineIntake(page: Page) {
-  await page.goto(`/projects/${pipelineProject}/intake`);
+  await page.goto(`/projects/${pipelineProject}/intake?mode=form`);
   for (const text of [
     "Neighborhood coffee",
     "Any",
