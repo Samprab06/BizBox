@@ -253,6 +253,73 @@ describe("evaluation assembly with injected source dependencies", () => {
       out.assumptions["sites.101:1.config.stations.usableSf"],
     ).toMatchObject({ value: 1200, origin: "default" });
   });
+  it("builds an order-independent study area: reversing candidates leaves every site's result unchanged (HAC-60)", async () => {
+    /** Each site sees its own block group and workplace plus one shared block group whose
+     * allocated population differs by site, as overlapping rings would. */
+    const siteSpecific = (raw: AssembleEvaluationInput) => {
+      const deps = dependencies(raw);
+      const get = deps.getCatchment;
+      deps.getCatchment = async (...args) => {
+        const [id] = args;
+        const bundle = await get(...args);
+        const n = Number(String(id).split(":")[0]) - 100;
+        const [bg] = bundle.response.residents.blockGroups;
+        const [job] = bundle.response.workers.blocks;
+        const scaled = <T extends { value: number | null }>(
+          v: T,
+          k: number,
+        ) => ({ ...v, value: (v.value ?? 0) * k });
+        bundle.response.catchment = {
+          ...bundle.response.catchment,
+          id: `catchment-${id}`,
+        };
+        bundle.response.residents.blockGroups = [
+          {
+            ...bg!,
+            geoid: `bg-${id}`,
+            allocatedPopulation: scaled(bg!.allocatedPopulation, n),
+          },
+          {
+            ...bg!,
+            geoid: "bg-shared",
+            allocatedPopulation: scaled(bg!.allocatedPopulation, 1 + n / 2),
+          },
+        ];
+        bundle.response.workers.blocks = [
+          { ...job!, geoid: `job-${id}`, jobs: scaled(job!.jobs, n) },
+        ];
+        bundle.locations = {
+          ...bundle.locations,
+          workers: { [`job-${id}`]: { lat: 29.76 + n * 0.002, lng: -95.37 } },
+          blockGroups: {
+            [`bg-${id}`]: { lat: 29.76 + n * 0.002, lng: -95.371 },
+          },
+        };
+        return bundle;
+      };
+      return deps;
+    };
+    const forward = input();
+    const reversed = {
+      ...input(),
+      candidateIds: [...forward.candidateIds].reverse(),
+    };
+    const a = await assembleEvaluation(forward, siteSpecific(forward));
+    // Same inventory (the harness assigns rent/size by list position); only the request order differs.
+    const b = await assembleEvaluation(reversed, siteSpecific(forward));
+    // The population includes every candidate's block groups, not just the first site's.
+    expect(a.request.personaSet).toEqual(b.request.personaSet);
+    expect(a.request.personaSet.catchmentId).toMatch(/^study:/);
+    expect(a.findings.map((f) => f.code)).toContain("SHARED_STUDY_AREA");
+    const result = (x: typeof a) =>
+      Object.fromEntries(
+        evaluateSites(x.request).result.sites.map((s) => [
+          s.siteId,
+          s.monthlyContributionUsd,
+        ]),
+      );
+    expect(result(b)).toEqual(result(a));
+  });
   it("skips unknown rent or size with findings instead of fabricating values", async () => {
     const raw = input();
     const deps = dependencies(raw);
