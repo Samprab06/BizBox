@@ -8,6 +8,7 @@ import {
   Storefront,
 } from "@/lib/demand/contracts";
 import { SiteConfigSchema } from "@/lib/sim/contracts";
+import { SiteInsightsSchema } from "./insights";
 
 /**
  * HAC-22: site evaluation and sensitivity. One evaluation runs every site through
@@ -141,29 +142,40 @@ export const RepresentativeRunSchema = z.object({
 });
 export type RepresentativeRun = z.infer<typeof RepresentativeRunSchema>;
 
-export const SiteEvaluationSchema = z.object({
-  siteId: z.string().min(1),
-  rank: z.number().int().positive(),
-  /** Sites whose contribution intervals overlap this one's heavily: not a meaningful difference. */
-  tiedWith: z.array(z.string().min(1)),
-  demandSource: DemandSourceSchema,
-  /** Operating contribution per month (revenue minus COGS, labor, rent, opex), USD. */
-  monthlyContributionUsd: MetricSummarySchema,
-  /** The same after buildout amortization, USD. */
-  monthlyContributionAfterBuildoutUsd: MetricSummarySchema,
-  monthlyRevenueUsd: MetricSummarySchema,
-  monthlyServedCustomers: MetricSummarySchema,
-  weekdayMeanWaitMin: MetricSummarySchema,
-  weekdayAbandonmentRate: MetricSummarySchema,
-  weekdayUtilization: MetricSummarySchema,
-  /** Per-seed operating contribution, in seed order. Kept so ties and reruns are checkable. */
-  contributionBySeed: z.array(z.number().finite()),
-  representative: z.object({
-    weekday: RepresentativeRunSchema,
-    weekend: RepresentativeRunSchema,
-  }),
-  excludedPersonaIds: z.array(z.string()),
-});
+export const SiteEvaluationSchema = z
+  .object({
+    siteId: z.string().min(1),
+    rank: z.number().int().positive(),
+    /** Sites whose contribution intervals overlap this one's heavily: not a meaningful difference. */
+    tiedWith: z.array(z.string().min(1)),
+    demandSource: DemandSourceSchema,
+    /** Operating contribution per month (revenue minus COGS, labor, rent, opex), USD. */
+    monthlyContributionUsd: MetricSummarySchema,
+    /** The same after buildout amortization, USD. */
+    monthlyContributionAfterBuildoutUsd: MetricSummarySchema,
+    monthlyRevenueUsd: MetricSummarySchema,
+    monthlyServedCustomers: MetricSummarySchema,
+    weekdayMeanWaitMin: MetricSummarySchema,
+    weekdayAbandonmentRate: MetricSummarySchema,
+    weekdayUtilization: MetricSummarySchema,
+    /** Per-seed operating contribution, in seed order. Kept so ties and reruns are checkable. */
+    contributionBySeed: z.array(z.number().finite()),
+    representative: z.object({
+      weekday: RepresentativeRunSchema,
+      weekend: RepresentativeRunSchema,
+    }),
+    excludedPersonaIds: z.array(z.string()),
+    /** HAC-94: all-seed hourly visualization data; absent on legacy comparisons. */
+    insights: SiteInsightsSchema.optional(),
+  })
+  .superRefine((site, ctx) => {
+    if (site.insights && site.insights.siteId !== site.siteId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["insights", "siteId"],
+        message: "Insights must belong to the evaluation site",
+      });
+  });
 export type SiteEvaluation = z.infer<typeof SiteEvaluationSchema>;
 
 export const EVALUATION_MODEL_VERSION = "hac-22-evaluation-1";

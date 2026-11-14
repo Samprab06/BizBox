@@ -1,0 +1,16 @@
+# HAC-94 backend design and plan
+
+Approved scope: pure hourly insights and factual callouts, plus an optional persisted evaluation field. Frontend owns charts, mount points, Recharts and package files. HAC-102 owns station experiments separately. No schema, services, auth or automatic reruns.
+
+New evaluations retain `SiteEvaluation.insights` version `hac94-v1` while all seed days are in memory. Reuse `hourlySeries`/`aggregateHourly`: equal-weight seeds, nearest-rank p5/p95, completed-customer waits assigned to service-start hour. Customer p90 and uncertainty across seeds are distinct. Compute cumulative revenue within each seed before its quantiles. Capacity uses resolved stations × actual open minutes / known service mean; unknown inputs stay explicit.
+
+Customer mixes count modeled arrivals, with resident/worker/pass-by kinds and straight-line modeled-persona distances <0.5, [0.5,1), [1,3], >3 miles and unknown. Actual trip-origin heatmaps require explicitly supplied seed/customer coordinates and a grid frame. Otherwise they are unavailable; persona jitter is not a sampled trip origin. Synthetic fixtures may supply clearly authored points. Heatmap work is bounded to 256 cells; inputs use at most the existing 100 seeds and 24 hours. No customer trajectories are persisted.
+
+Legacy results without this field report unavailable rather than inventing uncertainty or silently recomputing. Existing comparison metric-equality checks omit the new visualization field so adding it does not break legacy rerun reproduction. Existing simulation/economic outputs and model version remain unchanged.
+
+Peak callout: largest positive mean arrivals among open hours, earliest tie. Quiet callout: lowest mean utilization among open hours, earliest tie. Values copy hourly observations exactly; no closing advice or event-count/arrival-cohort percentage. Text formatting belongs to frontend.
+
+- [x] Add typed schemas and tests for seed aggregation, cumulative revenue and total walk-away covariance, null waits, partial-hour capacity, mix boundaries and explicit origin availability. Manager review requested the per-seed total walk-away band; its anti-correlated regression was observed failing before implementation.
+- [x] Implement pure model and deterministic multi-seed fixture export; add factual callout tests and implementation. Geographic field is `servedOriginMap`, distinct from evidence provenance.
+- [x] Add optional evaluation output and aggregate before seed days are discarded; test persisted optional output, legacy parsing and rerun reproduction. Relevant evaluator baseline/model/evidence checks passed; latest focused model/contract checks: 37 passed; comparison handler: 13 passed. Owned-file lint and project typecheck passed during UI integration. No broad checks until the manager grants the shared CPU window.
+- [ ] Run targeted tests, then coordinated four checks and update documentation/evidence.
