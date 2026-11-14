@@ -1,6 +1,11 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
 // HAC-129: guided onboarding and the workspace are one session. Every network boundary is a
 // page.route mock: no model, voice, listing or database service is called.
@@ -246,14 +251,16 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
     session?.messages.filter((entry) => entry.text === "Is parking nearby?"),
   ).toHaveLength(1);
 
-  // The detailed form's composer is the same draft, and sending there uses the same action.
+  // HAC-143: the detailed form has no composer of its own. The consultant dock stays
+  // mounted, so its draft follows the founder there and sending uses the same action.
   await page.goto(workspaceHref("houston-coffee", "workspace"));
+  await openConsultant(page);
+  await tab(page, "Text").click();
   await composer(page).fill("Second thought");
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Edit all fields" }).click();
-  const formComposer = page.getByLabel("Message the intake agent");
-  await expect(formComposer).toHaveValue("Second thought");
-  await formComposer.press("Enter");
+  await expect(composer(page)).toHaveValue("Second thought");
+  await composer(page).press("Enter");
   await expect.poll(() => held.length).toBe(2);
   expect(messages[1]!.message).toBe("Second thought");
   await held[1]!.fulfill({ json: reply("Noted from the form.") });

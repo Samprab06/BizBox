@@ -3,11 +3,13 @@ import { founderAnswers, number } from "../../lib/agent/__fixtures__/founder";
 import { BusinessProfileSchema } from "../../lib/contracts";
 import type { IntakeState } from "../../lib/contracts/intake";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, test } from "./fixtures";
+import { expect, openConsultant, test } from "./fixtures";
 
 const path = "**/api/projects/*/intake";
 const storageKey = "sitework:intake:v1:houston-coffee";
-const chat = (page: Page) => page.getByRole("textbox", { name: "Message the intake agent" });
+// HAC-143: the form has no composer of its own; messages go through the consultant dock.
+const dock = (page: Page) => page.getByRole("complementary", { name: "Assistant" });
+const chat = (page: Page) => dock(page).getByRole("textbox", { name: "Message the BizBox assistant" });
 const conversation = (page: Page) => page.getByRole("list", { name: "Conversation" });
 const defaultValue = (value: number, unit: string) => ({
   value, unit, origin: "default" as const, evidenceIds: ["category-default"],
@@ -60,6 +62,8 @@ async function open(page: Page) {
 }
 
 async function say(page: Page, message: string) {
+  await openConsultant(page);
+  await expect(dock(page).getByText("Live", { exact: true })).toBeVisible();
   await chat(page).fill(message);
   await chat(page).press("Enter");
 }
@@ -144,7 +148,7 @@ test("a timeout preserves the interview and retries the same message only once",
   });
   await open(page);
   await say(page, "Morning Cup is a coffee shop.");
-  const alert = page.getByRole("alert").filter({ hasText: "Could not reach the intake service" });
+  const alert = page.getByRole("alert").filter({ hasText: "Could not reach the BizBox assistant" });
   await expect(alert.getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(conversation(page).getByText("Morning Cup is a coffee shop.", { exact: true })).toHaveCount(1);
   await alert.getByRole("button", { name: "Retry" }).click();

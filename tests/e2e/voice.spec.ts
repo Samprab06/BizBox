@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { expect, openConsultant, test } from "./fixtures";
 
 type Harness = {
   deny: boolean;
@@ -190,8 +190,19 @@ async function mockVoice(
   );
   return () => setups;
 }
+// HAC-143: the intake form has no voice panel of its own; the consultant dock's one voice
+// session answers the form's current prompt while the form is open.
 const voice = (page: Page) =>
-  page.getByRole("region", { name: "Voice intake", exact: true });
+  page.getByRole("region", { name: "Voice assistant", exact: true });
+async function openIntakeForm(page: Page) {
+  await openIntakeForm(page);
+  await openConsultant(page);
+  await page
+    .getByRole("complementary", { name: "Assistant" })
+    .getByRole("tab", { name: "Voice" })
+    .click();
+  await expect(voice(page)).toBeVisible();
+}
 const profileConcept = (page: Page) =>
   page.getByRole("textbox", { name: "Business concept", exact: true });
 async function start(page: Page) {
@@ -207,7 +218,7 @@ test("unconfigured voice has no microphone/setup side effects and typed intake w
   page,
 }) => {
   const setups = await mockVoice(page, { configured: false });
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await expect(
     voice(page).getByRole("button", { name: "Start voice" }),
   ).toBeDisabled();
@@ -225,7 +236,7 @@ test("voice and typed answers share the current offline profile, validation and 
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await start(page);
   await page.evaluate(() => window.__voice.complete("A", "Voice café"));
   await expect(profileConcept(page)).toHaveValue("Voice café");
@@ -280,7 +291,7 @@ test("permission denial permits retry and leaves typed input available", async (
   page,
 }) => {
   const setups = await mockVoice(page, { denied: true });
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await voice(page).getByRole("button", { name: "Start voice" }).click();
   await expect(voice(page).getByRole("status")).toContainText(
     "microphone access was denied",
@@ -302,7 +313,7 @@ test("mute cancels identified speech without treating its cancellation race as a
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await start(page);
   await page.evaluate(() => window.__voice.complete("A", "Coffee"));
   await expect(profileConcept(page)).toHaveValue("Coffee");
@@ -360,9 +371,9 @@ test("live voice uses the typed endpoint and stop suppresses late speech while p
       },
     });
   });
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await expect(
-    page.getByLabel("Message the intake agent", { exact: true }),
+    page.getByText("Live intake agent. Answers are kept in this browser."),
   ).toBeVisible();
   await start(page);
   await page.evaluate(() => window.__voice.complete("A", "Voice idea"));
@@ -386,10 +397,12 @@ test("live voice uses the typed endpoint and stop suppresses late speech while p
           .length,
     ),
   ).toBe(0);
-  await page
-    .getByLabel("Message the intake agent", { exact: true })
+  const dock = page.getByRole("complementary", { name: "Assistant" });
+  await dock.getByRole("tab", { name: "Text" }).click();
+  await dock
+    .getByLabel("Message the BizBox assistant", { exact: true })
     .fill("Typed follow-up");
-  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await dock.getByRole("button", { name: "Send message", exact: true }).click();
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1].message).toBe("Typed follow-up");
   expect(JSON.stringify(bodies[1].patch)).toContain("Newer manual edit");
@@ -399,7 +412,7 @@ test("out-of-order transcription never applies an answer to a changed prompt", a
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await start(page);
   await page.evaluate(() => {
     window.__voice.emit({
@@ -436,12 +449,12 @@ test("out-of-order transcription never applies an answer to a changed prompt", a
   await expect(voice(page).getByRole("status")).toContainText("Please repeat");
 });
 
-test("responsive reduced-motion and WebGL fallback keep accessible voice controls and clean up on navigation", async ({
+test("responsive reduced-motion and WebGL fallback keep accessible voice controls and survive navigation", async ({
   page,
 }, testInfo) => {
   await mockVoice(page, { noWebGL: true });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await start(page);
   for (const width of [375, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -450,7 +463,7 @@ test("responsive reduced-motion and WebGL fallback keep accessible voice control
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(width);
     const { violations } = await new AxeBuilder({ page })
-      .include('section[aria-label="Voice intake"]')
+      .include('section[aria-label="Voice assistant"]')
       .analyze();
     expect(violations).toEqual([]);
   }
@@ -463,7 +476,15 @@ test("responsive reduced-motion and WebGL fallback keep accessible voice control
     .getByRole("navigation", { name: "Project views", exact: true })
     .getByRole("link", { name: "Map", exact: true })
     .click();
-  await expect(voice(page)).toHaveCount(0);
+  // HAC-143: the session belongs to the consultant shell, so navigation keeps it running.
+  await expect(page).toHaveURL(/\/map/);
+  await expect(voice(page)).toHaveCount(1);
+  await expect(voice(page).getByRole("status")).toContainText("Listening");
+  expect(await page.evaluate(() => window.__voice.stopped)).toBe(0);
+  expect(await page.evaluate(() => window.__voice.peersClosed)).toBe(0);
+  await voice(page)
+    .getByRole("button", { name: "Stop voice", exact: true })
+    .click();
   expect(await page.evaluate(() => window.__voice.stopped)).toBe(1);
   expect(await page.evaluate(() => window.__voice.peersClosed)).toBe(1);
 });
@@ -472,7 +493,7 @@ test("a manual edit between speech capture and transcription cannot move the ans
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake?mode=form");
+  await openIntakeForm(page);
   await start(page);
   await page.evaluate(() => {
     window.__voice.emit({

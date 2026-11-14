@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { IntakeSession } from "@/components/intake/profile";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
 import { useContextIntake } from "@/lib/client/use-workspace-context";
 import {
   applyIntakeReply,
+  assistantCopy,
   intakeEndpoint,
   intakeRequestBody,
   intakeStorageKey,
@@ -12,10 +14,28 @@ import {
   postIntakeMessage,
   sessionOrInitial,
   withFounderMessage,
+  type IntakeCopy,
 } from "./intake-conversation";
 
 export type AgentAvailability = "checking" | "live" | "offline";
-export type ConversationFailure = { message: string; retry?: string };
+/**
+ * Where a failure is shown. `assistant`: the consultant dock (typed or default voice
+ * messages). `page`: the screen that started the request (the intake form's structured
+ * edits and its prompt-guarded voice answers), so one failure never shows two alerts.
+ */
+export type FailureSource = "assistant" | "page";
+export type ConversationFailure = {
+  message: string;
+  /** The message to resend; "" retries a form-only sync of pending edits. */
+  retry?: string;
+  source: FailureSource;
+};
+export type SendOptions = {
+  source?: FailureSource;
+  copy?: IntakeCopy;
+  /** Appended to the failure message, e.g. "Your profile edits still work." */
+  suffix?: string;
+};
 
 /** Same capability probe as the intake screen: live only when the server reports a model. */
 function useAgentAvailability(projectId: string): AgentAvailability {
@@ -39,18 +59,28 @@ function useAgentAvailability(projectId: string): AgentAvailability {
 }
 
 /**
- * The workspace assistant's conversation: the existing intake session, observed through the
+ * The project's one conversation: the existing intake session, observed through the
  * existing `useContextIntake` store hook and updated only through the intake agent's reply.
- * Text and voice both call `submit`, so they share one history and one request queue.
+ *
+ * HAC-143: the consultant shell mounts this once in the project layout, so the busy state,
+ * failure, request queue and availability probe survive client navigation. The dock's text
+ * and voice input and the intake screen's form (structured edits, offline fixture answers)
+ * all go through `enqueue`, so there is one queue per project.
  */
 export function useIntakeConversation(projectId: string) {
   const key = intakeStorageKey(projectId);
   const raw = useContextIntake(projectId);
-  const session = useMemo(() => parseIntakeSession(raw), [raw]);
   const availability = useAgentAvailability(projectId);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<ConversationFailure | null>(null);
   const [storageError, setStorageError] = useState(false);
+  // When localStorage refuses a write, the session lives here until the page reloads.
+  const [unsaved, setUnsaved] = useState<IntakeSession | null>(null);
+  const unsavedRef = useRef<IntakeSession | null>(null);
+  const session = useMemo(
+    () => unsaved ?? parseIntakeSession(raw),
+    [raw, unsaved],
+  );
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const mounted = useRef(true);
   useEffect(() => {
@@ -60,7 +90,9 @@ export function useIntakeConversation(projectId: string) {
     };
   }, []);
 
-  const read = useCallback(() => {
+  /** The latest session, read synchronously so queued actions never act on stale state. */
+  const read = useCallback((): IntakeSession => {
+    if (unsavedRef.current) return unsavedRef.current;
     try {
       return sessionOrInitial(localStorage.getItem(key));
     } catch {
@@ -69,38 +101,71 @@ export function useIntakeConversation(projectId: string) {
   }, [key]);
 
   const save = useCallback(
-    (next: ReturnType<typeof read>) => {
+    (next: IntakeSession) => {
       try {
         localStorage.setItem(key, JSON.stringify(next));
-        window.dispatchEvent(
-          new CustomEvent(INTAKE_UPDATED_EVENT, { detail: { key } }),
-        );
+        unsavedRef.current = null;
+        setUnsaved(null);
         setStorageError(false);
       } catch {
+        unsavedRef.current = next;
+        setUnsaved(next);
         setStorageError(true);
       }
+      window.dispatchEvent(
+        new CustomEvent(INTAKE_UPDATED_EVENT, { detail: { key } }),
+      );
     },
     [key],
   );
 
+  // Another tab's write replaces an unsaved in-memory session.
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key !== key || !unsavedRef.current) return;
+      unsavedRef.current = null;
+      setUnsaved(null);
+    };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, [key]);
+
+  /**
+   * Posts the founder's message (or, with no text, only pending form edits) with the
+   * round-tripped state, then merges the reply. Resolves to the agent's reply, or null.
+   */
   const send = useCallback(
-    async (text: string, appendFounder: boolean): Promise<string | null> => {
+    async (
+      text: string | undefined,
+      appendFounder: boolean,
+      options: SendOptions = {},
+    ): Promise<string | null> => {
+      const source = options.source ?? "assistant";
       const current = read();
       const body = intakeRequestBody(current, text);
-      if (appendFounder) save(withFounderMessage(current, text));
+      if (!text && !body.patch) return null;
+      if (appendFounder && text) save(withFounderMessage(current, text));
       setBusy(true);
       setFailure(null);
       try {
-        const outcome = await postIntakeMessage(fetch, projectId, body);
+        const outcome = await postIntakeMessage(
+          fetch,
+          projectId,
+          body,
+          options.copy ?? assistantCopy,
+        );
         if (!mounted.current) return null;
         if (!outcome.ok) {
           setFailure({
-            message: outcome.message,
-            retry: outcome.retryable ? text : undefined,
+            message: options.suffix
+              ? `${outcome.message} ${options.suffix}`
+              : outcome.message,
+            retry: outcome.retryable ? (text ?? "") : undefined,
+            source,
           });
           return null;
         }
-        save(applyIntakeReply(read(), current, outcome.result));
+        save(applyIntakeReply(read(), current, outcome.result, Boolean(text)));
         return outcome.result.assistantMessage;
       } finally {
         if (mounted.current) setBusy(false);
@@ -120,6 +185,22 @@ export function useIntakeConversation(projectId: string) {
     [],
   );
 
+  // The options of the request that failed, so Retry reports in the same place.
+  const lastOptions = useRef<SendOptions>({});
+  /** Sends immediately; only call it from inside an `enqueue`d action. */
+  const sendNow = useCallback(
+    (text: string | undefined, appendFounder: boolean, options: SendOptions) => {
+      lastOptions.current = options;
+      return send(text, appendFounder, options);
+    },
+    [send],
+  );
+  const sendWith = useCallback(
+    (text: string | undefined, appendFounder: boolean, options: SendOptions) =>
+      enqueue(() => sendNow(text, appendFounder, options)),
+    [enqueue, sendNow],
+  );
+
   /** Sends a typed or spoken message; resolves to the agent's actual reply, or null. */
   const submit = useCallback(
     (raw: string): Promise<string | null> => {
@@ -129,19 +210,44 @@ export function useIntakeConversation(projectId: string) {
         setFailure({
           message:
             "The BizBox assistant is offline, so nothing was sent. Edit your brief in Intake instead.",
+          source: "assistant",
         });
         return Promise.resolve(null);
       }
-      return enqueue(() => send(text, true));
+      return sendWith(text, true, {});
     },
-    [availability, enqueue, send],
+    [availability, sendWith],
   );
 
   const retry = useCallback(() => {
     const text = failure?.retry;
     if (text === undefined) return;
-    void enqueue(() => send(text, false));
-  }, [enqueue, failure, send]);
+    void sendWith(text || undefined, false, {
+      ...lastOptions.current,
+      source: failure?.source,
+    });
+  }, [failure, sendWith]);
+
+  /** Sends committed form edits as a structured patch; no model call is needed. */
+  const syncEdits = useCallback(
+    (options: SendOptions) => {
+      // A pending retry carries these edits with it, so it is not pre-empted.
+      if (
+        availability === "live" &&
+        !busy &&
+        failure?.retry === undefined &&
+        read().pending?.length
+      )
+        void sendWith(undefined, false, options);
+    },
+    [availability, busy, failure, read, sendWith],
+  );
+
+  const report = useCallback(
+    (message: string, source: FailureSource) =>
+      setFailure({ message, source }),
+    [],
+  );
 
   return {
     session,
@@ -150,8 +256,16 @@ export function useIntakeConversation(projectId: string) {
     busy,
     failure,
     storageError,
+    read,
+    save,
+    enqueue,
     submit,
+    /** Queues a live send with page-specific wording and failure placement. */
+    sendWith,
+    sendNow,
     retry,
+    syncEdits,
+    report,
   };
 }
 

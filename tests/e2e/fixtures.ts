@@ -86,3 +86,24 @@ export async function expandProjectNavigation(page: Page) {
   )
     await disclosure.locator("summary").click();
 }
+
+/**
+ * HAC-143: below 768 px the consultant is a bottom sheet that starts closed. Opens it when
+ * it is closed; on wider screens the consultant is always docked, so this does nothing.
+ */
+export async function openConsultant(page: Page) {
+  const toggle = page.getByRole("button", { name: /^(Open|Hide) assistant/ });
+  if (await toggle.isVisible()) {
+    // Retried: a click that lands before hydration does nothing.
+    await expect(async () => {
+      if ((await toggle.getAttribute("aria-expanded")) !== "true")
+        await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true", {
+        timeout: 1_000,
+      });
+    }).toPass();
+  }
+  await expect(
+    page.getByRole("complementary", { name: "Assistant" }),
+  ).toBeVisible();
+}
