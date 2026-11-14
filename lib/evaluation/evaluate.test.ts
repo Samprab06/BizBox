@@ -263,6 +263,18 @@ describe("evaluateSites", () => {
 });
 
 describe("sensitivity", () => {
+  it("limits an explicit seed set to its original prefix for a bounded sensitivity sweep", () => {
+    const explicit = request({ seedSet: [7, 31, 99, 123], seeds: 4 });
+    const expected = runSensitivity(
+      { ...explicit, seedSet: [7, 31], seeds: 2 },
+      "rent",
+      [0.9, 1.1],
+    );
+    expect(runSensitivity(explicit, "rent", [0.9, 1.1], { seeds: 2 })).toEqual(
+      expected,
+    );
+  });
+
   it("a market-share sweep changes the ranking at a reported break-even value", () => {
     const values = [0.25, 0.5, 1, 1.5, 2, 3];
     const s = runSensitivity(request(), "market_share_scale", values, {
