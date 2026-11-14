@@ -124,7 +124,8 @@ SIM-1 + HAC-14 ─► SIM-12 (fixture until HAC-14) ─► SIM-13, SIM-14 (+SIM-
 everything ─► SIM-16 (tests, absorbs HAC-36)
 ```
 
-SIM-2, SIM-3 and SIM-1 can start now.
+SIM-2, SIM-3 and SIM-1 can start now. SIM-17 (Jev end to end) can also start now and
+runs alongside the rest.
 
 ---
 
@@ -715,3 +716,96 @@ To check, run `git ls-tree -d origin/main components/simulator`.
 - Related: HAC-36 (duplicate, see above), HAC-29 ✓ (harness), HAC-34 (pipeline determinism)
 
 **Suggested owner.** frank-claude (test lane).
+
+---
+
+## SIM-17 Jev end to end: live runs, partial failures and Jev-backed example data
+
+**Context.** The Jev customer panel is built and wired:
+- HAC-15 ✓ built the panel and HAC-54 ✓ aligned its client with TypeSafe's real API.
+- HAC-18 ✓ built the demand model that consumes Jev's behavior tables.
+- When `/api/comparisons/capabilities` reports `jevConfigured: true`, the live comparison
+  screen (`lib/client/live-comparison.ts`) and the agent tools (`lib/agent/tools.ts`) already
+  ask for `demandSource: "jev"`.
+
+In practice founders still see Huff almost everywhere:
+- **Config.** Nobody has confirmed that `JEV_API_KEY` is set for Vercel Preview and
+  Production. Without it, every run is Huff.
+- **Partial failures.** In `lib/evaluation/assemble.ts`, if any single persona fails, the
+  whole site falls back to Huff (`JEV_INCOMPLETE`). The only trace is a finding.
+- **Example data.** The Montrose example (`components/comparison/example-comparison.ts`) is
+  hardcoded to `demandSource: "huff"`. The simulator demo (`makeDemo()` on
+  `simulator-visualization`) uses no demand model at all: 110 hand-built customers. The only
+  recorded Jev data, `lib/panel/__fixtures__/jev-recorded.json`, covers a single
+  persona × site, not a full panel.
+
+The API default stays `huff`, which is deliberate: callers must opt in to paid panel calls.
+This ticket doesn't change that default.
+
+**Scope.**
+- **Configuration and a smoke check.**
+  - Ask `@oracle-lead` on the board to confirm that `JEV_API_KEY` (and `JEV_MODEL` if it isn't
+    `jev-latest`) is set in Vercel for Preview and Production. Agents never handle the key
+    itself.
+  - Add a deployed smoke check: `GET /api/comparisons/capabilities` returns
+    `jevConfigured: true` on the Preview and Production URLs.
+  - Run one live Jev comparison on Preview and record its `demandSource`, model version and
+    panel call count in the PR.
+- **Partial-failure handling** in `lib/evaluation/assemble.ts` and `lib/panel/panel.ts`:
+  - Retry each failed persona once before giving up. The panel cache means successful
+    answers are not paid for twice.
+  - If a site still has failures, keep today's site-level Huff fallback.
+  - Show that fallback on the comparison screen next to the site, not only in findings:
+    for example "Huff (Jev failed for 3 of 64 personas)".
+- **Jev-backed example data.**
+  - Record **one full Jev panel** for the Montrose example: all personas × the example
+    sites and competitors. Use a script that runs only when `JEV_API_KEY` is set, and check
+    the result in as a behavior-table fixture with its model version and recording date.
+  - Switch `example-comparison.ts` to use that table, with `demandSource: "jev"`. It keeps
+    its **Example** label and adds "Recorded Jev answers, `<model version>`, `<date>`".
+  - Export a helper that turns the recorded table into a schedule through
+    `buildArrivalSchedule`, so `makeDemo()` can replace its hand-built customers. The
+    simulator change itself is made in HAC-63 or DS-4 on `simulator-visualization`, not in
+    this ticket.
+- **Recording terms.** Checking in recorded Jev answers is subject to the TypeSafe terms
+  tracked in HAC-14. If the terms don't allow it, keep the recording out of git and say so
+  in the PR.
+
+**Files.**
+- `lib/evaluation/assemble.ts` and `lib/panel/panel.ts` (+ tests)
+- `scripts/record-jev-example.ts`
+- `lib/panel/__fixtures__/` (the recorded table)
+- `components/comparison/example-comparison.ts` (coordinate with HAC-25)
+- `components/comparison/live-comparison-screen.tsx` (the fallback note)
+- `tests/e2e/` (the capabilities smoke check)
+
+**Acceptance.**
+- [ ] On Preview, `GET /api/comparisons/capabilities` returns `jevConfigured: true`, and a live
+      comparison reports `demandSource: "jev"` with a model version. Both are recorded in
+      the PR.
+- [ ] A test with a fake Jev client that fails one persona once shows that it is retried
+      and the site uses Jev. A persona that fails twice gives the site-level Huff fallback,
+      and the screen says so next to the site.
+- [ ] The Montrose example renders from the recorded Jev table with no network calls, and
+      shows the **Example** and "Recorded Jev answers" labels.
+- [ ] Without `JEV_API_KEY`, tests, the build and the example all still work. The recording
+      script exits with a clear message and changes no files.
+- [ ] No key, token or raw request header appears in the repo, logs or the client bundle
+      (`scripts/check-client-bundle.ts`).
+
+**Branch.** `main`. Nothing here touches `components/simulator/`. Using the recorded table in
+`makeDemo()` happens in HAC-63 or DS-4.
+
+**Links.**
+- Blocked by: none. The config step needs `@oracle-lead` or a human to set the key.
+- Related:
+  - HAC-14 (Jev access and terms)
+  - HAC-15 ✓, HAC-18 ✓, HAC-54 ✓ (panel, demand model, client)
+  - HAC-25 (owns `example-comparison.ts`)
+  - HAC-47 (env and secret scanning)
+  - HAC-62 (robustness: whether Jev and Huff agree)
+  - HAC-63 (`makeDemo()` uses the recorded table)
+  - SIM-3 (arrival curves from the same schedule builder)
+  - DS-1 (the evidence label for recorded Jev answers)
+
+**Suggested owner.** The panel lane (HAC-15 author).
