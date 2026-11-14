@@ -34,7 +34,7 @@ const stillNeeded = (page: Page) => page.getByText(/^Still needed:/);
 const profileField = (page: Page, label: string) => page.getByLabel(new RegExp(`^${escapeRegExp(label)}`));
 
 async function openIntake(page: Page) {
-  await page.goto(workspaceHref("houston-coffee", "intake"));
+  await page.goto(`${workspaceHref("houston-coffee", "intake")}?mode=form`);
   await expect(page.getByRole("heading", { level: 2, name: "Business profile" })).toBeVisible();
 }
 

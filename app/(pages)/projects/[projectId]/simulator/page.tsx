@@ -7,6 +7,8 @@ import { demoPlan, makeDemo } from "@/components/simulator/fixture";
 import { storedSimulator } from "@/components/simulator/stored";
 import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
+import { parseStoredInsights } from "@/components/insights/stored-insights";
+import type { SiteInsights } from "@/lib/contracts/insights";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,12 @@ async function loadStored(projectId: string, search: Search) {
   const comparisonId = one(search.comparison);
   if (!comparisonId) return null;
   try {
-    const stored = await createPostgresComparisonStore().load(
-      projectId,
-      comparisonId,
-    );
+    const store = createPostgresComparisonStore();
+    const stored = await store.load(projectId, comparisonId);
     if (!stored) return null;
+    const currentProfileVersion = await store
+      .currentProfileVersion(projectId)
+      .catch(() => null);
     const simulator = storedSimulator({
       comparisonId: stored.id,
       request: stored.evaluation.request,
@@ -34,8 +37,42 @@ async function loadStored(projectId: string, search: Search) {
         : {}),
       ...(one(search.site) ? { siteId: one(search.site) } : {}),
     });
+    let insights: SiteInsights | undefined;
+    let insightsUnavailableReason: string | undefined;
+    if (simulator) {
+      try {
+        insights = parseStoredInsights(
+          {
+            comparisonId: stored.id,
+            outdated: false,
+            result: stored.evaluation.result,
+            comparison: stored.comparison,
+          },
+          {
+            projectId,
+            comparisonId: stored.id,
+            siteId: simulator.data[0].run.siteId,
+          },
+        ).site.insights;
+      } catch {
+        // An insights mismatch must not replace an otherwise valid recorded scene.
+        insightsUnavailableReason =
+          "Retained insights could not be verified for this selected saved site and scenario.";
+      }
+    }
     return simulator
-      ? { ...simulator, synthetic: stored.comparison.synthetic }
+      ? {
+          ...simulator,
+          synthetic: stored.comparison.synthetic,
+          robustness: stored.evaluation.robustness ?? null,
+          insights,
+          insightsUnavailableReason,
+          profileVersion: stored.evaluation.result.profileVersion,
+          profileVersionUnknown: currentProfileVersion === null,
+          outdated:
+            currentProfileVersion !== null &&
+            currentProfileVersion !== stored.evaluation.result.profileVersion,
+        }
       : null;
   } catch {
     // Database unavailable or stored record invalid: fall back to the labelled example.
@@ -63,6 +100,7 @@ export default async function Page({
         <WorkspaceView
           projectId={projectId}
           view="simulator"
+          decisionLayout
           title="Simulator"
           allowUnknownProject
           siteId={one(search.site)}
@@ -79,6 +117,12 @@ export default async function Page({
             data={stored.data}
             plan={stored.plan}
             story={stored.story}
+            robustness={stored.robustness}
+            outdated={stored.outdated}
+            profileVersionUnknown={stored.profileVersionUnknown}
+            insights={stored.insights}
+            insightsUnavailableReason={stored.insightsUnavailableReason}
+            profileVersion={stored.profileVersion}
             coordinates={
               tilesetUrl ? { ...stored.coordinates, tilesetUrl } : undefined
             }
@@ -96,6 +140,7 @@ export default async function Page({
       <WorkspaceView
         projectId={projectId}
         view="simulator"
+        decisionLayout
         title="Simulator"
         allowUnknownProject
         siteId="montrose"

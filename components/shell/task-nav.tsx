@@ -16,16 +16,19 @@ export function TaskNav({
   projectId,
   route,
   siteId,
+  compact = false,
 }: {
   projectId: string;
   route: WorkspaceRoute;
   siteId?: string;
+  /** Decision pages keep the complete grouped navigation in a native disclosure. */
+  compact?: boolean;
 }) {
   const currentTask = taskForRoute(route);
   const next = nextStep(route);
 
-  return (
-    <nav aria-label="Project views" className="border-b border-line pb-4 print:hidden">
+  const content = (
+    <>
       <ol aria-label="Tasks" className="grid gap-4 md:grid-cols-3 md:gap-6">
         {workspaceTasks.map((task, index) => {
           const active = task.id === currentTask.id;
@@ -44,7 +47,11 @@ export function TaskNav({
                   {index + 1}
                 </span>
                 <span>{task.label}</span>
-                {active && <span className="text-xs font-medium text-muted">(current task)</span>}
+                {active && (
+                  <span className="text-xs font-medium text-muted">
+                    (current task)
+                  </span>
+                )}
               </p>
               <ul aria-label={task.label} className="flex flex-wrap gap-1">
                 {task.entries.map((entry) => (
@@ -75,6 +82,29 @@ export function TaskNav({
             Next: {next.step}
           </Link>
         </p>
+      )}
+    </>
+  );
+
+  return (
+    <nav
+      aria-label="Project views"
+      className={
+        "border-b border-line print:hidden " + (compact ? "pb-2" : "pb-4")
+      }
+    >
+      {compact ? (
+        <details>
+          <summary className="cursor-pointer rounded text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-pine">
+            Workspace tasks · {currentTask.label}
+            <span className="mt-1 block text-xs font-normal text-muted">
+              {workspaceTasks.map((task) => task.label).join(" · ")}
+            </span>
+          </summary>
+          <div className="mt-3">{content}</div>
+        </details>
+      ) : (
+        content
       )}
     </nav>
   );

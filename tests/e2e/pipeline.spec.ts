@@ -150,7 +150,7 @@ test.describe("real HTTP pipeline (dedicated local seeded PostGIS)", () => {
     await expect(
       page.getByRole("table", { name: /Live comparison/ }),
     ).toContainText("90% interval");
-    await page.goto(`/projects/${pipelineProject}/intake`);
+    await page.goto(`/projects/${pipelineProject}/intake?mode=form`);
     await page.getByLabel("Buildout budget ($)", { exact: true }).fill("72000");
     await page.getByRole("link", { name: "Comparison", exact: true }).click();
     await expect(

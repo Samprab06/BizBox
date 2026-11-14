@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
+import type { SiteInsights } from "@/lib/contracts/insights";
+import { InsightsPanel } from "@/components/insights/insights-panel";
+import type { StationCalloutDays } from "@/components/insights/station-callout";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { catchmentRadiusMiles, evidenceDate, getSiteFixture } from "./site-fixtures";
 
-export function SiteDetail({ project, site }: { project: PreviewProject; site: PreviewProject["sites"][number] }) {
+export function SiteDetail({ project, site, insights, stationCallouts }: { project: PreviewProject; site: PreviewProject["sites"][number]; insights?: SiteInsights; stationCallouts?: StationCalloutDays }) {
   const fixture = getSiteFixture(site.id);
   if (!fixture) return (
     <div>
@@ -46,6 +49,7 @@ export function SiteDetail({ project, site }: { project: PreviewProject; site: P
         <p id="listing-source" tabIndex={-1}><strong>Listing source</strong> · Synthetic listing fixture · <time dateTime={evidenceDate}>{evidenceDate}</time></p>
         <p id="catchment-source" tabIndex={-1}><strong>Catchment source</strong> · Synthetic resident and worker estimates · <time dateTime={evidenceDate}>{evidenceDate}</time></p>
       </aside>
+      {insights && insights.siteId === site.id && <InsightsPanel data={insights} sourceLabel="Authored synthetic service example" fixtureStationCallouts={stationCallouts} />}
     </>
   );
 }

@@ -110,3 +110,56 @@ it is not newly accepted by any stored origin schema.
 Existing screens are unchanged by this foundation. Adopt these primitives in the
 later shell, comparison, replay and simulator tickets without changing the names,
 colors or provenance meaning.
+
+## Decision-first composition (HAC-71, comparison portion)
+
+`components/decision/decision-header.tsx` composes a specific `decision`, supplied
+`answer`, visible `qualification`, optional real `scene`, and `nextAction` in that
+reading order. It uses the solid `Card` surface and inherited tokens, wraps long
+addresses, and never clamps the answer or qualifications. The component does not
+compute results, fetch data, or start an experiment. Supply a scene only when a
+real replay or simulator is available; an absent slot invents no spatial evidence.
+
+Saved comparisons lead with the HAC-62 robustness headline before candidate setup.
+Keep provenance, Jev/Huff disagreement and stale-result warnings visible alongside
+the answer. Tested stable assumptions and missing-information items remain in the
+keyboard-operable **Decision evidence** disclosure.
+The next action selects and focuses the matching sensitivity control; running it
+is a separate explicit action. Unknown conditions or historical results without
+robustness lead to the evidence instead. Outdated results offer an explicit rerun.
+The synthetic example identifies its source and uses only its computed ranges;
+it does not imply that the live robustness sweep ran.
+
+The comparison scene reads its leader's canonical stored representative run,
+validates project/profile/site/day/run identity, and renders a manual 160 px
+schematic replay. Canonical `served` starts service and `departed` completes it.
+The scene has a time slider, counts and a full-replay link; it invents no measured
+floor geometry. Loading, unavailable and retry states never substitute another
+run. Examples reuse their existing seeded engine events.
+
+`WorkspaceView` accepts opt-in `decisionLayout` for comparison and simulator only.
+It retains navigation destinations, current state, the context bar and an h1;
+its complete three-task navigation opens from a native compact disclosure and remains
+keyboard reachable. It removes duplicate project-name text, large title spacing
+and nested content-card padding. Other views keep their default wrapper.
+
+The simulator mounts the same header before the neighborhood and full replay.
+Its decision scene uses the existing run-backed 3D operating scene in a 160 px
+viewport, with scenario/time controls, native fullscreen and a full-replay link.
+The compact scene's optional `cameraZoom` fits the shop; default scene zoom,
+quality budgets and visibility suspension stay unchanged elsewhere.
+
+Stored simulator answers use the actual saved HAC-62 headline and most-influential
+condition. Model disagreement stays visible. The loader uses the existing profile
+version read to identify stale snapshots; a failed freshness read retains the valid
+stored run and visibly says freshness is unknown. Example answers report the
+computed service difference and contribution direction for the existing seeded
+station experiment, explicitly identifying untested demand robustness. They never
+pretend to have a saved robustness sweep or show a single sales forecast.
+
+Decision-page acceptance checks cover the complete decision, answer, real scene and
+next action at 1280×800, 820×800 and 375×800. Supporting evidence uses disclosures;
+longer summaries, stale/unknown warnings and expanded evidence keep wrapping rather
+than clipping. The expanded viewer and full evidence remain scrollable.
+
+On compact decision pages, the task disclosure names the current task and all three task groups before expansion. Opening it exposes the same grouped destinations, current-step/current-page states and Next link. Other workspace pages retain their expanded navigation.

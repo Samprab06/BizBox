@@ -1,0 +1,100 @@
+/* The card contains a question, its answer, and navigation. */
+.question-card {
+  overflow: visible;
+  background: transparent !important;
+  border-color: transparent;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.question-card:before,
+.question-card:after {
+  content: none;
+}
+.card-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  backdrop-filter: blur(13px) saturate(0.82);
+  -webkit-backdrop-filter: blur(13px) saturate(0.82);
+  box-shadow:
+    0 22px 65px -25px #0008,
+    inset 0 1px 1px #ffffff65;
+  transform-origin: top center;
+}
+.card-surface:after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 #ffffff32;
+  pointer-events: none;
+}
+.question-card #onboard-form {
+  position: relative;
+  z-index: 1;
+}
+.question-card .card-content {
+  padding-top: 29px;
+  padding-bottom: 24px;
+  overflow: auto;
+  background: none;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff38 transparent;
+}
+.question-card .card-content h1 {
+  margin-bottom: 22px;
+}
+.question-card .card-footer {
+  background: transparent;
+  overflow: visible;
+}
+.transition-ghost {
+  user-select: none;
+  contain: paint;
+}
+.is-transitioning.question-card,
+.is-transitioning .question-card,
+.is-transitioning .card-surface,
+.is-transitioning .card-footer,
+.is-transitioning .card-content {
+  will-change: transform, opacity;
+}
+.card-top,
+.intro,
+.field-hint,
+.glass-edge-wave {
+  display: none !important;
+}
+.is-transitioning .card-footer .primary {
+  background: var(--accent);
+}
+.question-card .card-content.review {
+  padding-top: 29px;
+}
+@media (max-width: 720px) {
+  .question-card .card-content {
+    padding-top: 25px;
+    padding-bottom: 23px;
+  }
+  .question-card .card-content.review {
+    padding-top: 25px;
+  }
+  .question-card .card-content h1 {
+    margin-bottom: 20px;
+  }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .card-surface {
+    background: rgba(18, 19, 25, 0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transition-ghost {
+    display: none;
+  }
+}
