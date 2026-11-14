@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expandProjectNavigation } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/vexcel/**", (route) =>
@@ -29,6 +30,7 @@ test("legacy simulator links retain replay state inside the workspace", async ({
   await expect(
     page.getByRole("heading", { name: "Simulator", exact: true }),
   ).toBeVisible();
+  await expandProjectNavigation(page);
   await expect(
     page
       .getByRole("navigation", { name: "Project views" })

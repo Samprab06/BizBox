@@ -78,3 +78,7 @@ foreground city FPS measurement is still required. The local fullscreen sample
 was browser-throttled to roughly one callback per second and advanced the clock
 only 15 simulated minutes in 8.8 seconds, so it cannot establish the ≥30 FPS
 acceptance threshold. Do not treat that sample as a rendering benchmark.
+
+## Decision layout with three-task navigation
+
+HAC-71 integrates the latest HAC-69 grouping and moves the existing simulator route from planned to available. Decision pages use an opt-in native task disclosure, preserving all destinations, keyboard order and the current task without spending the initial viewport on the expanded navigation. The primary decision action remains outside it. The seeded answer omits the station description already present in the question, retaining computed service change, included-cost direction and the untested-robustness qualifier. This also avoids the Linux WebKit 375px action wrap observed in CI.

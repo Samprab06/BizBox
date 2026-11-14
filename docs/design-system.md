@@ -139,7 +139,7 @@ run. Examples reuse their existing seeded engine events.
 
 `WorkspaceView` accepts opt-in `decisionLayout` for comparison and simulator only.
 It retains navigation destinations, current state, the context bar and an h1;
-its navigation scrolls horizontally within the page at narrow widths and remains
+its complete three-task navigation opens from a native compact disclosure and remains
 keyboard reachable. It removes duplicate project-name text, large title spacing
 and nested content-card padding. Other views keep their default wrapper.
 
@@ -161,3 +161,5 @@ Decision-page acceptance checks cover the complete decision, answer, real scene 
 next action at 1280×800, 820×800 and 375×800. Supporting evidence uses disclosures;
 longer summaries, stale/unknown warnings and expanded evidence keep wrapping rather
 than clipping. The expanded viewer and full evidence remain scrollable.
+
+On compact decision pages, the task disclosure names the current task and all three task groups before expansion. Opening it exposes the same grouped destinations, current-step/current-page states and Next link. Other workspace pages retain their expanded navigation.

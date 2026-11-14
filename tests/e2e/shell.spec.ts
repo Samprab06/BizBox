@@ -83,6 +83,7 @@ test.describe("navigation", () => {
       ).toBeVisible();
 
       // Exactly one link is current, and it is the one for this route.
+      await expandProjectNavigation(page);
       await expect(navLink(page, route)).toHaveAttribute(
         "aria-current",
         "page",
@@ -199,6 +200,7 @@ test.describe("deep links", () => {
       await expect(
         page.getByRole("region", { name: views[view], exact: true }),
       ).toBeVisible();
+      await expandProjectNavigation(page);
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     });
   }
@@ -212,6 +214,7 @@ test.describe("deep links", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Location plan" }),
     ).toBeVisible();
+    await expandProjectNavigation(page);
     await expect(navLink(page, "plan")).toHaveAttribute("aria-current", "page");
     await expect(
       page.getByRole("link", { name: "Open the comparison" }),
@@ -354,6 +357,7 @@ test.describe("history", () => {
       await expect(page).toHaveURL(
         (url) => url.pathname + url.search === pathFor(view),
       );
+      await expandProjectNavigation(page);
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     }
 
@@ -365,6 +369,7 @@ test.describe("history", () => {
       await expect(page).toHaveURL(
         (url) => url.pathname + url.search === pathFor(view),
       );
+      await expandProjectNavigation(page);
       await expect(navLink(page, view)).toHaveAttribute("aria-current", "page");
     }
   });

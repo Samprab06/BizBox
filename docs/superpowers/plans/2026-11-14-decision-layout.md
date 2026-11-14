@@ -73,3 +73,9 @@ enabled separately with a dummy local Vexcel key and intercepted imagery: the
 actual neighborhood WebGL fallback and Retry passed with no page errors. Three
 upstream replay/floor-plan/fallback Chromium cases also passed. No added skip,
 retry, timeout or product workaround was needed for the refreshed base.
+
+## Latest navigation and Linux WebKit integration
+
+Integrated HAC-70 target 974e823 and main d123010 in cdbc1ca, preserving source/model metadata and three-task navigation. Compact decision pages now use a native disclosure with current-task and all group names visible; all grouped links and Next remain keyboard reachable. The original Linux WebKit CI run exposed a partly offscreen CTA (572 other E2E cases passed); shorter duplicate example copy and compact action typography preserve all qualifiers and the real160px canvas.
+
+Fresh lint, typecheck, full unit suite (844 passed /30 gated skips) and production build passed on cdbc1ca. Production Chromium/WebKit affected matrix:228 passed and6 existing city gates initially, with6 navigation-setup failures because role locators correctly hide collapsed links. Tests were updated to explicitly open the native disclosure before navigation/history assertions; all6 reran successfully, giving234 verified cases /6 gates. New checks cover collapsed/open navigation, current task, keyboard activation and axe. First-viewport375px simulator CTA ends at717px Chromium/711px WebKit; ratio1 assertions remain intact at375/820/1280.
