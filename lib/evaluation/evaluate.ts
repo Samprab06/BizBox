@@ -376,6 +376,7 @@ export function evaluateSite(
         ),
       },
       excludedPersonaIds: estimateDemand(demandInput).excludedPersonaIds,
+      ...(site.jevPanel ? { jevPanel: site.jevPanel } : {}),
     },
     representativeDays: rep.days,
   };

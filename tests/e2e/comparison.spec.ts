@@ -293,6 +293,10 @@ test("configured Jev is requested and a returned Huff fallback remains explicit"
   payload.result.requestedDemandSource = "jev";
   payload.result.fallbackReason =
     "Jev answers were unavailable for a selected site; Huff was used.";
+  payload.result.sites[0]!.jevPanel = {
+    personaCount: 64,
+    failedPersonaCount: 3,
+  };
   let requested: unknown;
   await page.route("**/api/comparisons", (route) => {
     requested = route.request().postDataJSON();
@@ -307,6 +311,10 @@ test("configured Jev is requested and a returned Huff fallback remains explicit"
   ).toBeVisible();
   expect(requested).toMatchObject({ demandSource: "jev" });
   await expect(page.getByText(/Demand source: Huff/i)).toBeVisible();
+  // HAC-101: the failure is shown next to the site, not only in the findings.
+  await expect(
+    page.getByText("Huff (Jev failed for 3 of 64 personas)"),
+  ).toBeVisible();
 });
 
 test("shows the Huff-only ranking check returned with a Jev comparison", async ({
