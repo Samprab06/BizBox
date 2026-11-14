@@ -143,7 +143,7 @@ test.describe("page structure", () => {
 });
 
 test.describe("keyboard and focus", () => {
-  test("the first Tab stop is a skip link or the Sitework home link", async ({
+  test("the first Tab stop is a skip link or the BizBox home link", async ({
     page,
     gotoView,
     browserName,
@@ -160,7 +160,7 @@ test.describe("keyboard and focus", () => {
     await expect(first).toBeVisible();
     const name = (await first.textContent())?.trim() ?? "";
     // A skip link ("Skip to ...") is ideal; the header's home link is also a sensible first stop.
-    expect(name).toMatch(/^(skip to|sitework$)/i);
+    expect(name).toMatch(/^(skip to|bizbox$)/i);
   });
 
   for (const width of [375, 1280]) {

@@ -1,8 +1,11 @@
 import type { View } from "../../lib/client/workspace-routes";
 import { expect, test } from "./fixtures";
 
-test("/ redirects to the example project intake", async ({ page }) => {
+test("/ serves the BizBox landing, and /start opens the example project intake", async ({ page }) => {
   await page.goto("/");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveTitle(/BizBox/);
+  await page.goto("/start");
   await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
 });
 
