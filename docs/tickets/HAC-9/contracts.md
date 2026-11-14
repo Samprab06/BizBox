@@ -21,6 +21,8 @@ Plain numbers are reserved for structural indices (versions, seed, ranks, minute
 
 These are initial shared interfaces for downstream tickets, not completed simulation or agent behavior. APIs must parse incoming/outgoing values and validate persisted references against their project before database writes. A fixture bundle validates its own references; an individual schema cannot verify an external database reference.
 
+Fixture bundles require a behavior row and a schedule stay curve for every PersonaSet member, including personas without a realized arrival in that schedule. Implicit partial persona models are not supported. Each scheduled customer therefore has both executable lookups. Behavior destinations are limited to the behavior table's current site, competitor IDs recorded in that site's catchment, and the literal `none`; another candidate or another site's competitor is not automatically an available choice. A candidate could be a competitor only if the current catchment explicitly records that identity as one.
+
 ## Database
 
 `lib/db/schema.ts` exports all ten named Drizzle tables. Identifiers are application-supplied text, allowing stable fixture and source identifiers without an additional ID-generation dependency. Child rows reference a project; profile, persona and comparison links additionally use composite project-scoped foreign keys so a row cannot reference another project's snapshot. Referencing columns are indexed. Profiles have a positive version and a unique `(project_id, version)` key; callers create new versioned snapshots instead of updating a prior version. No trigger or user/auth policy is introduced here.

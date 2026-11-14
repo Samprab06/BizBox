@@ -511,6 +511,32 @@ export const FixtureBundleSchema = z
       )
     )
       fail("All persona references must resolve");
+    const behaviorPersonas = new Set(
+      v.behaviorTable.personas.map((p) => p.personaId),
+    );
+    const stayPersonas = new Set(
+      v.arrivalSchedule.stayProbabilityByPersona.map((p) => p.personaId),
+    );
+    if (
+      [...personas].some(
+        (id) => !behaviorPersonas.has(id) || !stayPersonas.has(id),
+      )
+    )
+      fail("Every persona needs a behavior row and a schedule stay curve");
+    const currentCatchment = v.catchments.find(
+      (c) => c.siteId === v.behaviorTable.siteId,
+    );
+    const destinations = new Set([
+      v.behaviorTable.siteId,
+      "none",
+      ...(currentCatchment?.competitors.map((c) => c.id) ?? []),
+    ]);
+    if (
+      v.behaviorTable.personas.some((p) =>
+        p.where.some((choice) => !destinations.has(choice.destinationId)),
+      )
+    )
+      fail("Destinations must be the current site, its competitors, or none");
     const walk = (node: unknown): void => {
       if (!node || typeof node !== "object") return;
       if (Array.isArray(node)) {

@@ -106,6 +106,36 @@ describe("shared synthetic business contracts", () => {
     expect(FixtureBundleSchema.safeParse(g).success).toBe(false);
   });
 
+  it.each(["behavior", "stay curve"])(
+    "rejects a scheduled persona missing its %s lookup",
+    (lookup) => {
+      const fixture = structuredClone(syntheticHoustonFixture);
+      if (lookup === "behavior") fixture.behaviorTable.personas.pop();
+      else fixture.arrivalSchedule.stayProbabilityByPersona.pop();
+      expect(FixtureBundleSchema.safeParse(fixture).success).toBe(false);
+    },
+  );
+
+  it("rejects silently omitted persona-model coverage even before arrivals are emitted", () => {
+    const fixture = structuredClone(syntheticHoustonFixture);
+    const persona = fixture.personaSet.personas[0];
+    fixture.personaSet.personas.push({
+      ...persona,
+      id: "persona-not-modeled",
+      weight: { ...persona.weight, value: 0 },
+    });
+    expect(FixtureBundleSchema.safeParse(fixture).success).toBe(false);
+  });
+
+  it.each(["ghost-site", "site-synthetic-b", "competitor-2"])(
+    "rejects destination %s outside the current site's choice set",
+    (destinationId) => {
+      const fixture = structuredClone(syntheticHoustonFixture);
+      fixture.behaviorTable.personas[0].where[0].destinationId = destinationId;
+      expect(FixtureBundleSchema.safeParse(fixture).success).toBe(false);
+    },
+  );
+
   it("rejects evidence references that are not in the fixture", () => {
     const f = structuredClone(syntheticHoustonFixture);
     f.profile.economics.averageTicketCents.evidenceIds = ["not-a-source"];
