@@ -1,5 +1,6 @@
 export * from "./costar-schema";
 import { sql } from "drizzle-orm";
+export * from "./public-schema";
 import {
   check,
   foreignKey,
