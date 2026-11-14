@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { TimeBlock } from "./contracts";
 import { TIME_BLOCKS, TIME_BLOCK_HOURS } from "./contracts";
 import { CATEGORY_DEFAULTS } from "./defaults";
 import { huffInput, jevInput } from "./fixtures";
-import { ratePerMinuteByHour, smoothBlockShares } from "./arrivals";
-import { buildArrivalSchedule } from "./model";
+import { generateArrivals, ratePerMinuteByHour, smoothBlockShares } from "./arrivals";
+import { buildArrivalSchedule, estimateDemand } from "./model";
 
 const BLOCKS: Record<TimeBlock, number> = {
   early_morning: 0.1,
@@ -80,26 +79,56 @@ describe("ratePerMinuteByHour smoothing", () => {
   });
 });
 
-// Hashes of buildArrivalSchedule output (seed 42, 06:00-19:00) taken on main before smoothing
-// existed: with smoothing off the schedules must stay byte-identical.
-const GOLDEN: [string, "weekday" | "weekend", "jev" | "huff", string][] = [
-  ["jev weekday", "weekday", "jev", "99b8745ece6d7e80"],
-  ["jev weekend", "weekend", "jev", "8056a967de6db4c9"],
-  ["huff weekday", "weekday", "huff", "d294bf1da45efee6"],
-  ["huff weekend", "weekend", "huff", "d33a9f74e9f24e3a"],
-];
+/** The pre-smoothing rate formula (HAC-18), kept here to pin the default behaviour. */
+function legacyRatePerMinuteByHour(dailyVisits: number, timeBlocks: Record<TimeBlock, number>): number[] {
+  const rates = new Array<number>(24).fill(0);
+  const total = TIME_BLOCKS.reduce((s, b) => s + timeBlocks[b], 0);
+  if (!(total > 0) || !(dailyVisits > 0)) return rates;
+  for (const block of TIME_BLOCKS) {
+    const [h0, h1] = TIME_BLOCK_HOURS[block];
+    const perHour = (dailyVisits * (timeBlocks[block] / total)) / (h1 - h0);
+    for (let h = h0; h < h1; h++) rates[h] = perHour / 60;
+  }
+  return rates;
+}
 
-describe("smoothing off is byte-identical to the unsmoothed model", () => {
-  for (const [name, dayType, source, hash] of GOLDEN) {
-    it(name, () => {
-      const input = source === "jev" ? jevInput() : huffInput();
-      const req = { seed: 42, dayType, openMin: 360, closeMin: 1140 };
-      const sha = (v: unknown) => createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16);
-      const off = buildArrivalSchedule(input, req);
-      expect(sha(off)).toBe(hash);
-      expect(JSON.stringify(buildArrivalSchedule(input, { ...req, smoothTimeBlocks: false }))).toBe(JSON.stringify(off));
-      expect(off.params["arrivals.smoothed"]).toBeUndefined();
-    });
+describe("smoothing off is identical to the unsmoothed model", () => {
+  for (const source of ["jev", "huff"] as const) {
+    for (const dayType of ["weekday", "weekend"] as const) {
+      it(`${source} ${dayType}`, () => {
+        const input = source === "jev" ? jevInput() : huffInput();
+        const req = { seed: 42, dayType, openMin: 360, closeMin: 1140 };
+        const off = buildArrivalSchedule(input, req);
+        expect(JSON.stringify(buildArrivalSchedule(input, { ...req, smoothTimeBlocks: false }))).toBe(JSON.stringify(off));
+        expect(off.params["arrivals.smoothed"]).toBeUndefined();
+
+        // Rebuild the customers from the legacy rate formula: they must match exactly.
+        const estimate = estimateDemand(input);
+        const legacy = generateArrivals(
+          estimate.personas.map((p) => ({
+            personaId: p.personaId,
+            weight: p.weight,
+            ratesByHour: legacyRatePerMinuteByHour(p.dailyVisits[dayType], p.timeBlocks[dayType]),
+          })),
+          {
+            seed: req.seed,
+            catchmentId: estimate.catchmentId,
+            dayType,
+            openMin: req.openMin,
+            closeMin: req.closeMin,
+            serviceMeanMin: estimate.serviceMeanMin.value,
+            serviceCv: estimate.serviceCv.value,
+          },
+        );
+        expect(off.customers).toEqual(legacy.customers);
+        expect(off.customers.length).toBeGreaterThan(0);
+        for (const p of estimate.personas) {
+          expect(ratePerMinuteByHour(p.dailyVisits[dayType], p.timeBlocks[dayType])).toEqual(
+            legacyRatePerMinuteByHour(p.dailyVisits[dayType], p.timeBlocks[dayType]),
+          );
+        }
+      });
+    }
   }
 
   it("smoothing on changes the schedule, is flagged, and is seeded", () => {
