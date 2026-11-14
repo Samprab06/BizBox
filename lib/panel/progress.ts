@@ -39,3 +39,32 @@ export const PanelInProgressBodySchema = z.object({
   totalPersonas: z.number().int().nonnegative(),
 });
 export type PanelInProgressBody = z.infer<typeof PanelInProgressBodySchema>;
+
+/** First wait before resending an in-progress request; doubles for each resend without progress. */
+export const PANEL_RESEND_BASE_MS = 1_000;
+/** Consecutive in-progress replies without new personas before a client gives up. */
+export const PANEL_MAX_STALLED_RESENDS = 5;
+
+/**
+ * Client backoff for resending a deadline-limited panel request: resend after
+ * `PANEL_RESEND_BASE_MS` while personas keep completing, doubling the wait for each reply that
+ * made no progress, and give up (`null`) after `PANEL_MAX_STALLED_RESENDS` such replies.
+ */
+export function createPanelResendBackoff() {
+  let best = -1;
+  let stalled = 0;
+  return {
+    /** The wait before the next resend, or `null` when the panel has stopped making progress. */
+    next(progress: PanelProgressCount): number | null {
+      if (progress.completedPersonas > best) {
+        best = progress.completedPersonas;
+        stalled = 0;
+      } else if (++stalled >= PANEL_MAX_STALLED_RESENDS) return null;
+      return PANEL_RESEND_BASE_MS * 2 ** stalled;
+    },
+    reset() {
+      best = -1;
+      stalled = 0;
+    },
+  };
+}

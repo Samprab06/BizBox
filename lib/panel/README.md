@@ -36,6 +36,22 @@ The live test in `jev-client.test.ts` runs only when `JEV_API_KEY` is set.
 - Tests run the real client, limiter and Postgres cache SQL against `__fixtures__/jev-sim.ts`
   (fake `fetch` with latency and an org rate limit, fake executor) on fake timers.
 
+## Deadlines and resume (HAC-155)
+
+- `runPanel` / `runPanelForSites` take `deadlineAt` (epoch ms on `now`, default `Date.now`) and/or
+  an `AbortSignal`. A call is issued only while `now + slowest observed call (estimatedCallMs
+  before any, default 5 s) + deadlineReserveMs (default 2 s) <= deadlineAt`; calls still in
+  flight at `deadlineAt - deadlineReserveMs` are abandoned for this run.
+- The result's `progress` is `{ completedPersonas, totalPersonas, inProgress }`. With
+  `inProgress`, unanswered personas are neither in `personas` nor in `failedPersonaIds`; the
+  table must not be used. Every answer received is already in the cache, so rerunning the same
+  inputs resumes and ends with tables identical to an unbounded run.
+- `assembleEvaluation` turns `inProgress` into `PanelInProgressError` (never a Huff fallback).
+  POST /api/comparisons answers 202 `{ status: "in_progress", ... }` (resend the same body),
+  scenario advance stays `queued` with `panel` progress, and an investigation step keeps the
+  job active with reason `Jev panel in progress (n/N personas)` (advance answers 202).
+  Shared wording, 202 body schema and client backoff: `progress.ts`.
+
 ## Proposed `jev_cache` table (for `lib/db/schema.ts`, HAC-9)
 
 Not wired yet; add this once HAC-9's Drizzle schema exists, then implement `JevCache` over it
