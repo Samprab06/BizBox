@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useWorkspaceReport } from "./use-workspace-context";
+import type { WorkspaceObservation } from "./workspace-context";
 import type { BusinessProfile } from "@/lib/contracts";
 import {
   SiteSearchResultSchema,
@@ -92,6 +94,20 @@ export function useSiteSearch(projectId: string, revision = 0) {
       controller.abort();
     };
   }, [projectId, attempt, revision]);
+  const context = useMemo<WorkspaceObservation>(
+    () => ({
+      kind: "search",
+      phase: state.mode,
+      candidates:
+        state.mode === "live"
+          ? state.result.candidates.map((entry) => entry.candidate)
+          : [],
+      evidenceId:
+        state.mode === "live" ? state.result.evidence[0]?.id : undefined,
+    }),
+    [state],
+  );
+  useWorkspaceReport(projectId, context);
   return {
     state,
     retry: () => {
