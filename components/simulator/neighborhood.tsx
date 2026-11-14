@@ -31,6 +31,11 @@ import {
   type AgentLayer,
 } from "@/components/city/cesium-agents";
 import { sampleTripFrame } from "@/components/city/trip-frame";
+import {
+  MAX_FOOTPRINT_METERS,
+  footprintSource,
+  loadSiteFootprint,
+} from "@/components/city/building-footprint";
 import type { DayResult } from "@/lib/sim/contracts";
 import type { AgentTrip } from "@/lib/sim/trips";
 
@@ -95,6 +100,10 @@ export default function Neighborhood({
   );
   const [agentsVisible, setAgentsVisible] = useState(true);
   const [layersOpen, setLayersOpen] = useState(false);
+  const [building, setBuilding] = useState<
+    | { status: "loading" | "none" | "failed" }
+    | { status: "found"; match: "contains" | "nearest"; distanceMeters: number }
+  >({ status: "loading" });
   const agentsVisibleRef = useRef(agentsVisible);
   useEffect(() => {
     agentsRef.current = agents;
@@ -249,6 +258,54 @@ export default function Neighborhood({
         if (agentLayerRef.current === agentLayer)
           agentLayerRef.current = undefined;
       });
+      // HAC-77: highlight the OSM building footprint under the site, if mapped.
+      void (async () => {
+        try {
+          const template = await getRoadTemplate(roadRequests.signal);
+          const found = await loadSiteFootprint(
+            template,
+            [longitude, latitude],
+            roadRequests.signal,
+          );
+          if (closed || city.isDestroyed()) return;
+          if (!found) {
+            setBuilding({ status: "none" });
+            return;
+          }
+          const outer = found.footprint.rings[0].flatMap(([lng, lat]) => [
+            lng,
+            lat,
+          ]);
+          city.entities.add({
+            polygon: {
+              hierarchy: Cartesian3.fromDegreesArray(outer),
+              material: Color.fromCssColorString("#818cf8").withAlpha(0.45),
+              classificationType: ClassificationType.CESIUM_3D_TILE,
+            },
+          });
+          city.entities.add({
+            polyline: {
+              positions: Cartesian3.fromDegreesArray([
+                ...outer,
+                outer[0],
+                outer[1],
+              ]),
+              width: 3,
+              material: Color.fromCssColorString("#c7d2fe"),
+              clampToGround: true,
+              classificationType: ClassificationType.CESIUM_3D_TILE,
+            },
+          });
+          setBuilding({
+            status: "found",
+            match: found.match,
+            distanceMeters: found.distanceMeters,
+          });
+          if (visibleRef.current) city.scene.requestRender();
+        } catch {
+          if (!closed) setBuilding({ status: "failed" });
+        }
+      })();
       let groundSampled = false;
       const updateAgents = () => {
         if (!groundSampled) {
@@ -789,7 +846,7 @@ export default function Neighborhood({
         id="city-layers"
         over="viewport"
         aria-label="Illustrative neighborhood overlays"
-        className={`absolute inset-x-0 bottom-0 z-20 max-h-[70%] overflow-y-auto !rounded-b-none !p-3 sm:inset-x-auto sm:top-20 sm:bottom-auto sm:left-3 sm:z-10 sm:block sm:max-h-[calc(100%-6rem)] sm:w-[11.5rem] sm:!rounded-b-[var(--radius-card)] ${layersOpen ? "block" : "hidden"}`}
+        className={`absolute inset-x-0 bottom-0 z-20 max-h-[70%] overflow-y-auto !rounded-b-none !p-3 sm:inset-x-auto sm:top-20 sm:bottom-auto sm:left-3 sm:z-10 sm:block sm:max-h-[calc(100%-11rem)] sm:w-[11.5rem] sm:!rounded-b-[var(--radius-card)] ${layersOpen ? "block" : "hidden"}`}
       >
         <div className="mb-3 flex items-center justify-between sm:hidden">
           <span className="text-sm font-semibold">Layers</span>
@@ -800,6 +857,20 @@ export default function Neighborhood({
           >
             Close
           </button>
+        </div>
+        <div className="mb-4">
+          <span className="text-xs font-medium">Selected site</span>
+          <p role="status" className="mt-1 text-[11px] text-viewport-muted">
+            {building.status === "loading"
+              ? "Finding the building…"
+              : building.status === "found"
+                ? building.match === "contains"
+                  ? `Building highlighted: ${footprintSource}.`
+                  : `Nearest mapped building highlighted, ${Math.round(building.distanceMeters)} m from the site point: ${footprintSource}.`
+                : building.status === "none"
+                  ? `No mapped building within ${MAX_FOOTPRINT_METERS} m; pin only.`
+                  : "Building footprint unavailable; pin only."}
+          </p>
         </div>
         {agents && (
           <div className="mb-4">
