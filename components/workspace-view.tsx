@@ -1,3 +1,4 @@
+import { ENTRY_PROJECT_ID } from "@/components/landing/entry";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { IntakeScreen } from "@/components/intake/intake-screen";
@@ -92,7 +93,7 @@ export function WorkspaceView({
             </h2>
             <Link
               className="mt-4 inline-block font-semibold text-pine underline"
-              href={project ? workspaceHref(projectId, "map") : "/"}
+              href={workspaceHref(project ? projectId : ENTRY_PROJECT_ID, project ? "map" : "intake")}
             >
               {project ? "Browse spaces" : "Open example project"}
             </Link>

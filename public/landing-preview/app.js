@@ -398,11 +398,11 @@ canvas.addEventListener('webglcontextlost', (event) => {
 async function start() {
   createRimMap();
   try {
-    const { PRODUCT_PREVIEW_URL, DEMO_URL, MATTERPORT_URL } = await import('./config.js');
-    config = { PRODUCT_PREVIEW_URL: verifiedURL(PRODUCT_PREVIEW_URL), DEMO_URL: verifiedURL(DEMO_URL), MATTERPORT_URL: verifiedURL(MATTERPORT_URL) };
-  } catch { config = { PRODUCT_PREVIEW_URL: '', DEMO_URL: '', MATTERPORT_URL: '' }; }
+    const { ENTRY_URL, PRODUCT_PREVIEW_URL, DEMO_URL, MATTERPORT_URL } = await import('./config.js');
+    config = { ENTRY_URL: verifiedURL(ENTRY_URL), PRODUCT_PREVIEW_URL: verifiedURL(PRODUCT_PREVIEW_URL), DEMO_URL: verifiedURL(DEMO_URL), MATTERPORT_URL: verifiedURL(MATTERPORT_URL) };
+  } catch { config = { ENTRY_URL: '', PRODUCT_PREVIEW_URL: '', DEMO_URL: '', MATTERPORT_URL: '' }; }
   document.querySelectorAll('.demo-link').forEach((link) => {
-    if (config.DEMO_URL) { link.href = config.DEMO_URL; link.removeAttribute('aria-disabled'); }
+    if (config.ENTRY_URL) { link.href = config.ENTRY_URL; link.removeAttribute('aria-disabled'); }
   });
   if (config.MATTERPORT_URL) source.href = config.MATTERPORT_URL;
   source.firstChild.textContent = 'Matterport demo · The Coffee Port ';

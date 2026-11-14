@@ -65,7 +65,7 @@ export function WorkspaceScreen({
           </p>
         </div>
         <Link
-          href={workspaceHref(projectId, "intake")}
+          href={workspaceHref(projectId, "intake", selected?.id)}
           prefetch={false}
           className="flex items-center gap-2 rounded-xl border border-viewport-line px-4 py-2.5 text-sm hover:bg-viewport-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink"
         >

@@ -18,7 +18,7 @@ export default async function ProjectLayout({
             href="/projects/houston-coffee/intake"
             className="text-xl font-bold tracking-tight text-pine"
           >
-            Sitework
+            BizBox
           </Link>
         </div>
       </header>
