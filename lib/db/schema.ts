@@ -1,3 +1,4 @@
+export * from "./costar-schema";
 import { sql } from "drizzle-orm";
 import {
   check,
