@@ -18,7 +18,7 @@ Provider contract checked November 14, 2026: [v2 documentation](https://v2.nessi
 
 - `NESSIE_API_KEY` is server only. Obtain a v2 key with GitHub sign-in at https://v2.nessieisreal.com/account and put it in ignored `.env.local`.
 - `NESSIE_BASE_URL` defaults to `https://v2-prod-api.nessieisreal.com`. Only that exact HTTPS origin is accepted; credentials, alternate paths, query strings and fragments are rejected. Keys travel in an Authorization Bearer header, never in query parameters or client code.
-- Native read-only fetches use no-store, no redirects, a total deadline and caller cancellation. No seeding, account creation, settlement, payments, resets, automatic writes or POST retries.
+- The app/consultant client uses native read-only fetches with no-store, no redirects, a total deadline and caller cancellation. This runtime client performs no seeding, account creation, settlement, payments, resets, automatic writes or POST retries.
 - Traverse `/accounts` at 100/page, `/transactions` at 5000/page and `/bills` at 100/page. Validate DTO subsets with Zod; null item arrays mean empty. A 20-page limit, repeated cursor or conflicting duplicate IDs fails explicitly rather than silently truncating financial data.
 - Return sanitized errors, never raw provider response bodies, keys, account numbers, customer PII or transaction descriptions. Missing configuration, empty data and provider errors are explicit states, never fabricated zero cash.
 
@@ -59,7 +59,6 @@ Consultant activity is mounted once in the shared comparison workspace for live 
 - Consultant revision acceptance: scripted financial question -> real tool registry/provider transport -> durable milestone -> checkpoint/resume without duplicate read -> grounded numerical findings; scoped comparison and missing/error/account cases; saved UI evidence with stale-note/attempt/profile/identity handling; no direct banking fetch or standalone form; responsive/accessibility browser checks; full four repo checks and secret scans. Final results recorded after integration below.
 - No PR merge or deployment is authorized. Akshar approved revising the existing PR; retain its explicit do-not-merge instruction.
 
-
 ### Consultant revision verification — November 14, 2026
 
 - Checked against current main at `b871537`; resolved only the overlap in comparison activity placement and server-env scanning, preserving upstream Jev labels and Matterport token policy. No target-branch PR merge occurred.
@@ -69,3 +68,21 @@ Consultant activity is mounted once in the shared comparison workspace for live 
 - Independent review's two stale-evidence findings were reproduced in failing tests, fixed, and re-reviewed with no remaining material findings. Fresh manager targeted check: 87 tests passed before latest-main integration; final full suite and browser checks passed afterward.
 - Actual new server consultant reader, using the saved v2 key, returned typed `empty`, source `nessie`, synthetic true, zero accounts, no snapshot/scenario. No populated live data or owner bank connection is claimed.
 - Environment-file/public-env/client-bundle scans passed, with zero configured-secret byte matches in emitted client assets. Secrets remain ignored. No provider writes/seeding, migrations, added dependencies, deployment or PR merge.
+
+## Guarded sandbox seed follow-up
+
+Sam's Lead requested a minimal, idempotent demo seed on HAC-6 comment 9acc8334-fc1c-4ee9-807b-9303d74129d4; Akshar asked this chat to recheck and carry out the remaining work. The follow-up is limited to the named mock-data setup; merge, deployment and remote secret configuration remain separate.
+
+`pnpm nessie:seed --dry-run` prints the offline plan without using a key or making requests. `pnpm nessie:seed --confirm` is a manual-only CLI: it refuses missing confirmation, CI execution and alternate provider origins. It creates or reuses one dedicated fictional BizBox customer and one checking account named `BizBox Demo - simulated funds`, initially funded with 5,000,000 cents ($50,000 explicitly simulated). It never resets or tops up an existing account, modifies other accounts, retries an uncertain POST, or runs from the app/build/CI. Repeat invocations re-list and reuse the exact demo records; ambiguous duplicates fail without guessing. Concurrent cross-machine execution cannot be made atomic without provider idempotency support, so run one controlled invocation at a time.
+
+The CLI loads the existing ignored local env, uses Bearer auth, validates paginated reads and created responses, and outputs the account ID/reuse status without credentials or account numbers. Partial creation or an uncertain network response is recovered by re-listing on the next explicitly confirmed run, not by blindly repeating a POST. Tests use injected transport and fake data only. No private key is posted.
+
+Oracle server and Vercel Production credential setup remains a separate action for Sam or Akshar, privately and with explicit approval. The script does not distribute secrets. PR #86 stays unmerged pending Akshar's explicit merge approval.
+
+### Seed verification — November 14, 2026
+
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` passed on the follow-up: 98 test files / 941 tests passed, 35 optional tests skipped. The same inherited recorded-example-loader tracing warning remains.
+- All 13 seed tests and focused independent review passed. Actual offline dry-run reported zero requests; `CI=true` confirmed execution refused before loading credentials or making provider requests. The seed is absent from app/build/CI invocation paths.
+- Ran `pnpm nessie:seed --confirm` exactly once. It created the dedicated fictional customer and checking account `acct_01m7dq1910qhas6jq1qw173aza` with 5,000,000 cents ($50,000 simulated). No existing balances were reset or topped up; no transactions or bills were created.
+- The actual server consultant reader then returned `ready`, `source: nessie`, `synthetic: true`, one eligible account, 5,000,000 available cents and a validated snapshot. Its transaction count/inflow/outflow/upcoming bills are zero, matching the newly created account. No site comparison was supplied to this read-only smoke, so scenario was null; the stored-comparison scenario path remains covered by the existing workflow/browser tests. No live paid-model execution is claimed.
+- Environment-file/public-env/client-bundle checks passed. Consultant UI behavior is unchanged from the 32 passing browser checks above. Oracle/Vercel private key setup remains with Sam or Akshar; no remote secret configuration, deployment or PR merge was performed.

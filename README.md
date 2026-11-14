@@ -72,16 +72,16 @@ project.
 
 Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example` lists the names.
 
-| Variable         | Used by                                 | Needed for                                                                                                           |
-| ---------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations.                                       |
-| `JEV_API_KEY`    | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
-| `JEV_BASE_URL`   | `lib/panel/jev-client.ts`               | Optional. Defaults to `https://api.typesafe.ai` (`POST /v1/systemone`).                                              |
-| `JEV_MODEL`      | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
-| `OPENAI_API_KEY` | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
-| `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
-| `NESSIE_API_KEY` | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the consultant’s simulated cash-buffer tool. Server only. |
-| `NESSIE_BASE_URL` | `lib/nessie/client.ts`                 | Optional; defaults to `https://v2-prod-api.nessieisreal.com`. Only this HTTPS origin is accepted. |
+| Variable          | Used by                                 | Needed for                                                                                                           |
+| ----------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`    | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations.                                       |
+| `JEV_API_KEY`     | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
+| `JEV_BASE_URL`    | `lib/panel/jev-client.ts`               | Optional. Defaults to `https://api.typesafe.ai` (`POST /v1/systemone`).                                              |
+| `JEV_MODEL`       | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
+| `OPENAI_API_KEY`  | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
+| `OPENAI_MODEL`    | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
+| `NESSIE_API_KEY`  | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the consultant’s simulated cash-buffer tool. Server only.                             |
+| `NESSIE_BASE_URL` | `lib/nessie/client.ts`                  | Optional; defaults to `https://v2-prod-api.nessieisreal.com`. Only this HTTPS origin is accepted.                    |
 
 The fixture screens, offline tests and production build run without these credentials.
 The optional live Jev test needs its configured endpoint and API key. The OpenAI live
@@ -112,13 +112,32 @@ and upcoming bills are context only; they are not matched to site costs. The
 scenario uses available cash minus modeled upfront buildout plus modeled monthly
 operating contribution. It does not change demand, rankings or CoStar evidence.
 
-The integration never creates accounts, moves money, or seeds/resets a sandbox.
+The app and consultant never create accounts, move money, or seed/reset a sandbox.
 Missing configuration, an empty sandbox or a provider error becomes an explicit
 consultant limitation, with no fabricated cash recommendation. A 401 means the
 saved key is not accepted by v2; get a valid v2 key rather than using the older
 `?key=` authentication. The read-only `/api/integrations/nessie` endpoint remains
 available for integration diagnostics. Setup, contracts and verification:
 [Nessie integration spec](docs/integrations/nessie.md).
+
+### Populate the Nessie demo sandbox manually
+
+The consultant is read-only. A separate opt-in CLI can create one fictional
+BizBox demo customer and one checking account with **$50,000 of simulated
+starting cash**:
+
+```sh
+pnpm nessie:seed --dry-run
+# After approval to create mock data in the configured sandbox:
+pnpm nessie:seed --confirm
+```
+
+Use the existing local `NESSIE_API_KEY`; never put it in a command or chat. The
+script refuses CI, requires confirmation, restricts the v2 origin, and reuses
+its exact demo records on later runs. It never resets an existing balance or
+creates transactions/bills. Do not run it concurrently from multiple machines.
+The output identifies the demo account, not the key. Run the consultant again
+after seeding; a previously saved empty milestone stays historical evidence.
 
 ### Database
 
