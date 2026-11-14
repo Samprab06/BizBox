@@ -16,10 +16,12 @@ export const PROJECT_ID = process.env.E2E_PROJECT_ID ?? "local-dev";
 
 /** The synthetic Houston coffee profile, re-scoped to the test project. */
 export function testProfile(): BusinessProfile {
-  return {
-    ...structuredClone(syntheticHoustonFixture.profile),
-    projectId: PROJECT_ID,
-  };
+  const profile = structuredClone(syntheticHoustonFixture.profile);
+  // The fixture requires ground floor and frontage; no Houston space meets both, which is a
+  // correct empty result but leaves the happy paths nothing to compare.
+  profile.mustHaves.groundFloor.value = false;
+  profile.mustHaves.frontage.value = false;
+  return { ...profile, projectId: PROJECT_ID };
 }
 
 const SECRET_PATTERNS = [

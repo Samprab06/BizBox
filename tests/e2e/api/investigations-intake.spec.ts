@@ -56,15 +56,13 @@ test.describe("happy paths (E2E_DB=1)", () => {
   test("an investigation is created, read back, and unknown IDs are 404", async ({
     request,
   }) => {
-    const saved = z
-      .object({ profile: BusinessProfileSchema })
-      .parse(
-        await (
-          await request.post("/api/profiles", {
-            data: { projectId: PROJECT_ID, profile: testProfile() },
-          })
-        ).json(),
-      );
+    const saved = z.object({ profile: BusinessProfileSchema }).parse(
+      await (
+        await request.post("/api/profiles", {
+          data: { projectId: PROJECT_ID, profile: testProfile() },
+        })
+      ).json(),
+    );
     const created = await request.post("/api/investigations", {
       data: {
         projectId: PROJECT_ID,
