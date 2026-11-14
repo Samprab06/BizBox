@@ -251,7 +251,7 @@ describe.skipIf(!enabled)("scenario Postgres adapter [local]", () => {
     ];
     for (const [index, overrides] of attempts.entries()) {
       await expect(client`INSERT INTO scenarios (id,project_id,parent_id,site_ids,profile_version,overrides,label,author,rationale)
-        VALUES (${`malformed-founder-${index}`},${projectId},'sc-1','["site-a","site-b"]',1,${client.json(overrides)},'x','agent','why')`).rejects.toThrow(
+        VALUES (${`malformed-founder-${index}`},${projectId},'sc-1','["site-a","site-b"]',1,${JSON.stringify(overrides)}::jsonb,'x','agent','why')`).rejects.toThrow(
         /Agent cannot introduce or change founder provenance/,
       );
     }
