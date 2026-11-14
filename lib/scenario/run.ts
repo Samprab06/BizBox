@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { LayoutInputError } from "@/lib/layout";
-import { AssemblyError } from "@/lib/evaluation/assemble";
+import {
+  AssemblyError,
+  PanelInProgressError,
+  type PanelDeadline,
+} from "@/lib/evaluation/assemble";
+import type { PanelProgressCount } from "@/lib/panel/progress";
 import {
   DEFAULT_SEEDS,
   EVALUATION_MODEL_VERSION,
@@ -24,6 +29,8 @@ import {
 } from "./run-store";
 
 export const DEFAULT_SCENARIO_RUN_BUDGET_UNITS = 1200;
+/** Time kept after a deadline-limited Jev panel (HAC-155) to checkpoint the execution. */
+export const SCENARIO_PANEL_RESERVE_MS = 5_000;
 export const StartScenarioRunSchema = z
   .object({
     confirm: z.boolean().default(false),
@@ -61,8 +68,9 @@ export function scenarioExecutionKey(
     )
     .digest("hex");
 }
-function publicExecution(e: ScenarioExecution) {
+function publicExecution(e: ScenarioExecution, panel?: PanelProgressCount) {
   return {
+    ...(panel ? { panel } : {}),
     status: e.status,
     runId: e.id,
     scenarioId: e.scenarioId,
@@ -89,6 +97,7 @@ export function createScenarioRunner({
   prepare: (
     scenario: Scenario,
     demandSource: DemandSource,
+    deadline?: PanelDeadline,
   ) => Promise<AssembledEvaluation>;
   newId: () => string;
   now?: () => Date;
@@ -143,7 +152,22 @@ export function createScenarioRunner({
           job.effectiveKey === scenarioExecutionKey(value, "jev", null)
             ? "jev"
             : "huff";
-        const assembled = await prepare(value, source);
+        let assembled: AssembledEvaluation;
+        try {
+          assembled = await prepare(value, source, {
+            deadlineAt: deadlineAt - SCENARIO_PANEL_RESERVE_MS,
+            now: () => now().getTime(),
+          });
+        } catch (error) {
+          // HAC-155: the Jev panel hit its deadline. Its answers are cached by key, so the
+          // next advance prepares the same scenario again and resumes from them (still queued).
+          if (error instanceof PanelInProgressError)
+            return publicExecution(job, {
+              completedPersonas: error.completedPersonas,
+              totalPersonas: error.totalPersonas,
+            });
+          throw error;
+        }
         const request = EvaluationRequestSchema.parse(assembled.request);
         const actualSites = request.sites.map((s) => s.siteId).sort();
         const expectedSeeds =

@@ -19,6 +19,7 @@ import {
   type AssembleEvaluationInput,
   type AssemblyCatchment,
   type AssemblyDependencies,
+  type PanelDeadline,
 } from "./assemble";
 
 type Row = Record<string, unknown>;
@@ -240,6 +241,7 @@ export function createPostgresAssemblyDependencies(
 
 export async function assemblePostgresEvaluation(
   input: AssembleEvaluationInput,
+  panelDeadline: PanelDeadline = {},
 ) {
   const key = process.env.JEV_API_KEY?.trim();
   // Explicit opt-in only: the new shortcut defaults to Huff and cannot silently incur panel calls.
@@ -248,5 +250,6 @@ export async function assemblePostgresEvaluation(
   return assembleEvaluation(
     input,
     createPostgresAssemblyDependencies(getDb(), input.projectId, client),
+    panelDeadline,
   );
 }
