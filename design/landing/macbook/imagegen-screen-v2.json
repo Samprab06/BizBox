@@ -1,0 +1,23 @@
+{
+  "asset": "public/landing-assets/macbook/bizbox-simulation-screen-gpt-v2.png",
+  "tool": "Built-in GPT Image",
+  "dimensions": [
+    1558,
+    1009
+  ],
+  "status": "Akshar approved as provisional MacBook display; final UI parity deferred until final UI is complete",
+  "use": "Hero screen image; crossfades into the live3D simulator on entry",
+  "geography": "Generated illustrative neighborhood, not actual surveyed or realtime imagery",
+  "ui_references": [
+    "Actual simulator UI at local /simulator-demo: dark fullbleed map, Traffic/Demand, bottom playback timeline",
+    "HAC112 workspace-text.png: existing dark Assistant/Text/Voice/composer design"
+  ],
+  "source_reference": "design/landing/macbook/imagegen-reference-simulator.png (3Dprovider pixels hidden before capture)",
+  "invariants": [
+    "Keep dark simulation UI controls and labels",
+    "Keep Assistant panel style from existing platform design",
+    "No invented KPI or forecast",
+    "Example imagery is not the actual3D renderer"
+  ],
+  "previous_variant": "Warm property-workspace variant discarded; not used in page"
+}
