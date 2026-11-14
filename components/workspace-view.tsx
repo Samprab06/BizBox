@@ -24,6 +24,8 @@ export function WorkspaceView({
   siteId,
   children,
   decisionLayout = false,
+  title,
+  allowUnknownProject = false,
 }: {
   projectId: string;
   view: View;
@@ -31,6 +33,8 @@ export function WorkspaceView({
   children?: ReactNode;
   /** Compact only decision pages; context and all destinations remain unchanged. */
   decisionLayout?: boolean;
+  title?: string;
+  allowUnknownProject?: boolean;
 }) {
   const project = getPreviewProject(projectId);
   const selectedId = siteId ?? project?.sites[0]?.id;
@@ -71,7 +75,8 @@ export function WorkspaceView({
               : "text-4xl font-semibold tracking-tight"
           }
         >
-          {views[view]}
+          {title ?? views[view]}
+
         </h1>
       </header>
       <section
@@ -82,16 +87,17 @@ export function WorkspaceView({
             : "rounded-2xl border border-line bg-white p-7"
         }
       >
-        {project ? (
+        {project || allowUnknownProject ? (
           <>
-            {children ?? (
-              <PreviewContent
-                view={view}
-                project={project}
-                site={site}
-                mapSelection={siteId}
-              />
-            )}
+            {children ??
+              (project ? (
+                <PreviewContent
+                  view={view}
+                  project={project}
+                  site={site}
+                  mapSelection={siteId}
+                />
+              ) : null)}
           </>
         ) : (
           <>
@@ -137,6 +143,7 @@ function PreviewContent({
       );
     case "comparison":
     case "replay":
+    case "simulator":
       return null;
   }
 }

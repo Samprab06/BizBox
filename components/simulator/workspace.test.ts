@@ -1,0 +1,110 @@
+import { createElement as h } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { WorkspaceView } from "@/components/workspace-view";
+import { fixture } from "@/lib/agent/__fixtures__/plan";
+
+const mocks = vi.hoisted(() => ({ load: vi.fn(), render: vi.fn() }));
+vi.mock("@/components/simulator/demo", () => ({
+  SimulatorDemo: (props: unknown) => {
+    mocks.render(props);
+    return h("div", null, "Simulator boundary");
+  },
+}));
+vi.mock("@/components/shell/context-bar", () => ({
+  ProjectContextProvider: ({ children }: { children: React.ReactNode }) =>
+    children,
+}));
+vi.mock("@/lib/evaluation/store-postgres", () => ({
+  createPostgresComparisonStore: () => ({ load: mocks.load }),
+}));
+
+import SimulatorPage from "@/app/(pages)/projects/[projectId]/simulator/page";
+
+describe("simulator workspace integration", () => {
+  beforeEach(() => {
+    mocks.load.mockReset();
+    mocks.render.mockClear();
+  });
+  it("selects the existing simulator navigation item", () => {
+    const html = renderToStaticMarkup(
+      h(
+        WorkspaceView,
+        { projectId: "houston-coffee", view: "simulator", title: "Simulator" },
+        h("div", null, "Replay content"),
+      ),
+    );
+    expect(html).toMatch(
+      /<a[^>]*aria-current="page"[^>]*href="\/projects\/houston-coffee\/simulator\?site=montrose"/,
+    );
+    expect(html).toContain("Test plan · Simulator");
+    expect(html).toContain("Replay content");
+  });
+  it("keeps stored replay available for project IDs outside the bundled example", async () => {
+    const stored = fixture().comparison;
+    stored.id = "saved-comparison";
+    stored.comparison.synthetic = false;
+    mocks.load.mockResolvedValue(stored);
+    const page = await SimulatorPage({
+      params: Promise.resolve({ projectId: "saved-project" }),
+      searchParams: Promise.resolve({ comparison: "saved-comparison" }),
+    });
+    const html = renderToStaticMarkup(page);
+    expect(mocks.load).toHaveBeenCalledWith(
+      "saved-project",
+      "saved-comparison",
+    );
+    expect(mocks.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: "saved-project",
+        context: {
+          kind: "simulator",
+          phase: "ready",
+          comparisonId: "saved-comparison",
+          siteId: stored.evaluation.result.ranking[0],
+          synthetic: false,
+        },
+        story: expect.objectContaining({
+          compare: false,
+          scenarioLabels: ["Weekday", "Weekend"],
+          provenance: expect.objectContaining({
+            label: expect.stringContaining("saved-comparison"),
+          }),
+        }),
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            run: expect.objectContaining({
+              siteId: stored.evaluation.result.ranking[0],
+            }),
+          }),
+        ]),
+      }),
+    );
+    expect(html).not.toContain("Project unavailable");
+    expect(html).toContain("/projects/saved-project/simulator");
+  });
+  it("publishes the actual Example fallback after stored loading fails", async () => {
+    mocks.load.mockRejectedValue(new Error("Unavailable"));
+    const page = await SimulatorPage({
+      params: Promise.resolve({ projectId: "saved-project" }),
+      searchParams: Promise.resolve({ comparison: "missing" }),
+    });
+    renderToStaticMarkup(page);
+    expect(mocks.load).toHaveBeenCalledWith("saved-project", "missing");
+    expect(mocks.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: {
+          kind: "simulator",
+          phase: "example",
+          siteId: "montrose",
+          synthetic: true,
+        },
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            run: expect.objectContaining({ siteId: "demo-cafe" }),
+          }),
+        ]),
+      }),
+    );
+  });
+});
