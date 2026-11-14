@@ -53,6 +53,29 @@ Import `test` and `expect` from `./fixtures`, not from `@playwright/test`.
 - Never select by CSS class or DOM position.
 - Don't hard-code `waitForTimeout`. Use web-first assertions (`await expect(...)`).
 
+## Location plan export (HAC-37)
+
+`export.spec.ts` covers the saved comparison → printable plan journey, interval
+and site-order parity, per-row origins/citations, outdated blocking, repeatable
+HTML and print-media overflow at mobile/intermediate/desktop widths. It observes
+the `window.print()` callback; the current app has no automatic download or
+app-selected filename. Grounded plans export saved low/high intervals, while the
+comparison screen also shows means. Chromium attaches a generated PDF alongside
+the complete printable HTML and a viewport-sized print-media screenshot; WebKit
+checks the HTML/print flow. The visual artifact captures the top of the plan and
+avoids WebKit's 32767px image limit; content assertions still cover every row.
+Native Save as PDF, pagination, Preview and Chrome PDF viewer checks are tracked
+separately in `tests/manual/plan-export.md` and remain unexecuted until recorded.
+
+```sh
+E2E_BASE_URL=http://localhost:3137 pnpm exec playwright test tests/e2e/export.spec.ts --project=chromium --project=webkit --workers=1
+```
+
+Start your own app on port 3137 first (`pnpm build`, then `pnpm start --port 3137`),
+or substitute an already approved local URL. These specs mock synthetic data and
+make no database/model writes. The generated PDF is a browser artifact, not proof
+of the original ticket's download or native-viewer acceptance.
+
 ## Explore with the Playwright MCP before writing specs
 
 Before writing a spec for a screen, drive it with the Playwright MCP: open the page,
