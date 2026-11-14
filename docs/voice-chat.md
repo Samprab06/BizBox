@@ -1,8 +1,5 @@
 # BizBox voice chat (HAC-111)
 
-Product requirements and the current delivery record live in the
-[voice chat PRD](prd/voice-chat.md). Update both documents when behavior changes.
-
 Akshar requested Goldie's reactive voice orb now, integrated with the active client
 UI work and delivered through a dedicated ticket, branch and PR. The existing
 glass onboarding prototype is owned by the client UI chat (HAC-112); its source

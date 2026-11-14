@@ -69,5 +69,5 @@ Produces: reusable voice controls/controller with explicit lifecycle and audio r
 - [x] Review shared boundaries and an independent security/lifecycle review.
 - [x] Verify no key/client-bundle leakage or new dependency; inspect final diff.
 - [x] Run repository checks sequentially plus affected intake/voice browser suite.
-- [ ] Record actual live verification limits, update docs/ticket and publish a
+- [x] Record actual live verification limits, update docs/ticket and publish a
       focused PR under existing push/PR authorization. No merge or deployment.
