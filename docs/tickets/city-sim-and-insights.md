@@ -362,6 +362,16 @@ HAC-63 feeds it stored runs, and DS-4 moves it into the Sitework shell. This tic
 - [ ] No overlay is labeled "Traffic" or "Demand" without its DS-4 qualifier next to it.
 - [ ] It works on a 375 px wide screen: the panels collapse into a bottom sheet.
 
+**Branch.** `components/simulator/` exists only on the `simulator-visualization` branch. It is not on
+`main` yet.
+- If `simulator-visualization` has not been merged into `main` when you start, branch from a
+  freshly fetched `origin/simulator-visualization` (after HAC-65, HAC-63 and DS-4 have
+  merged into it) and open the PR against
+  `simulator-visualization`, the same as HAC-65.
+- If it has been merged, branch from `main` and target `main` as usual.
+
+To check, run `git ls-tree -d origin/main components/simulator`. It prints nothing while the folder is only on `simulator-visualization`.
+
 **Links.**
 - Blocked by: SIM-4, SIM-5, HAC-65, HAC-63, DS-4
 - Blocks: SIM-7, SIM-8, SIM-9, SIM-13, SIM-15, AGT-9
@@ -387,6 +397,11 @@ revenue and walk-aways ("unmet demand"). It also has:
 **Acceptance.**
 - [ ] The numbers at any minute equal `replayAt` and `hourlySeries` cumulated to that minute.
 - [ ] At close, the numbers equal `DailyMetrics`.
+
+**Branch.** This ticket builds on the city view from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
 
 **Links.**
 - Blocked by: SIM-2, SIM-6
@@ -421,6 +436,11 @@ revenue and walk-aways ("unmet demand"). It also has:
 - [ ] Rerunning with unchanged levers reproduces the baseline exactly.
 - [ ] Adding a station never increases p90 wait on the fixture.
 - [ ] The deltas match a direct engine plus economics computation.
+
+**Branch.** This ticket builds on the city view from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
 
 **Links.**
 - Blocked by: SIM-6
@@ -457,6 +477,11 @@ revenue and walk-aways ("unmet demand"). It also has:
 **Acceptance.**
 - [ ] Every number on the card traces back to the schedule, persona or events.
 - [ ] Following keeps the agent in view through the whole trip.
+
+**Branch.** This ticket builds on the city view from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
 
 **Links.**
 - Blocked by: SIM-6, HAC-25 (inspector logic)
@@ -598,6 +623,11 @@ convincing "this is your space" asset we have.
 - [ ] The fallback label matches the `kind` from SIM-12.
 - [ ] No Matterport frames are recorded or exported beyond HAC-14's terms.
 
+**Branch.** This ticket reuses the playback clock from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
+
 **Links.**
 - Blocked by: SIM-12, SIM-6 (clock)
 - Blocks: SIM-15, AGT-8, AGT-9
@@ -643,6 +673,11 @@ convincing "this is your space" asset we have.
 **Acceptance.**
 - [ ] Simulation time does not jump across the transition in either direction.
 - [ ] The selection and the follow state survive the transition.
+
+**Branch.** This ticket builds on the city view from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
 
 **Links.**
 - Blocked by: SIM-6, SIM-13

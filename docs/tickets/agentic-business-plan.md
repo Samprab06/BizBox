@@ -443,6 +443,11 @@ a picture.
 - [ ] `focus_view` is deterministic: the same arguments always produce the same view state.
 - [ ] A founder interaction cancels any pending agent camera move.
 
+**Branch.** This ticket hooks into the city view from SIM-6, so use the same branch SIM-6 merged into. If
+`simulator-visualization` has not been merged into `main` yet, branch from
+`origin/simulator-visualization` and open the PR against it. Otherwise use `main`.
+To check, run `git ls-tree -d origin/main components/simulator`.
+
 **Links.**
 - Blocked by: AGT-4, SIM-6, SIM-13
 - Related: SIM-9 (follow-a-customer camera), SIM-15 (city and interior transition)

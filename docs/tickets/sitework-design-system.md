@@ -242,6 +242,15 @@ simulator, and the `/simulator-demo` redirect.
 - [ ] Fixture data shows the **Example** badge (DS-2), and stored runs don't.
 - [ ] Works at 375 px; the Expand control is keyboard-operable.
 
+**Branch.** `components/simulator/` exists only on the `simulator-visualization` branch. It is not on
+`main` yet.
+- If `simulator-visualization` has not been merged into `main` when you start, branch from a
+  freshly fetched `origin/simulator-visualization` and open the PR against
+  `simulator-visualization`, the same as HAC-65.
+- If it has been merged, branch from `main` and target `main` as usual.
+
+To check, run `git ls-tree -d origin/main components/simulator`. It prints nothing while the folder is only on `simulator-visualization`.
+
 **Links.**
 - Blocked by: DS-1, **HAC-65**, **HAC-63**
 - Blocks: SIM-6
