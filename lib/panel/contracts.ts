@@ -67,7 +67,7 @@ export type PersonaSet = z.infer<typeof PersonaSetSchema>;
 export const PersonaBehaviorSchema = z.object({
   personaId: z.string(),
   /** Option id (site id, competitor ids, "none") -> share; sums to 1. */
-  where: z.record(z.number().min(0).max(1)),
+  where: z.record(z.string(), z.number().min(0).max(1)),
   /** Expected visits per month, from `how_often`. */
   visitsPerMonth: z.number().nonnegative(),
   /** Sums to 1. */

@@ -88,7 +88,7 @@ export function toWireRequest(modelVersion: string, req: JevAskRequest): unknown
   };
 }
 
-const ProbabilityMap = z.record(z.number().min(0).max(1));
+const ProbabilityMap = z.record(z.string(), z.number().min(0).max(1));
 const WireAnswerSchema = z.discriminatedUnion("type", [
   z.object({
     name: z.string(),
