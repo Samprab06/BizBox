@@ -121,17 +121,13 @@ test.describe("deep links", () => {
     await expect(page.getByText(/\bat\s+\S+\s+\(.*:\d+:\d+\)/)).toHaveCount(0);
 
     // There is a way to pick a site.
-    await page.getByRole("link", { name: "Browse spaces" }).click();
+    await page.getByRole("link", { name: "Back to map" }).click();
     await expect(page).toHaveURL(workspaceHref(projectId, "map"));
     await expect(page.getByRole("link", { name: /Montrose storefront/ })).toBeVisible();
     expect(problems).toEqual([]);
   });
 
   test("/sites/unselected asks the user to pick a site", async ({ page, gotoView }) => {
-    test.fixme(
-      true,
-      'HAC-43: Site detail with no selection renders "Site unavailable" (reads as an error) instead of a "pick a site" prompt',
-    );
     await gotoView("site");
     await expect(page.getByText(/pick a site|select a site|choose a site/i)).toBeVisible();
   });

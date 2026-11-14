@@ -16,7 +16,17 @@ export function createCatchmentHandler(getter: Getter = getCatchment) {
     request: Request,
     context: { params: Promise<{ siteId: string }> },
   ) => {
-    const { siteId } = await context.params;
+    let siteId: string;
+    try {
+      // Next can preserve percent escapes in route params. Decode one component
+      // once; the existing numeric grammar still rejects slashes/double escapes.
+      siteId = decodeURIComponent((await context.params).siteId);
+    } catch {
+      return Response.json(
+        { error: "Invalid site identifier" },
+        { status: 400, headers },
+      );
+    }
     if (!/^\d+(?::\d+)?$/.test(siteId) || siteId.length > 100) {
       return Response.json(
         { error: "Invalid site identifier" },
