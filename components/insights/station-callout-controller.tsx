@@ -204,9 +204,9 @@ function StationController({
         Check whole-day station alternatives
       </h4>
       <p className={muted}>
-        Uses saved assumptions and the original paired seeds. Each configuration
-        reserves its own simulation budget; this is a resumable batch, not one
-        atomic run. Opening this view does not run it.
+        Uses saved assumptions and the original paired seeds. Options run one at
+        a time. Completed results stay saved if the next option needs budget
+        confirmation. Opening this view does not run an experiment.
       </p>
       <p className={muted}>
         <EvidenceBadge kind="Assumption" /> The +1/+2 whole-day station and
