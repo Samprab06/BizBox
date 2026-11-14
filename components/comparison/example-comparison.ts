@@ -1,4 +1,5 @@
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
+import { DEMO_PROJECT_ID } from "@/fixtures/demo-project";
 import { computeMonthlyEconomics } from "@/lib/sim/economics";
 import { percentile, simulateDay } from "@/lib/sim/engine";
 import {
@@ -16,7 +17,7 @@ import {
   recordedExampleSchedule,
 } from "@/lib/panel/recorded-example";
 
-export const comparisonId = "houston-coffee-example-v1";
+export const comparisonId = `${DEMO_PROJECT_ID}-example-v1`;
 const fixture = syntheticHoustonFixture;
 const hours = { openMin: 420, closeMin: 900 };
 // HAC-101: a recorded Jev panel, only if one is checked in. Without it the example stays Huff.

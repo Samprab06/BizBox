@@ -40,7 +40,7 @@ it came from: `costar`, `public`, `founder` or `default`.
 | Simulator   | `simulator`                       | The 3D city view (Vexcel tiles) with customer trips, live stats and experiments.       |
 | Plan        | `plan`                            | A printable location plan built only from the stored comparison.                       |
 
-The example project is `houston-coffee`. Opening `/` redirects to its onboarding.
+The seeded example project is `houston-coffee`. A first visit to `/start` creates a project of its own (`POST /api/projects`, an ID like `p-0123456789abcdef0123`) and opens its onboarding; the device remembers that ID so a returning founder resumes it.
 
 ## Landing design checkpoint
 
