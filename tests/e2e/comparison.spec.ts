@@ -49,7 +49,11 @@ test("completed intake permits deselection and runs only after an explicit actio
     candidateIds: [liveCandidateIds[0]],
     demandSource: "huff",
   });
-  await expect(page.getByText("Example data", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("live ranking keeps intervals, model provenance, findings and saved replay links", async ({
@@ -135,7 +139,11 @@ test("no intake and a failed API retain explicit examples with retry", async ({
   page,
 }) => {
   await page.goto("/projects/houston-coffee/comparison");
-  await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/Complete your intake/).first()).toBeVisible();
   await mockLiveComparison(page);
   await page.route("**/api/comparisons", (route) =>
@@ -156,7 +164,11 @@ test("no intake and a failed API retain explicit examples with retry", async ({
       .getByRole("alert")
       .filter({ hasText: /could not be run|unavailable/i }),
   ).toContainText(/could not be run|unavailable/i);
-  await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toBeVisible();
 });
 
 test("empty live search stays empty without inventing a ranking", async ({
@@ -178,7 +190,11 @@ test("empty live search stays empty without inventing a ranking", async ({
   await expect(
     page.getByRole("button", { name: "Run comparison", exact: true }),
   ).toBeDisabled();
-  await expect(page.getByText("Example data", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("comparison retains the no-single-sales-forecast guard across widths and keyboard navigation", async ({

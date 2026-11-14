@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import type { WorkspaceObservation } from "@/lib/client/workspace-context";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { SiteRunSchema, type SiteRun } from "@/lib/contracts";
 import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -90,6 +92,27 @@ export function LiveReplayScreen({
     dayType,
     attempt,
   ]);
+
+  const context = useMemo<WorkspaceObservation>(
+    () => ({
+      kind: "replay",
+      siteId: selectedId,
+      phase:
+        !site || !representative
+          ? "missing"
+          : state.kind === "ready" && state.run.id === runId
+            ? "ready"
+            : state.kind === "failed" && state.runId === runId
+              ? "example"
+              : "loading",
+      synthetic:
+        state.kind === "ready" && state.run.id === runId
+          ? state.run.synthetic
+          : undefined,
+    }),
+    [selectedId, site, representative, state, runId],
+  );
+  useWorkspaceReport(project.id, context);
 
   if (!site || !representative)
     return (
