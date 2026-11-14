@@ -40,8 +40,10 @@ regression exercises unavailable WebGL on the real workspace city branch; run
 the local app with a dummy `VEXCEL_API_KEY`, then set `E2E_SIMULATOR_CITY=1` for
 `simulator-workspace.spec.ts`. Test imagery requests are intercepted and never
 reach Vexcel. The gate is unset when the server does not expose the city branch.
-This check does not resolve the separate React Three Fiber café/replay WebGL
-fallback issue tracked by HAC-103.
+This guard covers the Cesium neighborhood only. The replay floor-plan fallback
+from HAC-103 is retained from main; café scenes keep their existing React Three
+Fiber fallback. The offline city check does not establish café WebGL-failure
+coverage.
 
 ## Remaining integration checks
 
