@@ -7,12 +7,15 @@ import type {
 import type { DayType } from "@/lib/demand/contracts";
 import type { DayResult, SiteConfig } from "@/lib/sim/contracts";
 import { canonicalEvents, isOutdated, type EvaluationRun } from "./evaluate";
+import type { AssemblyMetadata } from "./assemble";
 
 /** What a stored comparison keeps so it reruns exactly from cache (comparisons.evaluation). */
 export interface StoredEvaluation {
   request: EvaluationRequest;
   result: EvaluationResult;
   sensitivity: SensitivityResult[];
+  /** Input origins and exclusions from deterministic assembly, when used. */
+  assembly?: AssemblyMetadata;
 }
 
 export interface StoredComparison {
