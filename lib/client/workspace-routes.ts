@@ -4,7 +4,7 @@ export const views = {
   site: "Site detail",
   comparison: "Comparison",
   replay: "Replay",
-  simulator: "Test plan · Simulator",
+  simulator: "Simulator",
 };
 
 export type View = keyof typeof views;

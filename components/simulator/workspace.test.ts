@@ -37,7 +37,7 @@ describe("simulator workspace integration", () => {
     expect(html).toMatch(
       /<a[^>]*aria-current="page"[^>]*href="\/projects\/houston-coffee\/simulator\?site=montrose"/,
     );
-    expect(html).toContain("Test plan · Simulator");
+    expect(html).toContain("Simulator");
     expect(html).toContain("Replay content");
   });
   it("keeps stored replay available for project IDs outside the bundled example", async () => {
@@ -106,5 +106,15 @@ describe("simulator workspace integration", () => {
         ]),
       }),
     );
+  });
+  it("does not invent an example project when an unknown project has no stored comparison", async () => {
+    const page = await SimulatorPage({
+      params: Promise.resolve({ projectId: "no-such-project" }),
+      searchParams: Promise.resolve({}),
+    });
+    const html = renderToStaticMarkup(page);
+    expect(html).toContain("Project unavailable");
+    expect(html).toContain("Open example project");
+    expect(mocks.render).not.toHaveBeenCalled();
   });
 });
