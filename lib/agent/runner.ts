@@ -3,15 +3,13 @@ import { ChatOpenAI } from "@langchain/openai";
 import { tool } from "@langchain/core/tools";
 import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
-import { type IntakeSession, INTAKE_QUESTIONS } from "./intake";
+import { INTAKE_QUESTIONS } from "./intake";
 
 export const DEFAULT_INTAKE_MODEL = "gpt-6-luna";
-export const INTAKE_TIMEOUT_MS = 20_000;
-export type IntakeRunner = (input: {
-  session: IntakeSession;
-  message: string;
-  signal: AbortSignal;
-}) => Promise<string>;
+/** Graph step budget for one intake turn: up to 3 save_profile calls plus the reply. */
+export const INTAKE_RECURSION_LIMIT = 12;
+import type { IntakeRunner } from "./runtime-loader";
+export { INTAKE_TIMEOUT_MS, type IntakeRunner } from "./runtime-loader";
 
 const instructions = `You are the founder-facing intake (FDE) agent for a Houston / Los Angeles service-location investigation.
 Ask these seven groups, one at a time where information is missing: ${INTAKE_QUESTIONS.map((group) => group.question).join("\n")}
@@ -57,17 +55,34 @@ export function createDeepIntakeRunner(
       ],
       name: "founder_intake",
     });
-    const result = await agent.invoke(
-      {
-        messages: [
-          {
-            role: "user",
-            content: `Current validated draft:\n${JSON.stringify(session.snapshot())}\n\nFounder says:\n${message}`,
-          },
-        ],
-      },
-      { recursionLimit: 6, signal },
-    );
+    let result;
+    try {
+      result = await agent.invoke(
+        {
+          messages: [
+            {
+              role: "user",
+              content: `Current validated draft:\n${JSON.stringify(session.snapshot())}\n\nFounder says:\n${message}`,
+            },
+          ],
+        },
+        // Each tool call takes two graph steps; three saves plus a reply need ~8 (HAC-58).
+        { recursionLimit: INTAKE_RECURSION_LIMIT, signal },
+      );
+    } catch (error) {
+      // The draft keeps every save that succeeded; answer with the next question
+      // instead of failing the turn when the step budget runs out.
+      if (
+        saves > 0 &&
+        error instanceof Error &&
+        error.name === "GraphRecursionError"
+      )
+        return (
+          session.snapshot().nextQuestion?.question ??
+          "Your answers have been recorded in this draft. Review the findings and defaults."
+        );
+      throw error;
+    }
     const last = [...result.messages]
       .reverse()
       .find((entry) => entry.type === "ai" && entry.content);

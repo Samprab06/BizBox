@@ -6,6 +6,7 @@ import {
   type InvestigationRepository,
   type InvestigationStepPlanner,
 } from "@/lib/agent/jobs";
+import { ModelRuntimeUnavailableError } from "@/lib/agent/runtime-loader";
 
 type Context = { params: Promise<{ id: string }> };
 const identifier = z.string().trim().min(1).max(200);
@@ -15,6 +16,16 @@ const advanceBody = z
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 function failure(error: unknown) {
+  if (error instanceof ModelRuntimeUnavailableError)
+    return json(
+      {
+        code: "MODEL_RUNTIME_UNAVAILABLE",
+        message: "The investigation model runtime could not load.",
+        field_errors: {},
+        detail: error.detail,
+      },
+      503,
+    );
   if (error instanceof InvestigationJobError) {
     if (error.code === "not_found")
       return json(
