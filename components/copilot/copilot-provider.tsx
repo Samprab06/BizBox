@@ -12,44 +12,58 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import type {
+  CopilotEvent,
+  CopilotTurnRequest,
+} from "@/lib/contracts/copilot-runtime";
 import {
   copilotReducer,
   copilotStorageKey,
   initialCopilotState,
   restoreCopilotState,
+  type CardAction,
   type ConfirmationCard,
   type CopilotState,
   type DiffCard,
 } from "./controller";
-import { unavailableCopilotRuntime } from "./runtime-adapter";
+import {
+  COPILOT_UNAVAILABLE_MESSAGE,
+  CopilotHttpError,
+  createCopilotClient,
+  type CopilotClient,
+} from "./copilot-client";
+import { copilotContextWithoutRevision, withRevision } from "./copilot-context";
 import {
   createScenarioApi,
   type ScenarioApi,
   type ScenarioSummary,
 } from "./scenario-api";
-import type { CopilotRuntimeAdapter, CopilotRuntimeStatus } from "./types";
-import { viewContextFor } from "./view-context";
 
-export type ScenarioTreeState =
+type Loadable<T> =
   | { state: "idle" }
   | { state: "loading" }
-  | { state: "ready"; scenarios: ScenarioSummary[] }
-  | { state: "error"; message: string };
+  | { state: "ready"; value: T }
+  | { state: "error"; message: string; status: number | null };
+
+export type ScenarioTreeState = Loadable<ScenarioSummary[]>;
+export type RuntimeState = Loadable<true>;
 
 export type CopilotContextValue = {
   projectId: string;
   state: CopilotState;
-  runtime: CopilotRuntimeStatus;
+  /** Whether HAC-83's runtime answered; a 503 means it isn't set up yet. */
+  runtime: RuntimeState;
   scenarios: ScenarioTreeState;
-  sendError: string | null;
-  /** Sends a founder turn to the runtime with the current view context. */
+  busy: boolean;
   send: (text: string) => Promise<void>;
-  keep: (card: DiffCard) => void;
-  revert: (card: DiffCard) => Promise<void>;
-  confirm: (card: ConfirmationCard, approved: boolean) => Promise<void>;
+  act: (card: DiffCard, action: CardAction) => Promise<void>;
+  confirm: (card: ConfirmationCard) => Promise<void>;
+  resume: () => Promise<void>;
+  retryRevertVersion: (card: DiffCard) => Promise<void>;
   setActiveScenario: (scenarioId: string | null) => void;
   setExpanded: (expanded: boolean) => void;
-  reloadScenarios: () => void;
+  dismissNotice: () => void;
+  reload: () => void;
 };
 
 const CopilotContext = createContext<CopilotContextValue | null>(null);
@@ -61,40 +75,67 @@ export function useCopilot() {
 
 const messageOf = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
+const statusOf = (error: unknown) =>
+  error instanceof CopilotHttpError ? error.status : null;
+
+/** A load result counts only for the request it answered. */
+function resolveLoadable<T>(
+  requestKey: string | null,
+  loaded: { key: string; value: Loadable<T> } | null,
+): Loadable<T> {
+  if (!requestKey) return { state: "idle" };
+  return loaded?.key === requestKey ? loaded.value : { state: "loading" };
+}
+
+let requestCounter = 0;
+const newRequestId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `req-${Date.now()}-${(requestCounter += 1)}`;
+
+const ACTION_MESSAGE: Record<CardAction, (title: string) => string> = {
+  run: (title) => `Run the proposed change: ${title}`,
+  keep: (title) => `Keep the proposed change: ${title}`,
+  revert: (title) => `Revert the proposed change: ${title}`,
+};
 
 /**
- * HAC-84: owns one copilot session per project. Mounted by the project layout, which
- * Next.js keeps mounted across client navigation, so the dock's cards, plan and
- * selections survive moving between pages. The same state is mirrored to
- * sessionStorage so a reload in the same tab restores it.
+ * HAC-84: one copilot session per project, on HAC-83's runtime. Mounted by the project
+ * layout, which Next.js keeps mounted across client navigation, so the dock's cards,
+ * plan and selection survive moving between pages. The thread itself is durable on the
+ * server; sessionStorage only restores the dock's own view in this tab.
  */
 export function CopilotProvider({
   projectId,
-  adapter = unavailableCopilotRuntime,
+  client,
   scenarioApi,
   children,
 }: {
   projectId: string;
-  adapter?: CopilotRuntimeAdapter;
+  client?: CopilotClient;
   scenarioApi?: ScenarioApi;
   children: ReactNode;
 }) {
+  const copilot = useMemo(() => client ?? createCopilotClient(), [client]);
   const api = useMemo(() => scenarioApi ?? createScenarioApi(), [scenarioApi]);
   const [state, dispatch] = useReducer(copilotReducer, initialCopilotState);
   const hydrated = useRef(false);
-  const [loaded, setLoaded] = useState<{
+  const [loadedScenarios, setLoadedScenarios] = useState<{
     key: string;
     value: ScenarioTreeState;
   } | null>(null);
-  const [scenarioRequest, setScenarioRequest] = useState(0);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [loadedRuntime, setLoadedRuntime] = useState<{
+    key: string;
+    value: RuntimeState;
+  } | null>(null);
+  const [reloads, setReloads] = useState(0);
+  const [busy, setBusy] = useState(false);
   const pathname = usePathname();
   const search = useSearchParams().toString();
-  const view = useRef({ pathname, search });
-  const stateRef = useRef(state);
+  const latest = useRef({ pathname, search, state });
+  const revisionFloor = useRef(0);
   useEffect(() => {
-    view.current = { pathname, search };
-    stateRef.current = state;
+    latest.current = { pathname, search, state };
   });
 
   // Restore after mount so server and client markup match.
@@ -123,148 +164,236 @@ export function CopilotProvider({
     }
   }, [projectId, state]);
 
-  useEffect(
-    () =>
-      adapter.subscribe(projectId, (event) =>
-        dispatch({ type: "event", event }),
-      ),
-    [adapter, projectId],
+  const onEvent = useCallback(
+    (event: CopilotEvent) => dispatch({ type: "event", event }),
+    [],
   );
 
-  // The tree loads only once the dock is open, so a collapsed dock makes no request.
-  const requestKey = state.expanded ? `${projectId}:${scenarioRequest}` : null;
+  // Nothing loads until the dock is opened, so a collapsed dock makes no request.
+  const requestKey = state.expanded ? `${projectId}:${reloads}` : null;
   useEffect(() => {
     if (!requestKey) return;
     const controller = new AbortController();
+    const settle =
+      <T,>(
+        set: (value: { key: string; value: Loadable<T> }) => void,
+        fallback: string,
+      ) =>
+      (outcome: { value: T } | { error: unknown }) => {
+        if (controller.signal.aborted) return;
+        set({
+          key: requestKey,
+          value:
+            "value" in outcome
+              ? { state: "ready", value: outcome.value }
+              : {
+                  state: "error",
+                  message: messageOf(outcome.error, fallback),
+                  status: statusOf(outcome.error),
+                },
+        });
+      };
+    const runtimeDone = settle<true>(
+      setLoadedRuntime,
+      COPILOT_UNAVAILABLE_MESSAGE,
+    );
+    copilot
+      .snapshot(projectId, controller.signal)
+      .then((events) => {
+        events.forEach(onEvent);
+        runtimeDone({ value: true });
+      })
+      .catch((error: unknown) => runtimeDone({ error }));
+    const scenariosDone = settle<ScenarioSummary[]>(
+      setLoadedScenarios,
+      "Scenarios are unavailable right now.",
+    );
     api
       .list(projectId, controller.signal)
-      .then((list) =>
-        setLoaded({
-          key: requestKey,
-          value: { state: "ready", scenarios: list },
-        }),
-      )
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setLoaded({
-          key: requestKey,
-          value: {
-            state: "error",
-            message: messageOf(error, "Scenarios are unavailable right now."),
-          },
-        });
-      });
+      .then((value) => scenariosDone({ value }))
+      .catch((error: unknown) => scenariosDone({ error }));
     return () => controller.abort();
-  }, [api, projectId, requestKey]);
-  const scenarios = useMemo<ScenarioTreeState>(
-    () =>
-      !requestKey
-        ? { state: "idle" }
-        : loaded?.key === requestKey
-          ? loaded.value
-          : { state: "loading" },
-    [requestKey, loaded],
+  }, [api, copilot, onEvent, projectId, requestKey]);
+
+  const scenarios = useMemo(
+    () => resolveLoadable(requestKey, loadedScenarios),
+    [requestKey, loadedScenarios],
+  );
+  const runtimeLoaded = useMemo(
+    () => resolveLoadable(requestKey, loadedRuntime),
+    [requestKey, loadedRuntime],
+  );
+  // A turn that answered proves the runtime is up even if the snapshot failed.
+  const [runtimeOverride, setRuntimeOverride] = useState<RuntimeState | null>(
+    null,
+  );
+  const runtime = runtimeOverride ?? runtimeLoaded;
+
+  const contextFor = useCallback(
+    (scenarioId?: string) => {
+      const current = latest.current;
+      const context = withRevision(
+        copilotContextWithoutRevision({
+          projectId,
+          pathname: current.pathname,
+          search: current.search,
+          scenarioId:
+            scenarioId === undefined
+              ? current.state.activeScenarioId
+              : scenarioId,
+        }),
+        current.state.turn?.context ?? null,
+        revisionFloor.current,
+      );
+      revisionFloor.current = Math.max(revisionFloor.current, context.revision);
+      return context;
+    },
+    [projectId],
+  );
+
+  const stream = useCallback(async (work: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await work();
+      setRuntimeOverride({ state: "ready", value: true });
+      return true;
+    } catch (error) {
+      const message = messageOf(error, COPILOT_UNAVAILABLE_MESSAGE);
+      dispatch({ type: "turn_failed", message });
+      if (statusOf(error) === 503)
+        setRuntimeOverride({ state: "error", message, status: 503 });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const startTurn = useCallback(
+    (request: Omit<CopilotTurnRequest, "requestId">) =>
+      stream(() =>
+        copilot.start(
+          projectId,
+          { ...request, requestId: newRequestId() },
+          onEvent,
+        ),
+      ),
+    [copilot, onEvent, projectId, stream],
   );
 
   const send = useCallback(
     async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      setSendError(null);
-      try {
-        await adapter.send({
-          text: trimmed,
-          context: {
-            projectId,
-            view: viewContextFor(
-              view.current.pathname,
-              view.current.search,
-              stateRef.current.activeScenarioId,
-            ),
-          },
-        });
-      } catch (error) {
-        setSendError(messageOf(error, "The copilot didn't receive that."));
-      }
+      const message = text.trim();
+      if (!message) return;
+      dispatch({
+        type: "turn_requested",
+        id: `local:${newRequestId()}`,
+        text: message,
+      });
+      await startTurn({ message, context: contextFor() });
     },
-    [adapter, projectId],
+    [contextFor, startTurn],
   );
 
-  const revert = useCallback(
+  const saveRevertVersion = useCallback(
     async (card: DiffCard) => {
-      dispatch({ type: "revert_started", callId: card.callId });
+      if (!card.proposedScenarioId) return;
       try {
         const reverted = await api.revert({
           projectId,
-          scenarioId: card.scenarioId,
-          targetId: card.parentId,
+          scenarioId: card.proposedScenarioId,
+          targetId: card.baseScenarioId,
         });
         dispatch({
-          type: "revert_succeeded",
-          callId: card.callId,
+          type: "revert_version_saved",
+          proposalId: card.proposalId,
           revertScenarioId: reverted.id,
         });
-        setScenarioRequest((n) => n + 1);
+        setReloads((n) => n + 1);
       } catch (error) {
         dispatch({
-          type: "revert_failed",
-          callId: card.callId,
-          message: messageOf(error, "The revert could not be saved."),
+          type: "revert_version_failed",
+          proposalId: card.proposalId,
+          message: messageOf(error, "The revert version could not be saved."),
         });
       }
     },
     [api, projectId],
   );
 
-  const confirm = useCallback(
-    async (card: ConfirmationCard, approved: boolean) => {
-      dispatch({ type: "confirmation_pending", scenarioId: card.scenarioId });
-      try {
-        await adapter.confirmRun({
-          projectId,
-          scenarioId: card.scenarioId,
-          reason: card.reason,
-          approved,
-        });
+  const act = useCallback(
+    async (card: DiffCard, action: CardAction, confirmBudget?: boolean) => {
+      dispatch({ type: "card_action", proposalId: card.proposalId, action });
+      // The runtime checks the action against the proposal's own base scenario.
+      const ok = await startTurn({
+        message: ACTION_MESSAGE[action](card.title),
+        context: contextFor(card.baseScenarioId),
+        proposalAction: {
+          proposalId: card.proposalId,
+          action,
+          ...(action === "run" && confirmBudget ? { confirmBudget } : {}),
+        },
+      });
+      if (!ok) {
         dispatch({
-          type: "confirmation_resolved",
-          scenarioId: card.scenarioId,
+          type: "card_action_failed",
+          proposalId: card.proposalId,
+          message: "That decision wasn't saved. Try again.",
         });
-      } catch (error) {
-        dispatch({ type: "confirmation_failed", scenarioId: card.scenarioId });
-        setSendError(messageOf(error, "Your answer wasn't sent."));
+        return;
       }
+      if (action === "revert") await saveRevertVersion(card);
     },
-    [adapter, projectId],
+    [contextFor, saveRevertVersion, startTurn],
   );
 
-  const value = useMemo<CopilotContextValue>(
-    () => ({
-      projectId,
-      state,
-      runtime: adapter.status,
-      scenarios,
-      sendError,
-      send,
-      keep: (card) => dispatch({ type: "keep", callId: card.callId }),
-      revert,
-      confirm,
-      setActiveScenario: (scenarioId) =>
-        dispatch({ type: "set_active_scenario", scenarioId }),
-      setExpanded: (expanded) => dispatch({ type: "set_expanded", expanded }),
-      reloadScenarios: () => setScenarioRequest((n) => n + 1),
-    }),
-    [
-      projectId,
-      state,
-      adapter.status,
-      scenarios,
-      sendError,
-      send,
-      revert,
-      confirm,
-    ],
+  const confirm = useCallback(
+    async (confirmation: ConfirmationCard) => {
+      const card = latest.current.state.cards.find(
+        (c) => c.proposedScenarioId === confirmation.scenarioId,
+      );
+      if (!card) {
+        dispatch({
+          type: "turn_failed",
+          message:
+            "That run isn't linked to a proposal in this dock. Ask the copilot to propose it again.",
+        });
+        return;
+      }
+      await act(card, "run", confirmation.reason === "project_budget");
+    },
+    [act],
   );
+
+  const resume = useCallback(async () => {
+    const turn = latest.current.state.turn;
+    if (!turn?.resumable) return;
+    // Advance must resend the paused turn's exact context.
+    await stream(() =>
+      copilot.advance(projectId, turn.turnId, turn.context, onEvent),
+    );
+  }, [copilot, onEvent, projectId, stream]);
+
+  // The provider re-renders only when its own state changes, so no extra memo.
+  const value: CopilotContextValue = {
+    projectId,
+    state,
+    runtime,
+    scenarios,
+    busy,
+    send,
+    act: (card, action) => act(card, action),
+    confirm,
+    resume,
+    retryRevertVersion: saveRevertVersion,
+    setActiveScenario: (scenarioId) =>
+      dispatch({ type: "set_active_scenario", scenarioId }),
+    setExpanded: (expanded) => dispatch({ type: "set_expanded", expanded }),
+    dismissNotice: () => dispatch({ type: "dismiss_notice" }),
+    reload: () => {
+      setRuntimeOverride(null);
+      setReloads((n) => n + 1);
+    },
+  };
 
   return (
     <CopilotContext.Provider value={value}>{children}</CopilotContext.Provider>
