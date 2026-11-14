@@ -27,4 +27,11 @@
 - [x] `pnpm build`: passed. Historical a0ce767 absent-capacity JSON SHA-256 remains `cf515f65a0c19792780c3db845bbbe7627b8576ebd49e4b7d2a431426cdb74cb`.
 - [x] `pnpm lint`, `pnpm typecheck` and `git diff --check`: passed.
 
-Manager owns the final review and any remote delivery. No layout table, scenario FK, scan-to-layout adapter, scenario evaluation wiring or externally visible layout endpoint was added. The pure model is ready for those downstream integrations; the broader ticket remains In Development.
+## Persistence and execution completion
+
+Manager authorized project-scoped immutable layout persistence, reserved migration 0005 after the stable HAC-96 migration 0004, and a pure scenario execution configuration adapter. No layout editor, new auth policy, remote database writes or deployment is included.
+
+- [x] Add `applyLayoutToConfig(layout, config, { plannedStationsOverride? })`; selected layout overrides station and queue capacity, conflicting explicit station overrides fail with structured errors.
+- [x] Add server-only repository `insert(projectId, layout)` and `get(projectId, layoutId)`, validating stored geometry on both boundaries. Scoped parent FK protects project and site; scenario FK protects project. No update API; database rejects in-place updates. `loadLayoutDiffHook` preloads project-scoped snapshots for synchronous scenario diffs.
+- [x] Generate 0005 after stacking HAC-96, preserving earlier migration history. Fresh local PG17 migration/repository and adapter tests: 9 passed, covering cross-project/site references, ID conflicts, immutable updates, scoped reads, scenario FK and diff preloading. `pnpm lint`, `pnpm typecheck`, `drizzle-kit check` pass.
+- [ ] Update model integration docs and run the four checks against the final stacked candidate. Manager reviews and handles remote PR delivery.
