@@ -246,7 +246,12 @@ export async function fetchPublicData(options: {
   acsSource?: "api" | "summary";
   censusOnly?: boolean;
   databaseUrl?: string;
+  /** Rows per INSERT. Defaults suit local Postgres; small hosted computes need fewer. */
+  batchSizes?: { blockGroups?: number; jobs?: number; places?: number };
 }) {
+  const bgBatch = options.batchSizes?.blockGroups ?? 100;
+  const jobsBatch = options.batchSizes?.jobs ?? 500;
+  const placesBatch = options.batchSizes?.places ?? 500;
   if (options.censusOnly && options.databaseUrl)
     throw new Error(
       "Census-only preparation cannot replace database source tables",
@@ -399,9 +404,9 @@ export async function fetchPublicData(options: {
       await tx.execute(
         sql`TRUNCATE public_places, public_jobs, public_block_groups`,
       );
-      for (let offset = 0; offset < acsRows.length; offset += 100) {
+      for (let offset = 0; offset < acsRows.length; offset += bgBatch) {
         const batch = acsRows
-          .slice(offset, offset + 100)
+          .slice(offset, offset + bgBatch)
           .map(({ row, geometry }) => ({
             ...row,
             geom: sql`ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry.geometry)}),4326))`,
@@ -448,7 +453,7 @@ export async function fetchPublicData(options: {
             },
           });
           counts.jobBlocks++;
-          if (batch.length >= 500) {
+          if (batch.length >= jobsBatch) {
             await tx.insert(publicJobs).values(batch);
             batch.length = 0;
           }
@@ -491,7 +496,7 @@ export async function fetchPublicData(options: {
             const place = normalizePlace(JSON.parse(line) as Json, file.source);
             if (!place) continue;
             batch.push(place);
-            if (batch.length >= 500) await flushPlaces();
+            if (batch.length >= placesBatch) await flushPlaces();
           }
           await flushPlaces();
           requireSourceCoverage(previousPlaces, counts.places, file.path);
