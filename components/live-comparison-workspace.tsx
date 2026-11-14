@@ -10,23 +10,45 @@ import {
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { LiveComparisonScreen } from "@/components/comparison/live-comparison-screen";
 import { LiveReplayScreen } from "@/components/replay/live-replay-screen";
+import { ConsultantPanel } from "@/components/ConsultantPanel";
 
 export function ComparisonWorkspace({
   project,
   comparisonId,
+  investigationId,
   example,
 }: {
   project: PreviewProject;
   comparisonId?: string;
+  investigationId?: string;
   example: ReactNode;
 }) {
   const controller = useLiveComparison(project.id, comparisonId);
   return (
-    <LiveComparisonScreen
-      project={project}
-      controller={controller}
-      example={example}
-    />
+    <>
+      <LiveComparisonScreen
+        project={project}
+        controller={controller}
+        example={example}
+      />
+      <ConsultantPanel
+        investigationId={investigationId}
+        projectId={project.id}
+        cashContextStale={
+          controller.phase === "loading" ||
+          controller.phase === "running" ||
+          Boolean(controller.payload?.outdated)
+        }
+        profile={
+          controller.payload
+            ? {
+                id: controller.payload.result.profileId,
+                version: controller.payload.result.profileVersion,
+              }
+            : undefined
+        }
+      />
+    </>
   );
 }
 
