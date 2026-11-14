@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { replayAt } from "../replay/replay-state";
+import { interiorFrame } from "./interior-state";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
 import { glass } from "./glass";
@@ -27,13 +27,13 @@ function clock(minute: number) {
 
 /** The bundled fixture's copy, labelled as an example (HAC-63). */
 export const EXAMPLE_STORY: SimulatorStory = {
-  eyebrow: "Example · Houston coffee shop",
-  title: "Does a second station pay off?",
+  eyebrow: "BizBox · Toy data · Houston coffee shop",
+  title: "Does a second staffed counter pay off?",
   intro: "",
-  scenarioLabels: ["Current", "Alternative"],
+  scenarioLabels: ["One staffed counter", "Two staffed counters"],
   compare: true,
   footnote:
-    "Example data, not a researched property: 110 generated customers at a fixture site. Illustrative block and vehicles. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
+    "Example data, not a researched property: 110 generated customers at a fixture site. Modeled layout, not a Matterport scan. Dot travel paths are illustrative two-minute entry/exit animations, not measured walking or collision simulation. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
 };
 
 export function SimulatorDemo({
@@ -53,11 +53,13 @@ export function SimulatorDemo({
   const end = coordinates ? 1440 : closeMin;
   const [minute, setMinute] = useState(coordinates ? 360 : openMin);
   const [playing, setPlaying] = useState(false);
+  // Both views share a clock; the controller that starts it chooses its stop.
+  const [playbackEnd, setPlaybackEnd] = useState(end);
   const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
   const [quality, setQuality] = useState<RenderQuality>("balanced");
-  const running = playing && minute < end;
+  const running = playing && minute < playbackEnd;
 
   useEffect(() => {
     if (!running) return;
@@ -77,7 +79,7 @@ export function SimulatorDemo({
         committed = now - ((now - committed) % playbackFrameInterval);
         setMinute((value) =>
           Math.min(
-            end,
+            playbackEnd,
             value + (elapsedForFrame * speed) / (coordinates ? 55 : 125),
           ),
         );
@@ -97,9 +99,17 @@ export function SimulatorDemo({
       cancelAnimationFrame(request);
       document.removeEventListener("visibilitychange", resumeWhenVisible);
     };
-  }, [running, end, speed, coordinates]);
+  }, [running, playbackEnd, speed, coordinates]);
 
-  const arrivals = replayAt(data[0].run.events, minute).arrivals;
+  const customerIds = [
+    ...new Set(
+      data.flatMap(({ run }) =>
+        run.events
+          .filter((event) => event.type === "arrival")
+          .map((event) => event.customerId),
+      ),
+    ),
+  ];
   const [base, alternative] = data;
   const gain = alternative
     ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
@@ -141,6 +151,7 @@ export function SimulatorDemo({
             speed={speed}
             onSpeed={setSpeed}
             onToggle={() => {
+              setPlaybackEnd(end);
               if (minute >= end) setMinute(start);
               setPlaying(!running);
             }}
@@ -180,7 +191,7 @@ export function SimulatorDemo({
           </h1>
           <p className="mt-4 text-white/50 text-pretty">
             {story.intro ||
-              `Same 110 customers, same draws. One extra staffed station and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
+              `Same 110 customers and service-time draws. One extra employee, one extra counter and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
           </p>
         </header>
 
@@ -224,10 +235,34 @@ export function SimulatorDemo({
           ))}
         </ul>
 
-        <div className="sticky top-4 z-20 mt-12 flex flex-wrap items-center gap-2">
+        <div
+          className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/65"
+          aria-label="Dot legend"
+        >
+          <span className="flex items-center gap-2">
+            <span aria-hidden className="size-3 rounded-full bg-blue-400" />
+            Customer
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-3 rounded-full bg-purple-400 ring-2 ring-white/80 ring-offset-2 ring-offset-[#10141b]"
+            />
+            Employee · ring
+          </span>
+          <span>White outline · selected customer</span>
+        </div>
+        <p className="mt-3 max-w-2xl text-xs leading-relaxed text-white/50">
+          Customers approach the same shop, queue, receive service and leave.
+          Employee dots mark staffed counters; movement paths illustrate replay
+          events. Adding furniture without staffing does not add modeled service
+          capacity.
+        </p>
+
+        <div className="sticky top-4 z-20 mt-8 flex flex-wrap items-center gap-2">
           <Timeline
             label="Shared playback"
-            className="min-w-0 flex-1"
+            className="min-w-0 basis-full sm:flex-1 sm:basis-auto"
             minute={shopMinute}
             min={openMin}
             max={closeMin}
@@ -237,6 +272,7 @@ export function SimulatorDemo({
             speed={speed}
             onSpeed={setSpeed}
             onToggle={() => {
+              setPlaybackEnd(closeMin);
               if (minute >= closeMin || minute < openMin) {
                 setMinute(openMin);
                 setPlaying(true);
@@ -251,29 +287,54 @@ export function SimulatorDemo({
           />
           <button
             type="button"
+            aria-label="Reset shared playback"
+            onClick={() => {
+              setPlaying(false);
+              setPlaybackEnd(closeMin);
+              setMinute(openMin);
+              select("");
+            }}
+            className={`${glass} min-h-11 rounded-full px-4 text-sm text-white/70 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white`}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
             aria-pressed={cutaway}
             onClick={() => setCutaway(!cutaway)}
-            className={`${glass} self-stretch rounded-full px-5 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
+            className={`${glass} min-h-11 self-stretch rounded-full px-4 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
           >
             Focus on shop
           </button>
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {data.map(({ run, monthly }, index) => {
-            const frame = replayAt(run.events, minute);
+          {data.map(({ run, monthly, staffing }, index) => {
+            const frame = interiorFrame(run, minute, staffing?.headcount);
             const customer = frame.arrivals.get(selected);
             return (
-              <section key={index} className={`${glass} p-2`}>
-                <header className="flex items-baseline justify-between px-4 pt-3 pb-3">
+              <section
+                key={index}
+                aria-label={
+                  story.scenarioLabels[index] ?? `Scenario ${index + 1}`
+                }
+                className={`${glass} min-w-0 p-2`}
+              >
+                <header className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-3 pb-3">
                   <h2 className="font-medium">
                     {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
                   </h2>
                   <span className="text-xs text-white/40">
                     {run.metrics.stations}{" "}
-                    {run.metrics.stations === 1 ? "station" : "stations"}
+                    {run.metrics.stations === 1 ? "counter" : "counters"}
+                    {staffing
+                      ? ` · ${staffing.headcount} ${staffing.headcount === 1 ? "employee" : "employees"}`
+                      : " · staffing unavailable"}
                   </span>
                 </header>
+                <p className="px-4 pb-2 text-[11px] font-medium tracking-wide text-white/50">
+                  Modeled layout
+                </p>
                 <div
                   className="h-72 overflow-hidden rounded-xl bg-black/20"
                   aria-label="Modeled block and café"
@@ -285,14 +346,27 @@ export function SimulatorDemo({
                     cutaway={cutaway}
                     selected={selected}
                     select={select}
+                    employeeCount={staffing?.headcount}
                   />
                 </div>
-                <div className="grid grid-cols-3 px-4 pt-5 pb-1">
+                <dl className="grid grid-cols-2 gap-4 px-4 pt-5 pb-1 sm:grid-cols-4">
                   <Live label="Served" value={frame.served} />
                   <Live label="Waiting" value={frame.waiting.length} />
                   <Live label="Left" value={frame.left} warn={frame.left > 0} />
-                </div>
+                  <Live
+                    label="Busy counters"
+                    value={`${frame.serving.length}/${run.metrics.stations}`}
+                  />
+                </dl>
                 <dl className="space-y-2 px-4 pt-4 pb-4 text-sm">
+                  <Row
+                    label="Avg wait to service so far"
+                    value={
+                      frame.meanWaitMin === null
+                        ? "No service starts yet"
+                        : `${frame.meanWaitMin.toFixed(1)} min`
+                    }
+                  />
                   <Row
                     label="Day-end"
                     value={`${run.metrics.served} served · ${run.metrics.abandoned} left`}
@@ -302,17 +376,72 @@ export function SimulatorDemo({
                     value={usd.format(monthly.revenueUsd)}
                   />
                   <Row
+                    label="Labor / month"
+                    value={usd.format(monthly.costs.laborUsd)}
+                  />
+                  <Row
                     label="After costs"
                     value={usd.format(monthly.contributionUsd)}
                     strong
                   />
                 </dl>
+                <p className="px-4 pb-4 text-[11px] leading-relaxed text-white/45">
+                  Wait averages customers who have started service by this
+                  minute, including those still being served. Served and left
+                  are cumulative; waiting and busy counters are current.
+                </p>
+                {staffing && (
+                  <div
+                    className="flex flex-wrap gap-2 px-4 pb-4"
+                    aria-label="Employee inspection"
+                  >
+                    {Array.from(
+                      {
+                        length: Math.min(
+                          staffing.headcount,
+                          run.metrics.stations,
+                        ),
+                      },
+                      (_, employee) => (
+                        <button
+                          key={employee}
+                          type="button"
+                          aria-label={`Inspect employee ${employee + 1}`}
+                          aria-pressed={selected === `employee-${employee + 1}`}
+                          onClick={() => select(`employee-${employee + 1}`)}
+                          className="min-h-11 rounded-full border border-purple-300/25 px-3 text-xs text-purple-200 hover:bg-purple-300/10 focus-visible:outline-2 focus-visible:outline-purple-200"
+                        >
+                          Employee {employee + 1} · counter {employee + 1}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
                 {selected && (
-                  <p className="mx-2 mb-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-white/50">
-                    <span className="text-white/80">{selected}</span> ·{" "}
-                    {customer
-                      ? `${customer.lineLength} in line · ${Math.round(customer.stayProbability * 100)}% join · ${customer.decision === "join" ? "joined" : "left"}`
-                      : "not arrived yet"}
+                  <p
+                    role="status"
+                    aria-label="Person inspection"
+                    className="mx-2 mb-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-white/60"
+                  >
+                    <span className="text-white/90">
+                      {selected.startsWith("employee-")
+                        ? `Employee ${selected.slice(9)}`
+                        : selected}
+                    </span>{" "}
+                    ·{" "}
+                    {selected.startsWith("employee-")
+                      ? frame.employees.some(
+                          (employee) => employee.id === selected,
+                        )
+                        ? `staffing counter ${selected.slice(9)} · stationary role marker`
+                        : staffing &&
+                            Number(selected.slice(9)) <=
+                              Math.min(staffing.headcount, run.metrics.stations)
+                          ? "off shift · shop closed"
+                          : "not staffed in this scenario"
+                      : customer
+                        ? `${frame.customers.find((dot) => dot.id === selected)?.state ?? (customer.decision === "leave" ? "left" : "departed")} · ${customer.lineLength} in line on arrival · ${Math.round(customer.stayProbability * 100)}% join · ${customer.decision === "join" ? "joined" : "left"}`
+                        : "not arrived yet"}
                   </p>
                 )}
               </section>
@@ -324,13 +453,11 @@ export function SimulatorDemo({
           <select
             aria-label="Inspect a customer"
             className={`${glass} cursor-pointer rounded-full px-4 py-2 text-sm text-white/70 outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&>option]:bg-[#11141b]`}
-            value={arrivals.has(selected) ? selected : ""}
+            value={customerIds.includes(selected) ? selected : ""}
             onChange={(event) => select(event.target.value)}
           >
-            <option value="">
-              {arrivals.size ? "Inspect a customer" : "No arrivals yet"}
-            </option>
-            {[...arrivals.keys()].map((id) => (
+            <option value="">Inspect a customer</option>
+            {customerIds.map((id) => (
               <option key={id}>{id}</option>
             ))}
           </select>
@@ -483,17 +610,17 @@ function Live({
   warn,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   warn?: boolean;
 }) {
   return (
-    <div>
-      <p
-        className={`text-2xl font-semibold tabular-nums ${warn ? "text-rose-300" : ""}`}
+    <div className="flex flex-col">
+      <dt className="order-2 text-[11px] text-white/40">{label}</dt>
+      <dd
+        className={`order-1 text-2xl font-semibold tabular-nums ${warn ? "text-rose-300" : ""}`}
       >
         {value}
-      </p>
-      <p className="text-[11px] text-white/40">{label}</p>
+      </dd>
     </div>
   );
 }
