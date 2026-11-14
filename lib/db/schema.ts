@@ -9,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -22,14 +23,20 @@ import type {
   SiteComparison,
   SiteRun,
 } from "../contracts";
+import type {
+  InvestigationJob,
+  InvestigationMilestone,
+} from "../contracts/investigations";
+import type { StoredEvaluation } from "../evaluation/store";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 export const investigationStatus = pgEnum("investigation_status", [
   "queued",
   "running",
-  "completed",
+  "succeeded",
   "failed",
+  "interrupted",
 ]);
 
 export const projects = pgTable("projects", {
@@ -141,6 +148,8 @@ export const comparisons = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     profileId: text("profile_id").notNull(),
     data: jsonb("data").$type<SiteComparison>().notNull(),
+    /** HAC-22: request (with cached behavior tables), full result and sensitivity, for exact reruns. */
+    evaluation: jsonb("evaluation").$type<StoredEvaluation>(),
     createdAt: createdAt(),
   },
   (t) => [
@@ -215,6 +224,21 @@ export const investigations = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default({}),
+    attempt: integer("attempt").notNull().default(1),
+    limits: jsonb("limits")
+      .$type<InvestigationJob["limits"]>()
+      .notNull()
+      .default({ toolCalls: 25, pollCustomers: 3, evaluateSites: 3 }),
+    counters: jsonb("counters")
+      .$type<InvestigationJob["counters"]>()
+      .notNull()
+      .default({ toolCalls: 0, pollCustomers: 0, evaluateSites: 0 }),
+    findings: jsonb("findings").$type<string[]>().notNull().default([]),
+    lastAdvanceAt: timestamp("last_advance_at", { withTimezone: true }),
+    reason: text("reason"),
+    revision: integer("revision").notNull().default(0),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -228,6 +252,30 @@ export const investigations = pgTable(
     }).onDelete("cascade"),
     index("investigations_profile_idx").on(t.projectId, t.profileId),
     index("investigations_queue_idx").on(t.projectId, t.status, t.createdAt),
+    check("investigations_attempt_positive", sql`${t.attempt} > 0`),
+    check("investigations_revision_nonnegative", sql`${t.revision} >= 0`),
+  ],
+);
+
+export const investigationMilestones = pgTable(
+  "investigation_milestones",
+  {
+    investigationId: text("investigation_id")
+      .notNull()
+      .references(() => investigations.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    seq: integer("seq").notNull(),
+    tool: text("tool").notNull(),
+    inputHash: text("input_hash").notNull(),
+    summary: jsonb("summary")
+      .$type<InvestigationMilestone["summary"]>()
+      .notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.investigationId, t.attempt, t.seq] }),
+    check("investigation_milestones_attempt_positive", sql`${t.attempt} > 0`),
+    check("investigation_milestones_seq_nonnegative", sql`${t.seq} >= 0`),
   ],
 );
 

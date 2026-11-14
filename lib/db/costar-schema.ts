@@ -36,6 +36,14 @@ export const costarProperties = pgTable(
   ],
 );
 
+/** HAC-59: slim per-property projection for site search (see scripts/costar-property-search.sql). */
+export const costarPropertySearch = pgTable("costar_property_search", {
+  propertyId: text("property_id")
+    .primaryKey()
+    .references(() => costarProperties.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+});
+
 export const costarSpaces = pgTable(
   "costar_spaces",
   {

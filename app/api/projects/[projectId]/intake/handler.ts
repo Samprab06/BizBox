@@ -3,9 +3,10 @@ import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
   INTAKE_TIMEOUT_MS,
-  runConfiguredIntakeAgent,
+  loadIntakeRunner,
+  ModelRuntimeUnavailableError,
   type IntakeRunner,
-} from "@/lib/agent/runner";
+} from "@/lib/agent/runtime-loader";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const projectIdSchema = z.string().trim().min(1).max(200);
@@ -117,16 +118,55 @@ export function createIntakeHandler(dependencies: Dependencies) {
           onAbort = () => reject(new Error("Intake deadline exceeded"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
+        // The agent SDK loads only here, so validation never depends on it (HAC-58).
+        const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
         assistantMessage = await Promise.race([
-          (dependencies.runAgent ?? runConfiguredIntakeAgent)({
+          runAgent({
             session,
             message: input.message,
             signal,
           }),
           aborted,
         ]);
-      } catch {
-        return unavailable();
+      } catch (error) {
+        if (error instanceof ModelRuntimeUnavailableError)
+          return json(
+            {
+              code: "MODEL_RUNTIME_UNAVAILABLE",
+              message:
+                "The intake model runtime could not load. Structured profile edits still work.",
+              field_errors: {},
+              detail: error.detail,
+            },
+            503,
+          );
+        // Operator diagnostic from enumerated fields only (class, HTTP status, provider
+        // error code); never the provider's message text.
+        const e = (error ?? {}) as {
+          name?: unknown;
+          status?: unknown;
+          code?: unknown;
+        };
+        const detail = [
+          typeof e.name === "string" && /^[A-Za-z]{1,40}$/.test(e.name)
+            ? e.name
+            : "Error",
+          typeof e.status === "number" ? `HTTP ${e.status}` : null,
+          typeof e.code === "string" && /^[a-z_]{3,40}$/.test(e.code)
+            ? e.code
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return json(
+          {
+            code: "INTAKE_UNAVAILABLE",
+            message: "Intake is temporarily unavailable. Please try again.",
+            field_errors: {},
+            detail,
+          },
+          503,
+        );
       } finally {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
