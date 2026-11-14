@@ -39,6 +39,6 @@ The health route exports `maxDuration = 10` seconds. The actual Vercel project's
 
 ## Shared data and ownership
 
-Shared Zod contracts live in `lib/contracts/`, database tables in `lib/db/schema.ts`, and explicitly synthetic examples in `fixtures/`. See `docs/tickets/HAC-9/contracts.md` for schema choices and fixture usage once integrated. Assumed values retain units, origin and evidence links; missing values are explicit unknowns, not zero. Synthetic defaults do not establish actual property availability or a revenue forecast.
+Shared Zod contracts live in `lib/contracts/`, database tables in `lib/db/schema.ts`, and explicitly synthetic examples in `fixtures/`. See `docs/tickets/HAC-9/contracts.md` for schema choices and fixture usage. Assumed values retain units, origin and evidence links; missing values are explicit unknowns, not zero. Synthetic defaults do not establish actual property availability or a revenue forecast.
 
 Keep package/config and contract changes coordinated with Akshar. Yasser owns product pages/components, Samridh owns property/public data, and Frank owns panel/demand/simulation work under their respective tickets. See [the HAC-9 spec](docs/tickets/HAC-9/spec.md) and [implementation plan](docs/tickets/HAC-9/plan.md) for bootstrap boundaries and checks.

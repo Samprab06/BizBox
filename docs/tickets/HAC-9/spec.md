@@ -16,7 +16,7 @@ Provide the shared Next.js foundation, versioned Postgres schema, provenance-awa
 
 - Strict TypeScript App Router with Tailwind, ESLint, Prettier, Vitest, pnpm, and exact dependency versions including JavaScript `deepagents`.
 - Zod schemas for all ten ticket entities. Assumed values carry `value`, `unit`, `origin`, and `evidenceIds`; unknowns are explicit. Fixtures are synthetic, not sponsor findings or real customer data.
-- Ten foundational tables, immutable/versioned profile snapshots, JSONB event storage, appropriate project relationships and indexes, plus a reviewable PostGIS-enabling first migration. Sponsor data tables remain owned by later tickets.
+- Ten foundational tables, versioned profile snapshots, JSONB event storage, appropriate project relationships and indexes, plus a reviewable PostGIS-enabling first migration. Callers append snapshots rather than updating prior versions; this bootstrap does not introduce an immutability trigger. Sponsor data tables remain owned by later tickets.
 - `GET /api/health` is uncached: return 200 for a reachable database with PostGIS, or a sanitized 503 JSON error when missing/unavailable. Do not expose URLs, credentials, raw provider errors, or imply unavailable data is healthy.
 - No persistent runtime files. Database configuration is server-only; missing credentials must not prevent an offline build.
 
