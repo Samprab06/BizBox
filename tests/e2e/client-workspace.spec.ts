@@ -72,8 +72,8 @@ for (const viewport of [
         locations.getByRole("button", { name: "View 101 Invented St" }),
       ).toBeVisible();
       await expect(
-        page.getByText("Matched listing", { exact: true }),
-      ).toBeVisible();
+        page.getByRole("region", { name: "Selected location" }),
+      ).toContainText("101 Invented St");
       await expect(
         page.getByText("City preview · photo, not a map"),
       ).toHaveCount(0);
@@ -93,7 +93,10 @@ for (const viewport of [
         .getByRole("button", { name: "View interior", exact: true })
         .click();
       await expect(
-        page.getByText("No matched scan available", { exact: true }),
+        page.getByRole("heading", {
+          name: "Interior unavailable",
+          exact: true,
+        }),
       ).toBeVisible();
       await expect(composer).toHaveValue("Keep this question while I explore");
       await page.getByRole("tab", { name: "Voice", exact: true }).click();
@@ -115,8 +118,12 @@ for (const viewport of [
         page.getByRole("region", { name: "Location comparison results" }),
       ).toBeVisible();
       expect(posts).toEqual([["201:301", "202:302"]]);
+      await page
+        .getByRole("region", { name: "Location comparison results" })
+        .getByText("Details", { exact: true })
+        .click();
       await expect(
-        page.getByText("Huff fallback", { exact: false }),
+        page.getByText("Modeled estimates · Huff fallback.", { exact: false }),
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: /Run baseline/ }),
@@ -178,7 +185,7 @@ test("only a matching non-demo registry scan can mount the Matterport view", asy
     page.locator('iframe[title="Matterport interior for 101 Invented St"]'),
   ).toHaveAttribute("src", /my\.matterport\.com\/show\/\?m=TestScan001/);
   await expect(
-    page.getByText("Matched space interior", { exact: true }),
+    page.getByText("Interior details", { exact: true }),
   ).toBeVisible();
 });
 
@@ -189,9 +196,7 @@ test("unavailable inventory never substitutes example properties", async ({
   await page.route("**/api/sites", (r) => r.fulfill({ status: 503, json: {} }));
   await page.goto("/projects/houston-coffee/workspace");
   await expect(
-    page.getByText(
-      "No verified spaces are available for this brief right now.",
-    ),
+    page.getByText("No spaces available", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("group", { name: "Matching locations" }),

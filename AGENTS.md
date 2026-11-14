@@ -1,5 +1,12 @@
 # HackPrinceton: rules for every agent
 
+## Akshar's current UI scope
+
+This project is desktop-only. As explicitly directed on 2026-11-14, skip phone/mobile
+layout work, phone-specific polish, screenshots and QA unless Akshar asks to resume it.
+Keep existing responsive behavior; do not remove it or change shared CI solely because
+of this preference. Prioritize the desktop experience across all project UI work.
+
 Read this whole file before doing anything. It is the contract between every agent on
 this project.
 

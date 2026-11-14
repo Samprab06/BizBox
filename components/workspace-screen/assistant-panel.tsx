@@ -73,11 +73,7 @@ function Conversation({
       tabIndex={0}
       className={`${styles.conversation} ${focusRing}`}
     >
-      {count === 0 ? (
-        <p className={styles.conversationEmpty}>
-          What would you like to work through?
-        </p>
-      ) : (
+      {count > 0 && (
         <ol className={styles.messages}>
           {conversation.messages.map((entry, index) => (
             <li
@@ -158,17 +154,17 @@ export function AssistantPanel({
   return (
     <aside aria-labelledby={`${base}-heading`} className={styles.assistant}>
       <header className={styles.assistantHeader}>
-        <div className={styles.assistantHeading}>
-          <h2 id={`${base}-heading`} className={styles.assistantTitle}>
-            Assistant
-          </h2>
-          <span
-            className={styles.assistantStatus}
-            title="Connection to the existing BizBox intake assistant"
-          >
-            {status}
-          </span>
-        </div>
+        <h2 id={`${base}-heading`} className="sr-only">
+          Assistant
+        </h2>
+        <span
+          className="sr-only"
+          data-agent-availability={availability}
+          role="status"
+          aria-label="Assistant connection"
+        >
+          {status}
+        </span>
         <div
           role="tablist"
           aria-label="Assistant mode"
@@ -196,9 +192,6 @@ export function AssistantPanel({
           ))}
         </div>
       </header>
-      <p className={styles.assistantScope}>
-        Ask about your brief. Use the comparison controls to explore locations.
-      </p>
 
       {failure && (
         <div role="alert" className={styles.assistantFailure}>
@@ -275,7 +268,7 @@ export function AssistantPanel({
               </div>
               {offline && (
                 <p className={styles.assistantOffline}>
-                  The assistant is offline. You can still edit your brief.
+                  Assistant unavailable.
                 </p>
               )}
             </form>
@@ -298,6 +291,7 @@ export function AssistantPanel({
                 title="Talk to BizBox"
                 label="Voice assistant"
                 tone="dark"
+                compact
                 className={styles.voiceSurface}
               />
             </div>

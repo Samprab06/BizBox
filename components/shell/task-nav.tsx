@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   nextStep,
   taskForRoute,
@@ -17,12 +18,16 @@ export function TaskNav({
   route,
   siteId,
   compact = false,
+  disclosureLabel,
+  footer,
 }: {
   projectId: string;
   route: WorkspaceRoute;
   siteId?: string;
   /** Decision pages keep the complete grouped navigation in a native disclosure. */
   compact?: boolean;
+  disclosureLabel?: string;
+  footer?: ReactNode;
 }) {
   const currentTask = taskForRoute(route);
   const next = nextStep(route);
@@ -96,12 +101,15 @@ export function TaskNav({
       {compact ? (
         <details>
           <summary className="cursor-pointer rounded text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-pine">
-            Workspace tasks · {currentTask.label}
+            {disclosureLabel ?? `Workspace tasks · ${currentTask.label}`}
             <span className="mt-1 block text-xs font-normal text-muted">
               {workspaceTasks.map((task) => task.label).join(" · ")}
             </span>
           </summary>
-          <div className="mt-3">{content}</div>
+          <div className="mt-3">
+            {content}
+            {footer}
+          </div>
         </details>
       ) : (
         content

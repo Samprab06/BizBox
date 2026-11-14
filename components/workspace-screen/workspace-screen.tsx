@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
 import { TaskNav } from "@/components/shell/task-nav";
@@ -74,6 +75,15 @@ export function WorkspaceScreen({
             route="workspace"
             siteId={selected?.candidate.id ?? siteId ?? project?.sites[0]?.id}
             compact
+            disclosureLabel="Views"
+            footer={
+              <Link
+                href="/workspace/credits.html"
+                className="mt-4 inline-block text-xs underline"
+              >
+                Photo credits
+              </Link>
+            }
           />
         )
       }

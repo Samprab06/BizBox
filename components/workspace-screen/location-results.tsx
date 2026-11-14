@@ -29,16 +29,8 @@ export function LocationResults({
       aria-label="Location comparison results"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2>Compare locations</h2>
-        <span className={styles.badge}>
-          Modeled ·{" "}
-          {payload.result.demandSource === "jev" ? "Jev" : "Huff fallback"}
-        </span>
+        <h2>Location comparison</h2>
       </div>
-      <p className={styles.muted}>
-        Same business brief. Estimates reflect the saved assumptions; they are
-        not measured foot traffic.
-      </p>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">
@@ -47,8 +39,8 @@ export function LocationResults({
           <thead>
             <tr>
               <th scope="col">Location</th>
-              <th scope="col">Customers / month</th>
-              <th scope="col">Contribution / month</th>
+              <th scope="col">Est. customers / mo</th>
+              <th scope="col">Est. contribution / mo</th>
               <th scope="col">Wait</th>
             </tr>
           </thead>
@@ -59,11 +51,6 @@ export function LocationResults({
               const candidate = candidates.find(
                 (s) => s.candidate.id === id,
               )?.candidate;
-              const label = siteDemandLabel(
-                payload.result,
-                result,
-                payload.result.sites,
-              );
               return (
                 <tr key={id}>
                   <th scope="row">
@@ -73,9 +60,6 @@ export function LocationResults({
                     >
                       {candidate?.address ?? "Saved location"}
                     </button>
-                    {label && (
-                      <span className="block text-xs font-normal">{label}</span>
-                    )}
                   </th>
                   <td>
                     {count(result.monthlyServedCustomers.mean)}
@@ -99,10 +83,11 @@ export function LocationResults({
         </table>
       </div>
       <details>
-        <summary className="cursor-pointer text-xs">
-          Sources and assumptions
-        </summary>
+        <summary className="cursor-pointer text-xs">Details</summary>
         <p className="mt-2 text-xs">
+          Modeled estimates ·{" "}
+          {payload.result.demandSource === "jev" ? "Jev" : "Huff fallback"}. Not
+          measured foot traffic.{" "}
           {payload.result.fallbackReason ??
             "Demand uses the returned model source."}{" "}
           {payload.result.jevModelVersion &&
@@ -111,6 +96,21 @@ export function LocationResults({
           is separate.
         </p>
         <ul className="mt-2 list-disc pl-4 text-xs">
+          {payload.result.sites.map((site) => {
+            const label = siteDemandLabel(
+              payload.result,
+              site,
+              payload.result.sites,
+            );
+            const address = candidates.find(
+              (entry) => entry.candidate.id === site.siteId,
+            )?.candidate.address;
+            return label ? (
+              <li key={site.siteId}>
+                {address ?? "Saved location"}: {label}
+              </li>
+            ) : null;
+          })}
           {payload.assembly?.findings.map((finding, index) => (
             <li key={index}>{finding.message}</li>
           ))}

@@ -51,14 +51,13 @@ export function SelectedInterior({
   if (phase === "loading")
     return (
       <div className={styles.empty} role="status">
-        Finding the interior for this space…
+        Loading interior…
       </div>
     );
   if (phase === "failed")
     return (
       <div className={styles.empty}>
         <h2>Interior unavailable</h2>
-        <p>We couldn’t load the interior record for this space.</p>
         <button
           className={styles.secondary}
           onClick={() => {
@@ -83,26 +82,20 @@ export function SelectedInterior({
         <div
           className={`${styles.glass} absolute bottom-4 left-4 max-w-[calc(100%-2rem)] p-3 text-xs`}
         >
-          <strong>
-            {scan.provenance.scope === "space"
-              ? "Matched space interior"
-              : "Parent-building interior"}
-          </strong>
-          <p>{scan.provenance.description}</p>
-          {scan.provenance.scope === "property" && (
-            <p>Building scan; the selected suite’s layout is not verified.</p>
-          )}
+          <details>
+            <summary className="cursor-pointer">
+              {scan.provenance.scope === "space"
+                ? "Interior details"
+                : "Building scan · suite unverified"}
+            </summary>
+            <p className="mt-2">{scan.provenance.description}</p>
+          </details>
         </div>
       </>
     );
   return (
     <div className={styles.empty}>
-      <span className={styles.badge}>Selected space</span>
-      <h2>No matched scan available</h2>
-      <p>
-        {response?.provenance.description ??
-          "There isn’t a verified Matterport interior for this space yet."}
-      </p>
+      <h2>Interior unavailable</h2>
       {response?.kind === "floorplan" && (
         <a
           href={response.floorPlanUri}
@@ -110,13 +103,9 @@ export function SelectedInterior({
           rel="noreferrer"
           className={styles.secondary}
         >
-          Open listing floor plan
+          View floor plan
         </a>
       )}
-      <p className={styles.muted}>
-        You can still compare operating assumptions using the saved location
-        data.
-      </p>
     </div>
   );
 }

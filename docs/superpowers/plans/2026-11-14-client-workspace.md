@@ -23,4 +23,12 @@
 
 ## Component interface
 
-`WorkspaceShell({header, projectId, selectedSiteId?, navigation?, backdrop?, children, assistant})` takes `WorkspaceHeader` from existing model, ReactNode slots, and wraps one visualization area + persistent assistant. A single shared backdrop extends behind both panes. It exports scoped style classes: `viewport`, `viewToolbar`, `glass`, `primary`, `secondary`, `badge`, `candidates`, `candidate`, `selectedCandidate`, `details`, `comparison`, `notice`, `viewTabs`, `activeTab`, `muted`, `status`, `empty`, `toolbarActions`. Readability, restrained periwinkle accent, no green. Existing AssistantPanel props remain compatible.
+`WorkspaceShell({header, projectId, selectedSiteId?, navigation?, backdrop?, children, assistant})` takes `WorkspaceHeader` from existing model, ReactNode slots, and wraps one visualization area + persistent assistant. A single shared backdrop extends behind both panes. Scoped style classes include `viewport`, `viewToolbar`, `glass`, `primary`, `secondary`, `candidates`, `candidate`, `selectedCandidate`, `details`, `comparison`, `notice`, `viewTabs`, `muted`, `empty`, `toolbarActions`. Existing AssistantPanel props remain compatible. The corrected visual rules are recorded below.
+
+## User-directed UI correction
+
+The initial local-ready design at c6193df was rejected. Akshar explicitly selected the original onboarding's neutral smoked-glass visual system and narrowed this pass to UI only; there are no unresolved design questions. The existing service integration scope is frozen during this pass.
+
+- [x] Replace blue/periwinkle dashboard chrome with the actual onboarding palette, glass opacity, white controls, soft edge and type treatment; preserve the split scene/chat and existing city-photo atmosphere.
+- [x] Remove nested frames, visible status/source tags, repeated headings and explanatory prose; keep concise actions/statuses, keyboard names and evidence behind Details.
+- [x] Verify the resulting desktop appearance in the actual browser against onboarding, including Text/Voice and available/unavailable content. The final desktop-only Chromium run passed 60 cases with 2 existing skips; lint/typecheck/build and 1,364 unit tests passed for the isolated delivery source. Selected/results fixture captures are explicitly invented API test data. Original service gates and the existing build tracing warning are unchanged. Concurrent onboarding work and the interrupted prototype test remain excluded. Akshar explicitly stopped phone/mobile work project-wide during this pass; preserved existing responsive behavior and stopped further phone QA/polish. Saved the directive in project AGENTS.md and on HAC-6; separate memory-worker search/save failed, so no global-memory success is claimed.

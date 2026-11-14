@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 export function ProjectFrame({ children }: { children: ReactNode }) {
   const workspace = usePathname().endsWith("/workspace");
   return (
-    <div className={workspace ? "min-h-dvh bg-[#0c1019]" : undefined}>
+    <div className={workspace ? "min-h-dvh bg-[#101115]" : undefined}>
       {!workspace && (
         <header className="border-b border-line bg-white">
           <div className="mx-auto max-w-5xl px-5 py-5 sm:px-8">

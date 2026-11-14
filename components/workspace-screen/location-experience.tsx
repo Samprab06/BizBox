@@ -115,8 +115,7 @@ export function LocationExperience({
           <div className="pointer-events-auto max-h-[430px] overflow-y-auto">
             {running ? (
               <div className={styles.notice} role="status">
-                Comparing {selectedIds.length} locations using your business
-                brief. Results appear here when ready; no replay is required.
+                Comparing locations…
               </div>
             ) : payload ? (
               <LocationResults
@@ -130,8 +129,8 @@ export function LocationExperience({
             ) : (
               <div className={styles.notice} role="status">
                 {controller.phase === "example"
-                  ? "We couldn’t verify the comparison. Retry when the service is available."
-                  : "Select at least two locations, then compare them."}
+                  ? "Comparison unavailable. Try again."
+                  : "Select two locations to compare."}
               </div>
             )}
           </div>
@@ -144,9 +143,7 @@ export function LocationExperience({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <span className={styles.badge}>Matched listing</span>
-                <h2 className="mt-2">{selected.candidate.address}</h2>
-                <p className={styles.muted}>{selected.candidate.city}</p>
+                <h2>{selected.candidate.address}</h2>
               </div>
               <button
                 className={styles.secondary}
@@ -159,16 +156,11 @@ export function LocationExperience({
             </div>
             <dl>
               <div>
-                <dt>Monthly base rent</dt>
-                <dd>
-                  {metricText(selected.baseRentCents)}{" "}
-                  <span className="text-xs opacity-70">
-                    {selected.baseRentCents.origin}
-                  </span>
-                </dd>
+                <dt>Rent / month</dt>
+                <dd>{metricText(selected.baseRentCents)}</dd>
               </div>
               <div>
-                <dt>Listing area</dt>
+                <dt>Size</dt>
                 <dd>{metricText(selected.candidate.floorAreaSqFt)} sq ft</dd>
               </div>
             </dl>
@@ -184,6 +176,9 @@ export function LocationExperience({
               className="mt-3 text-xs"
             >
               <p>{selected.candidate.name}</p>
+              <p className="mt-2">
+                Rent source: {selected.baseRentCents.origin}
+              </p>
               {selected.flags.length > 0 && (
                 <p className="mt-2">{selected.flags.join(" · ")}</p>
               )}
@@ -191,7 +186,7 @@ export function LocationExperience({
                 className="mt-2 inline-block underline"
                 href={workspaceHref(projectId, "site", selected.candidate.id)}
               >
-                Listing details and evidence
+                Full details
               </Link>
             </div>
           </section>
@@ -205,7 +200,7 @@ export function LocationExperience({
             }
           >
             <summary className="cursor-pointer text-sm font-medium">
-              Indoor experiment · Test service capacity
+              Test capacity
             </summary>
             {payload && resultForSite ? (
               <div className="mt-4">
@@ -223,15 +218,11 @@ export function LocationExperience({
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-sm">
-                  Compare locations first to save the current setup for this
-                  space.
-                </p>
                 <button
-                  className={styles.secondary + " mt-3"}
+                  className={styles.secondary}
                   onClick={() => setView("locations")}
                 >
-                  Choose locations
+                  Compare locations first
                 </button>
               </div>
             )}
@@ -239,34 +230,28 @@ export function LocationExperience({
         )}
 
         {view !== "interior" && !candidates.length && (
-          <div className={styles.notice + " pointer-events-auto"} role="status">
+          <div
+            className={
+              styles.notice +
+              " pointer-events-auto flex max-w-fit items-center gap-4"
+            }
+            role="status"
+          >
             <p>
               {controller.phase === "loading"
-                ? "Finding matching spaces…"
-                : "No verified spaces are available for this brief right now."}
+                ? "Finding spaces…"
+                : "No spaces available"}
             </p>
             {controller.phase !== "loading" && (
-              <div className={styles.toolbarActions + " mt-3"}>
-                <button className={styles.secondary} onClick={controller.retry}>
-                  Retry listings
-                </button>
-                <Link
-                  className={styles.secondary}
-                  href={workspaceHref(projectId, "intake")}
-                >
-                  Review brief
-                </Link>
-              </div>
+              <button className={styles.secondary} onClick={controller.retry}>
+                Retry
+              </button>
             )}
           </div>
         )}
 
         {view !== "interior" && candidates.length > 0 && (
           <>
-            <p className="rounded-lg bg-black/40 px-3 py-1 text-xs">
-              {selectedIds.length} selected for comparison · Estimates are
-              modeled, not observed foot traffic
-            </p>
             <div
               className={styles.candidates + " pointer-events-auto"}
               role="group"

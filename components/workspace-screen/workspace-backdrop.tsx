@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { candidateCoordinates, type WorkspaceCandidate } from "./client-model";
 import { supportedCity } from "./model";
 import { SelectedInterior } from "./selected-interior";
-import styles from "./workspace-glass.module.css";
 
 const Neighborhood = dynamic(
   () => import("@/components/simulator/neighborhood"),
@@ -56,18 +55,10 @@ export function WorkspaceBackdrop({
     );
   return (
     <div
-      className={
-        styles.empty +
-        " h-full !items-start !justify-center !pl-10 !pr-[35%] !text-left"
-      }
+      className="pointer-events-none absolute inset-x-6 top-24 text-sm text-white/80"
+      role="status"
     >
-      <span className={styles.badge}>3D neighborhood</span>
-      <h2>{city ? "3D imagery unavailable" : "Choose a supported city"}</h2>
-      <p>
-        {city
-          ? "A verified Vexcel collection must be available for this city. Listing details and your conversation remain available."
-          : "Review your brief to explore Houston or Los Angeles."}
-      </p>
+      {city ? "Map unavailable" : "Choose a city"}
     </div>
   );
 }

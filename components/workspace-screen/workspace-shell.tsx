@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useId, type ReactNode } from "react";
 import { workspaceHref } from "@/lib/client/workspace-routes";
-import type { WorkspaceHeader } from "./model";
+import { cityPhotoFor, type WorkspaceHeader } from "./model";
 import styles from "./workspace-glass.module.css";
 
 /** Presentation only: visualization and the existing assistant retain their own controllers. */
@@ -25,6 +26,7 @@ export function WorkspaceShell({
   assistant: ReactNode;
 }) {
   const headingId = useId();
+  const photo = cityPhotoFor(header.city);
 
   return (
     <section
@@ -32,17 +34,25 @@ export function WorkspaceShell({
       className={styles.shell}
       data-surface="viewport"
     >
+      <div className={styles.atmosphere} aria-hidden="true">
+        {photo && (
+          <Image
+            src={photo.src}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className={styles.photo}
+          />
+        )}
+      </div>
+      <div className={styles.shade} aria-hidden="true" />
       <h1 id={headingId} className="sr-only">
         Workspace
       </h1>
       <header className={styles.header}>
         <div className={styles.identity}>
-          <span className={styles.brand}>
-            <span className={styles.brandMark} aria-hidden="true">
-              b
-            </span>
-            BizBox
-          </span>
+          <span className={styles.brand}>BizBox.</span>
           <div className={styles.project}>
             <span>{header.business}</span>
             <span className={styles.projectDivider} aria-hidden="true">
@@ -52,12 +62,6 @@ export function WorkspaceShell({
           </div>
         </div>
         <div className={styles.headerActions}>
-          <span className={styles.budget}>
-            {header.budget}
-            {header.budgetIsDefault && (
-              <span className={styles.budgetOrigin}>Default</span>
-            )}
-          </span>
           {navigation && <div className={styles.navigation}>{navigation}</div>}
           <Link
             href={workspaceHref(projectId, "intake", selectedSiteId)}

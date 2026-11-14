@@ -72,8 +72,8 @@ async function open(page: Page, projectId: string) {
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
   await expect(
-    assistant(page).getByText("Live", { exact: true }),
-  ).toBeVisible();
+    assistant(page).locator('[data-agent-availability="live"]'),
+  ).toHaveCount(1);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -102,7 +102,7 @@ for (const viewport of VIEWPORTS) {
       const { calls, pending } = await mockServices(page);
       await open(page, projectId);
 
-      // Missing listing service/intake must not invent properties or substitute a city photo.
+      // Missing inventory must not present the decorative city photo as a property or map.
       await expect(
         page
           .getByRole("region", { name: "Workspace", exact: true })
@@ -111,11 +111,7 @@ for (const viewport of VIEWPORTS) {
       const location = page.getByRole("region", {
         name: "Location and interior workspace",
       });
-      await expect(
-        location.getByText(
-          "No verified spaces are available for this brief right now.",
-        ),
-      ).toBeVisible();
+      await expect(location.getByText("No spaces available")).toBeVisible();
       await expect(
         page.getByRole("heading", { name: "Montrose storefront" }),
       ).toHaveCount(0);
@@ -187,11 +183,7 @@ for (const viewport of VIEWPORTS) {
       await expect(textLog).toContainText(
         "Street parking is limited near Montrose.",
       );
-      await expect(
-        location.getByText(
-          "No verified spaces are available for this brief right now.",
-        ),
-      ).toBeVisible();
+      await expect(location.getByText("No spaces available")).toBeVisible();
 
       // Later messages carry the round-tripped intake state, as the intake screen does.
       await composer(page).press("Enter");
@@ -240,8 +232,8 @@ test("offline, nothing is sent, the draft is kept and no reply is invented", asy
   const { calls } = await mockServices(page, { live: false });
   await page.goto(workspaceHref(projectId, "workspace"));
   await expect(
-    assistant(page).getByText("Offline", { exact: true }),
-  ).toBeVisible();
+    assistant(page).locator('[data-agent-availability="offline"]'),
+  ).toHaveCount(1);
   await composer(page).fill("Hello?");
   await composer(page).press("Enter");
   await expect(assistant(page).getByRole("alert")).toContainText(
