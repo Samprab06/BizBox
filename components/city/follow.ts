@@ -38,4 +38,3 @@ export function followTarget(
   }
   return { status: "following", position: agent.position, phase: agent.phase };
 }
-

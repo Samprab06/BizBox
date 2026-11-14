@@ -92,7 +92,9 @@ describe("inspectCustomer", () => {
     expect(during.why).not.toMatch(/served at/);
     const after = inspect(servedId, done.timeMin);
     expect(after.outcome).toBe("served");
-    expect(after.service?.durationMin).toBeCloseTo(done.timeMin - start.timeMin);
+    expect(after.service?.durationMin).toBeCloseTo(
+      done.timeMin - start.timeMin,
+    );
     // Seeking back to the arrival restores the pre-outcome card.
     const arrival = first("arrival", (e) => e.customerId === servedId);
     expect(inspect(servedId, arrival.timeMin).outcome).toBeNull();

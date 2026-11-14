@@ -47,12 +47,7 @@ export type InspectInput = {
 };
 
 export type Activity =
-  | "not_arrived"
-  | "traveling"
-  | "waiting"
-  | "in_service"
-  | "served"
-  | "left";
+  "not_arrived" | "traveling" | "waiting" | "in_service" | "served" | "left";
 
 export type Outcome = "served" | "balked" | "reneged";
 
@@ -203,7 +198,10 @@ export function personaIdAt(
   );
 }
 
-function why(card: Omit<InspectCard, "why" | "history">, source: InspectSource) {
+function why(
+  card: Omit<InspectCard, "why" | "history">,
+  source: InspectSource,
+) {
   const { arrival, wait, service, outcome, activity } = card;
   if (!arrival)
     return activity === "traveling"
@@ -331,7 +329,8 @@ export function inspectCustomer(input: InspectInput): InspectCard {
 
   const stored = source === "stored";
   const draw = !stored && scheduled ? scheduled.stayDraw : null;
-  const stayProbability = arrivalEvent && !stored ? arrivalEvent.stayProbability : null;
+  const stayProbability =
+    arrivalEvent && !stored ? arrivalEvent.stayProbability : null;
 
   const geometry = trip
     ? trip.geometry.sources.some((s) => s.provenance === "assumed")

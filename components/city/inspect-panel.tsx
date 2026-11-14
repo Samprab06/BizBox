@@ -72,7 +72,9 @@ const UNAVAILABLE = "Not available for this run";
 
 function activityText(card: InspectCard) {
   if (card.activity === "traveling")
-    return card.outcome ? "Traveling, leaving the site" : "Traveling to the site";
+    return card.outcome
+      ? "Traveling, leaving the site"
+      : "Traveling to the site";
   if (card.atClose)
     return `${activityLabels[card.activity]} when the doors closed`;
   return activityLabels[card.activity];
@@ -382,11 +384,9 @@ export function InspectPanel({
         {controls}
       </div>
       <p id={`${id}-count`} className="text-xs text-muted" aria-live="polite">
-        {listed.length} of {arrived.length} customers arrived by{" "}
-        {clock(minute)}
-        {query.trim() ? ` match “${query.trim()}”` : ""}. Later arrivals are
-        not listed. Esc {following ? "stops following" : "clears the selection"}
-        .
+        {listed.length} of {arrived.length} customers arrived by {clock(minute)}
+        {query.trim() ? ` match “${query.trim()}”` : ""}. Later arrivals are not
+        listed. Esc {following ? "stops following" : "clears the selection"}.
       </p>
       {card ? (
         <CustomerCard
