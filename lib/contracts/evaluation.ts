@@ -174,6 +174,19 @@ export const EvaluationResultSchema = z.object({
   /** Site IDs, best first, by mean monthly contribution. */
   ranking: z.array(z.string().min(1)),
   sites: z.array(SiteEvaluationSchema),
+  /**
+   * How the demand numbers were produced (HAC-61): inputs → synthetic personas → behavioural
+   * model → calibration → modelled arrivals. Optional so comparisons stored earlier still parse.
+   */
+  derivation: z
+    .object({
+      inputs: z.enum(["public", "default"]),
+      transformation: z.literal("synthetic_personas"),
+      behaviorModel: DemandSourceSchema,
+      calibration: z.enum(["none", "founder"]),
+      output: z.literal("modelled_arrivals"),
+    })
+    .optional(),
 });
 export type EvaluationResult = z.infer<typeof EvaluationResultSchema>;
 

@@ -374,3 +374,24 @@ describe("service-time wiring (HAC-64)", () => {
       expect(long.get(id)! / short.get(id)!).toBeCloseTo(5, 5);
   });
 });
+
+describe("demand provenance chain (HAC-61)", () => {
+  it("labels modelled outputs as modelled and states the derivation", () => {
+    const jev = evaluateSites(request({ seeds: 2 })).result;
+    expect(jev.derivation).toEqual({
+      inputs: "default",
+      transformation: "synthetic_personas",
+      behaviorModel: "jev",
+      calibration: "none",
+      output: "modelled_arrivals",
+    });
+    const real = evaluateSites(
+      request({ seeds: 2, synthetic: false, demandSource: "huff" }),
+    ).result;
+    expect(real.derivation).toMatchObject({
+      inputs: "public",
+      behaviorModel: "huff",
+      calibration: "none",
+    });
+  });
+});

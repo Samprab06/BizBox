@@ -30,7 +30,11 @@ import type {
   DemandInput,
 } from "@/lib/demand/contracts";
 import { CATEGORY_DEFAULTS } from "@/lib/demand/defaults";
-import { buildArrivalSchedule, estimateDemand } from "@/lib/demand/model";
+import {
+  buildArrivalSchedule,
+  demandDerivation,
+  estimateDemand,
+} from "@/lib/demand/model";
 import type { DayResult, SimEvent, SiteConfig } from "@/lib/sim/contracts";
 import { computeParsedMonthlyEconomics } from "@/lib/sim/economics";
 import { percentile, simulateDay } from "@/lib/sim/engine";
@@ -505,6 +509,16 @@ function assemble(
     overrides: request.overrides,
     ranking: sites.map((s) => s.siteId),
     sites,
+    derivation: demandDerivation(
+      {
+        demandSource: source,
+        // The scale is shared by all sites; founder only when the profile calibrated it.
+        scale: estimateDemand(
+          demandInputFor(request, request.sites[0]!, source),
+        ).scale,
+      },
+      request.synthetic ? "default" : "public",
+    ),
   };
   return {
     result,

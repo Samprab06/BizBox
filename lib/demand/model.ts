@@ -29,7 +29,11 @@ import {
   type StayPoint,
   type TimeBlock,
 } from "./contracts";
-import { expectedVisitsByHour, generateArrivals, ratePerMinuteByHour } from "./arrivals";
+import {
+  expectedVisitsByHour,
+  generateArrivals,
+  ratePerMinuteByHour,
+} from "./arrivals";
 import {
   CATEGORY_DEFAULTS,
   CITY_DISTANCE_FACTOR,
@@ -72,19 +76,50 @@ export interface DemandEstimate {
 const def = (value: number): Sourced<number> => ({ value, origin: "default" });
 
 /** Splits monthly visits into per-day visits for weekdays and weekend days. */
-export function dailyFromMonthly(monthly: number, weekendMultiplier: number): Record<DayType, number> {
-  const weekday = monthly / (WEEKDAYS_PER_MONTH + WEEKEND_DAYS_PER_MONTH * weekendMultiplier);
+export function dailyFromMonthly(
+  monthly: number,
+  weekendMultiplier: number,
+): Record<DayType, number> {
+  const weekday =
+    monthly / (WEEKDAYS_PER_MONTH + WEEKEND_DAYS_PER_MONTH * weekendMultiplier);
   return { weekday, weekend: weekday * weekendMultiplier };
 }
 
 /**
- * Origin of numbers derived from the whole model (expected customers, hourly rates): founder
- * once the scale is calibrated; otherwise public for jev (census-built personas answering
- * through Jev) and default for the Huff fallback.
+ * How a modelled demand number was produced (HAC-61). Census-backed persona inputs do not make
+ * the personas' generated behaviour a public observation, so outputs are labelled modelled and
+ * the chain is stated explicitly instead of inheriting one source label.
  */
-function derivedOrigin(scale: Sourced<number>, source: "jev" | "huff"): Origin {
-  if (scale.origin === "founder") return "founder";
-  return source === "jev" ? "public" : "default";
+export interface DemandDerivation {
+  /** Where the persona inputs came from: public data, or default/synthetic fixtures. */
+  inputs: "public" | "default";
+  transformation: "synthetic_personas";
+  behaviorModel: "jev" | "huff";
+  /** founder: the market-share scale was fitted to the founder's own observations. */
+  calibration: "none" | "founder";
+  output: "modelled_arrivals";
+}
+
+export function demandDerivation(
+  estimate: Pick<DemandEstimate, "demandSource" | "scale">,
+  inputs: DemandDerivation["inputs"] = "public",
+): DemandDerivation {
+  return {
+    inputs,
+    transformation: "synthetic_personas",
+    behaviorModel: estimate.demandSource,
+    calibration: estimate.scale.origin === "founder" ? "founder" : "none",
+    output: "modelled_arrivals",
+  };
+}
+
+/**
+ * Origin of numbers derived from the whole model (expected customers, hourly rates). They are
+ * modelled, never observed: always "default", with the derivation chain carried separately
+ * (calibration to founder data does not make the output a founder observation).
+ */
+function derivedOrigin(): Origin {
+  return "default";
 }
 
 /** Step 1: per-persona choice and frequency for one site. */
@@ -106,7 +141,10 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
     "day.weekdaysPerMonth": def(WEEKDAYS_PER_MONTH),
     "day.weekendDaysPerMonth": def(WEEKEND_DAYS_PER_MONTH),
     "arrivals.envelopePerPersonHour": def(ENVELOPE_VISITS_PER_PERSON_HOUR),
-    "catchment.personas": { value: personaSet.personas.length, origin: "public" },
+    "catchment.personas": {
+      value: personaSet.personas.length,
+      origin: "public",
+    },
     "catchment.weight": {
       value: personaSet.personas.reduce((s, p) => s + p.weight, 0),
       origin: "public",
@@ -115,15 +153,25 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
 
   const personas: PersonaDemand[] = [];
   const excludedPersonaIds: string[] = [];
-  const push = (p: Persona, visitsPerMonth: number, share: number, blocks: PersonaDemand["timeBlocks"], stay: StayPoint[]) => {
-    const expectedVisitsPerMonth = p.weight * visitsPerMonth * share * scale.value;
+  const push = (
+    p: Persona,
+    visitsPerMonth: number,
+    share: number,
+    blocks: PersonaDemand["timeBlocks"],
+    stay: StayPoint[],
+  ) => {
+    const expectedVisitsPerMonth =
+      p.weight * visitsPerMonth * share * scale.value;
     personas.push({
       personaId: p.id,
       weight: p.weight,
       visitsPerMonth,
       share,
       expectedVisitsPerMonth,
-      dailyVisits: dailyFromMonthly(expectedVisitsPerMonth, cat.weekendMultiplier),
+      dailyVisits: dailyFromMonthly(
+        expectedVisitsPerMonth,
+        cat.weekendMultiplier,
+      ),
       timeBlocks: blocks,
       stayCurve: stay,
     });
@@ -132,7 +180,9 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
   if (input.demand.source === "jev") {
     const table = input.demand.behavior;
     if (table.siteId !== site.id) {
-      throw new Error(`behavior table is for site ${table.siteId}, not ${site.id}`);
+      throw new Error(
+        `behavior table is for site ${table.siteId}, not ${site.id}`,
+      );
     }
     const byId = new Map(table.personas.map((b) => [b.personaId, b]));
     const failed = new Set(table.failedPersonaIds);
@@ -142,11 +192,23 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
         excludedPersonaIds.push(p.id);
         continue;
       }
-      const stay = [...b.stayByLineLength].sort((x, y) => x.lineLength - y.lineLength);
-      push(p, b.visitsPerMonth, b.where[site.id] ?? 0, { weekday: b.timeBlocks, weekend: b.timeBlocks }, stay);
+      const stay = [...b.stayByLineLength].sort(
+        (x, y) => x.lineLength - y.lineLength,
+      );
+      push(
+        p,
+        b.visitsPerMonth,
+        b.where[site.id] ?? 0,
+        { weekday: b.timeBlocks, weekend: b.timeBlocks },
+        stay,
+      );
     }
-    params["jev.personas"] = { value: personas.length, origin: "public" };
-    params["jev.excludedPersonas"] = { value: excludedPersonaIds.length, origin: "public" };
+    // Counts of modelled Jev answers, not public observations (HAC-61).
+    params["jev.personas"] = { value: personas.length, origin: "default" };
+    params["jev.excludedPersonas"] = {
+      value: excludedPersonaIds.length,
+      origin: "default",
+    };
   } else {
     const huff = input.demand.huff;
     const alpha = huff.alpha ?? def(DEFAULT_ALPHA);
@@ -154,16 +216,34 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
     params["huff.alpha"] = alpha;
     params["huff.beta"] = beta;
     params["huff.distanceFactor"] = def(CITY_DISTANCE_FACTOR[input.city]);
-    params[`huff.attractiveness.${site.id}`] = { value: attractiveness(site), origin: site.origin };
+    params[`huff.attractiveness.${site.id}`] = {
+      value: attractiveness(site),
+      origin: site.origin,
+    };
     for (const c of huff.competitors) {
-      params[`huff.attractiveness.${c.id}`] = { value: attractiveness(c), origin: c.origin };
+      params[`huff.attractiveness.${c.id}`] = {
+        value: attractiveness(c),
+        origin: c.origin,
+      };
     }
     for (const kind of ["resident", "worker", "passby"] as const) {
-      params[`frequency.${kind}.visitsPerMonth`] = def(cat.visitsPerMonth[kind]);
+      params[`frequency.${kind}.visitsPerMonth`] = def(
+        cat.visitsPerMonth[kind],
+      );
     }
     for (const p of personaSet.personas) {
-      const share = huffShare(p, site, huff.competitors, { alpha: alpha.value, beta: beta.value, city: input.city });
-      push(p, huffVisitsPerMonth(p, input.category, input.priceTier), share, cat.timeBlocks, cat.stayCurve);
+      const share = huffShare(p, site, huff.competitors, {
+        alpha: alpha.value,
+        beta: beta.value,
+        city: input.city,
+      });
+      push(
+        p,
+        huffVisitsPerMonth(p, input.category, input.priceTier),
+        share,
+        cat.timeBlocks,
+        cat.stayCurve,
+      );
     }
   }
 
@@ -181,7 +261,12 @@ export function estimateDemand(input: DemandInput): DemandEstimate {
 }
 
 /** Step 2: expected customers per clock hour (24 entries) within opening hours. */
-export function hourlyRates(estimate: DemandEstimate, dayType: DayType, openMin: number, closeMin: number): number[] {
+export function hourlyRates(
+  estimate: DemandEstimate,
+  dayType: DayType,
+  openMin: number,
+  closeMin: number,
+): number[] {
   const total = new Array<number>(24).fill(0);
   for (const p of estimate.personas) {
     const byHour = expectedVisitsByHour(
@@ -201,18 +286,28 @@ export function expectedDailyCustomers(
   openMin: number,
   closeMin: number,
 ): number {
-  return hourlyRates(estimate, dayType, openMin, closeMin).reduce((s, v) => s + v, 0);
+  return hourlyRates(estimate, dayType, openMin, closeMin).reduce(
+    (s, v) => s + v,
+    0,
+  );
 }
 
 /** Steps 1-3: the seeded arrival schedule for one site and one day. */
-export function buildArrivalSchedule(input: DemandInput, req: ScheduleRequest): ArrivalSchedule {
-  if (!(req.closeMin > req.openMin)) throw new Error("closeMin must be after openMin");
+export function buildArrivalSchedule(
+  input: DemandInput,
+  req: ScheduleRequest,
+): ArrivalSchedule {
+  if (!(req.closeMin > req.openMin))
+    throw new Error("closeMin must be after openMin");
   const estimate = estimateDemand(input);
   const { customers, clippedPersonaHours } = generateArrivals(
     estimate.personas.map((p) => ({
       personaId: p.personaId,
       weight: p.weight,
-      ratesByHour: ratePerMinuteByHour(p.dailyVisits[req.dayType], p.timeBlocks[req.dayType]),
+      ratesByHour: ratePerMinuteByHour(
+        p.dailyVisits[req.dayType],
+        p.timeBlocks[req.dayType],
+      ),
     })),
     {
       seed: req.seed,
@@ -225,7 +320,7 @@ export function buildArrivalSchedule(input: DemandInput, req: ScheduleRequest): 
     },
   );
 
-  const origin = derivedOrigin(estimate.scale, estimate.demandSource);
+  const origin = derivedOrigin();
   const params: Record<string, Sourced<number>> = { ...estimate.params };
   const hourly = hourlyRates(estimate, req.dayType, req.openMin, req.closeMin);
   hourly.forEach((v, h) => {
@@ -233,8 +328,14 @@ export function buildArrivalSchedule(input: DemandInput, req: ScheduleRequest): 
       params[`rate.h${String(h).padStart(2, "0")}`] = { value: v, origin };
     }
   });
-  params["expected.dailyCustomers"] = { value: hourly.reduce((s, v) => s + v, 0), origin };
-  params["arrivals.clippedPersonaHours"] = { value: clippedPersonaHours, origin: "default" };
+  params["expected.dailyCustomers"] = {
+    value: hourly.reduce((s, v) => s + v, 0),
+    origin,
+  };
+  params["arrivals.clippedPersonaHours"] = {
+    value: clippedPersonaHours,
+    origin: "default",
+  };
 
   const schedule: ArrivalSchedule = {
     siteId: estimate.siteId,
@@ -265,20 +366,40 @@ export interface CalibrationResult {
  * Step 4: fit one market-share scale so the calibration site (the founder's other location)
  * reproduces the founder's count. `input` describes that site; its own `scale` is ignored.
  */
-export function calibrateScale(input: DemandInput, calibration: CalibrationInput): CalibrationResult {
-  const estimate = estimateDemand({ ...input, scale: { value: 1, origin: "default" } });
+export function calibrateScale(
+  input: DemandInput,
+  calibration: CalibrationInput,
+): CalibrationResult {
+  const estimate = estimateDemand({
+    ...input,
+    scale: { value: 1, origin: "default" },
+  });
   const { openMin, closeMin } = calibration;
   let modelled: number;
   let observed: number;
   if (calibration.kind === "daily_customers") {
-    modelled = expectedDailyCustomers(estimate, calibration.dayType, openMin, closeMin);
+    modelled = expectedDailyCustomers(
+      estimate,
+      calibration.dayType,
+      openMin,
+      closeMin,
+    );
     observed = calibration.dailyCustomers;
   } else {
     modelled =
-      WEEKDAYS_PER_MONTH * expectedDailyCustomers(estimate, "weekday", openMin, closeMin) +
-      WEEKEND_DAYS_PER_MONTH * expectedDailyCustomers(estimate, "weekend", openMin, closeMin);
+      WEEKDAYS_PER_MONTH *
+        expectedDailyCustomers(estimate, "weekday", openMin, closeMin) +
+      WEEKEND_DAYS_PER_MONTH *
+        expectedDailyCustomers(estimate, "weekend", openMin, closeMin);
     observed = calibration.monthlySalesUsd / calibration.avgTicketUsd;
   }
-  if (!(modelled > 0)) throw new Error("calibration site has no modelled demand; cannot fit a scale");
-  return { scale: { value: observed / modelled, origin: "founder" }, modelledAtUnitScale: modelled, observed };
+  if (!(modelled > 0))
+    throw new Error(
+      "calibration site has no modelled demand; cannot fit a scale",
+    );
+  return {
+    scale: { value: observed / modelled, origin: "founder" },
+    modelledAtUnitScale: modelled,
+    observed,
+  };
 }
