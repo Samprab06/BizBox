@@ -16,11 +16,11 @@ export const fields = [
 
 type Field = (typeof fields)[number];
 type Key = Field["key"];
-const fieldKey = z.enum(fields.map((field) => field.key));
+const fieldKey = z.enum([fields[0].key, ...fields.slice(1).map((field) => field.key)]);
 const answerSchema = z.object({ value: z.string(), origin: z.enum(["default", "founder"]) });
 
 export const intakeSessionSchema = z.object({
-  profile: z.partialRecord(fieldKey, answerSchema),
+  profile: z.record(fieldKey, answerSchema),
   messages: z.array(z.object({ role: z.enum(["founder", "agent"]), text: z.string() })),
 });
 

@@ -5,7 +5,7 @@ it("uses current form edits when choosing the next field to ask about", () => {
   const profile = updateProfile(initialSession.profile, "concept", "Coffee and pastries");
   const session = answerPrompt({ ...initialSession, profile }, "Montrose");
   expect(session.profile.areas).toEqual({ value: "Montrose", origin: "founder" });
-  expect(missingFields(session.profile)[0].key).toBe("rent");
+  expect(missingFields(session.profile)[0]?.key).toBe("rent");
 });
 
 it("marks an edited default as founder-provided", () => {
