@@ -201,7 +201,11 @@ export function simulateParsedDay(schedule: ArrivalSchedule, config: SiteConfig)
   const heap = new EventHeap();
   let arrivalsOutsideHours = 0;
   let serviceSum = 0;
-  for (const c of schedule.customers) {
+  // Canonical order (arrivalMin, then id) so float sums do not depend on input order.
+  const sorted = [...schedule.customers].sort((a, b) =>
+    a.arrivalMin !== b.arrivalMin ? a.arrivalMin - b.arrivalMin : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+  );
+  for (const c of sorted) {
     serviceSum += c.serviceMin;
     if (c.arrivalMin < openMin || c.arrivalMin >= closeMin) {
       arrivalsOutsideHours++;
