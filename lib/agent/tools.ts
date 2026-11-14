@@ -30,6 +30,12 @@ import {
   siteRunSummary,
 } from "@/lib/evaluation/evaluate";
 import { createIntakeSession } from "./intake";
+import {
+  NessieConsultantResultSchema,
+  type NessieConsultantResult,
+  type NessieConsultantScenario,
+} from "@/lib/contracts/nessie";
+import type { NessieConsultantReadInput } from "@/lib/nessie/consultant";
 
 const id = z.string().min(1).max(512);
 const siteIds = z
@@ -72,6 +78,20 @@ export const InvestigationToolSchemas = {
     comparison_id: id,
   }).strict(),
   get_site_run: z.object({ run_id: id }).strict(),
+  read_nessie_cash_buffer: z
+    .object({
+      account_id: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{1,128}$/)
+        .optional(),
+      comparison_id: id.optional(),
+      site_id: siteIds.element.optional(),
+    })
+    .strict()
+    .refine(
+      (a) => Boolean(a.comparison_id) === Boolean(a.site_id),
+      "comparison_id and site_id must be supplied together",
+    ),
 };
 export type InvestigationToolName = keyof typeof InvestigationToolSchemas;
 export type InvestigationToolContext = {
@@ -137,6 +157,9 @@ export type InvestigationToolDependencies = {
     runId: string,
   ): Promise<StoredComparison | null>;
   jevConfigured: boolean;
+  readNessieCashBuffer?(
+    input: NessieConsultantReadInput,
+  ): Promise<NessieConsultantResult>;
 };
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -166,6 +189,8 @@ const descriptions: Record<InvestigationToolName, string> = {
     "Test an assumption on this investigation's comparison and summarize ranking changes and break-even.",
   get_site_run:
     "Summarize a stored run's utilization, waits and abandonment by hour, with event IDs to cite.",
+  read_nessie_cash_buffer:
+    "Read the shared simulated Nessie cash buffer; for site affordability supply this investigation's current comparison_id and site_id. Buildout and contribution come only from saved evaluation, never model amounts. Multiple accounts require an explicit demo choice.",
 };
 
 export function createInvestigationTools(
@@ -229,6 +254,171 @@ export function createInvestigationTools(
             m.output.comparisonId === comparisonId,
         );
       try {
+        if (name === "read_nessie_cash_buffer") {
+          const input = parsed as z.infer<
+            typeof InvestigationToolSchemas.read_nessie_cash_buffer
+          >;
+          const identity = {
+            investigationId: context.job.id,
+            attempt: context.job.attempt,
+            projectId: current.projectId,
+            profileId: current.id,
+            profileVersion: current.version,
+          };
+          const empty = (
+            status: NessieConsultantResult["status"],
+            message: string,
+          ) =>
+            NessieConsultantResultSchema.parse({
+              ...identity,
+              kind: "nessie_cash_buffer",
+              source: "nessie",
+              synthetic: true,
+              status,
+              message,
+              accounts: [],
+              selectedAccount: null,
+              snapshot: null,
+              scenario: null,
+            });
+          const completed = (
+            value: NessieConsultantResult,
+          ): InvestigationToolResult => {
+            const r = NessieConsultantResultSchema.parse(value);
+            if (
+              Object.entries(identity).some(
+                ([key, value]) => r[key as keyof typeof identity] !== value,
+              )
+            )
+              throw new Error("Nessie evidence identity mismatch");
+            const findings = [r.message];
+            const money = (cents: number) =>
+              (cents / 100).toLocaleString("en-US", {
+                style: "currency",
+                currency: "USD",
+              });
+            if (r.status === "ready" && r.selectedAccount && r.snapshot) {
+              findings.push(
+                `Capital One Nessie simulated cash for demo account ${r.selectedAccount.id}: available ${money(r.selectedAccount.availableCents)} at ${r.snapshot.asOf}; last-30-day inflow ${money(r.snapshot.inflowCents)}, outflow ${money(r.snapshot.outflowCents)}. Upcoming bills ${money(r.snapshot.upcomingBillsCents)} are context only, not extra costs deducted from the scenario.`,
+              );
+              if (r.scenario)
+                findings.push(
+                  `Simulated cash scenario for comparison ${r.scenario.comparisonId}, site ${r.scenario.siteId}: modeled upfront buildout ${money(r.scenario.modeledUpfrontBuildoutCents)}; cash after one month ${money(r.scenario.projection.cashAfterOneMonthCents.mean)} (modeled interval ${money(r.scenario.projection.cashAfterOneMonthCents.low)} to ${money(r.scenario.projection.cashAfterOneMonthCents.high)}). This is a scenario, not a forecast or a real financing approval.`,
+                );
+            }
+            return { summary: json(r), findings };
+          };
+          let scenario:
+            Omit<NessieConsultantScenario, "projection"> | undefined;
+          if (input.comparison_id && input.site_id) {
+            const milestones = context.milestones
+              .filter(
+                (m) =>
+                  m.investigationId === context.job.id &&
+                  m.attempt === context.job.attempt,
+              )
+              .sort((a, b) => a.seq - b.seq);
+            const profileSeq =
+              milestones
+                .filter(
+                  (m) =>
+                    m.tool === "save_profile" &&
+                    typeof milestoneOutput(m).profileId === "string",
+                )
+                .at(-1)?.seq ?? -1;
+            const allowed = milestones.some((m) => {
+              const output = milestoneOutput(m);
+              return (
+                m.seq > profileSeq &&
+                m.tool === "evaluate_sites" &&
+                output.comparisonId === input.comparison_id &&
+                output.profileId === current.id &&
+                (output.projectId === undefined ||
+                  output.projectId === current.projectId)
+              );
+            });
+            if (!allowed)
+              return completed(
+                empty(
+                  "comparison_unavailable",
+                  "Cash affordability requires a comparison produced by this investigation's current attempt and profile. Run the comparison first; no Nessie cash recommendation was made.",
+                ),
+              );
+            try {
+              const stored = await deps.comparisons.load(
+                current.projectId,
+                input.comparison_id,
+              );
+              context.signal.throwIfAborted();
+              const request = stored?.evaluation.request;
+              const result = stored?.evaluation.result;
+              const sourceSite = request?.sites.find(
+                (site) => site.siteId === input.site_id,
+              );
+              const outcome = result?.sites.find(
+                (site) => site.siteId === input.site_id,
+              );
+              if (
+                !stored ||
+                stored.id !== input.comparison_id ||
+                request?.projectId !== current.projectId ||
+                request.profileId !== current.id ||
+                request.profileVersion !== current.version ||
+                result?.projectId !== current.projectId ||
+                result.profileId !== current.id ||
+                result.profileVersion !== current.version ||
+                !sourceSite ||
+                !outcome
+              )
+                throw new Error("Invalid comparison scope");
+              const upfront = Math.round(
+                sourceSite.config.lease.buildoutUsd * 100,
+              );
+              if (!Number.isSafeInteger(upfront) || upfront < 0)
+                throw new Error("Invalid modeled buildout");
+              const { low, mean, high } = outcome.monthlyContributionUsd;
+              scenario = {
+                comparisonId: stored.id,
+                siteId: outcome.siteId,
+                modeledUpfrontBuildoutCents: upfront,
+                monthlyContributionUsd: { low, mean, high },
+              };
+            } catch {
+              context.signal.throwIfAborted();
+              return completed(
+                empty(
+                  "comparison_unavailable",
+                  "The stored comparison or site is unavailable for the current project/profile. Rerun it before making a cash-affordability comparison.",
+                ),
+              );
+            }
+          }
+          if (!deps.readNessieCashBuffer)
+            return completed(
+              empty(
+                "unconfigured",
+                "Nessie simulated cash evidence is unavailable. Continue the location investigation without a cash-affordability claim.",
+              ),
+            );
+          try {
+            const result = await deps.readNessieCashBuffer({
+              ...identity,
+              ...(input.account_id ? { accountId: input.account_id } : {}),
+              ...(scenario ? { scenario } : {}),
+              signal: context.signal,
+            });
+            context.signal.throwIfAborted();
+            return completed(result);
+          } catch {
+            context.signal.throwIfAborted();
+            return completed(
+              empty(
+                "provider_error",
+                "Nessie could not return valid simulated cash evidence. Continue without a cash-affordability claim; no banking result was invented.",
+              ),
+            );
+          }
+        }
         if (name === "save_profile") {
           const { patch } = parsed as z.infer<
             typeof InvestigationToolSchemas.save_profile
@@ -658,3 +848,10 @@ export function createInvestigationTools(
     },
   };
 }
+
+// HAC-82: injectable scenario tools, separate from the budgeted HAC-23 job runtime.
+export { createCopilotMutationTools } from "./copilot-tools";
+export type {
+  CopilotMutationContext,
+  CopilotMutationDependencies,
+} from "./copilot-tools";
