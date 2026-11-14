@@ -76,7 +76,8 @@ Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example
 | ---------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `DATABASE_URL`   | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations.                                       |
 | `JEV_API_KEY`    | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
-| `JEV_BASE_URL`   | `lib/panel/jev-client.ts`               | The Jev endpoint (to be confirmed in HAC-14).                                                                        |
+| `JEV_BASE_URL`   | `lib/panel/jev-client.ts`               | Optional. Defaults to `https://api.typesafe.ai` (`POST /v1/systemone`).                                              |
+| `JEV_MODEL`      | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
 | `OPENAI_API_KEY` | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
 | `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
 

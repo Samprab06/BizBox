@@ -29,7 +29,7 @@ export function makeSites(n: number): CandidateSite[] {
 
 interface WireBody {
   model: string;
-  questions: { name: string; type: string; options?: { id: string }[] }[];
+  questions: Record<string, { type: string; instructions: string; criteria?: Record<string, string> | string[] }>;
 }
 
 /**
@@ -50,8 +50,8 @@ export function recordedFetch(opts: { statuses?: number[]; body?: unknown } = {}
         headers: status === 429 ? { "retry-after": "1" } : {},
       });
     }
-    const where = body.questions.find((q) => q.name === "where");
-    const order = (where?.options ?? []).map((o) => o.id).join(",");
+    const where = body.questions.where?.criteria;
+    const order = (where && !Array.isArray(where) ? Object.keys(where) : []).join(",");
     const variant = recorded.variants[hashString(order) % recorded.variants.length]!;
     return new Response(JSON.stringify(opts.body ?? variant), {
       status: 200,
