@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import type { DemoData, demoPlan } from "./fixture";
+import type { SimulatorStory } from "./stored";
 import { glass } from "./glass";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
@@ -22,14 +23,28 @@ function clock(minute: number) {
   return `${hour % 12 || 12}:${String(total % 60).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
 }
 
+/** The bundled fixture's copy, labelled as an example (HAC-63). */
+export const EXAMPLE_STORY: SimulatorStory = {
+  eyebrow: "Example · Houston coffee shop",
+  title: "Does a second station pay off?",
+  intro: "",
+  scenarioLabels: ["Current", "Alternative"],
+  compare: true,
+  footnote:
+    "Example data, not a researched property: 110 generated customers at a fixture site. Illustrative block and vehicles. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
+};
+
 export function SimulatorDemo({
   data,
   plan,
   coordinates,
+  story = EXAMPLE_STORY,
 }: {
   data: DemoData;
   plan: typeof demoPlan;
   coordinates?: { longitude: number; latitude: number; tilesetUrl: string };
+  /** Copy and provenance; defaults to the labelled example. */
+  story?: SimulatorStory;
 }) {
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
@@ -115,19 +130,18 @@ export function SimulatorDemo({
 
         <header className="max-w-2xl">
           <p className="text-xs font-medium tracking-[0.18em] text-white/40 uppercase">
-            Houston coffee shop
+            {story.eyebrow}
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
-            Does a second station pay off?
+            {story.title}
           </h1>
           <p className="mt-4 text-white/50 text-pretty">
-            Same 110 customers, same draws. One extra staffed station and{" "}
-            {usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more
-            buildout.
+            {story.intro ||
+              `Same 110 customers, same draws. One extra staffed station and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
           </p>
         </header>
 
-        {alternative && (
+        {story.compare && alternative && (
           <dl
             className={`${glass} mt-12 grid divide-white/10 sm:grid-cols-3 sm:divide-x`}
           >
@@ -207,10 +221,10 @@ export function SimulatorDemo({
             const frame = replayAt(run.events, minute);
             const customer = frame.arrivals.get(selected);
             return (
-              <section key={run.metrics.stations} className={`${glass} p-2`}>
+              <section key={index} className={`${glass} p-2`}>
                 <header className="flex items-baseline justify-between px-4 pt-3 pb-3">
                   <h2 className="font-medium">
-                    {index === 0 ? "Current" : "Alternative"}
+                    {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
                   </h2>
                   <span className="text-xs text-white/40">
                     {run.metrics.stations}{" "}
@@ -278,13 +292,23 @@ export function SimulatorDemo({
           </select>
         </div>
 
+        {story.provenance && (
+          <section
+            aria-label="Recorded run provenance"
+            className={`${glass} mt-12 p-4 text-xs text-white/60`}
+          >
+            <h2 className="font-medium text-white/80">
+              {story.provenance.label}
+            </h2>
+            <ul className="mt-2 space-y-1">
+              {story.provenance.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        )}
         <p className="mt-16 max-w-2xl text-xs leading-relaxed text-white/30">
-          Illustrative block and vehicles. Monthly totals repeat one weekday 22
-          times and include ingredients, labor, rent and buildout amortization;
-          taxes and other overhead are excluded. Buildout{" "}
-          {usd.format(plan.baselineBuildout)} vs.{" "}
-          {usd.format(plan.alternativeBuildout)}. CoStar listing not connected
-          yet.
+          {story.footnote}
         </p>
       </main>
     </div>
