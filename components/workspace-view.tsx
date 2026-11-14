@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IntakeScreen } from "@/components/intake/intake-screen";
 import { workspaceHref, views, type View } from "@/lib/client/workspace-routes";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
@@ -32,7 +33,7 @@ export function WorkspaceView({ projectId, view, siteId }: { projectId: string; 
         {project && (view !== "site" || site) ? (
           <>
             <PreviewContent view={view} project={project} site={site} />
-            <p className="mt-6 text-xs text-muted">Example data</p>
+            {view !== "intake" && <p className="mt-6 text-xs text-muted">Example data</p>}
           </>
         ) : (
           <>
@@ -55,12 +56,7 @@ function PreviewContent({ view, project, site }: {
 }) {
   switch (view) {
     case "intake":
-      return (
-        <dl className="grid gap-6 sm:grid-cols-2">
-          <div><dt className="text-sm text-muted">Business</dt><dd className="mt-1 font-semibold">{project.business}</dd></div>
-          <div><dt className="text-sm text-muted">Market</dt><dd className="mt-1 font-semibold">{project.city}</dd></div>
-        </dl>
-      );
+      return <IntakeScreen projectId={project.id} />;
     case "map":
       return (
         <ul className="grid gap-4 sm:grid-cols-2">
