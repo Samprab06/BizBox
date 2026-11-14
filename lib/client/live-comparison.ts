@@ -7,6 +7,8 @@ import type { WorkspaceObservation } from "./workspace-context";
 import { BusinessProfileSchema, type BusinessProfile } from "@/lib/contracts";
 import {
   EvaluationResultSchema,
+  RobustnessSummarySchema,
+  type RobustnessSummary,
   SensitivityResultSchema,
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
@@ -24,6 +26,7 @@ export type LiveComparisonPayload = {
   comparisonId: string;
   outdated: boolean;
   result: EvaluationResult;
+  robustness?: RobustnessSummary | null;
   assembly?: AssemblyMetadata;
   /** Existing server record provenance, retained for the workspace context. */
   comparison?: { synthetic: boolean };
@@ -70,6 +73,8 @@ const PayloadSchema = z.object({
   outdated: z.boolean(),
   result: EvaluationResultSchema,
   comparison: z.object({ synthetic: z.boolean() }).optional(),
+  /** HAC-62 headline; null/absent for comparisons stored before it existed. */
+  robustness: RobustnessSummarySchema.nullable().optional(),
   /** Huff-only rerun of the same request (returned for fresh Jev comparisons only). */
   demandSourceCheck: z
     .object({

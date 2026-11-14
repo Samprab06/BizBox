@@ -190,6 +190,14 @@ export function LiveComparisonScreen({
             disabled={busy}
           />
           <ComparisonEvidence payload={payload} />
+          {!payload.outdated && (
+            <Link
+              className="inline-block font-semibold text-pine underline"
+              href={`/projects/${encodeURIComponent(project.id)}/plan?comparison=${encodeURIComponent(payload.comparisonId)}`}
+            >
+              Export the location plan
+            </Link>
+          )}
         </>
       )}
     </div>
@@ -209,8 +217,55 @@ function ComparisonResults({
   const rows = result.ranking
     .map((id) => result.sites.find((site) => site.siteId === id))
     .filter((site) => site !== undefined);
+  const robustness = payload.robustness;
+  // Server text names sites by ID; show the addresses the founder sees elsewhere.
+  const named = (text: string) =>
+    result.sites.reduce(
+      (t, site) => t.replaceAll(site.siteId, address(site.siteId)),
+      text,
+    );
   return (
     <>
+      {robustness && (
+        <section
+          aria-label="Recommendation robustness"
+          className="rounded-xl border-2 border-pine bg-mint p-4"
+        >
+          <h3 className="text-lg font-semibold">
+            {named(robustness.headline)}
+          </h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {robustness.jevHuffAgree !== null && (
+              <li>
+                {robustness.jevHuffAgree
+                  ? "The Jev and Huff demand models agree on the leader."
+                  : "The Jev and Huff demand models disagree on the leader: treat the ranking as uncertain."}
+              </li>
+            )}
+            {robustness.robustTo.length > 0 && (
+              <li>
+                The lead holds across the tested changes in{" "}
+                {robustness.robustTo
+                  .map((a) => a.replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </li>
+            )}
+          </ul>
+          {robustness.missingInformation.length > 0 && (
+            <>
+              <h4 className="mt-3 text-sm font-semibold">
+                What would most improve this decision
+              </h4>
+              <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm">
+                {robustness.missingInformation.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ol>
+            </>
+          )}
+        </section>
+      )}
       <section
         aria-label="Comparison provenance"
         className="rounded-xl border border-line p-4 text-sm"
