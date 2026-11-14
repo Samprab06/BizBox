@@ -441,6 +441,62 @@ describe("evaluation assembly with injected source dependencies", () => {
     expect(out.request.sites[0]!.behaviorTable).toBeUndefined();
     expect(evaluateSites(out.request).result.demandSource).toBe("huff");
   });
+  /** Fake Jev whose first-seen request fails `times` times, then answers. */
+  function flakyJev(times: number) {
+    const attempts = new Map<string, number>();
+    let target: string | undefined;
+    return fakeJevClient({
+      fail: (req) => {
+        const key = JSON.stringify(req);
+        target ??= key;
+        if (key !== target) return false;
+        attempts.set(key, (attempts.get(key) ?? 0) + 1);
+        return attempts.get(key)! <= times;
+      },
+    });
+  }
+  it("retries a persona that fails once and still uses Jev for the site", async () => {
+    const raw = input();
+    raw.candidateIds = ["101:1"];
+    raw.demandSource = "jev";
+    const deps = dependencies(raw);
+    deps.jev = { client: flakyJev(1), cache: new MemoryJevCache() };
+    const out = await assembleEvaluation(raw, deps);
+    const site = out.request.sites[0]!;
+    expect(site.behaviorTable).toBeDefined();
+    expect(site.jevPanel).toEqual({
+      personaCount: out.request.personaSet.personas.length,
+      failedPersonaCount: 0,
+    });
+    expect(out.findings.some((f) => f.code === "JEV_INCOMPLETE")).toBe(false);
+    const result = evaluateSites(out.request).result;
+    expect(result.demandSource).toBe("jev");
+    expect(result.sites[0]!.jevPanel?.failedPersonaCount).toBe(0);
+  });
+  it("falls back to Huff and reports the failed persona count when a persona fails twice", async () => {
+    const raw = input();
+    raw.candidateIds = ["101:1"];
+    raw.demandSource = "jev";
+    const deps = dependencies(raw);
+    deps.jev = { client: flakyJev(2), cache: new MemoryJevCache() };
+    const out = await assembleEvaluation(raw, deps);
+    const personaCount = out.request.personaSet.personas.length;
+    const site = out.request.sites[0]!;
+    expect(site.behaviorTable).toBeUndefined();
+    expect(site.jevPanel).toEqual({ personaCount, failedPersonaCount: 1 });
+    expect(out.findings).toContainEqual(
+      expect.objectContaining({
+        code: "JEV_INCOMPLETE",
+        message: `Jev failed for 1 of ${personaCount} personas after one retry; all-site Huff fallback will be used.`,
+      }),
+    );
+    const result = evaluateSites(out.request).result;
+    expect(result.demandSource).toBe("huff");
+    expect(result.sites[0]!.jevPanel).toEqual({
+      personaCount,
+      failedPersonaCount: 1,
+    });
+  });
   it("returns the canonical request from the simple public function", async () => {
     const raw = input();
     expect(await assembleEvaluationRequest(raw, dependencies(raw))).toEqual(

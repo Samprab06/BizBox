@@ -104,3 +104,5 @@ The role needs CREATEDB. Tests create/drop only their own random hac81_test data
 The Scenario database checks workflow supplies a fresh PostGIS 17 service and runs
 scenario/layout/interior SQL tests without production secrets or data. The ordinary
 lint, typecheck, full Vitest, build and client-bundle gates still apply.
+
+Explicit seed identities also remain stable during bounded sensitivity sweeps: a smaller caller seed limit uses the original seed-set prefix, avoiding an accidental full-seed automatic robustness sweep.
