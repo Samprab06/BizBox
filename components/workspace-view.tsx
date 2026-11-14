@@ -31,7 +31,7 @@ export function WorkspaceView({ projectId, view, siteId }: { projectId: string; 
         <p className="mb-2 text-sm font-medium text-muted">{project?.name ?? projectId}</p>
         <h1 className="text-4xl font-semibold tracking-tight">{views[view]}</h1>
       </header>
-      <section aria-label={views[view]} className="rounded-2xl border border-line bg-white p-7">
+      <section aria-label={view === "map" ? "Candidate locations" : views[view]} className="rounded-2xl border border-line bg-white p-7">
         {project && (view !== "site" || site) ? (
           <>
             <PreviewContent view={view} project={project} site={site} />
