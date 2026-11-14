@@ -4,9 +4,12 @@ import {
   createJevClientFromEnv,
   createLimiter,
   DEFAULT_JEV_BASE_URL,
+  DEFAULT_JEV_CONCURRENCY,
   fromWireResponse,
   JevError,
+  jevBundleOrdersFromEnv,
   JEV_MODEL_VERSION,
+  parseJevConcurrency,
 } from "./jev-client";
 import { buildPersonas } from "./personas";
 import { buildQuestions, buildState, type PanelContext } from "./state";
@@ -16,7 +19,7 @@ const ctx: PanelContext = { site: catchment.site, competitors: catchment.competi
 const persona = buildPersonas(catchment).personas[0]!;
 const request = { state: buildState(persona, ctx), questions: buildQuestions(ctx).questions };
 
-function client(fetchStub: typeof fetch, delays: number[] = [], extra: { maxRetries?: number } = {}) {
+function client(fetchStub: typeof fetch, delays: number[] = [], extra: { maxRetries?: number; maxRateLimitRetries?: number } = {}) {
   return createJevClient({
     baseUrl: "https://jev.test/",
     apiKey: "test-key",
@@ -91,7 +94,13 @@ describe("Jev client against recorded responses (offline)", () => {
     const result = await client(rec.fetch, delays).ask(request);
     expect(result.answers.where).toBeDefined();
     expect(rec.requests).toHaveLength(4);
-    expect(delays).toEqual([100, 1000, 400]); // 100*2^0, Retry-After 1s, 100*2^2
+    // 100*2^0 for the 503; the 429 waits out the limiter's Retry-After pause (1 s, to the ms
+    // the clock allows); then 100*2^1, because a 429 does not use up a transport retry.
+    expect(delays).toHaveLength(3);
+    expect(delays[0]).toBe(100);
+    expect(delays[1]).toBeGreaterThan(900);
+    expect(delays[1]).toBeLessThanOrEqual(1000);
+    expect(delays[2]).toBe(200);
   });
 
   it("gives up after maxRetries", async () => {
@@ -137,6 +146,62 @@ describe("Jev client against recorded responses (offline)", () => {
     const c = createJevClient({ baseUrl: "https://jev.test", apiKey: "k", fetch: slow, concurrency: 3 });
     await Promise.all(Array.from({ length: 12 }, () => c.ask(request)));
     expect(peak).toBe(3);
+  });
+
+  it("a 429 pauses dispatch for every queued request, not just the one that was limited", async () => {
+    let clock = 0;
+    const arrivals: number[] = [];
+    const rec = recordedFetch();
+    let n = 0;
+    const server = (async (...args: Parameters<typeof fetch>) => {
+      arrivals.push(clock);
+      if (n++ === 0) return new Response("{}", { status: 429, headers: { "retry-after": "2" } });
+      return rec.fetch(...args);
+    }) as typeof fetch;
+    const c = createJevClient({
+      baseUrl: "https://jev.test",
+      apiKey: "k",
+      fetch: server,
+      concurrency: 1,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+    });
+    // Three requests share one slot: the first is limited, the other two were already queued.
+    await Promise.all([c.ask(request), c.ask(request), c.ask(request)]);
+    expect(arrivals).toHaveLength(4); // one 429 and three answers
+    expect(arrivals[0]).toBe(0);
+    expect(arrivals.slice(1).every((t) => t >= 1900)).toBe(true); // nobody went ahead of the pause
+    expect(c.limiter?.()).toMatchObject({ rateLimited: 1, active: 0, queued: 0 });
+  });
+
+  it("gives up on a request that is rate limited past its 429 budget", async () => {
+    const rec = recordedFetch({ statuses: [429, 429, 429] });
+    await expect(
+      client(rec.fetch, [], { maxRateLimitRetries: 1 }).ask(request),
+    ).rejects.toMatchObject({ status: 429, retryable: true });
+    expect(rec.requests).toHaveLength(2);
+  });
+
+  it("reads JEV_CONCURRENCY, falling back to 32 and clamping to 1..256", () => {
+    expect(parseJevConcurrency(undefined)).toBe(DEFAULT_JEV_CONCURRENCY);
+    expect(parseJevConcurrency("")).toBe(32);
+    expect(parseJevConcurrency("abc")).toBe(32);
+    expect(parseJevConcurrency("0")).toBe(32);
+    expect(parseJevConcurrency("1.5")).toBe(32);
+    expect(parseJevConcurrency("16")).toBe(16);
+    expect(parseJevConcurrency(" 64 ")).toBe(64);
+    expect(parseJevConcurrency("100000")).toBe(256);
+    const c = createJevClientFromEnv({ JEV_API_KEY: "k", JEV_CONCURRENCY: "5" }, { fetch: recordedFetch().fetch });
+    expect(c.limiter?.().cap).toBe(5);
+    expect(createJevClientFromEnv({ JEV_API_KEY: "k" }).limiter?.().cap).toBe(32);
+  });
+
+  it("reads JEV_BUNDLE_ORDERS as an opt-in flag, off by default", () => {
+    expect(jevBundleOrdersFromEnv({})).toBe(false);
+    expect(jevBundleOrdersFromEnv({ JEV_BUNDLE_ORDERS: "0" })).toBe(false);
+    expect(jevBundleOrdersFromEnv({ JEV_BUNDLE_ORDERS: "1" })).toBe(true);
+    expect(jevBundleOrdersFromEnv({ JEV_BUNDLE_ORDERS: " TRUE " })).toBe(true);
   });
 
   it("limiter keeps FIFO order and propagates errors", async () => {
