@@ -8,9 +8,17 @@ import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
 import { glass } from "./glass";
 import type { RenderQuality } from "./render-policy";
+import type { MatterportConfig } from "../interior/matterport-view";
 
-const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
+const Neighborhood = dynamic(() => import("./neighborhood"), {
+  ssr: false,
+  // Reserve the city viewport so a direct interior anchor survives lazy loading.
+  loading: () => <div className="h-dvh" aria-label="Loading neighborhood" />,
+});
 const Scene = dynamic(() => import("./scene"), { ssr: false });
+const MatterportView = dynamic(() => import("../interior/matterport-view"), {
+  ssr: false,
+});
 const usd = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -40,6 +48,7 @@ export function SimulatorDemo({
   data,
   plan,
   coordinates,
+  matterport,
   story = EXAMPLE_STORY,
 }: {
   data: DemoData;
@@ -47,11 +56,14 @@ export function SimulatorDemo({
   coordinates?: { longitude: number; latitude: number; tilesetUrl: string };
   /** Copy and provenance; defaults to the labelled example. */
   story?: SimulatorStory;
+  matterport?: MatterportConfig;
 }) {
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
   const end = coordinates ? 1440 : closeMin;
-  const [minute, setMinute] = useState(coordinates ? 360 : openMin);
+  const [minute, setMinute] = useState(
+    matterport ? Math.min(closeMin, openMin + 24) : coordinates ? 360 : openMin,
+  );
   const [playing, setPlaying] = useState(false);
   // Both views share a clock; the controller that starts it chooses its stop.
   const [playbackEnd, setPlaybackEnd] = useState(end);
@@ -59,6 +71,10 @@ export function SimulatorDemo({
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
   const [quality, setQuality] = useState<RenderQuality>("balanced");
+  const [interiorMode, setInteriorMode] = useState<"scan" | "modeled">(
+    matterport ? "scan" : "modeled",
+  );
+  const [activePlan, setActivePlan] = useState(0);
   const running = playing && minute < playbackEnd;
 
   useEffect(() => {
@@ -298,15 +314,111 @@ export function SimulatorDemo({
           >
             Reset
           </button>
-          <button
-            type="button"
-            aria-pressed={cutaway}
-            onClick={() => setCutaway(!cutaway)}
-            className={`${glass} min-h-11 self-stretch rounded-full px-4 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
-          >
-            Focus on shop
-          </button>
+          {interiorMode === "modeled" && (
+            <button
+              type="button"
+              aria-pressed={cutaway}
+              onClick={() => setCutaway(!cutaway)}
+              className={`${glass} min-h-11 self-stretch rounded-full px-4 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
+            >
+              Focus on shop
+            </button>
+          )}
         </div>
+
+        <section
+          id="scanned-interior"
+          aria-label="Interior view controls"
+          className="mt-5 scroll-mt-24"
+        >
+          {matterport && (
+            <p className="mb-3 text-xs text-white/55">
+              Starts paused at {clock(Math.min(closeMin, openMin + 24))}. Play
+              the day or reset to opening.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={interiorMode === "scan"}
+              disabled={!matterport}
+              onClick={() => setInteriorMode("scan")}
+              className={`${glass} min-h-11 rounded-full px-4 text-sm disabled:opacity-40 ${interiorMode === "scan" ? "bg-white/15" : "text-white/65"}`}
+            >
+              Scanned interior
+            </button>
+            <button
+              type="button"
+              aria-pressed={interiorMode === "modeled"}
+              onClick={() => setInteriorMode("modeled")}
+              className={`${glass} min-h-11 rounded-full px-4 text-sm ${interiorMode === "modeled" ? "bg-white/15" : "text-white/65"}`}
+            >
+              Modeled layout
+            </button>
+          </div>
+          {!matterport && (
+            <p className="mt-2 text-xs text-white/55">
+              Scanned interior is unavailable in this environment. The modeled
+              replay is selected.
+            </p>
+          )}
+          {interiorMode === "scan" && matterport && (
+            <>
+              <div
+                role="radiogroup"
+                aria-label="Scanned plan"
+                className="mt-4 flex flex-wrap gap-2"
+              >
+                {data.map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    role="radio"
+                    aria-checked={activePlan === index}
+                    tabIndex={activePlan === index ? 0 : -1}
+                    onClick={() => setActivePlan(index)}
+                    onKeyDown={(event) => {
+                      const direction =
+                        event.key === "ArrowRight" || event.key === "ArrowDown"
+                          ? 1
+                          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                            ? -1
+                            : 0;
+                      if (
+                        !direction &&
+                        event.key !== "Home" &&
+                        event.key !== "End"
+                      )
+                        return;
+                      event.preventDefault();
+                      const next =
+                        event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? data.length - 1
+                            : (index + direction + data.length) % data.length;
+                      setActivePlan(next);
+                      event.currentTarget.parentElement
+                        ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+                        [next]?.focus();
+                    }}
+                    className={`${glass} min-h-11 rounded-full px-4 text-sm ${activePlan === index ? "bg-white/15 text-white" : "text-white/60"}`}
+                  >
+                    {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+                  </button>
+                ))}
+              </div>
+              <MatterportView
+                config={matterport}
+                run={data[activePlan].run}
+                minute={minute}
+                employeeCount={data[activePlan].staffing?.headcount}
+                selected={selected}
+                select={select}
+              />
+            </>
+          )}
+        </section>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {data.map(({ run, monthly, staffing }, index) => {
@@ -332,23 +444,27 @@ export function SimulatorDemo({
                       : " · staffing unavailable"}
                   </span>
                 </header>
-                <p className="px-4 pb-2 text-[11px] font-medium tracking-wide text-white/50">
-                  Modeled layout
-                </p>
-                <div
-                  className="h-72 overflow-hidden rounded-xl bg-black/20"
-                  aria-label="Modeled block and café"
-                >
-                  <Scene
-                    quality={quality}
-                    run={run}
-                    minute={minute}
-                    cutaway={cutaway}
-                    selected={selected}
-                    select={select}
-                    employeeCount={staffing?.headcount}
-                  />
-                </div>
+                {interiorMode === "modeled" && (
+                  <>
+                    <p className="px-4 pb-2 text-[11px] font-medium tracking-wide text-white/50">
+                      Modeled layout
+                    </p>
+                    <div
+                      className="h-72 overflow-hidden rounded-xl bg-black/20"
+                      aria-label="Modeled block and café"
+                    >
+                      <Scene
+                        quality={quality}
+                        run={run}
+                        minute={minute}
+                        cutaway={cutaway}
+                        selected={selected}
+                        select={select}
+                        employeeCount={staffing?.headcount}
+                      />
+                    </div>
+                  </>
+                )}
                 <dl className="grid grid-cols-2 gap-4 px-4 pt-5 pb-1 sm:grid-cols-4">
                   <Live label="Served" value={frame.served} />
                   <Live label="Waiting" value={frame.waiting.length} />
@@ -479,7 +595,12 @@ export function SimulatorDemo({
           </section>
         )}
         <p className="mt-16 max-w-2xl text-xs leading-relaxed text-white/30">
-          {story.footnote}
+          {interiorMode === "scan" && matterport
+            ? story.footnote.replace(
+                "Modeled layout, not a Matterport scan.",
+                "The backdrop is a public Matterport café reference, not the selected Houston property. Toy customer dots and proposed service counters are simulation overlays, not observed activity or captured furnishings.",
+              )
+            : story.footnote}
         </p>
       </main>
     </div>

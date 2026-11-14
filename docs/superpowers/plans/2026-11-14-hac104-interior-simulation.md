@@ -57,6 +57,19 @@
 
 No merge or deployment is included. Remote delivery follows Akshar's applicable approval instructions.
 
+## Corrected scope: real Matterport interior
+
+Akshar clarified that the required visual is dots inside the real café scan. The
+modeled comparison above is a foundation, not completion of that requirement.
+He supplied a browser SDK key privately; no API credential is sent to the client.
+
+- [x] Verify the actual provider connection on localhost and inspect the café's service area.
+- [x] Add pinned, integrity-verified SDK asset preparation without changing the app's Three.js dependency.
+- [x] Implement provider Scene components and lifecycle/subscription tests; retain the existing shared replay.
+- [x] Register the public café placement and verify blue/purple dots inside the actual scan, including the one/two staffing switch.
+- [x] Verify failure states, SDK cleanup, retained modeled behavior, browser controls and required repo checks for the combined candidate.
+- [x] Update ticket documentation and save the verified local candidate; no merge/deploy.
+
 ## Verification result
 
 - Required lint, typecheck, production build and environment/client guards passed.
@@ -64,3 +77,12 @@ No merge or deployment is included. Remote delivery follows Akshar's applicable 
 - Production browser checks: 9 passed across Chromium, WebKit and mobile Chrome.
 - Visual review confirmed purple employees are visible in default and focused framing; a closing-time regression was reproduced and fixed before final checks.
 - Manager reviewed the scoped diff and React boundaries. No API, schema, environment, dependency or neighborhood changes. No merge or deployment.
+
+## Real-scan verification result
+
+- SDK connection and actual blue/purple 3D scene objects visually verified inside The Coffee Port on localhost3016.
+- One/two staffed plan switch retained the same iframe and replay minute; playback advanced the actual dot layer.
+- Live SDK startup exposed the reserved-output declaration error; outputs now initialize empty and the live regression passes.
+- Full lint/typecheck/build and private-client/environment guards passed; full units579 passed/15 existing gated skips.
+- Nine focused browser checks passed across Chromium/WebKit/mobile; separate opt-in real-SDK Chromium test passed, including the direct interior anchor.
+- SDK key remains in ignored .env.local; private API credentials are never sent to the client.

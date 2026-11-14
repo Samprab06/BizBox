@@ -3,12 +3,18 @@ import { expect, test } from "./fixtures";
 test.beforeEach(async ({ page }) => {
   // This slice exercises the modeled operating replay, independently of city tiles.
   await page.route("**/api/vexcel/**", (route) => route.abort());
+  await page.route("**/matterport/**", (route) => route.abort());
 });
 
 test("paired cafe replay seeks both plans together and resets their counts and selection", async ({
   page,
 }) => {
   await page.goto("/simulator-demo#operating-plan");
+  const modeled = page.getByRole("button", {
+    name: "Modeled layout",
+    exact: true,
+  });
+  if (await modeled.count()) await modeled.click();
   const one = page.getByRole("region", {
     name: "One staffed counter",
     exact: true,
@@ -75,6 +81,11 @@ test("staffing roles can be inspected without relying on dot color at each layou
   page,
 }) => {
   await page.goto("/simulator-demo#operating-plan");
+  const modeled = page.getByRole("button", {
+    name: "Modeled layout",
+    exact: true,
+  });
+  if (await modeled.count()) await modeled.click();
   const one = page.getByRole("region", {
     name: "One staffed counter",
     exact: true,
@@ -122,6 +133,11 @@ test("WebGL-unavailable interior keeps the comparison, staffing and playback usa
     } as typeof original;
   });
   await page.goto("/simulator-demo#operating-plan");
+  const modeled = page.getByRole("button", {
+    name: "Modeled layout",
+    exact: true,
+  });
+  if (await modeled.count()) await modeled.click();
   const one = page.getByRole("region", {
     name: "One staffed counter",
     exact: true,

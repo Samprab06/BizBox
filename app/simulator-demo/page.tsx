@@ -43,6 +43,10 @@ export default async function Page({
   searchParams: Promise<Search>;
 }) {
   const search = await searchParams;
+  // A browser SDK key is domain-restricted and intentionally client-permitted.
+  // The API key/token never cross this server-component boundary. This public
+  // cafe is a demonstration reference, not a scan of a stored candidate site.
+  const sdkKey = process.env.MATTERPORT_SDK_KEY?.trim();
   const tilesetUrl = process.env.VEXCEL_API_KEY?.trim()
     ? "/api/vexcel/3d/tileset"
     : undefined;
@@ -68,6 +72,25 @@ export default async function Page({
       data={makeDemo()}
       plan={demoPlan}
       coordinates={coordinates}
+      matterport={
+        sdkKey
+          ? {
+              sdkKey,
+              modelId: "qfmMbTLt4Bo",
+              // Proposed service-area overlay, registered against the public
+              // scan's floor intersections; not a measured business layout.
+              placement: {
+                origin: { x: 17.1, y: 0.04, z: 10.3 },
+                rotationY: Math.PI,
+                scale: 0.5,
+              },
+              viewpoint: {
+                sweepId: "y0xe63ayfyepf8cg51cua77hb",
+                rotation: { x: -17, y: 168 },
+              },
+            }
+          : undefined
+      }
     />
   );
 }

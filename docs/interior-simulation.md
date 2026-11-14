@@ -1,8 +1,44 @@
 # BizBox café interior replay
 
 HAC-104 adds a dots-only operating comparison to
-`/simulator-demo#operating-plan`. It uses the existing seeded toy café and queue
-engine, not observed demand or a Matterport scan.
+`/simulator-demo#operating-plan`. With a domain-authorized `MATTERPORT_SDK_KEY`,
+the example opens the real **The Coffee Port** Matterport scan and adds simulated
+people and proposed service markers through the Bundle SDK's 3D Scene API. The
+demand remains the existing seeded toy café, not observed activity in that scan.
+
+Use `http://localhost:3016/simulator-demo#scanned-interior` to open the interior directly.
+The supplied development key was verified on `localhost`; the `127.0.0.1` origin
+did not load the model. Domain authorization belongs to the SDK key's settings.
+
+## Matterport setup and viewing
+
+Set the SDK key privately in ignored `.env.local`. It is a domain-restricted
+browser key; never substitute `MATTERPORT_API_KEY` or `MATTERPORT_API_TOKEN`.
+Those API credentials are server-only and covered by the client-bundle guard.
+
+`pnpm dev` and `pnpm build` prepare unmodified Bundle SDK assets when an SDK key
+is configured. `pnpm matterport:prepare` explicitly prepares them. The script
+downloads the official `@matterport/webcomponent` 0.1.47 archive, verifies its
+pinned SHA-512 integrity, and extracts its self-contained bundle into ignored
+`public/matterport/`, retaining vendor license notices. It does not install the
+web component or change the application's Three.js version. The iframe uses the
+SDK's own Three.js 0.184 context. Static SDK assets are about 32 MB; model content
+is streamed directly from Matterport. No model geometry is exported or recorded.
+
+**Scanned interior** is the configured example's default. One viewer switches
+between **One staffed counter** and **Two staffed counters**, using the same
+replay minute. The example starts paused at 8:24 AM. **Show service area** returns
+the camera to the café counter; normal Matterport controls let users explore.
+The scan is a public reference, not the selected Houston candidate property.
+Mint service markers are proposed overlays; the photographed counter is not
+removed or remodeled.
+
+The proposed overlay is registered near floor intersections in the public scan
+at `{ x: 17.1, y: 0.04, z: 10.3 }`, rotated by π radians and scaled by 0.5. This
+is an illustrative placement, not measured room geometry or a physical layout
+validation. Blue and purple dots belong to the SDK scene graph, not a flat HTML
+layer. Connection/overlay errors are explicit; the UI never silently labels the
+modeled fallback as a scanned interior.
 
 ## Use the comparison
 
@@ -49,11 +85,12 @@ preserved. They are not the fixture's paired staffing experiment. When no
 per-station staffing metadata is supplied, employee dots are omitted and the
 UI says staffing is unavailable rather than inferring it from station count.
 
-The comparison uses a **Modeled layout**. Matterport registry/access and the
-general scanned viewer remain HAC-96/HAC-14/HAC-97. HAC-87 owns the general layout
-editor; HAC-99 owns the full city-to-interior camera transition. This slice does
-not add those features or a new chat/map shell. Captured furniture in a future
-scan cannot be removed by overlaying a proposed counter.
+**Modeled layout** is an explicit alternative and the default without an SDK key.
+The general candidate registry/access and viewer integration remain
+HAC-96/HAC-14/HAC-97. HAC-87 owns the general layout editor; HAC-99 owns the full
+city-to-interior camera transition. This slice does not add those features or a
+new chat/map shell. Public-scan configuration is only passed to the example;
+stored candidate runs are never paired with this unrelated café scan.
 
 Sphere geometry/materials are shared; the existing visibility observer and
 demand rendering stop offscreen work. If WebGL is unavailable, a fallback leaves
@@ -67,3 +104,18 @@ departure lifetimes, wait calculations, empty/zero-capacity input and backward
 seek/reset behavior. `tests/e2e/simulator-interior.spec.ts` checks shared playback,
 counts, selection/reset, staffing inspection at 375/768/1440 px, and WebGL
 fallback. Run the repository's four required checks before delivery.
+
+The opt-in `tests/e2e/matterport-live.spec.ts` checks the actual provider's startup,
+plan switch without replacing the iframe, shared playback and reset. Run with a
+domain-authorized key configured on the server:
+
+```sh
+E2E_BASE_URL=http://localhost:3016 E2E_EXPECT_MATTERPORT=1 pnpm exec playwright test tests/e2e/matterport-live.spec.ts --project=chromium --workers=1
+```
+
+Live verification also visually confirmed blue customer spheres and one/two
+purple employee spheres inside the public café, with real SDK depth testing.
+The SDK reserves `outputs.objectRoot` and `outputs.collider`: component outputs
+must initialize empty, with those fields assigned during `onInit`. Declaring
+them in the constructor fails with the real provider even if a permissive test
+double accepts it.
