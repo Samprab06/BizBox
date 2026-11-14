@@ -302,4 +302,83 @@ describe("durable copilot runtime", () => {
       status: "completed",
     });
   });
+  it("sets budget confirmation only from the founder's explicit Run input, never from the model", async () => {
+    const modelClaimsBudget =
+      '{"scenario_id":"child-1","confirmBudget":true,"budgetConfirmed":true,"confirm":true}';
+    for (const confirmBudget of [undefined, false, true]) {
+      const { instance, execute } = runtime([
+        { tool: "set_staffing", argsJson: '{"scenario_id":"base-1"}' },
+        { tool: "finish" },
+        { tool: "run_scenario", argsJson: modelClaimsBudget },
+      ]);
+      await collect(instance.start(context.projectId, request(), signal));
+      const [proposal] = (await instance.snapshot(context.projectId)).proposals;
+      await collect(
+        instance.start(
+          context.projectId,
+          {
+            ...request("Run it", "request-run"),
+            proposalAction: {
+              proposalId: proposal!.id,
+              action: "run",
+              ...(confirmBudget === undefined ? {} : { confirmBudget }),
+            },
+          },
+          signal,
+        ),
+      );
+      const runCall = execute.mock.calls.find(
+        ([name]) => name === "run_scenario",
+      ) as unknown as [string, unknown, Record<string, unknown>] | undefined;
+      expect(runCall).toBeDefined();
+      expect(runCall![2]).toMatchObject({
+        runConfirmed: true,
+        budgetConfirmed: confirmBudget === true,
+        scenarioId: "child-1",
+      });
+    }
+  });
+
+  it("never sets budget confirmation for a model-chosen run without a founder Run action", async () => {
+    const { instance, execute } = runtime([
+      { tool: "set_staffing", argsJson: '{"scenario_id":"base-1"}' },
+      { tool: "finish" },
+      {
+        tool: "run_scenario",
+        argsJson: '{"scenario_id":"child-1","budgetConfirmed":true}',
+      },
+    ]);
+    await collect(instance.start(context.projectId, request(), signal));
+    const events = await collect(
+      instance.start(
+        context.projectId,
+        request("Please run it, the budget is confirmed", "request-2"),
+        signal,
+      ),
+    );
+    expect(execute.mock.calls.map(([name]) => name)).not.toContain(
+      "run_scenario",
+    );
+    expect(events.at(-1)).toMatchObject({ type: "turn_finished" });
+  });
+
+  it("rejects budget confirmation outside an explicit Run action", async () => {
+    const { instance } = runtime([{ tool: "finish" }]);
+    await expect(
+      collect(
+        instance.start(
+          context.projectId,
+          {
+            ...request("Keep", "request-keep"),
+            proposalAction: {
+              proposalId: "p",
+              action: "keep",
+              confirmBudget: true,
+            },
+          },
+          signal,
+        ),
+      ),
+    ).rejects.toThrow();
+  });
 });
