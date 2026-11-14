@@ -133,7 +133,8 @@ test.describe("keyboard and focus", () => {
 
       const labels = NAV_ORDER.map((route) => routeLabels[route]);
       const seen: string[] = [];
-      for (let i = 0; i < 10 && seen.length < NAV_ORDER.length; i++) {
+      // The context bar sits before the nav and adds its own tab stops, so allow for them.
+      for (let i = 0; i < 25 && seen.length < NAV_ORDER.length; i++) {
         await pressTab(page, browserName);
         const text = (await page.locator(":focus").textContent())?.trim() ?? "";
         if (labels.includes(text)) seen.push(text);
@@ -158,10 +159,12 @@ test.describe("keyboard and focus", () => {
       "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",
     );
     await gotoView("map");
-    // Header link, then every task link, then the Next step.
-    for (let i = 0; i < 1 + NAV_ORDER.length + 1; i++) await pressTab(page, browserName);
-
+    // Tab past the header, the context bar and the task links to the Next step.
     const focused = page.locator(":focus");
+    for (let i = 0; i < 25; i++) {
+      await pressTab(page, browserName);
+      if ((await focused.getAttribute("data-next-step")) !== null) break;
+    }
     await expect(focused).toHaveText(`Next: ${nextStep("map")!.step}`);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(workspaceHref(projectId, "site", "montrose"));
@@ -169,7 +172,7 @@ test.describe("keyboard and focus", () => {
   });
 
   for (const view of NAV_ORDER) {
-    test(`focus is visible on the header and nav links of the ${view} view`, async ({
+    test(`focus is visible on the header, context bar and nav links of the ${view} view`, async ({
       page,
       gotoView,
       browserName,
@@ -180,15 +183,20 @@ test.describe("keyboard and focus", () => {
       );
       await gotoView(view, siteFor(view));
 
-      // Header link, the task links and the Next step (absent on the last step).
-      for (let i = 0; i < 1 + NAV_ORDER.length + (nextStep(view) ? 1 : 0); i++) {
+      // Walk every stop up to the last one in the nav: the Next step, or the plan link when
+      // there is no next step. The context bar adds its own stops before the nav.
+      const lastText = nextStep(view) ? "Next:" : routeLabels.plan;
+      let reachedLast = false;
+      for (let i = 0; i < 25 && !reachedLast; i++) {
         await pressTab(page, browserName);
         const focus = await focusedOutline(page);
         expect(focus, "something is focused").not.toBeNull();
         const hasIndicator =
           (focus!.outlineStyle !== "none" && focus!.outlineWidth > 0) || focus!.boxShadow !== "none";
         expect(hasIndicator, `focus indicator on "${focus!.text}": ${JSON.stringify(focus)}`).toBe(true);
+        reachedLast = focus!.text.startsWith(lastText);
       }
+      expect(reachedLast, "tabbing reaches the end of the nav").toBe(true);
     });
   }
 });
