@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   doublePrecision,
@@ -27,6 +28,10 @@ export const costarProperties = pgTable(
   },
   (t) => [
     index("costar_properties_point_idx").using("gist", t.point),
+    index("costar_properties_geog_idx").using(
+      "gist",
+      sql`(${t.point}::geography)`,
+    ),
     index("costar_properties_city_idx").on(t.city),
   ],
 );
