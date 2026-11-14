@@ -23,6 +23,19 @@ export type DemandSource = z.infer<typeof DemandSourceSchema>;
 export const MAX_EVALUATION_SITES = 8;
 export const DEFAULT_SEEDS = 30;
 
+/**
+ * How many panel personas Jev answered for one site (HAC-101). Optional everywhere so stored
+ * requests and results from before it existed still parse.
+ */
+export const JevPanelCoverageSchema = z
+  .object({
+    personaCount: z.number().int().nonnegative(),
+    /** Personas still unanswered after the panel's retry; any here means the site uses Huff. */
+    failedPersonaCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type JevPanelCoverage = z.infer<typeof JevPanelCoverageSchema>;
+
 export const EvaluationSiteSchema = z
   .object({
     siteId: z.string().min(1),
@@ -33,6 +46,8 @@ export const EvaluationSiteSchema = z
     /** Cached Jev answers for this site. Without one, the site cannot use demandSource "jev". */
     behaviorTable: BehaviorTable.optional(),
     behaviorTableId: z.string().min(1).optional(),
+    /** Panel coverage when Jev was asked for this site (HAC-101); carried to the result. */
+    jevPanel: JevPanelCoverageSchema.optional(),
     /** Origin of config.service.meanServiceMin (founder when the profile states it). */
     serviceMeanOrigin: z
       .enum(["costar", "public", "founder", "default"])
@@ -167,6 +182,8 @@ export const SiteEvaluationSchema = z
     excludedPersonaIds: z.array(z.string()),
     /** HAC-94: all-seed hourly visualization data; absent on legacy comparisons. */
     insights: SiteInsightsSchema.optional(),
+    /** Jev panel coverage, when Jev was asked; optional for older results. */
+    jevPanel: JevPanelCoverageSchema.optional(),
   })
   .superRefine((site, ctx) => {
     if (site.insights && site.insights.siteId !== site.siteId)

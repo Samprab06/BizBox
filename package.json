@@ -25,6 +25,7 @@
     "db:load": "tsx scripts/load-local-data.ts",
     "db:load:hosted": "tsx scripts/load-hosted-data.ts",
     "db:verify": "tsx scripts/verify-local-dev.ts",
+    "jev:record": "tsx scripts/record-jev-example.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

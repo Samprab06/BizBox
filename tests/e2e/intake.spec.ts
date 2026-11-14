@@ -346,10 +346,6 @@ test("the whole intake can be completed with the keyboard only", async ({ page, 
 });
 
 test("has no serious or critical accessibility violations", async ({ page }) => {
-  test.fixme(
-    true,
-    'HAC-40: axe "listitem" (serious): the conversation <ol role="log"> loses its list role, so its <li> children have no list parent',
-  );
   await openIntake(page);
   await expectNoA11yViolations(page);
 
