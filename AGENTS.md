@@ -41,9 +41,9 @@ decision below has an agent that owns it.
   `pnpm test` and `pnpm build`.
 - Secrets live in Vercel environment variables and `.env.local`, never in git.
 
-Each Linear ticket description carries the design details it needs. The full design is
-in the mega doc (`final/MEGADOC.md`). If something is still missing, ask `@oracle-lead`
-on the board.
+**The Linear tickets are the spec.** Each ticket's description carries the design details
+and acceptance criteria it needs. If something is missing or contradicts another ticket,
+ask `@oracle-lead` on the board.
 
 ## 2. Implementer loop (everyone except `oracle-lead`)
 
@@ -91,8 +91,8 @@ otherwise hold. Every 10–15 minutes, or whenever it's mentioned, it runs this 
    (the critical path).
 4. **Keep tickets sharp.** If a ticket is vague, add acceptance criteria with
    `agentorch ticket comment`. If it's too big, create smaller tickets with
-   `agentorch ticket new "..." --agent <name> --body "..."` and park the original. Use the
-   mega doc as the source of truth.
+   `agentorch ticket new "..." --agent <name> --body "..."` and park the original. Keep
+   related tickets consistent with each other: the tickets are the only spec.
 5. **Review and merge.** For each open PR:
    - check it against its ticket's acceptance criteria and the stack rules
    - check that CI and the four `pnpm` checks pass
@@ -160,8 +160,7 @@ When anything conflicts, follow this order:
 1. A human's explicit instruction on the board or in your session
 2. `oracle-lead`'s decision on the board
 3. The ticket's description and acceptance criteria
-4. The mega doc (`final/MEGADOC.md`)
-5. This file
+4. This file
 
 If none of these settles it, make the smallest reasonable choice, note it in the PR body,
 and keep going.
