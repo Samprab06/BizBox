@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IntakeStateSchema } from "@/lib/contracts/intake";
 
 export const fields = [
   { key: "concept", label: "Business concept" },
@@ -22,6 +23,17 @@ const answerSchema = z.object({ value: z.string(), origin: z.enum(["default", "f
 export const intakeSessionSchema = z.object({
   profile: z.partialRecord(fieldKey, answerSchema),
   messages: z.array(z.object({ role: z.enum(["founder", "agent"]), text: z.string() })),
+  // HAC-66: the intake API's round-tripped state and form edits not yet sent to it.
+  // .catch keeps an old or damaged live state from discarding the founder's answers.
+  live: z
+    .object({
+      state: IntakeStateSchema,
+      missingRequiredFields: z.array(z.string()),
+      findings: z.array(z.string()),
+    })
+    .optional()
+    .catch(undefined),
+  pending: z.array(fieldKey).optional().catch(undefined),
 });
 
 export type IntakeSession = z.infer<typeof intakeSessionSchema>;
