@@ -4,15 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DayResult } from "@/lib/sim/contracts";
 import { interiorFrame } from "../simulator/interior-state";
 import { useSceneVisibility } from "../simulator/use-scene-visibility";
-import { attachReplayScene, type ScanPlacement } from "./matterport-scene";
+import type { ScanPlacement } from "./matterport-scene";
+import type { ServiceViewpoint, ShowcaseWindow } from "./matterport-bridge";
 import {
-  waitForPlaying,
-  connectShowcase,
-  focusServiceArea,
-  type ServiceViewpoint,
-  type MatterportSdk,
-  type ShowcaseWindow,
-} from "./matterport-bridge";
+  createViewerSession,
+  failureStatus,
+  publicEmbedUrl,
+  initialViewerState,
+  type ViewerSession,
+  type ViewerState,
+} from "./matterport-session";
 
 export type MatterportConfig = {
   sdkKey: string;
@@ -38,18 +39,9 @@ export default function MatterportView({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { hasBeenVisible } = useSceneVisibility(container);
-  const [sdk, setSdk] = useState<MatterportSdk | null>(null);
-  const [connection, setConnection] = useState<"connecting" | "failed">(
-    "connecting",
-  );
-  const [focusFailed, setFocusFailed] = useState(false);
-  const [overlay, setOverlay] = useState<"pending" | "ready" | "failed">(
-    "pending",
-  );
-  const controller = useRef<AbortController | null>(null);
-  const session = useRef<Awaited<ReturnType<typeof attachReplayScene>> | null>(
-    null,
-  );
+  const [viewer, setViewer] = useState<ViewerState>(initialViewerState);
+  const [frameKey, setFrameKey] = useState(0);
+  const session = useRef<ViewerSession | null>(null);
   const replay = useMemo(
     () => ({
       frame: interiorFrame(run, minute, employeeCount),
@@ -58,72 +50,34 @@ export default function MatterportView({
     }),
     [run, minute, employeeCount, selected],
   );
-  const latest = useRef({ replay, select });
+  const latest = useRef({ replay, select, config });
   useEffect(() => {
-    latest.current = { replay, select };
-    session.current?.update(replay, config.placement);
-  }, [replay, select, config.placement]);
+    latest.current = { replay, select, config };
+    session.current?.update(replay);
+  }, [replay, select, config]);
 
-  useEffect(
-    () => () => {
-      controller.current?.abort();
-    },
-    [],
-  );
   useEffect(() => {
-    if (!sdk || !config.placement) return;
-    let disposed = false;
-    const attempt = new AbortController();
-    let layer: Awaited<ReturnType<typeof attachReplayScene>> | null = null;
-    void attachReplayScene(
-      sdk,
-      config.placement,
-      latest.current.replay,
-      (id) => latest.current.select(id),
-      attempt.signal,
-    )
-      .then((created) => {
-        if (disposed) {
-          created.dispose();
-          return;
-        }
-        layer = created;
-        session.current = created;
-        created.update(latest.current.replay);
-        setOverlay("ready");
-      })
-      .catch(() => {
-        if (!disposed) setOverlay("failed");
-      });
+    const created = createViewerSession({
+      config: () => latest.current.config,
+      replay: () => latest.current.replay,
+      select: (id) => latest.current.select(id),
+      onChange: setViewer,
+    });
+    session.current = created;
     return () => {
-      disposed = true;
-      attempt.abort();
-      layer?.dispose();
-      session.current = null;
+      created.dispose();
+      if (session.current === created) session.current = null;
     };
-  }, [sdk, config.placement]);
+  }, []);
 
-  async function connect(frame: HTMLIFrameElement) {
-    controller.current?.abort();
-    setSdk(null);
-    setConnection("connecting");
-    setOverlay("pending");
-    const attempt = new AbortController();
-    controller.current = attempt;
-    try {
-      const target = frame.contentWindow as ShowcaseWindow | null;
-      if (!target) throw new Error("Viewer SDK unavailable");
-      const connected = await connectShowcase(target, attempt.signal);
-      await waitForPlaying(connected, attempt.signal);
-      if (attempt.signal.aborted) return;
-      if (config.viewpoint) await focusServiceArea(connected, config.viewpoint);
-      if (!attempt.signal.aborted) setSdk(connected);
-    } catch {
-      if (!attempt.signal.aborted) setConnection("failed");
-    }
-  }
+  const { connection, failure, overlay, sdk, focusFailed } = viewer;
+  const failed = connection === "failed";
+  // Never leave a blank or broken frame: fall back to the keyless embed, or
+  // to a labelled placeholder when the model itself is unavailable.
+  const embed = failed && failure !== "model";
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
   const localhostUrl =
-    typeof window !== "undefined" && window.location.hostname === "127.0.0.1"
+    host === "127.0.0.1"
       ? window.location.href.replace("127.0.0.1", "localhost")
       : null;
   const params = new URLSearchParams({
@@ -132,18 +86,19 @@ export default function MatterportView({
     play: "1",
     qs: "1",
   });
-  const status =
-    connection === "failed"
-      ? "Unable to connect to the scanned interior. Check the SDK key's allowed domain and model access, or choose Modeled layout."
-      : !sdk
-        ? "Connecting to the Matterport café…"
-        : !config.placement
-          ? "Scanned interior connected. Simulation overlay is awaiting placement calibration."
-          : overlay === "failed"
-            ? "The scan connected, but simulation dots could not start. Choose Modeled layout to inspect the replay."
-            : overlay === "ready"
-              ? "Scanned interior connected · simulation dots active."
-              : "Scanned interior connected. Starting simulation dots…";
+  const status = failed
+    ? failureStatus(failure, host)
+    : !sdk
+      ? "Connecting to the Matterport café…"
+      : !config.placement
+        ? "Scanned interior connected. Simulation overlay is awaiting placement calibration."
+        : overlay === "failed"
+          ? "The scan connected, but simulation dots could not start. Retry the dots or choose Modeled layout to inspect the replay."
+          : overlay === "ready"
+            ? "Scanned interior connected · simulation dots active."
+            : "Scanned interior connected. Starting simulation dots…";
+  const button =
+    "min-h-11 rounded-full border border-white/20 px-4 text-sm text-white/80 hover:bg-white/10";
   return (
     <div
       ref={container}
@@ -151,26 +106,48 @@ export default function MatterportView({
       aria-label="Scanned simulation"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-white/65">
-        <span>Scanned interior · public café reference</span>
+        <span>
+          {embed
+            ? "Plain public embed · public café reference"
+            : "Scanned interior · public café reference"}
+        </span>
         <span>
           {run.metrics.stations} proposed staffed{" "}
           {run.metrics.stations === 1 ? "counter" : "counters"}
         </span>
       </div>
-      {sdk && config.viewpoint && (
-        <button
-          type="button"
-          onClick={() => {
-            setFocusFailed(false);
-            void focusServiceArea(sdk, config.viewpoint!).catch(() =>
-              setFocusFailed(true),
-            );
-          }}
-          className="mx-4 mb-3 min-h-11 rounded-full border border-white/20 px-4 text-sm text-white/80 hover:bg-white/10"
-        >
-          Show service area
-        </button>
-      )}
+      <div className="mx-4 mb-3 flex flex-wrap gap-2">
+        {sdk && config.viewpoint && (
+          <button
+            type="button"
+            onClick={() => void session.current?.focus()}
+            className={button}
+          >
+            Show service area
+          </button>
+        )}
+        {sdk && config.placement && overlay === "failed" && (
+          <button
+            type="button"
+            onClick={() => session.current?.retryOverlay()}
+            className={button}
+          >
+            Retry simulation dots
+          </button>
+        )}
+        {failed && (
+          <button
+            type="button"
+            onClick={() => {
+              session.current?.restart();
+              setFrameKey((key) => key + 1);
+            }}
+            className={button}
+          >
+            Retry scanned interior
+          </button>
+        )}
+      </div>
       {focusFailed && (
         <p className="px-4 pb-3 text-xs text-white/65">
           The service-area view could not be restored. You can still navigate
@@ -180,10 +157,12 @@ export default function MatterportView({
       <p
         role="status"
         data-overlay-status={overlay}
+        data-viewer-status={connection}
+        data-viewer-failure={failure}
         className="px-4 pb-3 text-sm text-white/75"
       >
         {status}
-        {connection === "failed" && localhostUrl && (
+        {failed && localhostUrl && (
           <>
             {" "}
             <a href={localhostUrl} className="underline">
@@ -193,18 +172,35 @@ export default function MatterportView({
           </>
         )}
       </p>
-      {hasBeenVisible && (
-        <iframe
-          title="Matterport café interior"
-          src={`/matterport/showcase.html?${params}`}
-          onLoad={(event) => {
-            void connect(event.currentTarget);
-          }}
-          allow="fullscreen; xr-spatial-tracking"
-          allowFullScreen
-          className="h-96 w-full border-0 sm:h-[32rem]"
-        />
-      )}
+      {hasBeenVisible &&
+        (embed ? (
+          <iframe
+            key="public-embed"
+            title="Matterport café interior (plain public embed)"
+            src={publicEmbedUrl(config.modelId)}
+            allow="fullscreen; xr-spatial-tracking"
+            allowFullScreen
+            className="h-96 w-full border-0 sm:h-[32rem]"
+          />
+        ) : failed ? (
+          <div className="flex h-96 items-center justify-center px-6 text-center text-sm text-white/65 sm:h-[32rem]">
+            Scanned interior unavailable. The modeled replay is unaffected.
+          </div>
+        ) : (
+          <iframe
+            key={`sdk-${frameKey}`}
+            title="Matterport café interior"
+            src={`/matterport/showcase.html?${params}`}
+            onLoad={(event) => {
+              const target = event.currentTarget
+                .contentWindow as ShowcaseWindow | null;
+              void session.current?.connect(target);
+            }}
+            allow="fullscreen; xr-spatial-tracking"
+            allowFullScreen
+            className="h-96 w-full border-0 sm:h-[32rem]"
+          />
+        ))}
       <p className="px-4 py-3 text-xs leading-relaxed text-white/55">
         Blue customer dots and purple employee dots are simulated. Translucent
         mint counter markers are proposed overlays; captured furniture stays

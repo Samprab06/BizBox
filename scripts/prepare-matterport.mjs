@@ -8,6 +8,9 @@ import { parse } from "dotenv";
 
 // Use the unmodified, self-contained Bundle SDK distributed by Matterport. Its
 // iframe owns Three.js 0.184; the application's Three.js version stays unchanged.
+// 0.1.47 is the newest npm release (checked 2026-11-14) and ships Showcase
+// 26.5.4. Matterport's docs list 26.10.4, which is not on npm yet; see
+// docs/matterport-sdk.md before changing this pin.
 const version = "0.1.47";
 const integrity =
   "rIwtHRHMBmFddoeF4A9dpdPnRvXZ736H77YFx3CdkVRCJkqUoxWoZW8lddCLdNF0CC0U8wyVSjX/J7UJUOIvDg==";
@@ -44,7 +47,13 @@ if (configured || process.argv.includes("--required")) {
         "package/built-bundle",
       ]);
       await writeFile(marker, version);
-      console.log(`Prepared Matterport Bundle SDK assets (${version})`);
+      const showcase = await readFile(
+        join(destination, "version.txt"),
+        "utf8",
+      ).catch(() => "unknown");
+      console.log(
+        `Prepared Matterport Bundle SDK assets (${version}, Showcase ${showcase.trim()})`,
+      );
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }

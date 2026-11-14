@@ -25,7 +25,11 @@ type SceneObject = {
 };
 export type MatterportSceneSdk = {
   Scene: {
-    register(name: string, factory: () => ReplayComponent): Promise<unknown>;
+    /** Resolves to a disposable registration in current bundles. */
+    register(
+      name: string,
+      factory: () => ReplayComponent,
+    ): Promise<{ dispose?(): void } | void | unknown>;
     createObjects(count: number): Promise<SceneObject[]>;
   };
 };
@@ -232,6 +236,11 @@ export class ReplayComponent {
 }
 
 let registration = 0;
+/**
+ * Builds a fresh scene object every call. A stopped Matterport scene object
+ * cannot be started again, so reconnects and retries must come through here
+ * rather than reuse an earlier session's object.
+ */
 export async function attachReplayScene(
   sdk: MatterportSceneSdk,
   placement: ScanPlacement,
@@ -239,13 +248,15 @@ export async function attachReplayScene(
   select: (id: string) => void,
   signal?: AbortSignal,
 ) {
+  const cancelled = () => new Error("Scene initialization cancelled");
+  if (signal?.aborted) throw cancelled();
   const name = `bizbox.replay-dots-${++registration}`;
   let didInitialize = false;
   let resolveInitialized: () => void = () => {};
   const initialized = new Promise<void>((resolve) => {
     resolveInitialized = resolve;
   });
-  await sdk.Scene.register(
+  const registered = await sdk.Scene.register(
     name,
     () =>
       new ReplayComponent(replay, placement, select, () => {
@@ -253,13 +264,33 @@ export async function attachReplayScene(
         resolveInitialized();
       }),
   );
-  const [object] = await sdk.Scene.createObjects(1);
-  if (!object) throw new Error("Scene initialization failed");
+  const unregister = () => {
+    const disposable = registered as { dispose?(): void } | undefined;
+    if (typeof disposable?.dispose === "function") disposable.dispose();
+  };
+  let object: SceneObject | undefined;
+  try {
+    if (signal?.aborted) throw cancelled();
+    [object] = await sdk.Scene.createObjects(1);
+    if (!object) throw new Error("Scene initialization failed");
+  } catch (error) {
+    // createObjects may still resolve after an abort; never leave it running.
+    unregister();
+    throw error;
+  }
+  const created = object;
+  let stopped = false;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    created.stop();
+    unregister();
+  };
   let component: ReplayComponent;
   try {
-    component = object.addNode().addComponent(name, { replay, placement });
-    if (signal?.aborted) throw new Error("Scene initialization cancelled");
-    await object.start();
+    component = created.addNode().addComponent(name, { replay, placement });
+    if (signal?.aborted) throw cancelled();
+    await created.start();
     if (!didInitialize) {
       await new Promise<void>((resolve, reject) => {
         const finish = (error?: Error) => {
@@ -268,7 +299,7 @@ export async function attachReplayScene(
           if (error) reject(error);
           else resolve();
         };
-        const abort = () => finish(new Error("Scene initialization cancelled"));
+        const abort = () => finish(cancelled());
         const timer = setTimeout(
           () => finish(new Error("Scene initialization timed out")),
           15000,
@@ -278,22 +309,17 @@ export async function attachReplayScene(
         else void initialized.then(() => finish());
       });
     }
+    if (signal?.aborted) throw cancelled();
   } catch (error) {
-    object.stop();
+    stop();
     throw error;
   }
-  let disposed = false;
   return {
     update(next: ScanReplay, nextPlacement = placement) {
-      if (disposed) return;
+      if (stopped) return;
       component.inputs.replay = next;
       component.inputs.placement = nextPlacement;
     },
-    dispose() {
-      if (!disposed) {
-        disposed = true;
-        object.stop();
-      }
-    },
+    dispose: stop,
   };
 }
