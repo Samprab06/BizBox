@@ -1,0 +1,49 @@
+{
+  "model": "macbook.glb",
+  "root": "HAC115_LaptopRoot",
+  "hinge": "HAC115_LidPivot",
+  "mobile_model": "macbook-mobile.glb",
+  "screen": "HAC115_Screen",
+  "units": "metres",
+  "width": 0.3557,
+  "source_axis": "Blender Z up; exported glTF Y up",
+  "screen_aspect": 1.545103483121591,
+  "screen_corners": [
+    {
+      "node": "HAC115_ScreenTopLeft",
+      "position_blender": [
+        -0.1723441481590271,
+        0.20811045169830322,
+        0.23329851031303406
+      ]
+    },
+    {
+      "node": "HAC115_ScreenTopRight",
+      "position_blender": [
+        0.17235511541366577,
+        0.20811045169830322,
+        0.23329851031303406
+      ]
+    },
+    {
+      "node": "HAC115_ScreenBottomRight",
+      "position_blender": [
+        0.17235511541366577,
+        0.1317072957754135,
+        0.023698121309280396
+      ]
+    },
+    {
+      "node": "HAC115_ScreenBottomLeft",
+      "position_blender": [
+        -0.1723441481590271,
+        0.1317072957754135,
+        0.023698121309280396
+      ]
+    }
+  ],
+  "screen_status": "Interim actual app map; requested consultant composition pending HAC-118",
+  "attribution_url": "./credits.html",
+  "triangles": 112625,
+  "mesh_objects": 24
+}

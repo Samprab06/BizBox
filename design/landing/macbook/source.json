@@ -1,0 +1,23 @@
+{
+  "original_model": "macbook pro M3 16 inch 2024",
+  "creator": "jackbaeten",
+  "original_url": "https://sketchfab.com/3d-models/macbook-pro-m3-16-inch-2024-8e34fc2b303144f78490007d91ff57c4",
+  "license": "CC-BY-4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "verified_date": "2026-11-14",
+  "verification": "Sketchfab public model API license metadata and embedded GLB asset extras",
+  "distribution_url": "https://github.com/william-laverty/rigged-macbook-3d",
+  "distribution_commit": "74771a18884dade35cdf79c7614628100f0f893a",
+  "source_path": "assets/macbook-source.glb",
+  "source_sha256": "6f4b01027858cbc5fd7a8320bbf48b66d553c67b39feabe19007eb91eafe96a1",
+  "source_bytes": 639284,
+  "modifications": [
+    "normalized physical scale",
+    "connected shell split into base and hinged lid",
+    "screen anchors",
+    "upright display UVs",
+    "interim actual application map texture",
+    "mobile mesh simplification"
+  ],
+  "screen_status": "Interim actual map capture; final map and consultant composition depends on HAC-118"
+}
