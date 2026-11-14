@@ -26,6 +26,7 @@
     "db:load:hosted": "tsx scripts/load-hosted-data.ts",
     "db:verify": "tsx scripts/verify-local-dev.ts",
     "jev:record": "tsx scripts/record-jev-example.ts",
+    "nessie:seed": "tsx scripts/nessie-seed.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
