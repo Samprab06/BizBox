@@ -61,6 +61,8 @@ export default function Neighborhood({
       viewer = new Viewer(target, {
         baseLayer: false,
         globe: false,
+        skyBox: false,
+        skyAtmosphere: false,
         baseLayerPicker: false,
         geocoder: false,
         animation: false,
@@ -138,6 +140,10 @@ export default function Neighborhood({
       }
       const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
       city.clock.shouldAnimate = false;
+      const nightSky = Color.fromCssColorString("#10182e");
+      const daySky = Color.fromCssColorString("#87bce6");
+      const twilightSky = Color.fromCssColorString("#ee9e83");
+      const sky = new Color();
       let previousMinute = -1;
       city.scene.preUpdate.addEventListener(() => {
         const step = Math.floor(timeRef.current / 5) * 5;
@@ -152,6 +158,13 @@ export default function Neighborhood({
         const warm = Math.max(
           0,
           1 - Math.min(Math.abs(step - 410), Math.abs(step - 1040)) / 75,
+        );
+        Color.lerp(nightSky, daySky, Math.sqrt(light), sky);
+        city.scene.backgroundColor = Color.lerp(
+          sky,
+          twilightSky,
+          warm * 0.85,
+          sky,
         );
         const brightness = 0.37 + 0.63 * light + warm * 0.2;
         const red = Math.min(1, brightness + 0.15 * warm);
