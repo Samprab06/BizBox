@@ -40,8 +40,8 @@ Responses contain `persisted: false`, `draft`, `assumptions`, `profile`,
 `missingRequiredFields`, `findings`, `questions`, `nextQuestion`, `defaultSources`,
 and `assistantMessage`. This endpoint is **stateless**: the caller must carry the
 returned state into the next request. It does not create durable profile snapshots
-or update the existing browser intake UI. The later orchestrator can use
-`saveProfile` and persist validated snapshots through its own database workflow.
+or update the existing browser intake UI. The [investigation orchestrator](../../docs/investigation-orchestrator.md)
+uses `saveProfile` and persists validated snapshots through its database workflow.
 
 An existing project and a configured `DATABASE_URL` are required for the read-only
 project lookup. Unknown projects return 404. Invalid JSON, unsupported fields,

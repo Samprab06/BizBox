@@ -75,7 +75,12 @@ class DeadlineReached extends Error {}
 
 export function createInvestigationService(
   repository: InvestigationRepository,
-  options: { now?: () => Date; id?: () => string; token?: () => string } = {},
+  options: {
+    now?: () => Date;
+    id?: () => string;
+    token?: () => string;
+    resumeToolTimeouts?: boolean;
+  } = {},
 ) {
   const now = options.now ?? (() => new Date());
   const id = options.id ?? randomUUID;
@@ -344,7 +349,7 @@ export function createInvestigationService(
           return await save(
             {
               ...job,
-              status: "queued",
+              status: options.resumeToolTimeouts ? "running" : "queued",
               reason: "Advancement time budget reached",
               lastAdvanceAt: now().toISOString(),
             },
@@ -362,15 +367,19 @@ export function createInvestigationService(
               ...job,
               status:
                 error instanceof DeadlineReached
-                  ? executing
-                    ? "interrupted"
-                    : "queued"
+                  ? options.resumeToolTimeouts
+                    ? "running"
+                    : executing
+                      ? "interrupted"
+                      : "queued"
                   : "failed",
               reason:
                 error instanceof DeadlineReached
-                  ? executing
-                    ? "Tool deadline reached; retry required"
-                    : "Advancement time budget reached"
+                  ? options.resumeToolTimeouts
+                    ? "Advancement time budget reached; resume from saved milestones"
+                    : executing
+                      ? "Tool deadline reached; retry required"
+                      : "Advancement time budget reached"
                   : "Investigation step failed",
               lastAdvanceAt: now().toISOString(),
             },

@@ -5,6 +5,8 @@ export const INVESTIGATION_LIMITS = {
   pollCustomers: 3,
   evaluateSites: 3,
 } as const;
+/** Overall investigation wall time, including retries; rehearsal can tune this. */
+export const INVESTIGATION_WALL_TIME_MS = 15 * 60_000;
 export const InvestigationLimitsSchema = z
   .object({
     toolCalls: z.number().int().min(0).max(INVESTIGATION_LIMITS.toolCalls),
