@@ -1,6 +1,6 @@
 # HAC-94 resume handoff
 
-Outcome: implemented and verified locally, still In Development because no new-ticket publication approval/PR is assumed. No remaining confirmed code-review findings. User requested issue handoffs without granting additional push/merge/deploy approval.
+Outcome: implemented and verified. Akshar explicitly authorized pushing and opening the HAC-94 PR in this chat; no merge/deploy authorization follows. Publication and review status are tracked in Linear/GitHub. No remaining confirmed code-review findings.
 
 Branch: `hac-94-sim-10-customer-insights-peak-hours-dash`.
 Worktree: `/Users/aksharkakkad/.codex/worktrees/hac-86-typed-layout/HackPrinceton` (reused name; original HAC-86 branch preserved and merged through PR76).
@@ -15,6 +15,8 @@ Limitations: actual served-origin geography is unavailable without explicit samp
 Resume:
 1. `cd /Users/aksharkakkad/.codex/worktrees/hac-86-typed-layout/HackPrinceton`; `git status --short`; `git log -1`.
 2. `agentorch board unread`; `agentorch ticket show HAC-94`; inspect PR85/88/79 states with `gh pr view` before choosing the eventual base. Do not overwrite another chat's branch.
-3. Obtain Akshar publication approval for this new ticket if none has arrived. Present current exact delivery/base; do not infer it from the handoff request. Publish a small stacked PR only after its API/simulator bases are aligned; preserve full reviewed behavior when resolving dependencies.
+3. Publication approval has arrived. Aligned source b22de8475b8d4aa1b4d6ea5ef7e025076e90a623 incorporates main4eafc9a and refreshed HAC-71 base60c2b6e; the diff against that base contains only35 HAC-94 files. Publish the stacked PR under that existing approval, preserve dependencies and rerun relevant checks for material later changes.
 4. If source changes, rerun the four pnpm checks and `pnpm exec playwright test tests/e2e/insights.spec.ts` against an owned local production/dev server for Chromium/WebKit/mobile. No hosted database or paid provider is necessary for those checks.
 5. After an authorized PR: `agentorch ticket done HAC-94 --pr <url>` and post the scoped DONE/CONTRACT handoff. Keep it open until that real PR handoff.
+
+Publication-aligned b22de84 again passes all4 checks (945 passed /40 gated skips), env/client guards, frozen dependencies, migration-chain and diff checks. Prior feature browser matrix:27/27 across Chromium/WebKit/mobile. Fresh upstream changes are the already-merged scenario API, replay-camera controls and main-only deployment policy. Subsequent documentation-only commit records this evidence.
