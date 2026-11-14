@@ -15,7 +15,7 @@ export default function Neighborhood({
   tilesetUrl: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const trafficEntities = useRef<Entity[]>([]);
+  const trafficEntities = useRef<(show: boolean) => void>(() => {});
   const [trafficVisible, setTrafficVisible] = useState(true);
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">(
@@ -62,7 +62,7 @@ export default function Neighborhood({
       }
       viewer.scene.primitives.add(tileset);
       const city = viewer;
-      trafficEntities.current = roads.map(({ roadClass, points }, index) => {
+      const entities: Entity[] = roads.map(({ roadClass, points }, index) => {
         const congestion =
           (index * 37 + (roadClass === "primary" ? 30 : 0)) % 100;
         const color =
@@ -85,6 +85,9 @@ export default function Neighborhood({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0018, 195),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-40), roll: 0 },
       });
+      trafficEntities.current = (show) => {
+        for (const entity of entities) entity.show = show;
+      };
       const stopWatching = tileset.tileVisible.addEventListener(() => {
         stopWatching();
         setStatus("ready");
@@ -100,7 +103,7 @@ export default function Neighborhood({
     });
     return () => {
       closed = true;
-      trafficEntities.current = [];
+      trafficEntities.current = () => {};
       viewer?.destroy();
     };
   }, [longitude, latitude, tilesetUrl, attempt]);
@@ -144,7 +147,7 @@ export default function Neighborhood({
             onChange={(event) => {
               const show = event.target.checked;
               setTrafficVisible(show);
-              for (const entity of trafficEntities.current) entity.show = show;
+              trafficEntities.current(show);
             }}
           />
           Traffic heatmap

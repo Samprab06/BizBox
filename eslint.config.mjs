@@ -6,6 +6,7 @@ export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
   globalIgnores([
+    "public/cesium/**",
     ".next/**",
     "coverage/**",
     "node_modules/**",
