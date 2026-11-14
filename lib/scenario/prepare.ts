@@ -99,12 +99,12 @@ export function createScenarioPreparer({
             openMin: hours.openMinute.value!,
             closeMin: hours.closeMinute.value!,
           };
-          assumptions[`${site.siteId}.config.hours.${day}.openMin`] = {
+          assumptions[`sites.${site.siteId}.config.hours.${day}.openMin`] = {
             value: hours.openMinute.value!,
             origin: hours.openMinute.origin,
             evidenceIds: hours.openMinute.evidenceIds,
           };
-          assumptions[`${site.siteId}.config.hours.${day}.closeMin`] = {
+          assumptions[`sites.${site.siteId}.config.hours.${day}.closeMin`] = {
             value: hours.closeMinute.value!,
             origin: hours.closeMinute.origin,
             evidenceIds: hours.closeMinute.evidenceIds,
@@ -117,15 +117,16 @@ export function createScenarioPreparer({
         config.prices.avgTicketUsd = o.averageTicketCents.value! / 100;
       if (o.plannedStations) {
         if (
+          selectedLayout?.siteId !== site.siteId &&
           o.plannedStations.value! >
-          Math.floor(config.stations.usableSf / config.stations.sfPerStation)
+            Math.floor(config.stations.usableSf / config.stations.sfPerStation)
         )
           throw new ScenarioRunError(
             "invalid",
             "Planned stations exceed the site's modeled area capacity",
           );
         config.stations.planned = o.plannedStations.value!;
-        assumptions[`${site.siteId}.config.stations.planned`] = {
+        assumptions[`sites.${site.siteId}.config.stations.planned`] = {
           value: o.plannedStations.value!,
           origin: o.plannedStations.origin,
           evidenceIds: o.plannedStations.evidenceIds,
@@ -150,7 +151,7 @@ export function createScenarioPreparer({
           "stations.sfPerStation": config.stations.sfPerStation,
           queueCapacity: config.queueCapacity!,
         }))
-          assumptions[`${site.siteId}.config.${key}`] = {
+          assumptions[`sites.${site.siteId}.config.${key}`] = {
             value,
             origin: "default",
             evidenceIds,

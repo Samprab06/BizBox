@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { LayoutInputError } from "@/lib/layout";
+import { AssemblyError } from "@/lib/evaluation/assemble";
 import {
   DEFAULT_SEEDS,
   EVALUATION_MODEL_VERSION,
@@ -203,7 +205,14 @@ export function createScenarioRunner({
       return publicExecution(job);
     } catch (error) {
       // Transient dependency/storage failures retain checkpoints for a later advance.
-      if (error instanceof ScenarioRunError && error.code === "invalid" && job)
+      if (
+        job &&
+        (error instanceof LayoutInputError ||
+          error instanceof AssemblyError ||
+          error instanceof z.ZodError ||
+          (error instanceof ScenarioRunError &&
+            (error.code === "invalid" || error.code === "not_found")))
+      )
         await save({ ...job, status: "failed" });
       throw error;
     } finally {

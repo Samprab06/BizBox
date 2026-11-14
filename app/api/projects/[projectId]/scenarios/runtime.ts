@@ -5,14 +5,18 @@ import { createScenarioService } from "@/lib/scenario/service";
 import { createScenarioHandlers } from "./handler";
 import { createPostgresScenarioRunner } from "@/lib/scenario/runtime";
 import { createScenarioRunHandlers } from "./run-handler";
-import { createPostgresLayoutRepository, loadLayoutDiffHook } from "@/lib/layout/repository";
+import {
+  createPostgresLayoutRepository,
+  loadLayoutDiffHook,
+} from "@/lib/layout/repository";
 
 // The repository opens no connection until a validated request calls it.
 export const scenarioHandlers = createScenarioHandlers(
   createScenarioService({
     repository: createPostgresScenarioRepository(),
     newId: () => `scenario_${randomUUID()}`,
-    layoutDiff: (projectId, ids) => loadLayoutDiffHook(createPostgresLayoutRepository(), projectId, ids),
+    layoutDiff: (projectId, ids) =>
+      loadLayoutDiffHook(createPostgresLayoutRepository(), projectId, ids),
   }),
 );
 
