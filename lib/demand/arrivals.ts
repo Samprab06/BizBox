@@ -24,19 +24,100 @@ import type { Customer, DayType, TimeBlock } from "./contracts";
 import { TIME_BLOCKS, TIME_BLOCK_HOURS } from "./contracts";
 import { ENVELOPE_VISITS_PER_PERSON_HOUR, GENERATION_WINDOW } from "./defaults";
 
+/** Options for turning time-block shares into hourly rates. */
+export interface RateOptions {
+  /**
+   * Smooth the block step function into a continuous curve (see smoothBlockShares). Opt-in:
+   * unset or false keeps the flat per-block rates, so existing results are unchanged.
+   */
+  smooth?: boolean;
+}
+
+/**
+ * Smooth alternative to the block step function: the share of the day's visits in each clock
+ * hour (24 entries, summing to 1). The blocks tile the day, so their cumulative share
+ * F(t) is known exactly at every block boundary. We interpolate F with a monotone cubic
+ * Hermite spline (Fritsch-Carlson): F is non-decreasing, so the density F' is non-negative
+ * and continuous, and every block's total share F(end) - F(start) is preserved exactly. The
+ * hourly shares are F(h + 1) - F(h). Deterministic and free of randomness.
+ */
+export function smoothBlockShares(timeBlocks: Record<TimeBlock, number>): number[] {
+  const total = TIME_BLOCKS.reduce((s, b) => s + timeBlocks[b], 0);
+  const shares = new Array<number>(24).fill(0);
+  if (!(total > 0)) return shares;
+
+  // Knots at the block boundaries (hours) with cumulative share.
+  const xs: number[] = [TIME_BLOCK_HOURS[TIME_BLOCKS[0]!][0]];
+  const fs: number[] = [0];
+  for (const block of TIME_BLOCKS) {
+    xs.push(TIME_BLOCK_HOURS[block][1]);
+    fs.push((fs[fs.length - 1] ?? 0) + timeBlocks[block] / total);
+  }
+  const n = xs.length - 1;
+  const dx = Array.from({ length: n }, (_, k) => (xs[k + 1] ?? 0) - (xs[k] ?? 0));
+  const slope = Array.from({ length: n }, (_, k) => ((fs[k + 1] ?? 0) - (fs[k] ?? 0)) / (dx[k] ?? 1));
+
+  // Tangents (the density at each knot): weighted harmonic mean of neighbouring block
+  // densities, zero at a local extremum, one-sided at the ends.
+  const m = new Array<number>(n + 1).fill(0);
+  m[0] = slope[0] ?? 0;
+  m[n] = slope[n - 1] ?? 0;
+  for (let k = 1; k < n; k++) {
+    const a = slope[k - 1] ?? 0;
+    const b = slope[k] ?? 0;
+    if (a * b <= 0) {
+      m[k] = 0;
+    } else {
+      const w1 = 2 * (dx[k] ?? 1) + (dx[k - 1] ?? 1);
+      const w2 = (dx[k] ?? 1) + 2 * (dx[k - 1] ?? 1);
+      m[k] = (w1 + w2) / (w1 / a + w2 / b);
+    }
+  }
+
+  const cumulative = (x: number): number => {
+    if (x <= (xs[0] ?? 0)) return 0;
+    if (x >= (xs[n] ?? 0)) return fs[n] ?? 1;
+    let k = 0;
+    while (k < n - 1 && x >= (xs[k + 1] ?? 0)) k++;
+    const h = dx[k] ?? 1;
+    const t = (x - (xs[k] ?? 0)) / h;
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (
+      (2 * t3 - 3 * t2 + 1) * (fs[k] ?? 0) +
+      (t3 - 2 * t2 + t) * h * (m[k] ?? 0) +
+      (-2 * t3 + 3 * t2) * (fs[k + 1] ?? 0) +
+      (t3 - t2) * h * (m[k + 1] ?? 0)
+    );
+  };
+
+  for (let h = xs[0] ?? 0; h < (xs[n] ?? 0); h++) {
+    shares[h] = Math.max(0, cumulative(h + 1) - cumulative(h));
+  }
+  return shares;
+}
+
 /**
  * Per-minute arrival rate for each hour of the day (24 entries), given expected visits per
- * day if the site were open through every time block. Block shares are spread evenly over the
- * block's hours. Opening hours are applied later by rateAt / expectedVisitsByHour: visits that
- * fall outside [openMin, closeMin) are lost (the customer finds the site closed).
+ * day if the site were open through every time block. By default block shares are spread
+ * evenly over the block's hours (a step function); with `smooth` they follow a continuous
+ * curve with the same total per block. Opening hours are applied later by rateAt /
+ * expectedVisitsByHour: visits that fall outside [openMin, closeMin) are lost (the customer
+ * finds the site closed).
  */
 export function ratePerMinuteByHour(
   dailyVisits: number,
   timeBlocks: Record<TimeBlock, number>,
+  options: RateOptions = {},
 ): number[] {
   const rates = new Array<number>(24).fill(0);
   const total = TIME_BLOCKS.reduce((s, b) => s + timeBlocks[b], 0);
   if (!(total > 0) || !(dailyVisits > 0)) return rates;
+  if (options.smooth) {
+    const shares = smoothBlockShares(timeBlocks);
+    for (let h = 0; h < 24; h++) rates[h] = (dailyVisits * (shares[h] ?? 0)) / 60;
+    return rates;
+  }
   for (const block of TIME_BLOCKS) {
     const [h0, h1] = TIME_BLOCK_HOURS[block];
     const perHour = (dailyVisits * (timeBlocks[block] / total)) / (h1 - h0);

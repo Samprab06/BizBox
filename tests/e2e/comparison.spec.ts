@@ -49,7 +49,11 @@ test("completed intake permits deselection and runs only after an explicit actio
     candidateIds: [liveCandidateIds[0]],
     demandSource: "huff",
   });
-  await expect(page.getByText("Example data", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("live ranking keeps intervals, model provenance, findings and saved replay links", async ({
@@ -135,7 +139,11 @@ test("no intake and a failed API retain explicit examples with retry", async ({
   page,
 }) => {
   await page.goto("/projects/houston-coffee/comparison");
-  await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/Complete your intake/).first()).toBeVisible();
   await mockLiveComparison(page);
   await page.route("**/api/comparisons", (route) =>
@@ -156,7 +164,11 @@ test("no intake and a failed API retain explicit examples with retry", async ({
       .getByRole("alert")
       .filter({ hasText: /could not be run|unavailable/i }),
   ).toContainText(/could not be run|unavailable/i);
-  await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toBeVisible();
 });
 
 test("empty live search stays empty without inventing a ranking", async ({
@@ -178,7 +190,11 @@ test("empty live search stays empty without inventing a ranking", async ({
   await expect(
     page.getByRole("button", { name: "Run comparison", exact: true }),
   ).toBeDisabled();
-  await expect(page.getByText("Example data", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Comparison", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toHaveCount(0);
 });
 
 test("comparison retains the no-single-sales-forecast guard across widths and keyboard navigation", async ({
@@ -318,6 +334,52 @@ test("shows the Huff-only ranking check returned with a Jev comparison", async (
     page.getByText(/Huff-only check: the top site differs/),
   ).toBeVisible();
   await expect(page.getByText(/Huff order:/)).toBeVisible();
+});
+
+test("leads with the robustness headline, naming sites by address (HAC-62)", async ({
+  page,
+}) => {
+  await mockLiveComparison(page, { jevConfigured: true });
+  const [leader, other] = liveComparisonPayload.result.ranking;
+  const payload = {
+    ...structuredClone(liveComparisonPayload),
+    robustness: {
+      headline: `${leader} leads under current assumptions; ${other} leads if demand (market share) falls below 0.70× its current level.`,
+      leaderSiteId: leader,
+      tiedSiteIds: [],
+      mostInfluential: {
+        assumption: "market_share_scale",
+        breakEven: 0.7,
+        unit: "multiplier",
+        relativeDistance: 0.3,
+        fromSiteId: other,
+        toSiteId: leader,
+      },
+      robustTo: ["rent"],
+      jevHuffAgree: false,
+      missingInformation: [
+        "Your own sales or visitor counts from another location, to calibrate demand.",
+      ],
+    },
+  };
+  await page.route("**/api/comparisons", (route) =>
+    route.fulfill({ status: 201, json: payload }),
+  );
+  await page.goto("/projects/houston-coffee/comparison");
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  const headline = page.getByRole("region", {
+    name: "Recommendation robustness",
+  });
+  await expect(headline.getByRole("heading", { level: 3 })).toContainText(
+    "leads under current assumptions",
+  );
+  await expect(headline.getByRole("heading", { level: 3 })).not.toContainText(
+    leader!,
+  );
+  await expect(headline).toContainText("disagree on the leader");
+  await expect(headline).toContainText("calibrate demand");
 });
 
 test("failed sensitivity keeps the saved ranking and can retry", async ({

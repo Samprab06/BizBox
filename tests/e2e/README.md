@@ -44,6 +44,11 @@ Import `test` and `expect` from `./fixtures`, not from `@playwright/test`.
 ## Selector rules
 
 - Prefer `getByRole` (with `name`) and `getByLabel`. Then `getByText` for static copy.
+- Scope repeated labels and location links to their named region. The project context
+  bar repeats page status and location text; assert page content and shell context
+  separately rather than relying on page-wide uniqueness or `.first()`.
+- A successful mocked API response can still contain synthetic data. Assert its
+  provenance explicitly; an API-backed screen does not imply an absent Example badge.
 - Add a `data-testid` only where no accessible name exists, and say why in the PR.
 - Never select by CSS class or DOM position.
 - Don't hard-code `waitForTimeout`. Use web-first assertions (`await expect(...)`).

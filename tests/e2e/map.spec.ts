@@ -279,9 +279,11 @@ test.describe("intake-backed map", () => {
       .getByRole("link");
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("101 Invented St");
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("region", { name: "Search diagnostics" }),
     ).toContainText("city");
@@ -328,9 +330,11 @@ test.describe("intake-backed map", () => {
     await expect(
       page.getByRole("list", { name: "Candidate sites" }),
     ).toHaveCount(0);
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
   });
 
   test("failed search is labelled example data and retry recovers live results", async ({
@@ -350,15 +354,23 @@ test.describe("intake-backed map", () => {
         .getByRole("alert")
         .filter({ hasText: /Candidate search unavailable/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     failed = false;
     await page.getByRole("button", { name: "Retry search" }).click();
     await expect(
-      page.getByRole("link", { name: /101 Invented St/ }).first(),
+      page
+        .getByRole("list", { name: "Candidate sites", exact: true })
+        .getByRole("link", { name: /101 Invented St/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
   });
 });
 
@@ -378,7 +390,11 @@ test.describe("live map boundaries", () => {
       await route.fulfill({ status: 503, json: {} });
     });
     await page.goto("/projects/houston-coffee/map");
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
@@ -464,7 +480,11 @@ test.describe("live map boundaries", () => {
         .getByRole("alert")
         .filter({ hasText: /Candidate search unavailable/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
   });
 
   test("live map works across widths with reduced motion and no blocking accessibility issues", async ({
