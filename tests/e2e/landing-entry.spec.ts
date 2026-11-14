@@ -90,6 +90,20 @@ async function openLanding(page: Page) {
   );
 }
 
+/**
+ * Saves a finished profile for the next visit. It is written from /api/health, a plain JSON
+ * document on the app's origin: seeding from /start raced that page's own redirect into the
+ * onboarding (an empty session sends it there), which left a later reload or navigation
+ * landing on the intake view or interrupted.
+ */
+async function saveFinishedProfile(page: Page) {
+  await page.goto("/api/health");
+  await page.evaluate(
+    ([key, value]) => localStorage.setItem(key!, value!),
+    [STORAGE_KEY, JSON.stringify(answeredProfile)],
+  );
+}
+
 async function goToStage(page: Page, step: number, mode: string) {
   await page.locator(`.progress-nav [data-step="${step}"]`).click();
   await expect.poll(() => contentMode(page), { timeout: 15_000 }).toBe(mode);
@@ -271,11 +285,7 @@ test.describe("landing to onboarding to workspace", () => {
   test("a returning founder with a finished profile reaches the workspace in two clicks", async ({
     page,
   }) => {
-    await page.goto("/start");
-    await page.evaluate(
-      ([key, value]) => localStorage.setItem(key!, value!),
-      [STORAGE_KEY, JSON.stringify(answeredProfile)],
-    );
+    await saveFinishedProfile(page);
     await openLanding(page);
     await page.locator(".nav-cta").click();
     await expect(
@@ -313,12 +323,8 @@ test.describe("landing to onboarding to workspace", () => {
 
   test("/start is usable at phone width", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await saveFinishedProfile(page);
     await page.goto("/start");
-    await page.evaluate(
-      ([key, value]) => localStorage.setItem(key!, value!),
-      [STORAGE_KEY, JSON.stringify(answeredProfile)],
-    );
-    await page.reload();
     await expect(
       page.getByRole("link", { name: "Open your workspace" }),
     ).toBeInViewport();
