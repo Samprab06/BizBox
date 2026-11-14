@@ -56,7 +56,7 @@ The runner exposes only that tool, with no filesystem or delegation tools.
 Natural-language requests require `OPENAI_API_KEY` in private server environment
 configuration. Structured patches do not require a model key.
 
-The default model is [`gpt-5.4-mini`](https://developers.openai.com/api/docs/models/gpt-5.4-mini),
+The default model is [`gpt-6-luna`](https://developers.openai.com/api/docs/models/gpt-6-luna),
 confirmed in official OpenAI documentation on November 14, 2026. `OPENAI_MODEL`
 optionally selects another compatible tool-calling model. Reasoning is set to
 `none` so temperature 0 is supported. The runner keeps a 1,500-token response cap,

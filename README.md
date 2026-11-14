@@ -78,7 +78,7 @@ Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example
 | `JEV_API_KEY`    | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
 | `JEV_BASE_URL`   | `lib/panel/jev-client.ts`               | The Jev endpoint (to be confirmed in HAC-14).                                                                        |
 | `OPENAI_API_KEY` | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
-| `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-5.4-mini` with reasoning disabled.                              |
+| `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
 
 The fixture screens, offline tests and production build run without these credentials.
 The optional live Jev test needs its configured endpoint and API key. The OpenAI live

@@ -5,7 +5,7 @@ import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
 import { type IntakeSession, INTAKE_QUESTIONS } from "./intake";
 
-export const DEFAULT_INTAKE_MODEL = "gpt-5.4-mini";
+export const DEFAULT_INTAKE_MODEL = "gpt-6-luna";
 export const INTAKE_TIMEOUT_MS = 20_000;
 export type IntakeRunner = (input: {
   session: IntakeSession;

@@ -37,7 +37,7 @@ describe("configured OpenAI intake", () => {
             id: `chatcmpl-test-${requests.length}`,
             object: "chat.completion",
             created: 1,
-            model: override ?? "gpt-5.4-mini",
+            model: override ?? "gpt-6-luna",
             choices: [
               {
                 index: 0,
@@ -79,7 +79,7 @@ describe("configured OpenAI intake", () => {
       expect(message).toBe("Which city?");
       expect(requests).toHaveLength(2);
       expect(requests[0]).toMatchObject({
-        model: override ?? "gpt-5.4-mini",
+        model: override ?? "gpt-6-luna",
         temperature: 0,
         max_completion_tokens: 1500,
         reasoning_effort: "none",
