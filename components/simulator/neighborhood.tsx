@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Entity, Viewer } from "cesium";
+import type { ReactNode } from "react";
+import type { Viewer } from "cesium";
+import {
+  daylight,
+  demandAnchors,
+  demandLevel,
+  trafficLevel,
+} from "./day-cycle";
 import roads from "./montrose-roads.json";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
@@ -9,12 +16,20 @@ export default function Neighborhood({
   longitude,
   latitude,
   tilesetUrl,
+  minute,
+  children,
 }: {
   longitude: number;
   latitude: number;
   tilesetUrl: string;
+  minute: number;
+  children: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const timeRef = useRef(minute);
+  useEffect(() => {
+    timeRef.current = minute;
+  }, [minute]);
   const trafficEntities = useRef<(show: boolean) => void>(() => {});
   const [trafficVisible, setTrafficVisible] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -36,6 +51,10 @@ export default function Neighborhood({
         Cartesian3,
         ClassificationType,
         Color,
+        CallbackProperty,
+        ColorMaterialProperty,
+        JulianDate,
+        Cesium3DTileStyle,
         Math: CesiumMath,
       } = await import("cesium");
       if (closed) return;
@@ -62,25 +81,86 @@ export default function Neighborhood({
       }
       viewer.scene.primitives.add(tileset);
       const city = viewer;
-      const entities: Entity[] = roads.map(({ roadClass, points }, index) => {
-        const congestion =
-          (index * 37 + (roadClass === "primary" ? 30 : 0)) % 100;
-        const color =
-          congestion >= 70
-            ? "#ff3e47"
-            : congestion >= 38
-              ? "#ffb522"
-              : "#2fdf92";
-        return city.entities.add({
+      const entities = roads.map(({ roadClass, points }, index) =>
+        city.entities.add({
           polyline: {
             positions: Cartesian3.fromDegreesArray(points),
             width: roadClass === "tertiary" ? 5 : 8,
-            material: Color.fromCssColorString(color).withAlpha(0.82),
+            material: new ColorMaterialProperty(
+              new CallbackProperty(() => {
+                const congestion = trafficLevel(
+                  timeRef.current,
+                  index,
+                  roadClass,
+                );
+                const color =
+                  congestion >= 0.7
+                    ? "#ff3e47"
+                    : congestion >= 0.38
+                      ? "#ffb522"
+                      : "#2fdf92";
+                return Color.fromCssColorString(color).withAlpha(0.82);
+              }, false),
+            ),
             clampToGround: true,
             classificationType: ClassificationType.CESIUM_3D_TILE,
           },
+        }),
+      );
+      for (const anchor of demandAnchors) {
+        const position = Cartesian3.fromDegrees(
+          longitude + anchor.east,
+          latitude + anchor.north,
+        );
+        city.entities.add({
+          position,
+          ellipse: {
+            semiMajorAxis: new CallbackProperty(
+              () => 18 + 47 * demandLevel(timeRef.current, anchor.peaks),
+              false,
+            ),
+            semiMinorAxis: new CallbackProperty(
+              () => 18 + 47 * demandLevel(timeRef.current, anchor.peaks),
+              false,
+            ),
+            classificationType: ClassificationType.CESIUM_3D_TILE,
+            material: new ColorMaterialProperty(
+              new CallbackProperty(
+                () =>
+                  Color.fromCssColorString(anchor.color).withAlpha(
+                    0.05 + 0.45 * demandLevel(timeRef.current, anchor.peaks),
+                  ),
+                false,
+              ),
+            ),
+          },
+        });
+      }
+      const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
+      city.clock.shouldAnimate = false;
+      let previousMinute = -1;
+      city.scene.preUpdate.addEventListener(() => {
+        const step = Math.floor(timeRef.current / 5) * 5;
+        if (step === previousMinute) return;
+        previousMinute = step;
+        city.clock.currentTime = JulianDate.addSeconds(
+          midnight,
+          step * 60,
+          new JulianDate(),
+        );
+        const light = daylight(step);
+        const warm = Math.max(
+          0,
+          1 - Math.min(Math.abs(step - 410), Math.abs(step - 1040)) / 75,
+        );
+        const brightness = 0.37 + 0.63 * light + warm * 0.2;
+        const red = Math.min(1, brightness + 0.15 * warm);
+        const blue = Math.min(1, brightness + 0.1 * (1 - light) - 0.1 * warm);
+        tileset.style = new Cesium3DTileStyle({
+          color: `rgb(${Math.round(red * 255)}, ${Math.round(brightness * 255)}, ${Math.round(blue * 255)})`,
         });
       });
+
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0018, 195),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-40), roll: 0 },
@@ -139,7 +219,7 @@ export default function Neighborhood({
           )}
         </div>
       )}
-      <aside className="absolute bottom-10 left-3 max-w-[calc(100%-1.5rem)] rounded-lg bg-ink/90 p-3 text-sm text-white">
+      <aside className="absolute left-3 top-16 max-w-[calc(100%-1.5rem)] rounded-lg bg-ink/90 p-3 text-sm text-white">
         <label className="flex items-center gap-2 font-semibold">
           <input
             type="checkbox"
@@ -165,6 +245,23 @@ export default function Neighborhood({
           </>
         )}
       </aside>
+      <aside className="absolute right-3 top-16 hidden rounded-lg bg-ink/90 p-3 text-xs text-white sm:block">
+        <strong>Modeled demand</strong>
+        {demandAnchors.map((anchor) => {
+          const level = demandLevel(minute, anchor.peaks);
+          return (
+            <div key={anchor.label} className="mt-1 flex items-center gap-2">
+              <span
+                className="size-2 rounded-full"
+                style={{ backgroundColor: anchor.color }}
+              />
+              {anchor.label} ·{" "}
+              {level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}
+            </div>
+          );
+        })}
+      </aside>
+      {children}
       <p className="absolute bottom-1 right-3 rounded bg-white px-2 text-xs">
         Imagery © Vexcel Imaging US, Inc. · © Microsoft Corporation · ©
         OpenStreetMap contributors

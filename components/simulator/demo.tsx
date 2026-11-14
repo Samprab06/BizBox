@@ -23,12 +23,14 @@ export function SimulatorDemo({
   coordinates?: { longitude: number; latitude: number; tilesetUrl: string };
 }) {
   const { openMin, closeMin } = data[0].run.metrics;
-  const [minute, setMinute] = useState(openMin);
+  const start = coordinates ? 0 : openMin;
+  const end = coordinates ? 1440 : closeMin;
+  const [minute, setMinute] = useState(coordinates ? 360 : openMin);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
-  const running = playing && minute < closeMin;
+  const running = playing && minute < end;
 
   useEffect(() => {
     if (!running) return;
@@ -37,19 +39,75 @@ export function SimulatorDemo({
     function tick(now: number) {
       const elapsed = Math.min(now - previous, 100);
       previous = now;
-      setMinute((value) => Math.min(closeMin, value + (elapsed * speed) / 125));
+      setMinute((value) =>
+        Math.min(end, value + (elapsed * speed) / (coordinates ? 55 : 125)),
+      );
       request = requestAnimationFrame(tick);
     }
     request = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(request);
-  }, [running, closeMin, speed]);
+  }, [running, end, speed, coordinates]);
 
   const time = `${Math.floor(minute / 60)}:${String(Math.floor(minute % 60)).padStart(2, "0")}`;
   const arrivals = replayAt(data[0].run.events, minute).arrivals;
   return (
     <>
       {coordinates ? (
-        <Neighborhood {...coordinates} />
+        <Neighborhood {...coordinates} minute={minute}>
+          <section
+            aria-label="Neighborhood timeline"
+            className="absolute bottom-10 left-3 right-3 z-10 rounded-xl bg-ink/95 p-3 text-white sm:left-1/2 sm:w-[min(46rem,95vw)] sm:-translate-x-1/2"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="rounded bg-white px-4 py-2 font-semibold text-ink"
+                onClick={() => {
+                  if (minute >= end) setMinute(start);
+                  setPlaying(!running);
+                }}
+              >
+                {running ? "Pause" : minute >= end ? "Replay" : "Play"}
+              </button>
+              <strong className="font-mono">{time} Houston</strong>
+              <label className="ml-auto text-sm">
+                Speed{" "}
+                <select
+                  className="rounded bg-ink"
+                  value={speed}
+                  onChange={(event) => setSpeed(Number(event.target.value))}
+                >
+                  {[0.5, 1, 2, 4].map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate}×
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <input
+              className="mt-2 w-full accent-emerald-300"
+              type="range"
+              min={start}
+              max={end}
+              step={1}
+              value={Math.floor(minute)}
+              aria-label="Time of day"
+              aria-valuetext={time}
+              onChange={(event) => {
+                setPlaying(false);
+                setMinute(Number(event.target.value));
+              }}
+            />
+            <div className="flex justify-between text-xs text-emerald-100">
+              <span>Midnight</span>
+              <span>6 a.m.</span>
+              <span>Noon</span>
+              <span>6 p.m.</span>
+              <span>Midnight</span>
+            </div>
+          </section>
+        </Neighborhood>
       ) : (
         <p
           role="status"
@@ -107,7 +165,11 @@ export function SimulatorDemo({
           <button
             className="rounded bg-pine px-4 py-2 text-white"
             onClick={() => {
-              if (minute >= closeMin) setMinute(openMin);
+              if (minute >= closeMin || minute < openMin) {
+                setMinute(openMin);
+                setPlaying(true);
+                return;
+              }
               setPlaying(!running);
             }}
           >
@@ -134,7 +196,7 @@ export function SimulatorDemo({
               min={openMin}
               max={closeMin}
               step={0.01}
-              value={minute}
+              value={Math.min(closeMin, Math.max(openMin, minute))}
               aria-valuetext={time}
               onChange={(event) => {
                 setPlaying(false);
