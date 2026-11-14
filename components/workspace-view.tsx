@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { IntakeScreen } from "@/components/intake/intake-screen";
 import { MapPreview } from "@/components/map/map-preview";
 import { SiteScreen } from "@/components/site/site-screen";
+import { TaskNav } from "@/components/shell/task-nav";
 import { workspaceHref, views, type View } from "@/lib/client/workspace-routes";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
@@ -42,26 +43,12 @@ export function WorkspaceView({
 
   return (
     <>
-      <nav
-        aria-label="Project views"
-        className={
-          decisionLayout
-            ? "flex min-w-0 gap-1 overflow-x-auto border-b border-line pb-2 [&>a]:shrink-0"
-            : "flex flex-wrap gap-1 border-b border-line pb-3"
-        }
-      >
-        {(Object.keys(views) as View[]).map((item) => (
-          <Link
-            key={item}
-            href={workspaceHref(projectId, item, selectedId)}
-            prefetch={false}
-            aria-current={item === view ? "page" : undefined}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-muted hover:bg-white aria-[current=page]:bg-pine aria-[current=page]:text-white"
-          >
-            {views[item]}
-          </Link>
-        ))}
-      </nav>
+      <TaskNav
+        projectId={projectId}
+        route={view}
+        siteId={selectedId}
+        compact={decisionLayout}
+      />
       <header className={decisionLayout ? "my-2" : "my-10"}>
         {!decisionLayout && (
           <p className="mb-2 text-sm font-medium text-muted">

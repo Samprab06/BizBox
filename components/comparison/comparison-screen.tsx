@@ -4,7 +4,11 @@ import { DecisionHeader } from "@/components/decision/decision-header";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { exampleComparison, exampleComparisonId } from "./example-comparison";
+import {
+  exampleComparison,
+  exampleComparisonId,
+  exampleDemandLabel,
+} from "./example-comparison";
 import { ConsultantPanel } from "../ConsultantPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -40,6 +44,7 @@ export function ComparisonScreen({
   investigationId?: string;
 }) {
   const rows = exampleComparison(project.sites, visits);
+  const demandLabel = exampleDemandLabel(project.sites);
   const id = exampleComparisonId(visits);
   const leader = rows[0];
   const overlaps = rows.slice(1).filter((row) => row.high >= leader.low);
@@ -77,6 +82,7 @@ export function ComparisonScreen({
             <p>
               <EvidenceBadge kind="Simulation" /> Synthetic Houston example ·
               default assumptions.
+              {demandLabel && ` · Example · ${demandLabel}`}
             </p>
             <p>
               24 seeded scenarios · 90% modeled intervals, not a sales forecast.
@@ -185,8 +191,9 @@ export function ComparisonScreen({
             ))}
           </ul>
           <p className="mt-3 text-sm text-muted">
-            The displayed order uses synthetic Huff-style demand assumptions. A
-            separate Jev comparison is pending.
+            {demandLabel
+              ? `The displayed order uses a stored panel of Jev answers, not a live run. ${demandLabel}.`
+              : "The displayed order uses synthetic Huff-style demand assumptions. A separate Jev comparison is pending."}
           </p>
         </section>
         <section className="rounded-xl border border-line p-4">

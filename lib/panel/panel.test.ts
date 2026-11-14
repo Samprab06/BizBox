@@ -126,6 +126,86 @@ describe("runPanel with recorded Jev responses (offline)", () => {
   });
 });
 
+describe("retrying failed calls", () => {
+  const plan = planCalls(personaSet, ctx, 0, 4);
+  const target = plan[0]!;
+  const targetRequest = JSON.stringify(target.calls[0]!.request);
+
+  /** Fake Jev that fails the target request its first `failures` times, counting every request. */
+  function flakyClient(failures: number) {
+    const attempts = new Map<string, number>();
+    const inner = fakeJevClient();
+    const client = {
+      modelVersion: inner.modelVersion,
+      ask(req: Parameters<typeof inner.ask>[0]) {
+        const key = JSON.stringify(req);
+        attempts.set(key, (attempts.get(key) ?? 0) + 1);
+        if (key === targetRequest && attempts.get(key)! <= failures) return Promise.reject(new Error("flaky Jev"));
+        return inner.ask(req);
+      },
+      get requests() {
+        return [...attempts.values()].reduce((a, b) => a + b, 0);
+      },
+      attemptsFor: () => attempts.get(targetRequest) ?? 0,
+    };
+    return client;
+  }
+
+  it("retries a call that fails once and the persona is answered by Jev", async () => {
+    const cache = new MemoryJevCache();
+    const client = flakyClient(1);
+    const run = await runPanel({ ...base, client, cache });
+
+    expect(run.table.failedPersonaIds).toEqual([]);
+    expect(run.table.personas).toHaveLength(50);
+    expect(client.attemptsFor()).toBe(2);
+    expect(run.stats).toMatchObject({ calls: 201, retriedCalls: 1, failedCalls: 0 });
+    expect(cache.size).toBe(200);
+  });
+
+  it("gives up on a persona whose call fails twice and reports it as failed", async () => {
+    const cache = new MemoryJevCache();
+    const client = flakyClient(2);
+    const run = await runPanel({ ...base, client, cache });
+
+    expect(run.table.failedPersonaIds).toEqual([target.persona.id]);
+    expect(run.table.personas).toHaveLength(49);
+    expect(client.attemptsFor()).toBe(2); // one retry, never a third try
+    expect(run.stats).toMatchObject({ calls: 201, retriedCalls: 1, failedCalls: 1 });
+    expect(cache.size).toBe(199);
+  });
+
+  it("sends no extra calls for answers that succeed, and none at all once cached", async () => {
+    const cache = new MemoryJevCache();
+    const first = flakyClient(0);
+    const run1 = await runPanel({ ...base, client: first, cache });
+    expect(first.requests).toBe(200);
+    expect(run1.stats).toMatchObject({ calls: 200, retriedCalls: 0, failedCalls: 0 });
+
+    const second = flakyClient(0);
+    const run2 = await runPanel({ ...base, client: second, cache });
+    expect(second.requests).toBe(0);
+    expect(run2.stats).toMatchObject({ calls: 0, cacheHits: 200, retriedCalls: 0 });
+  });
+
+  it("only retries the calls that failed when a flaky persona is rerun against the cache", async () => {
+    const cache = new MemoryJevCache();
+    await runPanel({ ...base, client: flakyClient(2), cache });
+    const healthy = flakyClient(0);
+    const run = await runPanel({ ...base, client: healthy, cache });
+    expect(healthy.requests).toBe(1);
+    expect(run.table.failedPersonaIds).toEqual([]);
+  });
+
+  it("does not retry when retries is 0", async () => {
+    const client = flakyClient(1);
+    const run = await runPanel({ ...base, client, cache: new MemoryJevCache(), retries: 0 });
+    expect(client.attemptsFor()).toBe(1);
+    expect(run.table.failedPersonaIds).toEqual([target.persona.id]);
+    expect(run.stats.retriedCalls).toBe(0);
+  });
+});
+
 describe("fixture run: 50 personas x 8 sites", () => {
   it("reports the call count and run time", async () => {
     const sites = makeSites(8);

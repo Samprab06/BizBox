@@ -265,3 +265,42 @@ test("an explicit simulator sensitivity link selects and focuses the matching co
   await expect(page.getByLabel("Sensitivity assumption")).toBeFocused();
   expect(writes).toEqual([]);
 });
+
+test("decision pages keep all three task groups keyboard reachable in compact navigation", async ({
+  page,
+}) => {
+  for (const route of ["comparison", "simulator"]) {
+    await page.goto(`/projects/houston-coffee/${route}`);
+    const nav = page.getByRole("navigation", {
+      name: "Project views",
+      exact: true,
+    });
+    const summary = nav.locator("summary");
+    await expect(summary).toContainText(
+      "Find a location · Test the plan · Make the decision",
+    );
+    await expect(
+      nav.getByRole("list", { name: "Tasks", exact: true }),
+    ).not.toBeVisible();
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      nav.getByRole("list", { name: "Tasks", exact: true }),
+    ).toBeVisible();
+    await expect(nav.locator('[aria-current="step"]')).toContainText(
+      "Test the plan",
+    );
+    await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
+    const first = nav.getByRole("link", { name: "Intake", exact: true });
+    if (test.info().project.name === "webkit" && process.platform === "darwin")
+      await page.keyboard.press("Alt+Tab");
+    else await page.keyboard.press("Tab");
+    await expect(first).toBeFocused();
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      nav.getByRole("list", { name: "Tasks", exact: true }),
+    ).not.toBeVisible();
+    await expectNoA11yViolations(page);
+  }
+});

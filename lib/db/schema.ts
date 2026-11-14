@@ -1,4 +1,5 @@
 export * from "./costar-schema";
+export * from "./matterport-schema";
 import { sql } from "drizzle-orm";
 export * from "./public-schema";
 import {

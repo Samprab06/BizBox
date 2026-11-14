@@ -22,6 +22,7 @@ import type {
   LiveComparisonPayload,
 } from "@/lib/client/live-comparison";
 import { workspaceHref } from "@/lib/client/workspace-routes";
+import { siteDemandLabel } from "@/lib/evaluation/demand-label";
 
 const money = (value: number) =>
   value.toLocaleString("en-US", {
@@ -399,6 +400,11 @@ function ComparisonResults({
               <tr key={site.siteId} className="border-t border-line">
                 <th scope="row" className="py-4 pr-4">
                   {site.rank}. {address(site.siteId)}
+                  {siteDemandLabel(result, site, result.sites) && (
+                    <span className="mt-1 block text-xs font-medium text-muted">
+                      {siteDemandLabel(result, site, result.sites)}
+                    </span>
+                  )}
                   {site.tiedWith.length > 0 && (
                     <span className="mt-1 block text-xs font-medium text-muted">
                       Modeled tie · overlapping intervals with{" "}
