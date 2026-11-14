@@ -134,7 +134,6 @@ test("selecting a customer shows the persona, the panel's answers and the stay p
 });
 
 test("without WebGL the replay shows a fallback instead of crashing", async ({ page }) => {
-  test.fixme(true, "HAC-103: without WebGL the whole project view crashes");
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => {
