@@ -103,6 +103,11 @@ async function setup(
     scenarios: { get: service.get, create },
     stationCapacity: capacity,
     validateCandidates,
+    priceAcceptance: async (_project, scenario, change) => ({
+      comparisonId: change.kind === "price" ? "comparison-cached" : null,
+      siteIds: change.kind === "price" ? scenario.siteIds : [],
+      status: change.kind === "price" ? "cached_curve" : "tier_requires_run",
+    }),
   });
   const context = {
     projectId: "p1",
@@ -176,7 +181,7 @@ const cases: {
       avg_ticket: 7.8,
       rationale: "Explore a higher average ticket",
     },
-    status: "unsupported",
+    status: "created",
   },
   {
     name: "edit_layout",
@@ -246,6 +251,106 @@ describe("copilot tools with an offline scripted deepagents model", () => {
 });
 
 describe("mutation boundaries", () => {
+  it.each([
+    { index: 0, change: { kind: "fork", label: "Alternative" } },
+    {
+      index: 1,
+      change: {
+        kind: "hours",
+        dayType: "weekday",
+        openMinute: 360,
+        closeMinute: 1080,
+      },
+    },
+    { index: 2, change: { kind: "staffing", headcount: 3 } },
+    { index: 3, change: { kind: "stations", count: 3 } },
+    { index: 4, change: { kind: "add_sites", siteIds: ["3:1"] } },
+    { index: 5, change: { kind: "remove_sites", siteIds: ["2:1"] } },
+    { index: 6, change: { kind: "price", averageTicketCents: 780 } },
+  ])(
+    "matches the manual shared-service semantics for $change.kind",
+    async ({ index, change }) => {
+      const { parent, registry, service, rows, context } = await setup();
+      const output = await registry.execute(
+        cases[index].name,
+        cases[index].args,
+        context,
+      );
+      if (output.status !== "created") throw new Error("Expected proposal");
+      const manual = await service.create(context.projectId, {
+        fromId: parent.id,
+        patch: buildScenarioPatch(parent, change, {
+          origin: "default",
+          evidenceIds: [context.evidenceId],
+        }),
+        author: "founder",
+      });
+      const child = rows.get(output.scenarioId)!;
+      expect({
+        overrides: child.overrides,
+        label: child.label,
+        layoutId: child.layoutId,
+        siteIds: child.siteIds,
+        profileVersion: child.profileVersion,
+      }).toEqual({
+        overrides: manual.overrides,
+        label: manual.label,
+        layoutId: manual.layoutId,
+        siteIds: manual.siteIds,
+        profileVersion: manual.profileVersion,
+      });
+    },
+  );
+
+  it("replays one accepted action and rejects conflicting reuse of the action key", async () => {
+    const { registry, context, rows } = await setup();
+    const scoped = {
+      ...context,
+      scenarioId: "s1",
+      profileVersion: 1,
+      idempotencyKey: "same-action",
+    };
+    const first = await registry.execute("set_hours", cases[1].args, scoped);
+    expect(first.status).toBe("created");
+    expect(await registry.execute("set_hours", cases[1].args, scoped)).toEqual(
+      first,
+    );
+    expect(rows.size).toBe(2);
+    expect(
+      await registry.execute("set_staffing", cases[2].args, scoped),
+    ).toMatchObject({ code: "INVALID_INPUT" });
+    expect(rows.size).toBe(2);
+  });
+
+  it("rejects stale scenario/profile snapshots before creating a proposal", async () => {
+    const { registry, context, create } = await setup();
+    for (const stale of [{ scenarioId: "another" }, { profileVersion: 2 }]) {
+      expect(
+        await registry.execute("set_hours", cases[1].args, {
+          ...context,
+          ...stale,
+        }),
+      ).toMatchObject({ code: "STALE_CONTEXT" });
+    }
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects fractional-cent prices and missing repricing adapters without creating versions", async () => {
+    const { registry, service, context, rows } = await setup();
+    expect(
+      await registry.execute(
+        "set_price",
+        { ...cases[6].args, avg_ticket: 7.001 },
+        context,
+      ),
+    ).toMatchObject({ code: "INVALID_INPUT" });
+    const noPrice = createCopilotMutationTools({ scenarios: service });
+    expect(
+      await noPrice.execute("set_price", cases[6].args, context),
+    ).toMatchObject({ status: "unsupported" });
+    expect(rows.size).toBe(1);
+  });
+
   it("matches the shared service path with identical declared provenance", async () => {
     const { parent, registry, service, rows, context } = await setup();
     const output = await registry.execute("set_hours", cases[1].args, context);
@@ -272,7 +377,7 @@ describe("mutation boundaries", () => {
     expect(child.profileVersion).toEqual(expected.profileVersion);
   });
 
-  it("keeps founder wrappers intact and makes no row when today's strict service rejects inheritance", async () => {
+  it("keeps inherited founder wrappers intact on agent proposals", async () => {
     const original = {
       value: 2,
       unit: "people",
@@ -284,11 +389,14 @@ describe("mutation boundaries", () => {
     });
     const output = await registry.execute("set_hours", cases[1].args, context);
     expect(output).toMatchObject({
-      status: "rejected",
-      code: "PROVENANCE_CONFLICT",
+      status: "created",
     });
-    expect(rows.size).toBe(1);
+    expect(rows.size).toBe(2);
     expect(parent.overrides.staffHeadcount).toEqual(original);
+    if (output.status === "created")
+      expect(rows.get(output.scenarioId)?.overrides.staffHeadcount).toEqual(
+        original,
+      );
   });
 
   it("rejects scope changes, invalid arguments, empty shortlists and unsupported hourly staffing before writes", async () => {

@@ -1,59 +1,95 @@
-# Copilot mutation tools: local HAC-82 slice
+# Copilot business tools (HAC-82)
 
-`createCopilotMutationTools` is re-exported beside the HAC-23 tools in
-`lib/agent/tools.ts`. It is an injectable registry for a future BizBox copilot;
-it is not connected to the investigation planner, HTTP routes or a chat runtime.
-HAC-82 remains partial. This slice makes no provider, simulation or paid calls.
+This extends the intentionally partial mutation foundation in merged PR #87.
+`createCopilotTools` composes mutations, reads and checkpointed runs, with exactly
+one definition per tool. It is re-exported from `lib/agent/tools.ts` beside the
+unchanged HAC-23 investigation tools. `createPostgresCopilotTools` supplies lazy
+production adapters over the existing stores/services. It does not mount a chat
+endpoint, create another conversation, or dispatch client actions.
 
-The caller supplies trusted `projectId`, `evidenceId` and `AbortSignal` context.
-Every tool has a strict Zod schema in `lib/contracts/copilot-tools.ts`; a model
-cannot override the project or author. Supported mutations call the existing
-`ScenarioService.create` exactly once with `author: "agent"`, the required
-rationale and a full replacement patch. Failed validation and unavailable adapters
-create no scenario version. This is per-invocation behavior, not durable retry
-idempotency or budget enforcement; the eventual runtime must provide those.
+## Trusted context and proposals
 
-| Tool            | Current behavior                                                                                                                    |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `fork_scenario` | Fork with the supplied label                                                                                                        |
-| `set_hours`     | Same-day integer minutes for weekday or weekend                                                                                     |
-| `set_staffing`  | Constant headcount; `by_hour` returns unsupported                                                                                   |
-| `set_stations`  | Requires a trusted, scoped capacity adapter for every selected site; checks listing ceiling and exact selected-layout station count |
-| `add_sites`     | Requires a scoped inventory adapter confirming every added ID; at most eight sites                                                  |
-| `remove_sites`  | Keeps at least one selected site                                                                                                    |
-| `set_price`     | Unsupported until cached price-acceptance integration is available; no price change is stored                                       |
-| `edit_layout`   | Unsupported until durable layout persistence/linkage is integrated                                                                  |
-| `run_scenario`  | Unsupported until checkpointed execution and project-budget enforcement are integrated                                              |
+The runtime supplies `projectId`, `evidenceId`, `signal`, and the selected immutable
+`scenarioId`/`profileVersion`. Supply one stable `idempotencyKey` per accepted
+logical action; a retry must retain it, while a new action must get a new key.
+Keys and author/project/confirmation fields are not model arguments. Scope changes
+reject stale actions instead of silently applying them to another scenario.
 
-`buildScenarioPatch(parent, change, source)` in `lib/scenario/patch.ts` is the
-shared pure boundary for future UI levers and tools. It merges the selected day
-and field into a detached full overrides object, preserving untouched values,
-origins and evidence byte-for-byte. It performs no storage, capacity lookup or
-simulation. Callers must supply capacity validation for stations. Source is
-explicit: founder edits can declare `founder`; agent proposals use `default` with
-an evidence reference. Matching provenance inputs produce matching patches;
-this does not claim an implemented UI lever integration.
+Mutations use `buildScenarioPatch` and `ScenarioService.create`, the same shared
+service available to manual UI actions. Each accepted action creates one immutable
+agent child with rationale. No mutation runs a simulation or selects/keeps the
+proposal. Humans choose Run, Keep or Revert; HAC-88 owns client dispatch.
 
-The current scenario service rejects an agent child that inherits founder-origin
-wrappers. Until its owner lands the approved parent-aware validation, the tool
-reports `PROVENANCE_CONFLICT` and preserves those wrappers. This slice neither
-relaxes the invariant nor relabels founder values. Its inheritance regression must
-be updated when that owner change is integrated.
+`ScenarioService.create(project, request, { idempotencyKey })` hashes the scoped
+key into a stable ID, reads an existing result before writing, checks semantic
+request equality, and recovers concurrent uniqueness races. This survives process
+restart without a second history/cache store. Reusing a key for another request
+rejects. Without a key the existing manual/service behavior is unchanged.
 
-Mutation summaries return IDs, changed paths and typed `scenario_value` references
-(`scenarioId`, `path`) for before/after override values. They contain no raw numeric
-metrics or event lists. A future client reference resolver must load the scoped
-scenario and resolve that path. Station and candidate adapters must use trusted
-source evidence; neither has a production adapter in this slice.
+## Tool behavior
 
-Remaining HAC-82 work includes price acceptance, layout/run adapters, durable
-mutation retry identity, the copilot runtime/client reference resolver and the
-`find_sites`, `compare_scenarios`, `explain_hour`, `diagnose` and `focus_view` tools.
-HAC-60's per-site catchment independence is not established by changing a shortlist.
-The existing seven HAC-23 tools and their budgeted planner remain unchanged.
+| Tool                         | Behavior                                                                                                                                                                                                                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fork_scenario`              | Immutable child with a supplied label/rationale.                                                                                                                                                                                                                                          |
+| `set_hours`                  | Same-day integer minutes for weekday/weekend.                                                                                                                                                                                                                                             |
+| `set_staffing`               | Constant headcount; `by_hour` is explicitly unsupported.                                                                                                                                                                                                                                  |
+| `set_stations`               | Checks every selected site's modeled area; a selected layout must agree exactly. Uses the existing layout derivation, not invented geometry.                                                                                                                                              |
+| `add_sites` / `remove_sites` | Existing profile-scoped candidate search/inventory; one to eight unique sites. No catchment reassembly during the mutation.                                                                                                                                                               |
+| `set_price`                  | Dollar ticket converted to whole cents, or a tier override. Saved price-acceptance curves use the existing sensitivity interpolation; never another paid panel call. Missing curves are explicit `unavailable`; tier changes are `tier_requires_run`, with no invented dollar conversion. |
+| `find_sites`                 | Saved profile plus size/limit/rent/must-have preferences, through existing search. Area/near geocoding is explicitly unsupported rather than guessed. Returns IDs/evidence only.                                                                                                          |
+| `run_scenario`               | Existing durable runner and rolling project budget. Requires trusted `runConfirmed`; over-budget work additionally requires `budgetConfirmed`. Strict model schemas reject self-authored confirmations.                                                                                   |
+| `compare_scenarios`          | Completed, same-profile/version evaluations, ranking-change flag and typed interval/delta references; unmatched sites disclosed.                                                                                                                                                          |
+| `explain_hour`               | Verified saved representative run/day/hour, not all-seed data. Missing/out-of-hours traces are unsupported, never fabricated zeroes.                                                                                                                                                      |
+| `diagnose` / `focus_view`    | Scoped, injectable HAC-89/HAC-88 delegation hooks; explicit unsupported when absent. They do not duplicate classification/client features.                                                                                                                                                |
+| `edit_layout`                | Advanced layout persistence/linkage remains explicitly unsupported.                                                                                                                                                                                                                       |
 
-Offline checks use the real compiled deepagents graph with a scripted model for
-each exposed tool, and the real scenario service/model over an in-memory repository.
-They cover one version per supported call, explicit unsupported results, patch
-parity, scoping, preserved provenance, capacity, candidate identity, cancellation
-and sanitized failures. No model credentials or database are required.
+The composed registry routes `run_scenario` to the run adapter, not PR #87's
+legacy unsupported mutation-only entry. `start` performs the runner's existing
+single advancement; a resume invokes at most one additional slice. There is no
+polling loop or alternate budget/cache. Cancellation gates before/after awaits;
+the existing runner cannot interrupt an already executing slice.
+
+## References and display
+
+Strict Zod arguments/results live in `lib/contracts/copilot-*.ts`. Tool summaries
+contain IDs, status/warning codes and typed references, never raw metrics,
+listing prose or event arrays. Before/after mutation values use `scenario_value`;
+reads use `comparison_metric`, `comparison_delta`, `hour_metric` and `candidate`.
+Cached pricing uses `price_acceptance_shift` pointing at saved curves and the
+proposal, not a fabricated new panel response.
+
+`resolveCopilotReference` is a display helper, not a model tool. The caller supplies
+the exact issued references and scoped saved artifacts. It rejects unissued
+references, foreign projects/profile versions, arbitrary paths and missing
+artifacts. Delta bounds are B.low−A.high / B.high−A.low, explicitly **not paired-seed
+confidence**. Hour data stays representative-run-only; cached acceptance resolves
+per persona with its limitation. No model-authored number is accepted as a value.
+
+`fixtures/copilot.ts` provides deterministic invented example artifacts for
+HAC-83/88 integration. It is never a production fallback. HAC-83 must carry the
+existing investigation/Jev/Nessie tool surface into the durable conversation
+runtime; this ticket does not replace those tools or the shared playback clock.
+
+## Provenance and migration 0007
+
+Unchanged inherited founder wrappers remain founder-attributed; agent changes
+are `default` with action evidence. Agent roots and newly introduced/modified
+founder-attributed leaves are rejected by parent-aware model validation.
+
+Migration `0007_scenario-provenance.sql` replaces 0003's blanket ban with the same
+parent-aware rule at the database: a BEFORE INSERT trigger compares each founder
+leaf with the exact same path in the scoped immutable parent. The root check,
+immutable history, rationale and foreign-key constraints remain in force.
+**Deploying this code requires migration 0007 before agent proposals may inherit
+founder inputs.** This work does not apply hosted migrations.
+
+## Verification
+
+Offline scripted deepagents tests cover every tool. Shared-service tests cover
+manual/tool parity, durable retries, concurrent conflicts, stale scope, inherited
+and spoofed provenance, capacity, unsupported operations, aborts and sanitized
+errors. Production-composition tests mock only data/provider boundaries, ensuring
+price proposals make no panel/evaluation calls and run uses the confirmation gate.
+Loopback-only Postgres tests migrate a new disposable database, verify raw SQL
+inheritance guards and concurrent durable retries, then remove only that database.
+No paid calls, source recordings or hosted data changes are required.

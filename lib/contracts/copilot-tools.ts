@@ -83,12 +83,28 @@ export const ScenarioValueReferenceSchema = z
   })
   .strict();
 
+export const PriceAcceptanceShiftReferenceSchema = z
+  .object({
+    kind: z.literal("price_acceptance_shift"),
+    comparisonId: id,
+    scenarioId: id,
+    siteId: id,
+  })
+  .strict();
+
 export const CopilotMutationResultSchema = z.discriminatedUnion("status", [
   z
     .object({
       status: z.literal("created"),
       scenarioId: id,
       parentId: id,
+      priceAcceptance: z
+        .object({
+          status: z.enum(["cached_curve", "unavailable", "tier_requires_run"]),
+          references: z.array(PriceAcceptanceShiftReferenceSchema),
+        })
+        .strict()
+        .optional(),
       diff: z
         .object({
           sites: z
@@ -123,6 +139,7 @@ export const CopilotMutationResultSchema = z.discriminatedUnion("status", [
         "NOT_FOUND",
         "CAPACITY_CONFLICT",
         "UNAVAILABLE",
+        "STALE_CONTEXT",
       ]),
       message: z.string(),
     })
