@@ -8,6 +8,7 @@ import {
   Storefront,
 } from "@/lib/demand/contracts";
 import { SiteConfigSchema } from "@/lib/sim/contracts";
+import { SiteInsightsSchema } from "./insights";
 
 /**
  * HAC-22: site evaluation and sensitivity. One evaluation runs every site through
@@ -22,6 +23,19 @@ export type DemandSource = z.infer<typeof DemandSourceSchema>;
 export const MAX_EVALUATION_SITES = 8;
 export const DEFAULT_SEEDS = 30;
 
+/**
+ * How many panel personas Jev answered for one site (HAC-101). Optional everywhere so stored
+ * requests and results from before it existed still parse.
+ */
+export const JevPanelCoverageSchema = z
+  .object({
+    personaCount: z.number().int().nonnegative(),
+    /** Personas still unanswered after the panel's retry; any here means the site uses Huff. */
+    failedPersonaCount: z.number().int().nonnegative(),
+  })
+  .strict();
+export type JevPanelCoverage = z.infer<typeof JevPanelCoverageSchema>;
+
 export const EvaluationSiteSchema = z
   .object({
     siteId: z.string().min(1),
@@ -32,6 +46,8 @@ export const EvaluationSiteSchema = z
     /** Cached Jev answers for this site. Without one, the site cannot use demandSource "jev". */
     behaviorTable: BehaviorTable.optional(),
     behaviorTableId: z.string().min(1).optional(),
+    /** Panel coverage when Jev was asked for this site (HAC-101); carried to the result. */
+    jevPanel: JevPanelCoverageSchema.optional(),
     /** Origin of config.service.meanServiceMin (founder when the profile states it). */
     serviceMeanOrigin: z
       .enum(["costar", "public", "founder", "default"])
@@ -91,6 +107,16 @@ export const EvaluationRequestSchema = z
     demandSource: DemandSourceSchema.default("jev"),
     seeds: z.number().int().min(1).max(100).default(DEFAULT_SEEDS),
     baseSeed: z.number().int().nonnegative().default(1),
+    /** Exact scenario seeds; absent retains the historical seeds/baseSeed range. */
+    seedSet: z
+      .array(z.number().int().nonnegative())
+      .min(1)
+      .max(100)
+      .refine(
+        (values) => new Set(values).size === values.length,
+        "Seeds must be unique",
+      )
+      .optional(),
     overrides: EvaluationOverridesSchema.default({}),
   })
   .strict();
@@ -131,29 +157,42 @@ export const RepresentativeRunSchema = z.object({
 });
 export type RepresentativeRun = z.infer<typeof RepresentativeRunSchema>;
 
-export const SiteEvaluationSchema = z.object({
-  siteId: z.string().min(1),
-  rank: z.number().int().positive(),
-  /** Sites whose contribution intervals overlap this one's heavily: not a meaningful difference. */
-  tiedWith: z.array(z.string().min(1)),
-  demandSource: DemandSourceSchema,
-  /** Operating contribution per month (revenue minus COGS, labor, rent, opex), USD. */
-  monthlyContributionUsd: MetricSummarySchema,
-  /** The same after buildout amortization, USD. */
-  monthlyContributionAfterBuildoutUsd: MetricSummarySchema,
-  monthlyRevenueUsd: MetricSummarySchema,
-  monthlyServedCustomers: MetricSummarySchema,
-  weekdayMeanWaitMin: MetricSummarySchema,
-  weekdayAbandonmentRate: MetricSummarySchema,
-  weekdayUtilization: MetricSummarySchema,
-  /** Per-seed operating contribution, in seed order. Kept so ties and reruns are checkable. */
-  contributionBySeed: z.array(z.number().finite()),
-  representative: z.object({
-    weekday: RepresentativeRunSchema,
-    weekend: RepresentativeRunSchema,
-  }),
-  excludedPersonaIds: z.array(z.string()),
-});
+export const SiteEvaluationSchema = z
+  .object({
+    siteId: z.string().min(1),
+    rank: z.number().int().positive(),
+    /** Sites whose contribution intervals overlap this one's heavily: not a meaningful difference. */
+    tiedWith: z.array(z.string().min(1)),
+    demandSource: DemandSourceSchema,
+    /** Operating contribution per month (revenue minus COGS, labor, rent, opex), USD. */
+    monthlyContributionUsd: MetricSummarySchema,
+    /** The same after buildout amortization, USD. */
+    monthlyContributionAfterBuildoutUsd: MetricSummarySchema,
+    monthlyRevenueUsd: MetricSummarySchema,
+    monthlyServedCustomers: MetricSummarySchema,
+    weekdayMeanWaitMin: MetricSummarySchema,
+    weekdayAbandonmentRate: MetricSummarySchema,
+    weekdayUtilization: MetricSummarySchema,
+    /** Per-seed operating contribution, in seed order. Kept so ties and reruns are checkable. */
+    contributionBySeed: z.array(z.number().finite()),
+    representative: z.object({
+      weekday: RepresentativeRunSchema,
+      weekend: RepresentativeRunSchema,
+    }),
+    excludedPersonaIds: z.array(z.string()),
+    /** HAC-94: all-seed hourly visualization data; absent on legacy comparisons. */
+    insights: SiteInsightsSchema.optional(),
+    /** Jev panel coverage, when Jev was asked; optional for older results. */
+    jevPanel: JevPanelCoverageSchema.optional(),
+  })
+  .superRefine((site, ctx) => {
+    if (site.insights && site.insights.siteId !== site.siteId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["insights", "siteId"],
+        message: "Insights must belong to the evaluation site",
+      });
+  });
 export type SiteEvaluation = z.infer<typeof SiteEvaluationSchema>;
 
 export const EVALUATION_MODEL_VERSION = "hac-22-evaluation-1";

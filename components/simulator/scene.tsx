@@ -31,6 +31,7 @@ export default function Scene({
   selected,
   select,
   quality = "balanced",
+  cameraZoom,
 }: {
   run: DayResult;
   minute: number;
@@ -38,6 +39,8 @@ export default function Scene({
   selected: string;
   select: (id: string) => void;
   quality?: RenderQuality;
+  /** Optional fit for the compact decision viewport; standard viewers keep their existing zoom. */
+  cameraZoom?: number;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -72,7 +75,10 @@ export default function Scene({
         <Canvas
           frameloop={visible ? "demand" : "never"}
           orthographic
-          camera={{ position: [0, 16, 20], zoom: cutaway ? 41 : 22 }}
+          camera={{
+            position: [0, 16, 20],
+            zoom: cameraZoom ?? (cutaway ? 41 : 22),
+          }}
           dpr={quality === "balanced" ? 1 : [1, 1.5]}
           fallback={
             <p className="p-4 text-sm text-white/50">

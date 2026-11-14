@@ -239,6 +239,23 @@ describe("POST /api/comparisons", () => {
     fetchSpy.mockRestore();
   });
 
+  it("reproduces legacy metrics while enriching missing optional insights", async () => {
+    const { store, create } = setup();
+    const req = evaluationRequest();
+    req.seeds = 1;
+    await create(post(req));
+    const stored = store.records.get("p1/cmp_1")!;
+    expect(stored.evaluation.result.sites[0].insights).toBeDefined();
+    for (const site of stored.evaluation.result.sites) delete site.insights;
+    const response = await create(
+      post({ projectId: "p1", rerunComparisonId: "cmp_1" }),
+    );
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body.reproduces).toBe(true);
+    expect(body.result.sites[0].insights).toBeDefined();
+  });
+
   it("labels the comparison huff when Jev behavior tables are missing", async () => {
     const { create } = setup();
     const req = evaluationRequest();

@@ -10,23 +10,22 @@ The **Graphics** selector defaults to **Balanced**. **Detailed** restores the
 original city pixel density, tile detail and cloud sampling. Switching quality
 keeps the viewer, camera and current simulation time.
 
-| Setting                         | Balanced                      | Detailed                     |
-| ------------------------------- | ----------------------------- | ---------------------------- |
-| City pixel density              | At most 1 pixel per CSS pixel | Native display density       |
-| City tile screen-space error    | 16                            | 1 (original)                 |
-| Distance-dependent tile error   | Enabled                       | Disabled (original)          |
-| Tile cache / overflow budget    | 128 / 64 MiB                  | 512 / 512 MiB (original)     |
-| Cloud layer                     | Animated cloud banks          | Banks plus volumetric clouds |
-| Volumetric ray / shadow samples | Not used                      | 40 / 5 (original)            |
-| Café pixel density              | 1                             | Up to 1.5 (original)         |
+| Setting                         | Balanced                       | Detailed                              |
+| ------------------------------- | ------------------------------ | ------------------------------------- |
+| City pixel density              | At most 1 pixel per CSS pixel  | Native display density                |
+| City tile screen-space error    | 16                             | 1 (original)                          |
+| Distance-dependent tile error   | Enabled                        | Disabled (original)                   |
+| Tile cache / overflow budget    | 128 / 64 MiB                   | 512 / 512 MiB (original)              |
+| Cloud layer                     | Off by default; optional banks | Optional banks plus volumetric clouds |
+| Volumetric ray / shadow samples | Not used                       | 40 / 5 (original)                     |
+| Café pixel density              | 1                              | Up to 1.5 (original)                  |
 
 The city requests frames when its view, time, overlays or assets change instead
 of continuously redrawing a paused scene. Balanced samples traffic/demand every
 five simulated minutes, with opacity pulses over a fixed 65 m demand footprint;
-Detailed samples every minute and retains the expanding footprint. Cloud-bank
-positions sample each simulated minute. Playback batches React updates to at
+Detailed samples every minute and retains the expanding footprint. Enabled cloud-bank positions sample each simulated minute. Sky and clouds are an explicit optional control; Balanced defaults them off. Playback batches React updates to at
 most 60 Hz while accumulating elapsed time and preserving the frame phase; camera input remains independent.
-Offscreen scenes suspend their graphics loops, then synchronize to the latest
+Offscreen scenes and scenes covered by another fullscreen viewport suspend their graphics loops, then synchronize to the latest
 time on return. Café canvases use demand rendering and initialize after first
 visibility. Hidden-document playback pauses without advancing on resume.
 Road tile requests are shared while pending, and obsolete requests are aborted.
@@ -108,7 +107,7 @@ paused sample again recorded zero draw calls. Temporary probes were removed.
    samples used `pnpm start --hostname 127.0.0.1 --port 3014`; after the target
    branch enabled standalone output, that command emits a warning and does not
    establish standalone deployment acceptance.
-4. Open `/simulator-demo` in a WebGL-capable browser. Keep viewport, camera,
+4. Open `/projects/houston-coffee/simulator` (`/simulator-demo` redirects here) in a WebGL-capable browser. Keep viewport, camera,
    display density and cache conditions the same between candidates. Bring the
    browser to the foreground; occlusion throttling invalidates an FPS comparison.
 5. Wait for the city to load and settle. Seek to 9 AM and sample 1× playback for

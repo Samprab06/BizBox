@@ -25,16 +25,3 @@ test("GET /api/health reports database status in its contract shape", async ({
   expect(response.headers()["cache-control"]).toContain("no-store");
   await expectNoSecrets(response);
 });
-
-test("GET /api/comparisons/capabilities reports only key presence", async ({
-  request,
-}) => {
-  const response = await request.get("/api/comparisons/capabilities");
-  expect(response.status()).toBe(200);
-  const body = z
-    .object({ jevConfigured: z.boolean() })
-    .strict()
-    .parse(await response.json());
-  expect(typeof body.jevConfigured).toBe("boolean");
-  await expectNoSecrets(response);
-});

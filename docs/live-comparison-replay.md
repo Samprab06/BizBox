@@ -14,6 +14,29 @@ findings and numeric assumptions with origins. Sensitivity calls the existing
 comparison endpoint for rent ±10%, ticket, market share or price and shows ranking
 changes and the break-even point. These are scenario ranges, not a sales forecast.
 
+The saved comparison's decision header now precedes candidate selection. It uses
+the returned HAC-62 headline and its most influential condition without deriving
+new thresholds in the browser. **Change [assumption]** selects and focuses the
+matching sensitivity input (including visit frequency); it does not send a model
+request. Historical comparisons missing robustness explicitly say it is unavailable
+and link to evidence. Stale comparisons retain the prior answer with a visible
+warning and explicit rerun. New comparisons still require an explicit run.
+
+The shared header includes the leader's real stored weekday scene, read through
+the existing project-scoped site-run endpoint. Project, profile, site, run and day
+identity must match before rendering. A manual schematic replay uses canonical
+events (`served` starts service; `departed` completes it), with an accessible time
+slider, counts and full-replay link. Loading/failure/retry states do not substitute
+another run. Fixture comparisons reuse the existing seeded engine events.
+
+Simulator actions carrying a known influential condition use
+`?sensitivity=<supported assumption>#comparison-sensitivity`. The comparison
+validates that intent, selects and focuses its matching control after the saved
+result loads, and never sends a sensitivity/model request until the founder
+explicitly chooses **Run sensitivity**. Unsupported conditions lead to evidence.
+Both decision pages opt into the compact wrapper while preserving context,
+navigation destinations and h1 names; other screens keep their default wrapper.
+
 `sitework:comparison:v1:<projectId>` stores the active comparison identity and the
 serialized intake signature used for its snapshot. Reload and replay use the
 stored comparison through its project-scoped GET endpoint. A changed local intake

@@ -6,7 +6,8 @@
  * (`where`, `when`) in a different seeded shuffle; all answers are averaged and the spread of
  * `where` between orders is reported. Every call's answer is written to the cache as soon as it
  * arrives, so a run cut off by a time limit resumes from the cache and an unchanged rerun
- * makes zero Jev calls.
+ * makes zero Jev calls. A call that fails is retried once (`retries`, default 1) before its
+ * persona is reported as failed; answers that already arrived are never asked for again.
  */
 import { createRng } from "@/lib/sim/random";
 import {
@@ -36,6 +37,8 @@ import {
 } from "./state";
 
 export const DEFAULT_ORDERS = 4;
+/** Extra attempts for a Jev call that failed (the HTTP client has its own transport retries). */
+export const DEFAULT_RETRIES = 1;
 
 export interface RunPanelOptions {
   personaSet: PersonaSet;
@@ -48,16 +51,21 @@ export interface RunPanelOptions {
   seed?: number | string;
   /** Shuffled orders per persona. Default 4. */
   orders?: number;
+  /** Retries per failed call before the persona is given up on. Default 1. */
+  retries?: number;
   pricePoints?: number[];
   /** Called after each persona finishes (for progress reporting). */
   onPersona?: (personaId: string, ok: boolean) => void;
 }
 
 export interface PanelStats {
-  /** Jev calls actually sent (cache misses). */
+  /** Jev calls actually sent (cache misses), retries included. */
   calls: number;
   cacheHits: number;
+  /** Calls that still failed after their retries. */
   failedCalls: number;
+  /** Retry attempts sent after a first failure (already counted in `calls`). */
+  retriedCalls: number;
   elapsedMs: number;
 }
 
@@ -95,7 +103,8 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
   };
   const orders = Math.max(1, opts.orders ?? DEFAULT_ORDERS);
   const modelVersion = opts.client.modelVersion;
-  const stats: PanelStats = { calls: 0, cacheHits: 0, failedCalls: 0, elapsedMs: 0 };
+  const retries = Math.max(0, Math.floor(opts.retries ?? DEFAULT_RETRIES));
+  const stats: PanelStats = { calls: 0, cacheHits: 0, failedCalls: 0, retriedCalls: 0, elapsedMs: 0 };
   const plan = planCalls(opts.personaSet, ctx, opts.seed ?? 0, orders);
   const answeredVersions = new Set<string>();
 
@@ -110,9 +119,17 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
             answeredVersions.add(hit.modelVersion);
             return { key, result: hit };
           }
-          stats.calls++;
           try {
-            const result = await opts.client.ask(call.request);
+            let result: JevAskResult | undefined;
+            for (let attempt = 0; !result; attempt++) {
+              stats.calls++;
+              if (attempt > 0) stats.retriedCalls++;
+              try {
+                result = await opts.client.ask(call.request);
+              } catch (e) {
+                if (attempt >= retries) throw e;
+              }
+            }
             await opts.cache.set(key, result); // write as it arrives
             answeredVersions.add(result.modelVersion);
             return { key, result };
@@ -161,6 +178,7 @@ export async function runPanelForSites(
     calls: sum(runs.map((r) => r.stats.calls)),
     cacheHits: sum(runs.map((r) => r.stats.cacheHits)),
     failedCalls: sum(runs.map((r) => r.stats.failedCalls)),
+    retriedCalls: sum(runs.map((r) => r.stats.retriedCalls)),
     elapsedMs: performance.now() - started,
   };
   return { tables: runs.map((r) => r.table), stats };

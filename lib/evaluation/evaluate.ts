@@ -38,6 +38,7 @@ import {
 import type { DayResult, SimEvent, SiteConfig } from "@/lib/sim/contracts";
 import { computeParsedMonthlyEconomics } from "@/lib/sim/economics";
 import { percentile, simulateDay } from "@/lib/sim/engine";
+import { buildInsightsDay } from "@/lib/insights/model";
 
 const DAY_TYPES = ["weekday", "weekend"] as const satisfies readonly DayType[];
 /** Two sites are tied when their 90% intervals overlap by at least this share of the narrower one. */
@@ -205,8 +206,9 @@ export function resolveDemandSource(request: EvaluationRequest): {
 }
 
 export function seedList(
-  request: Pick<EvaluationRequest, "seeds" | "baseSeed">,
+  request: Pick<EvaluationRequest, "seeds" | "baseSeed" | "seedSet">,
 ): number[] {
+  if (request.seedSet) return [...request.seedSet];
   return Array.from({ length: request.seeds }, (_, i) => request.baseSeed + i);
 }
 
@@ -345,6 +347,18 @@ export function evaluateSite(
     if (d < best) rep = r;
   }
   const weekday = perSeed.map((r) => r.days.weekday.metrics);
+  const insightDay = (dayType: DayType) =>
+    buildInsightsDay({
+      runs: perSeed.map((r) => r.days[dayType]),
+      personas: request.personaSet.personas,
+      siteLocation: site.storefront.location,
+      capacityInputs: {
+        stations: perSeed[0]!.days[dayType].metrics.stations,
+        meanServiceMin: config.service.meanServiceMin ?? null,
+        stationOrigin: null,
+        serviceMeanOrigin: site.serviceMeanOrigin ?? null,
+      },
+    });
 
   return {
     evaluation: {
@@ -375,6 +389,17 @@ export function evaluateSite(
         ),
       },
       excludedPersonaIds: estimateDemand(demandInput).excludedPersonaIds,
+      insights: {
+        version: "hac94-v1",
+        siteId: site.siteId,
+        synthetic: request.synthetic,
+        seedCount: seeds.length,
+        days: {
+          weekday: insightDay("weekday"),
+          weekend: insightDay("weekend"),
+        },
+      },
+      ...(site.jevPanel ? { jevPanel: site.jevPanel } : {}),
     },
     representativeDays: rep.days,
   };
@@ -580,7 +605,14 @@ export function runSensitivity(
 ): SensitivityResult {
   const parsed = EvaluationRequestSchema.parse(input);
   const request: EvaluationRequest = options.seeds
-    ? { ...parsed, seeds: options.seeds }
+    ? {
+        ...parsed,
+        seeds: options.seeds,
+        // Preserve selected seed identities while honoring the caller's work limit.
+        ...(parsed.seedSet
+          ? { seedSet: parsed.seedSet.slice(0, options.seeds) }
+          : {}),
+      }
     : parsed;
   const sorted = [...new Set(values)].sort((a, b) => a - b);
   const baseline = evaluateSites(request).result;

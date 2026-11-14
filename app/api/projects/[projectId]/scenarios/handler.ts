@@ -6,6 +6,9 @@ import {
   type ScenarioService,
 } from "@/lib/scenario/service";
 import { ScenarioRepositoryError } from "@/lib/scenario/repository";
+import { ScenarioRunError } from "@/lib/scenario/run-store";
+import { LayoutInputError } from "@/lib/layout";
+import { AssemblyError } from "@/lib/evaluation/assemble";
 
 type Context = { params: Promise<{ projectId: string; id?: string }> };
 const id = z.string().trim().min(1).max(200);
@@ -14,10 +17,24 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { "Cache-Control": "private, no-store" },
   });
-function failure(error: unknown) {
+export function scenarioFailure(error: unknown) {
+  if (
+    error instanceof ScenarioRunError &&
+    (error.code === "busy" || error.code === "lease_lost")
+  )
+    return json(
+      {
+        code: "SCENARIO_RUN_CONFLICT",
+        message:
+          "Execution is already running or its ownership changed. Reload before advancing.",
+        field_errors: {},
+      },
+      409,
+    );
   if (
     error instanceof ScenarioServiceError ||
-    error instanceof ScenarioRepositoryError
+    error instanceof ScenarioRepositoryError ||
+    error instanceof ScenarioRunError
   ) {
     if (error.code === "not_found")
       return json(
@@ -43,10 +60,15 @@ function failure(error: unknown) {
     error instanceof ScenarioError ||
     error instanceof ScenarioServiceError ||
     error instanceof BodyError ||
+    error instanceof LayoutInputError ||
+    error instanceof AssemblyError ||
+    (error instanceof ScenarioRunError && error.code === "invalid") ||
     (error instanceof ScenarioRepositoryError && error.code === "invalid")
   ) {
     const field_errors: Record<string, string[]> = {};
-    if (error instanceof z.ZodError)
+    if (error instanceof LayoutInputError)
+      Object.assign(field_errors, error.fieldErrors);
+    else if (error instanceof z.ZodError)
       for (const issue of error.issues)
         (field_errors[issue.path.join(".") || "_request"] ??= []).push(
           issue.message,
@@ -64,7 +86,7 @@ function failure(error: unknown) {
   return json(
     {
       code: "SCENARIO_UNAVAILABLE",
-      message: "Scenario history is temporarily unavailable.",
+      message: "Scenario service is temporarily unavailable.",
       field_errors: {},
     },
     503,
@@ -87,7 +109,7 @@ export function createScenarioHandlers(service: ScenarioService) {
         const scenarioId = raw.id === undefined ? undefined : id.parse(raw.id);
         return await work(request, { projectId, id: scenarioId });
       } catch (error) {
-        return failure(error);
+        return scenarioFailure(error);
       }
     };
   return {

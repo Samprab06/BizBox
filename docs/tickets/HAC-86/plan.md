@@ -27,4 +27,13 @@
 - [x] `pnpm build`: passed. Historical a0ce767 absent-capacity JSON SHA-256 remains `cf515f65a0c19792780c3db845bbbe7627b8576ebd49e4b7d2a431426cdb74cb`.
 - [x] `pnpm lint`, `pnpm typecheck` and `git diff --check`: passed.
 
-Manager owns the final review and any remote delivery. No layout table, scenario FK, scan-to-layout adapter, scenario evaluation wiring or externally visible layout endpoint was added. The pure model is ready for those downstream integrations; the broader ticket remains In Development.
+## Persistence and execution completion
+
+Manager authorized project-scoped immutable layout persistence, reserved migration 0005 after the stable HAC-96 migration 0004, and a pure scenario execution configuration adapter. No layout editor, new auth policy, remote database writes or deployment is included.
+
+- [x] Add `applyLayoutToConfig(layout, config, { plannedStationsOverride? })`; selected layout overrides station and queue capacity, conflicting explicit station overrides fail with structured errors.
+- [x] Add server-only repository `insert(projectId, layout)` and `get(projectId, layoutId)`, validating stored geometry on both boundaries. Scoped parent FK protects project and site; scenario FK protects project. No update API; database rejects in-place updates. `loadLayoutDiffHook` preloads project-scoped snapshots for synchronous scenario diffs.
+- [x] Generate 0005 after stacking HAC-96, preserving earlier migration history. Fresh local PG17 migration/repository and adapter tests: 9 passed, covering cross-project/site references, ID conflicts, immutable updates, scoped reads, scenario FK and diff preloading. `pnpm lint`, `pnpm typecheck`, `drizzle-kit check` pass.
+- [x] Reject whitespace-altered project/layout scope IDs before database access instead of normalizing identity. Combined local layout/scenario repository, adapter and legacy-capacity checks: 22 passed.
+- [x] Production build after persistence: passed (TypeScript phase slowed under shared machine contention). Two full-suite attempts passed 760 tests with 24 skipped but each hit one different existing comparison-handler 5000 ms timeout; the unchanged handler file passed all 12 tests in isolation. No timeout or retry settings were changed.
+- [x] Final dependency stack includes interior `bf91a8d` and main `fd5bf33`; layout source candidate `87793c5`. All four checks passed: lint, typecheck, full suite (787 passed / 30 skipped, one worker), production build. Migration-chain and diff checks passed. Integration docs cover scoped persistence, layout precedence, caller validation, and migration preflight. Manager reviews and handles remote PR delivery.

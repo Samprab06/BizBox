@@ -16,7 +16,7 @@ import {
   type Road,
 } from "./road-tiles";
 import "cesium/Build/Cesium/Widgets/widgets.css";
-import { glass } from "./glass";
+import { GlassControl } from "@/components/ui/glass-control";
 import {
   RENDER_SETTINGS,
   createTimelineSampler,
@@ -33,6 +33,8 @@ export default function Neighborhood({
   minute,
   children,
   quality = "balanced",
+  locationLabel,
+  controls,
 }: {
   longitude: number;
   latitude: number;
@@ -40,19 +42,25 @@ export default function Neighborhood({
   minute: number;
   children: ReactNode;
   quality?: RenderQuality;
+  locationLabel: string;
+  controls?: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
   const timeRef = useRef(minute);
   const qualityRef = useRef(quality);
+  const [atmosphere, setAtmosphere] = useState<boolean | undefined>(undefined);
+  const atmosphereEnabled = atmosphere ?? quality === "detailed";
+  const atmosphereRef = useRef(atmosphereEnabled);
   const visibleRef = useRef(visible);
   const viewerRef = useRef<Viewer | undefined>(undefined);
   const updateScene = useRef<() => void>(() => {});
   useEffect(() => {
     timeRef.current = minute;
     qualityRef.current = quality;
+    atmosphereRef.current = atmosphereEnabled;
     updateScene.current();
-  }, [minute, quality]);
+  }, [minute, quality, atmosphereEnabled]);
   useEffect(() => {
     visibleRef.current = visible;
     const viewer = viewerRef.current;
@@ -225,14 +233,16 @@ export default function Neighborhood({
       city.clock.shouldAnimate = false;
       const { addVolumetricClouds } = await import("./volumetric-clouds");
       if (closed) return;
-      // Balanced keeps the animated cloud-bank layer below without warming a
-      // fullscreen ray-marched shader. Detailed restores the original volume.
+      // Sky/clouds are optional and off by default in Balanced. Detailed can
+      // restore the original volumetric layer without changing the viewer.
       const createCloudStage = () =>
-        RENDER_SETTINGS[qualityRef.current].volumetricClouds
+        RENDER_SETTINGS[qualityRef.current].volumetricClouds &&
+        atmosphereRef.current
           ? addVolumetricClouds(city.scene, () => timeRef.current)
           : undefined;
       let cloudStage = createCloudStage();
       let appliedQuality = qualityRef.current;
+      let appliedAtmosphere = atmosphereRef.current;
       const lowClouds = new CloudCollection({ noiseDetail: 32 });
       city.scene.primitives.add(lowClouds);
       const cloudBanks = [
@@ -318,10 +328,14 @@ export default function Neighborhood({
           tileset.maximumCacheOverflowBytes =
             settings.maximumCacheOverflowBytes;
         }
-        if (appliedQuality !== qualityRef.current) {
+        if (
+          appliedQuality !== qualityRef.current ||
+          appliedAtmosphere !== atmosphereRef.current
+        ) {
           if (cloudStage) city.scene.postProcessStages.remove(cloudStage);
           cloudStage = createCloudStage();
           appliedQuality = qualityRef.current;
+          appliedAtmosphere = atmosphereRef.current;
         }
       };
       const overlayTime = createTimelineSampler();
@@ -358,6 +372,13 @@ export default function Neighborhood({
         }
       };
       const updateLighting = () => {
+        lowClouds.show = atmosphereRef.current;
+        if (city.scene.sun) city.scene.sun.show = atmosphereRef.current;
+        if (!atmosphereRef.current) {
+          city.scene.backgroundColor = Color.fromCssColorString("#101b16");
+          previousMinute = -1;
+          return;
+        }
         const minute = timeRef.current;
         const cloudMinute = cloudTime.take(minute, 1);
         if (cloudMinute !== undefined) {
@@ -552,7 +573,12 @@ export default function Neighborhood({
     void load(element).catch(() => {
       if (!closed) setStatus("failed");
       roadRequests.abort();
+      trafficEntities.current = () => {};
+      updateScene.current = () => {};
       dispose();
+      // A constructor that throws can leave Cesium's own error panel behind
+      // before assigning viewer. This div contains only the unmanaged SDK UI.
+      if (!closed) element.replaceChildren();
     });
     return () => {
       closed = true;
@@ -566,11 +592,12 @@ export default function Neighborhood({
   return (
     <div
       id="neighborhood"
-      className="relative h-dvh w-full overflow-hidden bg-[#06080d] text-white"
+      className="relative h-full w-full overflow-hidden bg-viewport-canvas text-viewport-ink"
     >
       <div
         className="absolute inset-0"
         ref={container}
+        role="region"
         aria-label="Vexcel 3D neighborhood"
       />
       <div
@@ -578,63 +605,53 @@ export default function Neighborhood({
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.55))]"
       />
 
-      <header className="absolute inset-x-4 top-4 z-10 flex items-center justify-between gap-3 sm:inset-x-6 sm:top-6">
-        <div
-          className={`${glass} flex items-center gap-2.5 rounded-full py-2 pr-4 pl-3 text-sm`}
-        >
-          <span
-            className={`size-2 rounded-full ${status === "failed" ? "bg-rose-400" : status === "ready" ? "bg-emerald-400 shadow-[0_0_10px] shadow-emerald-400" : "animate-pulse bg-white/50"}`}
-          />
-          <span className="font-medium">Montrose</span>
-          <span className="text-white/40">Houston</span>
-          {status === "failed" && (
-            <button
-              type="button"
-              className="ml-1 text-xs text-white/60 underline-offset-2 hover:text-white hover:underline"
-              onClick={() => {
-                setTrafficVisible(true);
-                setStatus("loading");
-                setAttempt((value) => value + 1);
-              }}
-            >
-              Retry
-            </button>
-          )}
-        </div>
-        <a
-          href="#operating-plan"
-          className={`${glass} rounded-full px-4 py-2 text-sm font-medium transition hover:bg-white/[0.12]`}
-        >
-          Operating plan
-        </a>
-      </header>
+      <div className="absolute top-3 left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted">
+        <span>{locationLabel}</span>
+        {status === "failed" && (
+          <button
+            type="button"
+            className="ml-2 underline"
+            onClick={() => {
+              setTrafficVisible(true);
+              setStatus("loading");
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
 
       {status !== "ready" && (
         <div
           role="status"
-          className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-white/60"
+          className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-viewport-muted"
         >
           {status === "loading" ? (
             <span className="flex items-center gap-3">
-              <span className="size-4 animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+              <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
               Loading 3D neighborhood
             </span>
           ) : (
-            "Vexcel tiles could not load."
+            "3D neighborhood unavailable. Check WebGL support or retry imagery."
           )}
         </div>
       )}
 
-      <aside
-        className={`${glass} absolute top-20 left-4 z-10 w-52 p-4 sm:top-24 sm:left-6`}
+      <GlassControl
+        over="viewport"
+        aria-label="Illustrative neighborhood overlays"
+        className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-white/80">Traffic</span>
+          <span className="text-xs font-medium">
+            Illustrative traffic pattern
+          </span>
           <button
             type="button"
             role="switch"
             aria-checked={trafficVisible}
-            aria-label="Traffic heatmap"
+            aria-label="Illustrative traffic pattern"
             onClick={() => {
               const show = !trafficVisible;
               setTrafficVisible(show);
@@ -652,28 +669,36 @@ export default function Neighborhood({
         />
 
         {trafficVisible && roadStatus !== "ready" && (
-          <p role="status" className="mt-2 text-[11px] text-white/45">
+          <p role="status" className="mt-2 text-[11px] text-viewport-muted">
             {roadStatus === "loading"
               ? "Loading nearby roads…"
               : "Some roads didn’t load. Move the map or toggle to retry."}
           </p>
         )}
 
-        <div className="mt-5 hidden sm:block">
-          <span className="text-xs font-medium text-white/80">Demand</span>
+        <p className="mt-2 text-[11px]">
+          Time-of-day curves and invented offsets; not observed traffic.
+        </p>
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs font-medium">
+            Assumed activity by time of day
+          </summary>
+          <p className="mt-1 text-[11px]">
+            Hand-placed anchors; not measured trips.
+          </p>
           <ul className="mt-2.5 space-y-2">
             {demandAnchors.map((anchor) => {
               const level = demandLevel(minute, anchor.peaks);
               return (
                 <li
                   key={anchor.label}
-                  className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-white/50"
+                  className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
                   title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
                 >
                   {anchor.label}
                   <span className="h-1 overflow-hidden rounded-full bg-white/10">
                     <span
-                      className="block h-full rounded-full transition-[width] duration-300"
+                      className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
                       style={{
                         width: `${Math.max(3, level * 100)}%`,
                         backgroundColor: anchor.color,
@@ -684,12 +709,21 @@ export default function Neighborhood({
               );
             })}
           </ul>
-        </div>
-      </aside>
+        </details>
+        <label className="mt-4 flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={atmosphereEnabled}
+            onChange={(event) => setAtmosphere(event.target.checked)}
+          />
+          Sky and clouds
+        </label>
+        <div className="mt-3">{controls}</div>
+      </GlassControl>
 
       {children}
 
-      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-white/30 sm:right-6">
+      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-viewport-muted sm:right-6">
         © Vexcel Imaging · © Microsoft · © OpenStreetMap via OpenFreeMap
       </p>
     </div>

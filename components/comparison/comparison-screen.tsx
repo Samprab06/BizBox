@@ -1,7 +1,14 @@
 import Link from "next/link";
+import { DecisionReplay } from "@/components/decision/decision-replay";
+import { DecisionHeader } from "@/components/decision/decision-header";
+import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { exampleComparison, exampleComparisonId } from "./example-comparison";
+import {
+  exampleComparison,
+  exampleComparisonId,
+  exampleDemandLabel,
+} from "./example-comparison";
 import { ConsultantPanel } from "../ConsultantPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -37,6 +44,7 @@ export function ComparisonScreen({
   investigationId?: string;
 }) {
   const rows = exampleComparison(project.sites, visits);
+  const demandLabel = exampleDemandLabel(project.sites);
   const id = exampleComparisonId(visits);
   const leader = rows[0];
   const overlaps = rows.slice(1).filter((row) => row.high >= leader.low);
@@ -49,18 +57,48 @@ export function ComparisonScreen({
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="text-sm text-muted">
-          Synthetic Houston scenario · default assumptions
-        </p>
-        <h2 className="mt-2 text-2xl font-semibold">
-          Monthly operating scenarios
-        </h2>
-        <p className="mt-2 text-muted">
-          Contribution after included costs across 24 seeded scenarios. The 90%
-          interval describes modeled outcomes.
-        </p>
-      </div>
+      <DecisionHeader
+        compact
+        decision="Which example site should I choose?"
+        scene={
+          <DecisionReplay
+            example={leader.run}
+            label={`Synthetic weekday · ${leader.site.address}`}
+            fullReplayHref={comparisonLink(
+              project.id,
+              "replay",
+              visits,
+              leader.site.id,
+            )}
+          />
+        }
+        answer={
+          overlaps.length
+            ? `${leader.site.address} and ${overlaps.map((row) => row.site.address).join(", ")} have overlapping modeled ranges under these assumptions.`
+            : `${leader.site.address} leads this synthetic scenario under current assumptions.`
+        }
+        qualification={
+          <>
+            <p>
+              <EvidenceBadge kind="Simulation" /> Synthetic Houston example ·
+              default assumptions.
+              {demandLabel && ` · Example · ${demandLabel}`}
+            </p>
+            <p>
+              24 seeded scenarios · 90% modeled intervals, not a sales forecast.
+              No live robustness sweep.
+            </p>
+          </>
+        }
+        nextAction={
+          <a
+            href="#example-visit-frequency"
+            className="font-semibold text-pine underline"
+          >
+            Change visit frequency
+          </a>
+        }
+      />
       {previousId && previousId !== id && (
         <p role="status" className="rounded-lg border border-line bg-paper p-3">
           This comparison is outdated.{" "}
@@ -76,6 +114,7 @@ export function ComparisonScreen({
         <label className="grid gap-1 text-sm font-medium">
           Visit frequency
           <select
+            id="example-visit-frequency"
             name="visits"
             defaultValue={visits}
             className="rounded-lg border border-line p-2"
@@ -152,8 +191,9 @@ export function ComparisonScreen({
             ))}
           </ul>
           <p className="mt-3 text-sm text-muted">
-            The displayed order uses synthetic Huff-style demand assumptions. A
-            separate Jev comparison is pending.
+            {demandLabel
+              ? `The displayed order uses a stored panel of Jev answers, not a live run. ${demandLabel}.`
+              : "The displayed order uses synthetic Huff-style demand assumptions. A separate Jev comparison is pending."}
           </p>
         </section>
         <section className="rounded-xl border border-line p-4">
@@ -176,7 +216,10 @@ export function ComparisonScreen({
           </p>
         </section>
       </div>
-      <ConsultantPanel key={investigationId} investigationId={investigationId} />
+      <ConsultantPanel
+        key={investigationId}
+        investigationId={investigationId}
+      />
     </div>
   );
 }

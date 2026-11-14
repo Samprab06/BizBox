@@ -25,6 +25,7 @@
     "db:load": "tsx scripts/load-local-data.ts",
     "db:load:hosted": "tsx scripts/load-hosted-data.ts",
     "db:verify": "tsx scripts/verify-local-dev.ts",
+    "jev:record": "tsx scripts/record-jev-example.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -42,7 +43,9 @@
     "postgres": "4.1.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-is": "19.3.1",
     "react-map-gl": "8.1.3",
+    "recharts": "3.10.1",
     "server-only": "0.0.1",
     "three": "0.187.0",
     "zod": "4.6.7"

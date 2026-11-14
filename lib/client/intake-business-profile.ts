@@ -28,7 +28,7 @@ const tiers = {
   Premium: "premium",
 } as const;
 
-function operatingHours(text: string) {
+export function operatingHours(text: string) {
   // Accept a single explicit same-day range. Never guess that "9-5" means PM.
   const matches = [
     ...text
@@ -63,7 +63,7 @@ function operatingHours(text: string) {
     : null;
 }
 
-function mustHaves(
+export function mustHaves(
   answer: NonNullable<Profile["requirements"]>,
 ): BusinessProfile["mustHaves"] {
   const text = answer.value.toLowerCase();

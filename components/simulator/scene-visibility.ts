@@ -9,7 +9,11 @@ export function observeSceneVisibility(
   let previous: boolean | undefined;
   const update = () => {
     if (stopped) return;
-    const visible = inViewport && !document.hidden;
+    const fullscreen = document.fullscreenElement;
+    const visible =
+      inViewport &&
+      !document.hidden &&
+      (!fullscreen || fullscreen.contains(element));
     if (visible !== previous) {
       previous = visible;
       onChange(visible);
@@ -23,11 +27,13 @@ export function observeSceneVisibility(
           update();
         });
   document.addEventListener("visibilitychange", update);
+  document.addEventListener("fullscreenchange", update);
   observer?.observe(element);
   update();
   return () => {
     stopped = true;
     observer?.disconnect();
     document.removeEventListener("visibilitychange", update);
+    document.removeEventListener("fullscreenchange", update);
   };
 }
