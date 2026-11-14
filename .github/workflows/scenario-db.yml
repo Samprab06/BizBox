@@ -1,0 +1,64 @@
+name: Scenario database checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/scenario-db.yml"
+      - "lib/scenario/**"
+      - "lib/layout/**"
+      - "lib/interior/**"
+      - "lib/db/**"
+      - "lib/contracts/**"
+      - "drizzle/**"
+  push:
+    branches: ["hac-81-agt-2-scenario-api"]
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    name: Scenario migration and concurrency checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hac96_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hac96_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify migrations, scoped repositories, reservations and checkpoints
+        env:
+          RUN_SCENARIO_EXECUTION_DB_TESTS: "1"
+          SCENARIO_EXECUTION_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
+          RUN_SCENARIO_DB_TESTS: "1"
+          SCENARIO_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
+          RUN_LAYOUT_DB_TESTS: "1"
+          LAYOUT_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
+          RUN_INTERIOR_DB_TESTS: "1"
+          INTERIOR_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
+        run: >-
+          pnpm exec vitest run
+          lib/scenario/run-store-postgres.test.ts
+          lib/scenario/repository.test.ts
+          lib/layout/repository.test.ts
+          lib/interior/postgres.test.ts
+          --maxWorkers=1
