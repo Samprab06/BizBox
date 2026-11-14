@@ -416,7 +416,10 @@ export const scenarioRuns = pgTable(
     idempotencyKey: text("idempotency_key"),
     request: jsonb("request").$type<EvaluationRequest>(),
     assembly: jsonb("assembly").$type<AssemblyMetadata>(),
-    completed: jsonb("completed").$type<Record<string, SiteOutcome>>().notNull().default({}),
+    completed: jsonb("completed")
+      .$type<Record<string, SiteOutcome>>()
+      .notNull()
+      .default({}),
     leaseToken: text("lease_token"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
     revision: integer("revision").notNull().default(0),
@@ -438,12 +441,22 @@ export const scenarioRuns = pgTable(
     }).onDelete("cascade"),
     index("scenario_runs_scenario_idx").on(t.projectId, t.scenarioId),
     index("scenario_runs_comparison_idx").on(t.projectId, t.comparisonId),
-    unique("scenario_runs_idempotency_unique").on(t.projectId, t.scenarioId, t.idempotencyKey),
+    unique("scenario_runs_idempotency_unique").on(
+      t.projectId,
+      t.scenarioId,
+      t.idempotencyKey,
+    ),
     index("scenario_runs_cache_idx").on(t.projectId, t.effectiveKey, t.status),
     index("scenario_runs_budget_idx").on(t.projectId, t.createdAt),
-    check("scenario_runs_cost_valid", sql`${t.costUnits} >= 0 AND (NOT ${t.cached} OR ${t.costUnits} = 0)`),
+    check(
+      "scenario_runs_cost_valid",
+      sql`${t.costUnits} >= 0 AND (NOT ${t.cached} OR ${t.costUnits} = 0)`,
+    ),
     check("scenario_runs_revision_valid", sql`${t.revision} >= 0`),
-    check("scenario_runs_lease_pair", sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`),
+    check(
+      "scenario_runs_lease_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
   ],
 );
 

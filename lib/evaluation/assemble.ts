@@ -27,6 +27,8 @@ import { buildPersonas } from "@/lib/panel/personas";
 import { runPanelForSites } from "@/lib/panel/panel";
 import type { JevClient } from "@/lib/panel/jev-client";
 import type { JevCache } from "@/lib/panel/cache";
+import type { ScenarioOverrides } from "@/lib/contracts/scenario";
+import type { Layout } from "@/lib/contracts/layout";
 
 export const AssemblyShortcutSchema = z
   .object({
@@ -70,6 +72,13 @@ export type AssemblyFinding = {
   siteId?: string;
 };
 export type AssemblyMetadata = {
+  /** Immutable scenario and optional layout snapshot used by HAC-81. */
+  scenario?: {
+    id: string;
+    layoutId: string | null;
+    overrides: ScenarioOverrides;
+    layout: Layout | null;
+  };
   findings: AssemblyFinding[];
   assumptions: Record<
     string,

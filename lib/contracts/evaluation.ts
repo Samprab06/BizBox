@@ -92,8 +92,15 @@ export const EvaluationRequestSchema = z
     seeds: z.number().int().min(1).max(100).default(DEFAULT_SEEDS),
     baseSeed: z.number().int().nonnegative().default(1),
     /** Exact scenario seeds; absent retains the historical seeds/baseSeed range. */
-    seedSet: z.array(z.number().int().nonnegative()).min(1).max(100)
-      .refine(values => new Set(values).size === values.length, "Seeds must be unique").optional(),
+    seedSet: z
+      .array(z.number().int().nonnegative())
+      .min(1)
+      .max(100)
+      .refine(
+        (values) => new Set(values).size === values.length,
+        "Seeds must be unique",
+      )
+      .optional(),
     overrides: EvaluationOverridesSchema.default({}),
   })
   .strict();
