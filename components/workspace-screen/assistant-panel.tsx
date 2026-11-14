@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
+import { useAssistantDraft } from "./use-assistant-draft";
 import type { IntakeConversation } from "./use-intake-conversation";
 
 const MODE_LABEL: Record<AssistantMode, string> = {
@@ -115,7 +116,7 @@ export function AssistantPanel({
   summary: string;
 }) {
   const [mode, setMode] = useState<AssistantMode>("text");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useAssistantDraft(projectId);
   const [historyOpen, setHistoryOpen] = useState(false);
   const tabs = useRef<Record<AssistantMode, HTMLButtonElement | null>>({
     text: null,
@@ -206,6 +207,9 @@ export function AssistantPanel({
           ))}
         </div>
       </header>
+      <p className="border-b border-viewport-line px-5 py-2 text-xs text-viewport-muted">
+        Staffing changes and Keep/Revert are not connected yet.
+      </p>
 
       {failure && (
         <div
@@ -303,11 +307,12 @@ export function AssistantPanel({
       >
         {mode === "voice" && (
           <>
-            <div className="px-5 text-ink">
+            <div className="px-5">
               <VoicePanel
                 adapter={voiceAdapter}
                 title="Talk to BizBox"
                 label="Voice assistant"
+                tone="dark"
               />
             </div>
             <details

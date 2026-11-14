@@ -165,7 +165,7 @@ test.describe("navigation", () => {
     });
   }
 
-  test("the Sitework link in the header returns to the example project", async ({
+  test("the BizBox link in the header returns to the example project", async ({
     page,
     gotoView,
     projectId,
@@ -174,7 +174,7 @@ test.describe("navigation", () => {
     await expandProjectNavigation(page);
     await page
       .getByRole("banner")
-      .getByRole("link", { name: "Sitework" })
+      .getByRole("link", { name: "BizBox" })
       .click();
     await expect(page).toHaveURL(
       new RegExp(`${workspaceHref(projectId, "intake")}$`),

@@ -215,7 +215,8 @@ test("the history is the intake conversation, so the intake screen shows it too"
     assistant(page).getByRole("log", { name: "Conversation" }),
   ).toContainText("Corner spaces noted.");
 
-  await page.goto(workspaceHref(projectId, "intake"));
+  // The detailed form (?mode=form) shows the conversation; the guided questions do not.
+  await page.goto(`${workspaceHref(projectId, "intake")}?mode=form`);
   const intakeLog = page.getByRole("list", { name: "Conversation" });
   await expect(intakeLog).toContainText("We want a corner space");
   await expect(intakeLog).toContainText("Corner spaces noted.");

@@ -1,0 +1,372 @@
+/* One question, one glass surface. Decorative liquid never filters text. */
+.question-card {
+  max-height: calc(100dvh - 132px);
+  display: flex;
+  flex-direction: column;
+}
+.question-card #onboard-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.question-card .card-top {
+  flex-shrink: 0;
+  padding-bottom: 0;
+}
+.question-card .step-name {
+  font-variant-numeric: tabular-nums;
+  font-weight: 450;
+}
+.question-card .progress {
+  height: 3px;
+  width: 118px;
+  background: #ffffff20;
+  border-radius: 3px;
+  overflow: hidden;
+  display: block;
+}
+.question-card .progress span {
+  display: block;
+  height: 100%;
+  width: var(--question-progress);
+  background: #f4f4f9;
+  transition: width 0.35s ease;
+  border-radius: 3px;
+}
+.question-card .card-content {
+  min-height: 300px;
+  padding-top: 35px;
+  padding-bottom: 34px;
+  overflow-y: auto;
+}
+.question-card .card-content h1 {
+  font-size: 36px;
+  max-width: 560px;
+  margin-bottom: 24px;
+}
+.question-scene {
+  position: relative;
+  isolation: isolate;
+}
+.question-card .intro {
+  margin-top: -12px;
+  margin-bottom: 23px;
+  font-size: 13px;
+  color: #d6d6df;
+}
+.question-answer {
+  width: 100%;
+}
+.question-answer input,
+.question-answer textarea {
+  font-size: 21px;
+  line-height: 1.5;
+  padding: 17px 19px;
+  border-radius: 17px;
+}
+.question-answer textarea {
+  min-height: 118px;
+  resize: vertical;
+  max-height: 190px;
+}
+.question-answer input {
+  min-height: 66px;
+}
+.question-answer .currency input {
+  font-size: 35px;
+  line-height: 1.4;
+  padding-left: 41px;
+  min-height: 79px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+}
+.question-answer .currency > span {
+  left: 19px;
+  top: 17px;
+  font-size: 25px;
+}
+.question-card .field-hint {
+  font-size: 12px;
+  margin-top: 11px;
+  color: #d6d6df;
+}
+.question-card .choice-grid {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 0;
+}
+.question-card .choice {
+  min-height: 78px;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 17px;
+  font-size: 15px;
+  padding: 17px 16px;
+}
+.question-card .choice svg {
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+}
+.question-card .choice[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 0.5px #ffffff3b,
+    0 6px 18px #0001;
+}
+.question-card .price-choices {
+  grid-template-columns: repeat(3, 1fr);
+}
+.question-card .price-choices .choice {
+  min-height: 90px;
+}
+.question-card .cities {
+  margin: 0;
+  gap: 14px;
+}
+.question-card .city-art {
+  height: 105px;
+}
+.question-card .city-label {
+  padding: 16px;
+  font-size: 16px;
+}
+.question-card .neighborhoods {
+  margin-top: 13px;
+}
+.question-card .chip {
+  position: relative;
+  overflow: hidden;
+  font-size: 12px;
+  padding: 8px 13px;
+}
+.question-card .card-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  min-height: 94px;
+}
+.question-card .footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+.skip {
+  border: 0;
+  background: none;
+  font-size: 13px;
+  color: #dedee7;
+  padding: 12px 2px;
+}
+.question-card .review {
+  min-height: 0;
+}
+.question-card .review h1 {
+  margin-bottom: 17px;
+}
+.question-card .review-concept {
+  margin: 0 0 16px;
+  padding: 13px 15px;
+}
+.question-card .review-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 26px;
+}
+.question-card .review-row {
+  grid-template-columns: 75px 1fr 28px;
+  gap: 8px;
+  font-size: 11px;
+  padding: 10px 0;
+  align-items: start;
+  break-inside: avoid;
+}
+.question-card .review-row dd {
+  overflow-wrap: anywhere;
+}
+.question-card .review-concept p {
+  font-size: 12px;
+}
+.question-card .review .review-row:nth-last-child(2) {
+  border-bottom: 0;
+}
+.question-card .card-content.review {
+  max-height: 470px;
+  padding-top: 27px;
+  padding-bottom: 23px;
+}
+.liquid-flight {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+.liquid-flight > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+}
+.liquid-membrane {
+  position: absolute;
+  inset: 3px;
+  z-index: 1;
+  pointer-events: none;
+  border: 2px solid #fff8;
+  background: linear-gradient(140deg, #ffffff12, transparent 40%, #ffffff0b);
+  box-shadow:
+    inset 0 1px 8px #ffffff55,
+    0 0 15px #ffffff14;
+  transform-origin: 80% 90%;
+}
+.liquid-ripple {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 900px;
+  height: 900px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 15px solid #ffffff25;
+  box-shadow:
+    0 0 18px #ffffff20,
+    inset 0 0 18px #ffffff18;
+  background: radial-gradient(
+    circle,
+    transparent 55%,
+    #ffffff0d 59%,
+    transparent 62%
+  );
+  transform-origin: center;
+}
+.selection-liquid {
+  position: absolute;
+  left: 35%;
+  top: 5%;
+  width: 30%;
+  height: 90%;
+  background: radial-gradient(ellipse, #ffffff80, #ffffff08 70%);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  filter: blur(2px);
+}
+.is-transitioning .card-footer button {
+  pointer-events: none;
+}
+.is-transitioning .card-footer .primary {
+  background: #e6e6ee;
+}
+@media (max-width: 1000px) {
+  .question-card .card-content h1 {
+    font-size: 33px;
+  }
+}
+@media (max-width: 720px) {
+  .question-card {
+    max-height: calc(100dvh - 140px);
+    min-height: 435px;
+  }
+  .question-card .card-content {
+    min-height: 245px;
+    padding-top: 29px;
+    padding-bottom: 28px;
+  }
+  .question-card .card-content h1 {
+    font-size: 28px;
+    line-height: 1.2;
+    margin-bottom: 22px;
+  }
+  .question-card .intro {
+    font-size: 12px;
+    margin-top: -10px;
+    line-height: 1.5;
+  }
+  .question-card .progress {
+    width: 84px;
+  }
+  .question-answer input,
+  .question-answer textarea {
+    font-size: 17px;
+    padding: 14px 15px;
+  }
+  .question-answer textarea {
+    min-height: 118px;
+    max-height: 170px;
+  }
+  .question-card .choice {
+    font-size: 12px;
+    min-height: 74px;
+    gap: 8px;
+    padding: 13px 9px;
+    border-radius: 15px;
+  }
+  .question-card .choice svg {
+    width: 21px;
+    height: 21px;
+  }
+  .question-card .choice-grid {
+    gap: 9px;
+  }
+  .question-card .price-choices {
+    grid-template-columns: 1fr;
+  }
+  .question-card .price-choices .choice {
+    min-height: 50px;
+  }
+  .question-card .city-art {
+    height: 76px;
+  }
+  .question-card .city-label {
+    padding: 13px;
+    font-size: 13px;
+  }
+  .question-answer .currency input {
+    font-size: 29px;
+    padding-left: 35px;
+  }
+  .question-answer .currency > span {
+    font-size: 22px;
+    top: 20px;
+    left: 16px;
+  }
+  .question-card .card-footer {
+    min-height: 86px;
+  }
+  .question-card .footer-actions {
+    gap: 12px;
+  }
+  .question-card .review-list {
+    grid-template-columns: 1fr;
+  }
+  .question-card .card-content.review {
+    padding-top: 25px;
+    max-height: none;
+  }
+  .question-card .review-row {
+    font-size: 11px;
+    grid-template-columns: 79px 1fr 29px;
+    padding: 10px 0;
+  }
+  .question-card .review .review-row:nth-last-child(2) {
+    border-bottom: 1px solid var(--line);
+  }
+  .question-card .review-concept p {
+    font-size: 11px;
+  }
+  .question-card .review-concept h2 {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .liquid-flight,
+  .liquid-membrane,
+  .liquid-ripple,
+  .selection-liquid {
+    display: none !important;
+  }
+  .question-card .progress span {
+    transition: none !important;
+  }
+}

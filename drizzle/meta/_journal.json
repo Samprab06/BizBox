@@ -50,6 +50,13 @@
       "when": 1794675261055,
       "tag": "0006_scenario-executions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794692838474,
+      "tag": "0007_scenario-provenance",
+      "breakpoints": true
     }
   ]
 }

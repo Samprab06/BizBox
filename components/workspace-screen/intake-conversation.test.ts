@@ -122,4 +122,41 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(next.profile.city?.value).toBe("Houston");
     expect(next.live?.missingRequiredFields).toEqual(["businessName"]);
   });
+
+  it("is the one implementation: a form sync sends no message and adds no chat reply", () => {
+    const body = intakeRequestBody(session);
+    expect(body.message).toBeUndefined();
+    expect(body.patch).toBeDefined();
+    const next = applyIntakeReply(session, session, reply, false);
+    expect(next.messages).toEqual(session.messages);
+    expect(next.live?.missingRequiredFields).toEqual(["businessName"]);
+  });
+
+  it("takes each surface's own wording for failures", async () => {
+    const copy = {
+      unreachable: "unreachable",
+      unavailable: "unavailable",
+      unexpected: "unexpected",
+    };
+    const fail = (impl: () => Promise<Response>) =>
+      postIntakeMessage(
+        impl as unknown as typeof fetch,
+        "p",
+        intakeRequestBody(session, "Hi"),
+        copy,
+      );
+    expect(
+      await fail(async () => {
+        throw new TypeError("offline");
+      }),
+    ).toMatchObject({ message: "unreachable" });
+    expect(await fail(async () => Response.json({}, { status: 500 }))).toEqual({
+      ok: false,
+      message: "unavailable",
+      retryable: true,
+    });
+    expect(await fail(async () => Response.json({ nope: 1 }))).toMatchObject({
+      message: "unexpected",
+    });
+  });
 });

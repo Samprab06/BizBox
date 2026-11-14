@@ -1,6 +1,11 @@
 import { simulateDay } from "@/lib/sim/engine";
 import { computeMonthlyEconomics } from "@/lib/sim/economics";
-import type { SiteConfigInput } from "@/lib/sim/contracts";
+import type {
+  ArrivalSchedule,
+  DayResult,
+  MonthlyEconomics,
+  SiteConfigInput,
+} from "@/lib/sim/contracts";
 import { createRng } from "@/lib/sim/random";
 
 export const demoPlan = {
@@ -13,10 +18,13 @@ export const demoPlan = {
   alternativeBuildout: 15000,
 };
 
-export function makeDemo() {
+export function makeDemoInputs(): {
+  schedule: ArrivalSchedule;
+  configs: SiteConfigInput[];
+} {
   const hours = { openMin: 480, closeMin: 720 };
   const random = createRng(45);
-  const schedule = {
+  const schedule: ArrivalSchedule = {
     ...hours,
     siteId: "demo-cafe",
     seed: 45,
@@ -42,36 +50,46 @@ export function makeDemo() {
     })),
   };
 
-  return [1, 2].map((stations) => {
-    const config: SiteConfigInput = {
-      hours: { weekday: hours, weekend: hours },
-      stations: {
-        planned: stations,
-        usableSf: demoPlan.area,
-        sfPerStation: 250,
-      },
-      prices: { avgTicketUsd: demoPlan.ticket },
-      staff: { headcount: stations, wageUsdPerHour: demoPlan.wage },
-      costs: { cogsPctOfRevenue: 0.3 },
-      lease: {
-        sf: demoPlan.area,
-        askingRentUsdPerSfYear: demoPlan.rentPerSquareFoot,
-        tripleNet: false,
-        buildoutUsd:
-          stations === 2
-            ? demoPlan.alternativeBuildout
-            : demoPlan.baselineBuildout,
-        leaseTermMonths: 36,
-      },
-      calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 0 },
-    };
+  const configs = [1, 2].map((stations): SiteConfigInput => ({
+    hours: { weekday: hours, weekend: hours },
+    stations: {
+      planned: stations,
+      usableSf: demoPlan.area,
+      sfPerStation: 250,
+    },
+    prices: { avgTicketUsd: demoPlan.ticket },
+    staff: { headcount: stations, wageUsdPerHour: demoPlan.wage },
+    costs: { cogsPctOfRevenue: 0.3 },
+    lease: {
+      sf: demoPlan.area,
+      askingRentUsdPerSfYear: demoPlan.rentPerSquareFoot,
+      tripleNet: false,
+      buildoutUsd:
+        stations === 2
+          ? demoPlan.alternativeBuildout
+          : demoPlan.baselineBuildout,
+      leaseTermMonths: 36,
+    },
+    calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 0 },
+  }));
+  return { schedule, configs };
+}
+
+export type DemoData = Array<{
+  run: DayResult;
+  monthly: MonthlyEconomics;
+  /** Omitted for stored runs whose per-station staffing is not available here. */
+  staffing?: { headcount: number };
+}>;
+
+export function makeDemo(): DemoData {
+  const { schedule, configs } = makeDemoInputs();
+  return configs.map((config) => {
     const run = simulateDay(schedule, config);
     const monthly = computeMonthlyEconomics(config, {
       weekday: run.metrics,
       weekend: { revenueUsd: 0, served: 0 },
     });
-    return { run, monthly };
+    return { run, monthly, staffing: { headcount: config.staff.headcount } };
   });
 }
-
-export type DemoData = ReturnType<typeof makeDemo>;

@@ -74,7 +74,7 @@ describe("workspace header", () => {
 });
 
 describe("selected space", () => {
-  it("shows the requested example site, labelled as an example and without a rent", () => {
+  it("shows the requested example site, labelled as an example with its rent marked unavailable", () => {
     const space = selectedSpace(
       { mode: "example", message: "Complete your intake." },
       project,
@@ -87,7 +87,10 @@ describe("selected space", () => {
       example: true,
     });
     if (space.kind !== "space") throw new Error("expected a space");
-    expect(space.stats.map((stat) => stat.label)).toEqual(["Area"]);
+    expect(space.stats).toEqual([
+      { label: "Monthly rent", value: "Not listed" },
+      expect.objectContaining({ label: "Area" }),
+    ]);
   });
 
   it("falls back to the first example site and reports loading and empty states", () => {

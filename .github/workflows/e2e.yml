@@ -3,10 +3,29 @@ name: E2E
 on:
   pull_request:
 
+permissions:
+  contents: read
+
+# HAC-132: the whole suite takes about 20 minutes on one runner, so each Playwright project
+# runs as its own job (about 5-8 minutes each). The `e2e` job at the bottom keeps the
+# required-check name stable: it passes only when every project job passed.
 jobs:
-  e2e:
+  project:
+    name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: chromium
+            browser: chromium
+          - project: webkit
+            browser: webkit
+          - project: mobile-chrome
+            browser: chromium
+          - project: api
+            browser: ""
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -15,11 +34,28 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium webkit
-      - run: pnpm test:e2e
+      - name: Install browser
+        if: matrix.browser != ''
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Run ${{ matrix.project }} specs
+        run: pnpm exec playwright test --project=${{ matrix.project }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: playwright-report/
           retention-days: 14
+
+  e2e:
+    name: e2e
+    needs: project
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every project passed
+        env:
+          RESULT: ${{ needs.project.result }}
+        run: |
+          echo "e2e project jobs: $RESULT"
+          test "$RESULT" = "success"

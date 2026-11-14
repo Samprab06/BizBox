@@ -10,8 +10,6 @@ on:
       - "lib/db/**"
       - "lib/contracts/**"
       - "drizzle/**"
-  push:
-    branches: ["hac-81-agt-2-scenario-api"]
 
 permissions:
   contents: read

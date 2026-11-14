@@ -14,6 +14,15 @@ import {
 } from "./intake-guard";
 
 export const DEFAULT_INTAKE_MODEL = "gpt-6-luna";
+/** Unset means the native OpenAI endpoint. */
+export function modelConfiguration(env: Record<string, string | undefined>) {
+  const baseURL = env.OPENAI_BASE_URL?.trim();
+  return {
+    timeout: 10_000,
+    maxRetries: 0,
+    ...(baseURL ? { baseURL } : {}),
+  };
+}
 /** Graph step budget for one intake turn. A normal turn is one save and a reply (about 4 steps). */
 export const INTAKE_RECURSION_LIMIT = 12;
 /** One save_profile call per turn is normal; a second covers a rejected or corrected patch. */
@@ -220,7 +229,7 @@ export const runConfiguredIntakeAgent: IntakeRunner = async (input) => {
     maxTokens: 1500,
     maxRetries: 0,
     timeout: 10_000,
-    configuration: { timeout: 10_000, maxRetries: 0 },
+    configuration: modelConfiguration(process.env),
   });
   return createDeepIntakeRunner(model)(input);
 };
