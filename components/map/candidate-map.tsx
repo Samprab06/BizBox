@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import Map, { Layer, Marker, NavigationControl, Source, type ViewState } from "react-map-gl/maplibre";
+import Map, { Layer, Marker, NavigationControl, Source, type ViewState, type MarkerInstance } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { catchmentRadiusMiles, competitors, getSiteFixture } from "../site/site-fixtures";
 
@@ -31,6 +31,15 @@ function catchment(longitude: number, latitude: number) {
 
 type Site = { id: string; address: string; href: string };
 type Overlay = "residents" | "workers";
+
+function setSiteMarkerElement(marker: MarkerInstance | null) {
+  if (!marker) return;
+  const element = marker.getElement();
+  // MapLibre supplies button semantics for unconfigured marker wrappers.
+  // The link inside this wrapper is the site marker's only control.
+  element.setAttribute("role", "presentation");
+  element.setAttribute("aria-label", "");
+}
 
 export default function CandidateMap({ projectId, sites, selectedId }: { projectId: string; sites: Site[]; selectedId?: string }) {
   const key = `sitework:map:${projectId}`;
@@ -72,15 +81,19 @@ export default function CandidateMap({ projectId, sites, selectedId }: { project
           </Source>
         )}
         {competitors.map((competitor) => (
-          <Marker key={competitor.name} longitude={competitor.longitude} latitude={competitor.latitude}>
-            <span title={competitor.name} aria-label={competitor.name} className="block size-3 rounded-full border-2 border-white bg-orange-600 shadow" />
+          <Marker ref={(marker) => {
+            const element = marker?.getElement();
+            element?.setAttribute("role", "img");
+            element?.setAttribute("aria-label", competitor.name);
+          }} key={competitor.name} longitude={competitor.longitude} latitude={competitor.latitude}>
+            <span title={competitor.name} className="block size-3 rounded-full border-2 border-white bg-orange-600 shadow" />
           </Marker>
         ))}
         {sites.map((site) => {
           const location = getSiteFixture(site.id);
           if (!location) return null;
           return (
-            <Marker key={site.id} longitude={location.longitude} latitude={location.latitude}>
+            <Marker ref={setSiteMarkerElement} key={site.id} longitude={location.longitude} latitude={location.latitude}>
               <Link href={site.href} aria-label={`Open ${site.address}`} className="rounded-full border-2 border-white bg-pine px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow">
                 {site.address}
               </Link>
