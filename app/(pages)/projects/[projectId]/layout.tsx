@@ -1,6 +1,15 @@
 import Link from "next/link";
+import { ProjectContextProvider } from "@/components/shell/context-bar";
+import { getPreviewProject } from "@/lib/workspace-preview";
 
-export default function ProjectLayout({ children }: { children: React.ReactNode }) {
+export default async function ProjectLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ projectId: string }>;
+}) {
+  const project = getPreviewProject((await params).projectId);
   return (
     <>
       <header className="border-b border-line bg-white">
@@ -13,7 +22,15 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
           </Link>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-5 py-7 sm:px-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-5 py-7 sm:px-8">
+        {project ? (
+          <ProjectContextProvider project={project}>
+            {children}
+          </ProjectContextProvider>
+        ) : (
+          children
+        )}
+      </main>
     </>
   );
 }
