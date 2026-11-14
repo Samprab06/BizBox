@@ -71,3 +71,14 @@ When a test (Playwright or computer-use) finds a real bug in the app, as opposed
 7. **Announce it** on the board: `[BLOCKED] @<owner> HAC-n <symptom>, found by <test ticket>`, or `[QUESTION]` if you aren't sure it's a bug.
 
 Don't fix the bug inside a test PR unless it's a one-line test-hook or `aria-label` change in the files the ticket names.
+
+## API contract suite (HAC-33)
+
+`tests/e2e/api/` runs in its own `api` Playwright project (no browser).
+
+- Without a database (CI), only validation, not-found and no-secret checks run; happy paths skip.
+- With a loaded database: `pnpm db:up && pnpm db:migrate && pnpm db:load`, start the app with that
+  `DATABASE_URL`, then `E2E_DB=1 E2E_PROJECT_ID=local-dev pnpm test:e2e --project=api`.
+  Against the hosted DB use `E2E_BASE_URL=<deployment> E2E_PROJECT_ID=houston-coffee`; it writes test
+  profiles and comparisons, so prefer local.
+- `E2E_MODEL=1` also advances an investigation through the configured model.
