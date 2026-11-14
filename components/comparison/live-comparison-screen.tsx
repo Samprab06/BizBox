@@ -223,6 +223,21 @@ function ComparisonResults({
         <p className="mt-2">
           Demand source: {result.demandSource === "jev" ? "Jev" : "Huff"}
         </p>
+        {result.derivation && (
+          <p className="mt-2">
+            How these numbers were made:{" "}
+            {result.derivation.inputs === "public"
+              ? "public census and jobs data"
+              : "example inputs"}{" "}
+            → synthetic customer personas →{" "}
+            {result.derivation.behaviorModel === "jev" ? "Jev" : "Huff"}{" "}
+            behaviour model →{" "}
+            {result.derivation.calibration === "founder"
+              ? "calibrated to your own figures"
+              : "not calibrated to observed sales"}{" "}
+            → modelled arrivals. These are modelled, not observed.
+          </p>
+        )}
         {result.fallbackReason && (
           <p className="mt-2">Fallback reason: {result.fallbackReason}</p>
         )}
