@@ -53,7 +53,7 @@ function IntakeForm({ storageKey }: { storageKey: string }) {
         <section aria-labelledby="chat-heading">
           <h2 id="chat-heading" className="text-lg font-semibold">Intake conversation</h2>
           <p className="mt-1 text-sm text-muted">This conversation uses a fixture.</p>
-          <ol role="list" aria-live="polite" aria-label="Conversation" className="my-4 max-h-96 space-y-3 overflow-y-auto">
+          <ol role="list" aria-live="polite" aria-label="Conversation" tabIndex={0} className="my-4 max-h-96 space-y-3 overflow-y-auto">
             {session.messages.map((entry, index) => (
               <li key={index} className={entry.role === "founder" ? "ml-5 rounded-xl bg-mint p-3" : "mr-5 rounded-xl bg-paper p-3"}>
                 <span className="block text-xs font-semibold">{entry.role === "founder" ? "You" : "Intake"}</span>
