@@ -22,11 +22,24 @@ export const routeLabels: Record<WorkspaceRoute, string> = {
   workspace: "Workspace",
 };
 
-export function workspaceHref(projectId: string, view: WorkspaceRoute, siteId?: string) {
+/** Routes that open the project's saved comparison when given one (HAC-135). */
+export const comparisonRoutes: readonly WorkspaceRoute[] = ["plan", "simulator"];
+
+export function workspaceHref(
+  projectId: string,
+  view: WorkspaceRoute,
+  siteId?: string,
+  comparisonId?: string | null,
+) {
   const base = `/projects/${encodeURIComponent(projectId)}`;
   if (view === "site") return `${base}/sites/${encodeURIComponent(siteId ?? "unselected")}`;
-  if (view === "plan") return `${base}/plan`;
-  return `${base}/${view}${siteId ? `?site=${encodeURIComponent(siteId)}` : ""}`;
+  const query = new URLSearchParams();
+  const comparison = comparisonId && comparisonRoutes.includes(view) ? comparisonId : undefined;
+  if (comparison) query.set("comparison", comparison);
+  // A saved comparison names its own sites, so a preview site id would only mislead it.
+  if (siteId && view !== "plan" && !comparison) query.set("site", siteId);
+  const search = query.toString();
+  return `${base}/${view}${search ? `?${search}` : ""}`;
 }
 
 export type TaskId = "find" | "test" | "decide";
