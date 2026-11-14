@@ -156,7 +156,7 @@ for (const viewport of [
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await proceed(page).click();
       await expect(title(page)).toHaveText("Review your business");
-      await expect(page.getByRole("link", { name: "Explore locations" })).toHaveAttribute("href", /\/projects\/houston-coffee\/map/);
+      await expect(page.getByRole("link", { name: "Open workspace" })).toHaveAttribute("href", /\/projects\/houston-coffee\/workspace/);
       await expectNoOverflow(page);
 
       // Stored in the existing intake session, mapped to the intake values, all founder input.

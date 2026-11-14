@@ -18,11 +18,14 @@ export function VoicePanel({
   title = "Talk through your intake",
   label = "Voice intake",
   className = "",
+  tone = "light",
 }: {
   adapter: VoiceAdapter;
   title?: string;
   label?: string;
   className?: string;
+  /** "dark" restyles the panel for the dark BizBox workspace; behaviour is identical. */
+  tone?: "light" | "dark";
 }) {
   const latest = useRef(adapter);
   useEffect(() => {
@@ -70,10 +73,14 @@ export function VoicePanel({
     };
   }, []);
   const active = !["idle", "error"].includes(state.phase);
+  const dark = tone === "dark";
+  const muted = dark ? "text-viewport-muted" : "text-muted";
+  const primary = `rounded-lg px-3 py-2 text-sm font-semibold ${dark ? "bg-viewport-ink text-viewport-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink" : "bg-pine text-white"}`;
+  const secondary = `rounded-lg border px-3 py-2 text-sm ${dark ? "border-viewport-line bg-transparent text-viewport-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink" : "border-line bg-white"}`;
   return (
     <section
       aria-label={label}
-      className={`my-4 rounded-xl border border-line bg-paper p-4 ${className}`}
+      className={`my-4 rounded-xl border p-4 ${dark ? "border-viewport-line bg-viewport-surface text-viewport-ink" : "border-line bg-paper"} ${className}`}
     >
       <div className="flex items-start gap-4">
         <GradientOrb
@@ -83,14 +90,14 @@ export function VoicePanel({
         />
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold">{title}</h3>
-          <p className="mt-1 text-xs text-muted">
+          <p className={`mt-1 text-xs ${muted}`}>
             Optional AI voice. Starting sends microphone audio for transcription
             and speaks the conversation reply. You can keep typing.
           </p>
           <p
             role="status"
             aria-label="Voice status"
-            className="mt-2 text-sm text-muted"
+            className={`mt-2 text-sm ${muted}`}
           >
             {configured === null
               ? "Checking voice availability…"
@@ -104,7 +111,7 @@ export function VoicePanel({
                 type="button"
                 disabled={configured !== true}
                 onClick={() => void client.current?.start()}
-                className="rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                className={`${primary} disabled:opacity-60`}
               >
                 Start voice
               </button>
@@ -114,21 +121,21 @@ export function VoicePanel({
                   type="button"
                   onClick={() => client.current?.setMuted(!state.muted)}
                   aria-pressed={state.muted}
-                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className={secondary}
                 >
                   {state.muted ? "Unmute microphone" : "Mute microphone"}
                 </button>
                 <button
                   type="button"
                   onClick={() => client.current?.interrupt()}
-                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className={secondary}
                 >
                   Stop speaking
                 </button>
                 <button
                   type="button"
                   onClick={() => client.current?.stop()}
-                  className="rounded-lg bg-pine px-3 py-2 text-sm font-semibold text-white"
+                  className={primary}
                 >
                   Stop voice
                 </button>

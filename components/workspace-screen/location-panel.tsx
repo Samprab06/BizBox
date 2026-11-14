@@ -115,7 +115,7 @@ export function LocationPanel({
         {space.kind === "space" && (
           <>
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:p-5">
-              <div className="flex min-w-0 flex-col items-start gap-1.5">
+              <div className="col-start-1 row-start-1 flex min-w-0 flex-col items-start gap-1.5">
                 <h2 className="text-base font-semibold tracking-tight [overflow-wrap:anywhere]">
                   {space.name}
                 </h2>
@@ -124,7 +124,7 @@ export function LocationPanel({
                   {space.example && <Badge>Example</Badge>}
                 </span>
               </div>
-              <dl className="col-span-2 row-start-2 flex flex-wrap gap-x-6 gap-y-2 tabular-nums sm:col-span-1 sm:row-start-auto">
+              <dl className="col-span-2 row-start-2 flex flex-wrap gap-x-6 gap-y-2 tabular-nums sm:col-span-1 sm:col-start-2 sm:row-start-1">
                 {space.stats.map((stat) => (
                   <div key={stat.label}>
                     <dt className="text-[11px] text-viewport-muted">
@@ -146,7 +146,7 @@ export function LocationPanel({
                 aria-expanded={expanded}
                 aria-controls={detailsId}
                 onClick={() => onExpandedChange(!expanded)}
-                className={`col-start-2 row-start-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-viewport-muted hover:text-viewport-ink sm:col-start-auto ${focusRing}`}
+                className={`col-start-2 row-start-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-viewport-muted hover:text-viewport-ink sm:col-start-3 ${focusRing}`}
               >
                 Details
                 <svg

@@ -7,11 +7,20 @@ import { workspaceHref } from "@/lib/client/workspace-routes";
 import Link from "next/link";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { assumptionRows, formFromDraft, IntakeResponseSchema, patchFromForm } from "./live";
+import { applyIntakeReply, intakeRequestBody, postIntakeMessage, withFounderMessage, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
+import { useAssistantDraft } from "@/components/workspace-screen/use-assistant-draft";
+import { assumptionRows } from "./live";
 import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, profileValidationMessage, updateProfile, type IntakeSession } from "./profile";
 
 type Key = (typeof fields)[number]["key"];
 type Failure = { message: string; retry?: string };
+
+/** Wording for the detailed form; the request itself is the workspace assistant's (HAC-129). */
+const formCopy: IntakeCopy = {
+  unreachable: "Could not reach the intake service.",
+  unavailable: "Intake is temporarily unavailable. Please try again.",
+  unexpected: "The intake service sent an unexpected reply. Please try again.",
+};
 
 const subscribe = () => () => {};
 
@@ -60,6 +69,8 @@ function useLiveIntake(projectId: string) {
 function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: string; projectId: string; mode: IntakeMode; siteId?: string }) {
   const [session, setSession] = useState(() => readSession(storageKey));
   const [message, setMessage] = useState("");
+  // HAC-129: the live composer shares its draft with the workspace assistant.
+  const [liveDraft, setLiveDraft] = useAssistantDraft(projectId);
   const [drafts, setDrafts] = useState<Partial<Record<Key, string>>>({});
   const [storageError, setStorageError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -109,53 +120,24 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
 
   async function sendLive(text: string | undefined, appendFounder: boolean): Promise<string | null> {
     const current = latest.current;
-    const pending = current.pending ?? [];
-    const patch = patchFromForm(current.profile, pending);
-    if (!text && !patch) return null;
-    const before = appendFounder && text ? { ...current, messages: [...current.messages, { role: "founder" as const, text }] } : current;
-    save(before);
+    const body = intakeRequestBody(current, text);
+    if (!text && !body.patch) return null;
+    save(appendFounder && text ? withFounderMessage(current, text) : current);
     setBusy(true);
     setFailure(null);
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/intake`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: current.live?.state, patch, message: text }),
-      });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const error = body as { message?: unknown } | null;
-        const reason = typeof error?.message === "string" ? error.message : "Intake is temporarily unavailable. Please try again.";
-        setFailure({ message: `${reason} Your profile edits still work.`, retry: response.status >= 500 ? text ?? "" : undefined });
-        return null;
-      }
-      const parsed = IntakeResponseSchema.safeParse(body);
-      if (!parsed.success) {
-        setFailure({ message: "The intake service sent an unexpected reply. Please try again.", retry: text ?? "" });
-        return null;
-      }
-      const result = parsed.data;
+      // HAC-129: the request and reply merge are the workspace assistant's own functions.
+      const outcome = await postIntakeMessage(fetch, projectId, body, formCopy);
       if (!mounted.current) return null;
-      const now = latest.current;
-      // Form edits made while the request was in flight stay newer than the reply.
-      const sent = new Set(pending);
-      const stillPending = (now.pending ?? []).filter((key) => !sent.has(key) || now.profile[key]?.value !== current.profile[key]?.value);
-      const fromDraft = formFromDraft(result.draft);
-      const profile = { ...now.profile };
-      for (const [key, answer] of Object.entries(fromDraft) as [Key, { value: string; origin: "default" | "founder" }][]) {
-        if (!stillPending.includes(key)) profile[key] = answer;
+      if (!outcome.ok) {
+        setFailure({
+          message: `${outcome.message} Your profile edits still work.`,
+          retry: outcome.retryable ? text ?? "" : undefined,
+        });
+        return null;
       }
-      save({
-        ...now,
-        profile,
-        pending: stillPending,
-        live: { state: { draft: result.draft, assumptions: result.assumptions }, missingRequiredFields: result.missingRequiredFields, findings: result.findings },
-        messages: text ? [...now.messages, { role: "agent", text: result.assistantMessage }] : now.messages,
-      });
-      return result.assistantMessage;
-    } catch {
-      if (mounted.current) setFailure({ message: "Could not reach the intake service. Your profile edits still work.", retry: text ?? "" });
-      return null;
+      save(applyIntakeReply(latest.current, current, outcome.result, Boolean(text)));
+      return outcome.result.assistantMessage;
     } finally {
       setBusy(false);
     }
@@ -212,7 +194,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
           profile={session.profile}
           onCommit={commit}
           formHref={intakeHref(projectId, "form", siteId)}
-          mapHref={workspaceHref(projectId, "map", siteId)}
+          nextHref={workspaceHref(projectId, "workspace", siteId)}
           notice={failure && (
             <div role="alert" className="mt-4 rounded-xl border border-white/25 bg-black/30 p-3 text-sm">
               <p>{failure.message}</p>
@@ -260,15 +242,15 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
           {live ? (
             <form onSubmit={(event) => {
               event.preventDefault();
-              const text = message.trim();
+              const text = liveDraft.trim();
               if (!text || busy) return;
-              setMessage("");
+              setLiveDraft("");
               void submitMessage(text);
             }}>
               <label className="block text-sm font-medium" htmlFor="intake-live-message">Message the intake agent</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 <input id="intake-live-message" className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2"
-                  value={message} onChange={(event) => setMessage(event.target.value)} required />
+                  value={liveDraft} onChange={(event) => setLiveDraft(event.target.value)} required />
                 <button type="submit" disabled={busy} className="rounded-lg bg-pine px-4 py-2 text-white disabled:opacity-60">
                   {busy ? "Sending…" : "Send"}
                 </button>
