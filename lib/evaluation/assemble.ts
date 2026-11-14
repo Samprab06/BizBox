@@ -418,11 +418,49 @@ export async function assembleEvaluation(
       "No candidates have enough known inputs to evaluate",
       findings,
     );
-  const first = catchments[0]!;
-  const firstSite = sites[0]!;
+  // HAC-60: one order-independent study area. Every candidate's catchment contributes; block
+  // groups and workplaces are deduplicated by geoid at their largest allocated share (ties
+  // broken by catchment ID), and everything is processed in a canonical order, so reordering
+  // the candidates cannot change the population behind the comparison.
+  const ordered = [...catchments].sort((a, b) =>
+    a.response.catchment.id.localeCompare(b.response.catchment.id),
+  );
+  const largest = <T>(
+    pick: (bundle: AssemblyCatchment) => T[],
+    key: (row: T) => string,
+    size: (row: T) => number | null,
+  ) => {
+    const chosen = new Map<string, { row: T; bundle: AssemblyCatchment }>();
+    for (const bundle of ordered)
+      for (const row of pick(bundle)) {
+        const prev = chosen.get(key(row));
+        if (!prev || (size(row) ?? -1) > (size(prev.row) ?? -1))
+          chosen.set(key(row), { row, bundle });
+      }
+    return [...chosen.values()].sort((a, b) =>
+      key(a.row).localeCompare(key(b.row)),
+    );
+  };
+  const studyBlockGroups = largest(
+    (b) => b.response.residents.blockGroups,
+    (bg) => bg.geoid,
+    (bg) => bg.allocatedPopulation.value,
+  );
+  const studyWorkplaces = largest(
+    (b) => b.response.workers.blocks,
+    (w) => w.geoid,
+    (w) => w.jobs.value,
+  );
+  const studyAreaId = `study:${createHash("sha256")
+    .update(ordered.map((b) => b.response.catchment.id).join("|"))
+    .digest("hex")
+    .slice(0, 16)}`;
+  const studySite = [...panelSites].sort((a, b) =>
+    a.id.localeCompare(b.id),
+  )[0]!;
   finding(
-    "SHARED_CATCHMENT",
-    `All sites use the first eligible candidate's catchment (${firstSite.siteId}) for one shared, seeded persona population.`,
+    "SHARED_STUDY_AREA",
+    `All sites share one order-independent study area (${studyAreaId}): the union of all ${catchments.length} candidates' catchments, with block groups and workplaces deduplicated at their largest allocated share. Results do not depend on candidate order.`,
   );
   finding(
     "AREA_PROXY",
@@ -436,7 +474,15 @@ export async function assembleEvaluation(
     "DEMOGRAPHIC_DEFAULTS",
     "Persona age, children and commute distributions use explicit scenario defaults where source detail is unavailable; workplace jobs are a worker-demand proxy, not unique people.",
   );
-  const center = firstSite.storefront.location;
+  // Fallback location for records without coordinates: the mean of the candidate sites.
+  const center: LatLng = {
+    lat:
+      sites.reduce((sum, s) => sum + s.storefront.location.lat, 0) /
+      sites.length,
+    lng:
+      sites.reduce((sum, s) => sum + s.storefront.location.lng, 0) /
+      sites.length,
+  };
   for (const [key, value] of Object.entries({
     medianAge: 40,
     shareHouseholdsWithKids: 0.35,
@@ -447,9 +493,9 @@ export async function assembleEvaluation(
   }))
     number(`personas.defaults.${key}`, defaultMetric(value));
   const inputCatchment: CatchmentInput = {
-    catchmentId: first.response.catchment.id,
-    site: panelSites[0]!,
-    blockGroups: first.response.residents.blockGroups.flatMap((bg) => {
+    catchmentId: studyAreaId,
+    site: studySite,
+    blockGroups: studyBlockGroups.flatMap(({ row: bg, bundle }) => {
       if (
         bg.allocatedPopulation.value === null ||
         bg.allocatedPopulation.value <= 0
@@ -460,7 +506,9 @@ export async function assembleEvaluation(
         );
         return [];
       }
-      const location = first.locations?.blockGroups?.[bg.geoid];
+      const location =
+        bundle.locations?.blockGroups?.[bg.geoid] ??
+        ordered.map((b) => b.locations?.blockGroups?.[bg.geoid]).find(Boolean);
       if (!location)
         finding(
           "DEFAULT_RESIDENT_LOCATION",
@@ -494,7 +542,7 @@ export async function assembleEvaluation(
         },
       ];
     }),
-    workplaces: first.response.workers.blocks.flatMap((w) => {
+    workplaces: studyWorkplaces.flatMap(({ row: w, bundle }) => {
       if (w.jobs.value === null || w.jobs.value <= 0) {
         finding(
           "JOBS_UNKNOWN",
@@ -502,7 +550,9 @@ export async function assembleEvaluation(
         );
         return [];
       }
-      const location = first.locations?.workers?.[w.geoid];
+      const location =
+        bundle.locations?.workers?.[w.geoid] ??
+        ordered.map((b) => b.locations?.workers?.[w.geoid]).find(Boolean);
       number(`personas.workers.${w.geoid}.jobs`, w.jobs);
       const earnings = location?.earnings ?? { low: 1, mid: 1, high: 1 };
       const ages = location?.ages ?? { under30: 1, age30to54: 1, over55: 1 };
@@ -559,8 +609,10 @@ export async function assembleEvaluation(
   const panelCompetitors: Competitor[] = [];
   const seen = new Set<string>();
   const seenSources = new Set<string>();
-  for (const bundle of catchments)
-    for (const competitor of bundle.response.competitors) {
+  for (const bundle of ordered)
+    for (const competitor of [...bundle.response.competitors].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    )) {
       if (
         seen.has(competitor.id) ||
         competitor.sourceIds.some((id) => seenSources.has(id))
