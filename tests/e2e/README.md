@@ -53,6 +53,29 @@ Import `test` and `expect` from `./fixtures`, not from `@playwright/test`.
 - Never select by CSS class or DOM position.
 - Don't hard-code `waitForTimeout`. Use web-first assertions (`await expect(...)`).
 
+## Location plan export (HAC-37)
+
+`export.spec.ts` covers the saved comparison → printable plan journey, interval
+and site-order parity, per-row origins/citations, outdated blocking, repeatable
+HTML and print-media overflow at mobile/intermediate/desktop widths. It observes
+the `window.print()` callback; the current app has no automatic download or
+app-selected filename. Grounded plans export saved low/high intervals, while the
+comparison screen also shows means. Chromium attaches a generated PDF alongside
+the complete printable HTML and a viewport-sized print-media screenshot; WebKit
+checks the HTML/print flow. The visual artifact captures the top of the plan and
+avoids WebKit's 32767px image limit; content assertions still cover every row.
+Native Save as PDF, pagination, Preview and Chrome PDF viewer checks are tracked
+separately in `tests/manual/plan-export.md` and remain unexecuted until recorded.
+
+```sh
+E2E_BASE_URL=http://localhost:3137 pnpm exec playwright test tests/e2e/export.spec.ts --project=chromium --project=webkit --workers=1
+```
+
+Start your own app on port 3137 first (`pnpm build`, then `pnpm start --port 3137`),
+or substitute an already approved local URL. These specs mock synthetic data and
+make no database/model writes. The generated PDF is a browser artifact, not proof
+of the original ticket's download or native-viewer acceptance.
+
 ## Explore with the Playwright MCP before writing specs
 
 Before writing a spec for a screen, drive it with the Playwright MCP: open the page,
@@ -87,6 +110,26 @@ Don't fix the bug inside a test PR unless it's a one-line test-hook or `aria-lab
   Against the hosted DB use `E2E_BASE_URL=<deployment> E2E_PROJECT_ID=houston-coffee`; it writes test
   profiles and comparisons, so prefer local.
 - `E2E_MODEL=1` also advances an investigation through the configured model.
+
+## Pipeline integration (HAC-34)
+
+Seed an empty **dedicated local** PostGIS database named `hac34_test_*` with `HAC34_TEST_DATABASE_URL=<loopback-url> pnpm exec tsx tests/e2e/pipeline-seed.ts`, start the app with that same `DATABASE_URL` and empty `JEV_API_KEY`/`OPENAI_API_KEY`, then run `E2E_BASE_URL=http://localhost:<port> E2E_PIPELINE_DB=1 pnpm exec playwright test pipeline.spec.ts --workers=1`.
+
+The opt-in suite makes real HTTP/search/catchment/evaluation/storage requests;
+only external map tiles are stubbed. Its three inventory rows and public observations
+are invented fixtures. The separate recorded-panel case aggregates the existing
+recorded Jev wire responses offline and submits the resulting
+behavior rows directly to the real evaluation route (it does not test live Jev polling).
+It compares all ranked metrics, intervals, representative hourly arrivals and persisted
+events on a repeated evaluation, changes seeds, checks founder buildout invalidation,
+and displays an actual missing-table Huff fallback. Intake collects a price tier and
+staff, not a dollar ticket or station count; the latter retain their explicit defaults.
+The exposed interval is monthly **served customers**, not arrival counts, so the seed
+check compares served means to that interval and independently checks changed arrivals.
+Timings are attached to the Playwright report against the comparison route's 60s budget;
+local timings do not establish Vercel limits or hosted seeded Neon acceptance. The suite
+requires a loopback app URL; configure that app with the dedicated local database.
+Without `E2E_PIPELINE_DB=1` these database-writing tests skip explicitly.
 
 ### Jev capabilities smoke check (HAC-101)
 

@@ -44,7 +44,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.ids.length = 0;
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe("production tool safety boundaries", () => {
   it("loads the deterministic profile artifact before saving another version", async () => {
@@ -138,4 +141,37 @@ describe("production tool safety boundaries", () => {
     expect(requestSignal?.aborted).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+});
+
+it("wires the optional read-only Nessie transport into production investigation dependencies", async () => {
+  vi.stubEnv("NESSIE_API_KEY", "test-v2-key");
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(Response.json({ items: [] }));
+  vi.stubGlobal("fetch", fetcher);
+  const deps = createPostgresInvestigationToolDependencies();
+  const controller = new AbortController();
+  const result = await deps.readNessieCashBuffer!({
+    investigationId: "job1",
+    attempt: 1,
+    projectId: "project1",
+    profileId: "profile1",
+    profileVersion: 1,
+    signal: controller.signal,
+  });
+  expect(result).toMatchObject({
+    kind: "nessie_cash_buffer",
+    status: "empty",
+    projectId: "project1",
+    profileId: "profile1",
+    attempt: 1,
+  });
+  expect(fetcher).toHaveBeenCalledWith(
+    expect.any(URL),
+    expect.objectContaining({
+      method: "GET",
+      headers: { Authorization: "Bearer test-v2-key" },
+    }),
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });

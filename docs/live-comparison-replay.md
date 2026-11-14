@@ -56,9 +56,11 @@ new read endpoints use `Cache-Control: private, no-store`.
 
 Replay uses the selected site's stored representative weekday/weekend run and
 its hourly statistics. Canonical `served` starts service; `departed` completes it.
-Concurrent service determines labelled schematic lanes. The player does not
-invent station geometry, persona decisions or stay probabilities absent from the
-stored events. Its time window comes from hourly rows and actual event bounds,
+Concurrent service determines labelled schematic lanes. New runs also record the
+selected customer’s simulated persona, queue length and stay probability at
+arrival. Jev runs retain the cached choice shares and monthly visit frequency for
+those personas. Older runs still show their event history. The playback window
+comes from hourly rows and actual event bounds,
 not an inferred claim about exact founder opening hours.
 
 Without a completed intake, or on unavailable comparison/run APIs, the existing
