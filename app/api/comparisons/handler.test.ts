@@ -239,14 +239,18 @@ describe("POST /api/comparisons", () => {
     fetchSpy.mockRestore();
   });
 
-  it("reproduces legacy metrics while enriching missing optional insights", async () => {
+  it("reproduces legacy metrics while enriching missing optional visualization artifacts", async () => {
     const { store, create } = setup();
     const req = evaluationRequest();
     req.seeds = 1;
     await create(post(req));
     const stored = store.records.get("p1/cmp_1")!;
     expect(stored.evaluation.result.sites[0].insights).toBeDefined();
-    for (const site of stored.evaluation.result.sites) delete site.insights;
+    expect(stored.evaluation.result.sites[0].stationObservations).toBeDefined();
+    for (const site of stored.evaluation.result.sites) {
+      delete site.insights;
+      delete site.stationObservations;
+    }
     const response = await create(
       post({ projectId: "p1", rerunComparisonId: "cmp_1" }),
     );
@@ -254,6 +258,7 @@ describe("POST /api/comparisons", () => {
     const body = await response.json();
     expect(body.reproduces).toBe(true);
     expect(body.result.sites[0].insights).toBeDefined();
+    expect(body.result.sites[0].stationObservations).toBeDefined();
   });
 
   it("labels the comparison huff when Jev behavior tables are missing", async () => {
