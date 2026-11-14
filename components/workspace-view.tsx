@@ -34,7 +34,7 @@ export function WorkspaceView({ projectId, view, siteId }: { projectId: string; 
       <section aria-label={view === "map" ? "Candidate locations" : views[view]} className="rounded-2xl border border-line bg-white p-7">
         {project && (view !== "site" || site) ? (
           <>
-            <PreviewContent view={view} project={project} site={site} />
+            <PreviewContent view={view} project={project} site={site} mapSelection={siteId} />
             {view !== "intake" && <p className="mt-6 text-xs text-muted">Example data</p>}
           </>
         ) : (
@@ -51,16 +51,17 @@ export function WorkspaceView({ projectId, view, siteId }: { projectId: string; 
   );
 }
 
-function PreviewContent({ view, project, site }: {
+function PreviewContent({ view, project, site, mapSelection }: {
   view: View;
   project: PreviewProject;
   site?: PreviewProject["sites"][number];
+  mapSelection?: string;
 }) {
   switch (view) {
     case "intake":
       return <IntakeScreen projectId={project.id} />;
     case "map":
-      return <MapPreview project={project} selectedId={site?.id} />;
+      return <MapPreview project={project} selectedId={mapSelection} />;
     case "site":
       return site && <SiteDetail project={project} site={site} />;
     case "comparison":
