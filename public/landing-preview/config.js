@@ -1,11 +1,18 @@
-// Same-origin routes make this checkpoint portable across local and preview hosts.
+// Same-origin routes make the landing portable across local and preview hosts.
+
+// Where the call-to-action goes (HAC-129). /start sends a first visit into the guided
+// onboarding and offers a returning visitor their workspace, reading the existing
+// intake session; the landing keeps no state of its own.
+export const ENTRY_URL = new URL("/start", window.location.origin).href;
+
+// The supported live map surface: the real Cesium + Vexcel simulator route.
 export const PRODUCT_PREVIEW_URL = new URL(
-  "/projects/houston-coffee/map",
+  "/projects/houston-coffee/simulator",
   window.location.origin,
 ).href;
 
-// The full counter-comparison simulator is follow-up work (HAC-104).
-// Until that route lands, the checkpoint opens main's existing example replay.
+// The staffed-counter comparison is still being integrated (HAC-104, HAC-120).
+// Until then the stage shows the existing example replay.
 export const DEMO_URL = new URL(
   "/projects/houston-coffee/replay?site=montrose",
   window.location.origin,
