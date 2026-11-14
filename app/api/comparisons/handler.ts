@@ -98,6 +98,9 @@ export function createComparisonsHandler({
           r.evaluation.result.sites.map((s) => ({
             ...s,
             representative: undefined,
+            // Additive visualization data was not retained by legacy evaluations.
+            insights: undefined,
+            stationObservations: undefined,
           }));
         return json(
           {

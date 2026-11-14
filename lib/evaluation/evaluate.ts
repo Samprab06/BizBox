@@ -30,16 +30,13 @@ import type {
   DemandInput,
 } from "@/lib/demand/contracts";
 import { CATEGORY_DEFAULTS } from "@/lib/demand/defaults";
-import {
-  buildArrivalSchedule,
-  demandDerivation,
-  estimateDemand,
-} from "@/lib/demand/model";
+import { demandDerivation, estimateDemand } from "@/lib/demand/model";
 import type { DayResult, SimEvent, SiteConfig } from "@/lib/sim/contracts";
-import { computeParsedMonthlyEconomics } from "@/lib/sim/economics";
-import { percentile, simulateDay } from "@/lib/sim/engine";
+import { percentile } from "@/lib/sim/engine";
+import { experimentSettings, runExperiment } from "@/lib/sim/experiment";
+import { captureStationObservations } from "@/lib/insights/station-experiment-observations";
+import { buildInsightsDay } from "@/lib/insights/model";
 
-const DAY_TYPES = ["weekday", "weekend"] as const satisfies readonly DayType[];
 /** Two sites are tied when their 90% intervals overlap by at least this share of the narrower one. */
 export const TIE_OVERLAP = 0.5;
 
@@ -316,22 +313,20 @@ export function evaluateSite(
   const seeds = seedList(request);
 
   const perSeed = seeds.map((seed) => {
-    const days = {} as Record<DayType, DayResult>;
-    for (const dayType of DAY_TYPES) {
-      const { openMin, closeMin } = config.hours[dayType];
-      const schedule = buildArrivalSchedule(demandInput, {
-        seed,
-        dayType,
-        openMin,
-        closeMin,
-      });
-      days[dayType] = simulateDay(schedule, config);
-    }
-    const economics = computeParsedMonthlyEconomics(config, {
-      weekday: days.weekday.metrics,
-      weekend: days.weekend.metrics,
-    });
-    return { seed, days, economics };
+    const input = {
+      demand: demandInput,
+      config,
+      seed,
+      dayType: "weekday" as const,
+    };
+    // Same two engine days as before; the helper result is retained, not rerun.
+    const experiment = runExperiment(input, experimentSettings(input));
+    return {
+      seed,
+      days: experiment.days,
+      economics: experiment.monthly,
+      experiment,
+    };
   });
 
   const contribution = perSeed.map((r) => r.economics.operatingContributionUsd);
@@ -346,6 +341,18 @@ export function evaluateSite(
     if (d < best) rep = r;
   }
   const weekday = perSeed.map((r) => r.days.weekday.metrics);
+  const insightDay = (dayType: DayType) =>
+    buildInsightsDay({
+      runs: perSeed.map((r) => r.days[dayType]),
+      personas: request.personaSet.personas,
+      siteLocation: site.storefront.location,
+      capacityInputs: {
+        stations: perSeed[0]!.days[dayType].metrics.stations,
+        meanServiceMin: config.service.meanServiceMin ?? null,
+        stationOrigin: null,
+        serviceMeanOrigin: site.serviceMeanOrigin ?? null,
+      },
+    });
 
   return {
     evaluation: {
@@ -376,6 +383,19 @@ export function evaluateSite(
         ),
       },
       excludedPersonaIds: estimateDemand(demandInput).excludedPersonaIds,
+      stationObservations: captureStationObservations(
+        perSeed.map((r) => r.experiment),
+      ),
+      insights: {
+        version: "hac94-v1",
+        siteId: site.siteId,
+        synthetic: request.synthetic,
+        seedCount: seeds.length,
+        days: {
+          weekday: insightDay("weekday"),
+          weekend: insightDay("weekend"),
+        },
+      },
       ...(site.jevPanel ? { jevPanel: site.jevPanel } : {}),
     },
     representativeDays: rep.days,

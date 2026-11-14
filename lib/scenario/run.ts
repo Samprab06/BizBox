@@ -43,12 +43,14 @@ const canonical = (value: unknown): string => {
 export function scenarioExecutionKey(
   scenario: Scenario,
   demandSource: DemandSource,
+  artifactVersion: string | null = "hac102-v1",
 ) {
   return createHash("sha256")
     .update(
       canonical({
         model: EVALUATION_MODEL_VERSION,
         assembly: "hac81-scenario-v1",
+        ...(artifactVersion ? { stationObservations: artifactVersion } : {}),
         projectId: scenario.projectId,
         profileVersion: scenario.profileVersion,
         siteIds: scenario.siteIds,
@@ -137,7 +139,8 @@ export function createScenarioRunner({
       if (!job.request) {
         // Reservation precedes assembly (and any opt-in Jev calls) or simulation.
         const source =
-          job.effectiveKey === scenarioExecutionKey(value, "jev")
+          job.effectiveKey === scenarioExecutionKey(value, "jev") ||
+          job.effectiveKey === scenarioExecutionKey(value, "jev", null)
             ? "jev"
             : "huff";
         const assembled = await prepare(value, source);

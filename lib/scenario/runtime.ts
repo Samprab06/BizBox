@@ -7,6 +7,7 @@ import { profiles } from "@/lib/db/schema";
 import { assemblePostgresEvaluation } from "@/lib/evaluation/assemble-db";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 import { createPostgresLayoutRepository } from "@/lib/layout/repository";
+import { withStationExperimentSnapshots } from "@/lib/insights/station-experiment-service";
 import { createScenarioPreparer } from "./prepare";
 import { createPostgresScenarioRepository } from "./repository";
 import { createPostgresScenarioExecutionStore } from "./run-store-postgres";
@@ -26,36 +27,40 @@ export function readScenarioRunBudgetUnits(
 /** All database/provider calls remain lazy, after validated route input. */
 export function createPostgresScenarioRunner() {
   const layouts = createPostgresLayoutRepository();
+  const comparisons = createPostgresComparisonStore();
   return createScenarioRunner({
     scenarios: createPostgresScenarioRepository(),
     executions: createPostgresScenarioExecutionStore(),
-    comparisons: createPostgresComparisonStore(),
+    comparisons,
     newId: () => `scenario_run_${randomUUID()}`,
     budgetUnits: readScenarioRunBudgetUnits(process.env),
-    prepare: createScenarioPreparer({
-      async loadProfile(projectId, version) {
-        const [row] = await getDb()
-          .select()
-          .from(profiles)
-          .where(
-            and(
-              eq(profiles.projectId, projectId),
-              eq(profiles.version, version),
-            ),
+    prepare: withStationExperimentSnapshots({
+      comparisons,
+      prepare: createScenarioPreparer({
+        async loadProfile(projectId, version) {
+          const [row] = await getDb()
+            .select()
+            .from(profiles)
+            .where(
+              and(
+                eq(profiles.projectId, projectId),
+                eq(profiles.version, version),
+              ),
+            )
+            .limit(1);
+          if (!row) return null;
+          const snapshot = BusinessProfileSchema.parse(row.snapshot);
+          if (
+            snapshot.id !== row.id ||
+            snapshot.projectId !== row.projectId ||
+            snapshot.version !== row.version
           )
-          .limit(1);
-        if (!row) return null;
-        const snapshot = BusinessProfileSchema.parse(row.snapshot);
-        if (
-          snapshot.id !== row.id ||
-          snapshot.projectId !== row.projectId ||
-          snapshot.version !== row.version
-        )
-          throw new Error("Stored profile identity mismatch");
-        return snapshot;
-      },
-      loadLayout: (projectId, id) => layouts.get(projectId, id),
-      assemble: assemblePostgresEvaluation,
+            throw new Error("Stored profile identity mismatch");
+          return snapshot;
+        },
+        loadLayout: (projectId, id) => layouts.get(projectId, id),
+        assemble: assemblePostgresEvaluation,
+      }),
     }),
   });
 }
