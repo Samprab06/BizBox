@@ -1,4 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import {
+  AgentStageSchema,
+  AgentViewContextSchema,
+  UiActionListSchema,
+  UiActionSchema,
+  type AgentStage,
+  type UiAction,
+} from "./agent";
+import { IntakeRequestSchema, IntakeResponseAgentFieldsSchema } from "./intake";
+import { IntakeResponseSchema } from "../../components/intake/live";
+import {
+  routeLabels,
+  type WorkspaceRoute,
+} from "../../lib/client/workspace-routes";
 import {
   ArrivalScheduleSchema,
   AssumedValueSchema,
@@ -254,6 +268,150 @@ describe("shared synthetic business contracts", () => {
     expect(
       LocationPlanSchema.safeParse({ ...plan, notSalesForecast: false })
         .success,
+    ).toBe(false);
+  });
+});
+
+describe("agent UI actions and view context (HAC-134)", () => {
+  const stages = [...AgentStageSchema.options].sort();
+
+  it("keeps the stage enum in step with WorkspaceRoute, plus interior", () => {
+    expectTypeOf<
+      Exclude<AgentStage, "interior">
+    >().toEqualTypeOf<WorkspaceRoute>();
+    expect(stages).toEqual([...Object.keys(routeLabels), "interior"].sort());
+  });
+
+  it("accepts every action type and rejects unknown types or keys", () => {
+    const actions: UiAction[] = [
+      { id: "a1", type: "navigate", stage: "comparison", comparisonId: "c1" },
+      { id: "a2", type: "open_site", siteId: "s1" },
+      { id: "a3", type: "focus_map", siteIds: ["s1", "s2"] },
+      { id: "a4", type: "show_comparison", investigationId: "i1" },
+      { id: "a5", type: "open_simulator", siteId: "s1" },
+      { id: "a6", type: "open_interior", siteId: "s1", minute: 480 },
+      { id: "a7", type: "show_plan", comparisonId: "c1" },
+      { id: "a8", type: "highlight", target: "comparison_table" },
+    ];
+    for (const action of actions)
+      expect(UiActionSchema.safeParse(action).success).toBe(true);
+    expect(
+      UiActionSchema.safeParse({ id: "x", type: "delete_site", siteId: "s1" })
+        .success,
+    ).toBe(false);
+    expect(
+      UiActionSchema.safeParse({ type: "open_site", siteId: "s1" }).success,
+    ).toBe(false);
+    expect(
+      UiActionSchema.safeParse({
+        id: "x",
+        type: "open_site",
+        siteId: "s1",
+        url: "/x",
+      }).success,
+    ).toBe(false);
+    expect(
+      UiActionSchema.safeParse({ id: "x", type: "navigate", stage: "settings" })
+        .success,
+    ).toBe(false);
+    expect(
+      UiActionSchema.safeParse({ id: "x", type: "highlight", target: "#root" })
+        .success,
+    ).toBe(false);
+    expect(
+      UiActionSchema.safeParse({
+        id: "x",
+        type: "open_interior",
+        siteId: "s1",
+        minute: 1440,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects over-limit lists", () => {
+    const sites = (n: number) => Array.from({ length: n }, (_, i) => `s${i}`);
+    const focus = (n: number) => ({
+      id: "f",
+      type: "focus_map",
+      siteIds: sites(n),
+    });
+    expect(UiActionSchema.safeParse(focus(8)).success).toBe(true);
+    expect(UiActionSchema.safeParse(focus(9)).success).toBe(false);
+    expect(UiActionSchema.safeParse(focus(0)).success).toBe(false);
+    const open = { id: "o", type: "open_site", siteId: "s1" };
+    expect(UiActionListSchema.safeParse([open, open, open]).success).toBe(true);
+    expect(UiActionListSchema.safeParse([open, open, open, open]).success).toBe(
+      false,
+    );
+    expect(
+      AgentViewContextSchema.safeParse({ stage: "map", candidateIds: sites(8) })
+        .success,
+    ).toBe(true);
+    expect(
+      AgentViewContextSchema.safeParse({ stage: "map", candidateIds: sites(9) })
+        .success,
+    ).toBe(false);
+  });
+
+  it("validates the view context strictly", () => {
+    expect(
+      AgentViewContextSchema.safeParse({
+        stage: "interior",
+        siteId: "s1",
+        comparisonId: "c1",
+        investigationId: "i1",
+        scenarioId: "sc1",
+        minute: 720,
+        phase: "ready",
+      }).success,
+    ).toBe(true);
+    expect(AgentViewContextSchema.safeParse({}).success).toBe(false);
+    expect(
+      AgentViewContextSchema.safeParse({ stage: "map", zoom: 3 }).success,
+    ).toBe(false);
+    expect(
+      AgentViewContextSchema.safeParse({ stage: "map", phase: "done" }).success,
+    ).toBe(false);
+  });
+
+  it("adds the intake fields without breaking old requests or responses", () => {
+    expect(
+      IntakeRequestSchema.safeParse({ message: "Coffee in Houston" }).success,
+    ).toBe(true);
+    expect(
+      IntakeRequestSchema.safeParse({
+        message: "Compare these",
+        view: { stage: "map", candidateIds: ["s1"] },
+      }).success,
+    ).toBe(true);
+    expect(
+      IntakeRequestSchema.safeParse({ view: { stage: "nowhere" } }).success,
+    ).toBe(false);
+
+    const oldResponse = {
+      draft: { category: "coffee", city: "Houston" },
+      assumptions: {},
+      missingRequiredFields: ["category"],
+      findings: [],
+      nextQuestion: { question: "What kind of business?" },
+      assistantMessage: "Tell me about your business.",
+    };
+    expect(IntakeResponseSchema.safeParse(oldResponse).success).toBe(true);
+    expect(IntakeResponseAgentFieldsSchema.safeParse(oldResponse).success).toBe(
+      true,
+    );
+    const newResponse = {
+      ...oldResponse,
+      actions: [{ id: "a1", type: "navigate", stage: "map" }],
+    };
+    expect(IntakeResponseSchema.safeParse(newResponse).success).toBe(true);
+    expect(IntakeResponseAgentFieldsSchema.safeParse(newResponse).success).toBe(
+      true,
+    );
+    expect(
+      IntakeResponseAgentFieldsSchema.safeParse({
+        actions: [{ id: "a1", type: "teleport" }],
+      }).success,
     ).toBe(false);
   });
 });

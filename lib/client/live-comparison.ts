@@ -13,6 +13,16 @@ import {
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
 import { useSiteSearch } from "./use-site-search";
+import {
+  activeComparisonId,
+  comparisonStorageKey,
+  readSavedComparison,
+  readShortlist,
+  restoreShortlist,
+  writeSavedComparison,
+  writeShortlist,
+  type SavedComparison,
+} from "./project-store";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type {
   DemandSource,
@@ -106,39 +116,14 @@ const PayloadSchema = z.object({
     })
     .optional(),
 });
-const SavedSchema = z.object({
-  projectId: z.string(),
-  comparisonId: z.string().min(1),
-  profileId: z.string().min(1),
-  profileVersion: z.number().int().positive(),
-  intakeFingerprint: z.string(),
-});
-export type SavedComparison = z.infer<typeof SavedSchema>;
-export const comparisonStorageKey = (projectId: string) =>
-  `sitework:comparison:v1:${projectId}`;
-export function activeComparisonId(
-  href: string,
-  saved: SavedComparison | null,
-) {
-  const ids = new URL(href).searchParams.getAll("comparison");
-  return (ids.length === 1 && ids[0]) || saved?.comparisonId;
-}
+export {
+  activeComparisonId,
+  comparisonStorageKey,
+  readSavedComparison,
+  type SavedComparison,
+} from "./project-store";
 const intakeKey = (projectId: string) => `sitework:intake:v1:${projectId}`;
 const fingerprint = (profile: BusinessProfile) => JSON.stringify(profile);
-
-export function readSavedComparison(
-  storage: Pick<Storage, "getItem">,
-  projectId: string,
-): SavedComparison | null {
-  try {
-    const saved = SavedSchema.parse(
-      JSON.parse(storage.getItem(comparisonStorageKey(projectId)) ?? "null"),
-    );
-    return saved.projectId === projectId ? saved : null;
-  } catch {
-    return null;
-  }
-}
 
 function readIntake(projectId: string) {
   try {
@@ -351,14 +336,7 @@ export function useStoredComparison(
     (payload: LiveComparisonPayload, saved: SavedComparison) => {
       generation.current++;
       activeId.current = payload.comparisonId;
-      try {
-        localStorage.setItem(
-          comparisonStorageKey(projectId),
-          JSON.stringify(saved),
-        );
-      } catch {
-        /* Explicit replay links still work when storage is unavailable. */
-      }
+      writeSavedComparison(saved);
       // Subsequent focus/retry reads the newly adopted comparison, including
       // when this run started from an older comparison permalink.
       const url = new URL(window.location.href);
@@ -404,7 +382,15 @@ export function useLiveComparison(
   const [intakeVersion, setIntakeVersion] = useState(0);
   const search = useSiteSearch(projectId, attempt + intakeVersion);
   const stored = useStoredComparison(projectId, initialComparisonId);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIdsState] = useState<string[]>([]);
+  // HAC-135: the shortlist is saved per project, so it survives navigation.
+  const setSelectedIds = useCallback(
+    (ids: string[]) => {
+      setSelectedIdsState(ids);
+      writeShortlist(projectId, ids);
+    },
+    [projectId],
+  );
   const [capability, setCapability] = useState<{
     jev: boolean;
     reason: string;
@@ -509,10 +495,12 @@ export function useLiveComparison(
     const ids = candidateKey ? candidateKey.split(",") : [];
     const first = previousCandidates.current === null;
     previousCandidates.current = candidateKey;
-    setSelectedIds((current) =>
-      first ? ids : current.filter((id) => ids.includes(id)),
+    setSelectedIdsState((current) =>
+      first
+        ? restoreShortlist(readShortlist(localStorage, projectId), ids)
+        : current.filter((id) => ids.includes(id)),
     );
-  }, [candidateKey, search.state.mode]);
+  }, [candidateKey, search.state.mode, projectId]);
   const retry = () => {
     setFailure("");
     setAttempt((n) => n + 1);
@@ -544,8 +532,10 @@ export function useLiveComparison(
         capability?.jev ? "jev" : "huff",
         controller.signal,
       );
-      if (mounted.current && operation.current === controller)
+      if (mounted.current && operation.current === controller) {
+        writeShortlist(projectId, selectedIds);
         stored.adopt(response.payload, response.saved);
+      }
     } catch {
       if (mounted.current && operation.current === controller)
         setFailure(

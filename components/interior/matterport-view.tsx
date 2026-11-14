@@ -7,6 +7,12 @@ import { useSceneVisibility } from "../simulator/use-scene-visibility";
 import type { ScanPlacement } from "./matterport-scene";
 import type { ServiceViewpoint, ShowcaseWindow } from "./matterport-bridge";
 import {
+  CameraController,
+  connectMatterportCamera,
+  scanTargets,
+  type CameraSdk,
+} from "./camera";
+import {
   createViewerSession,
   failureStatus,
   publicEmbedUrl,
@@ -29,6 +35,8 @@ export default function MatterportView({
   employeeCount,
   selected,
   select,
+  seek,
+  onCamera,
 }: {
   config: MatterportConfig;
   run: DayResult;
@@ -36,6 +44,10 @@ export default function MatterportView({
   employeeCount?: number;
   selected: string;
   select: (id: string) => void;
+  /** The shared playback clock's setter, for the camera bridge's `seek`. */
+  seek?: (minute: number) => void;
+  /** Receives the agent's camera bridge once the scan connects, and null after. */
+  onCamera?: (camera: CameraController | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { hasBeenVisible } = useSceneVisibility(container);
@@ -50,11 +62,13 @@ export default function MatterportView({
     }),
     [run, minute, employeeCount, selected],
   );
-  const latest = useRef({ replay, select, config });
+  const latest = useRef({ replay, select, config, seek, onCamera });
+  const camera = useRef<CameraController | null>(null);
   useEffect(() => {
-    latest.current = { replay, select, config };
+    latest.current = { replay, select, config, seek, onCamera };
     session.current?.update(replay);
-  }, [replay, select, config]);
+    camera.current?.tick();
+  }, [replay, select, config, seek, onCamera]);
 
   useEffect(() => {
     const created = createViewerSession({
@@ -71,6 +85,55 @@ export default function MatterportView({
   }, []);
 
   const { connection, failure, overlay, sdk, focusFailed } = viewer;
+  // HAC-139 camera bridge. The session resets `sdk` to null on every teardown
+  // (reconnect, retry, failure, unmount), so the bridge never outlives its SDK.
+  useEffect(() => {
+    if (!sdk) return;
+    const bridge = connectMatterportCamera(sdk as CameraSdk, {
+      seek: (minute) => {
+        const setMinute = latest.current.seek;
+        if (!setMinute) throw new Error("Shared playback unavailable");
+        setMinute(minute);
+      },
+      onFounderInput: () => controller.founderInput(),
+    });
+    const motion =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+    const controller = new CameraController(bridge.port, {
+      targets: () => {
+        const placement = latest.current.config.placement;
+        return placement
+          ? scanTargets(latest.current.replay, placement)
+          : { stations: [], agents: new Map() };
+      },
+      reducedMotion: () => motion?.matches ?? false,
+    });
+    camera.current = controller;
+    latest.current.onCamera?.(controller);
+    // Scrubbing shared playback is founder input too; agent seeks fire no input event.
+    const scrub = (event: Event) => {
+      if (
+        event.isTrusted &&
+        event.target instanceof HTMLInputElement &&
+        event.target.type === "range"
+      )
+        controller.founderInput();
+    };
+    document.addEventListener("input", scrub, true);
+    return () => {
+      document.removeEventListener("input", scrub, true);
+      controller.dispose();
+      try {
+        bridge.dispose();
+      } catch {
+        // The session may already have disconnected this SDK.
+      }
+      camera.current = null;
+      latest.current.onCamera?.(null);
+    };
+  }, [sdk]);
   const failed = connection === "failed";
   // Never leave a blank or broken frame: fall back to the keyless embed, or
   // to a labelled placeholder when the model itself is unavailable.
@@ -120,7 +183,10 @@ export default function MatterportView({
         {sdk && config.viewpoint && (
           <button
             type="button"
-            onClick={() => void session.current?.focus()}
+            onClick={() => {
+              camera.current?.founderInput();
+              void session.current?.focus();
+            }}
             className={button}
           >
             Show service area
