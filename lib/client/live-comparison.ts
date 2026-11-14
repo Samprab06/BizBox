@@ -23,6 +23,14 @@ export type LiveComparisonPayload = {
   outdated: boolean;
   result: EvaluationResult;
   assembly?: AssemblyMetadata;
+  /** Huff-only ranking check, returned only for fresh Jev comparisons. */
+  demandSourceCheck?: {
+    primary: "jev" | "huff";
+    primaryRanking: string[];
+    huffRanking: string[];
+    rankingMatches: boolean;
+    topMatches: boolean;
+  } | null;
 };
 
 export type LiveComparisonController = {
@@ -57,6 +65,17 @@ const PayloadSchema = z.object({
   comparisonId: z.string().min(1),
   outdated: z.boolean(),
   result: EvaluationResultSchema,
+  /** Huff-only rerun of the same request (returned for fresh Jev comparisons only). */
+  demandSourceCheck: z
+    .object({
+      primary: z.enum(["jev", "huff"]),
+      primaryRanking: z.array(z.string()),
+      huffRanking: z.array(z.string()),
+      rankingMatches: z.boolean(),
+      topMatches: z.boolean(),
+    })
+    .nullable()
+    .optional(),
   assembly: z
     .object({
       findings: z.array(

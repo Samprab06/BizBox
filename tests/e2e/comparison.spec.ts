@@ -293,6 +293,33 @@ test("configured Jev is requested and a returned Huff fallback remains explicit"
   await expect(page.getByText(/Demand source: Huff/i)).toBeVisible();
 });
 
+test("shows the Huff-only ranking check returned with a Jev comparison", async ({
+  page,
+}) => {
+  await mockLiveComparison(page, { jevConfigured: true });
+  const payload = {
+    ...structuredClone(liveComparisonPayload),
+    demandSourceCheck: {
+      primary: "jev",
+      primaryRanking: [...liveCandidateIds],
+      huffRanking: [...liveCandidateIds].reverse(),
+      rankingMatches: false,
+      topMatches: false,
+    },
+  };
+  await page.route("**/api/comparisons", (route) =>
+    route.fulfill({ status: 201, json: payload }),
+  );
+  await page.goto("/projects/houston-coffee/comparison");
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  await expect(
+    page.getByText(/Huff-only check: the top site differs/),
+  ).toBeVisible();
+  await expect(page.getByText(/Huff order:/)).toBeVisible();
+});
+
 test("failed sensitivity keeps the saved ranking and can retry", async ({
   page,
 }) => {
