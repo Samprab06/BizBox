@@ -5,7 +5,7 @@
 Akshar's final direction is the simple static dark-glass treatment. Earlier liquid
 pool/surface-tension experiments were rejected because transitions changed from
 clear to translucent. Do not restore those effects. Preserve the concise individual
-questions, Other category, real city photography, disabled preview cities and
+questions, Other as a disabled Coming soon option, real city photography, disabled preview cities and
 GetA5-inspired rulers. See [README.md](README.md) for preview commands and edit points.
 
 ## Final screen revision
@@ -40,20 +40,20 @@ validation in `components/intake/profile.ts` and API adaptation in
 `components/intake/live.ts`. Reuse those state/update/submission paths; do not mount
 a parallel production profile or chatbot from this prototype.
 
-| Prototype field/value                | Existing intake field/value                                                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `concept`                            | `concept`                                                                                                     |
-| `category: Coffee shop`              | `category: Coffee shop`                                                                                       |
-| `category: Quick food`               | `category: Quick-service food`                                                                                |
-| `category: Salon`                    | `category: Salon or barber`                                                                                   |
-| `category: Fitness`                  | `category: Fitness studio`                                                                                    |
-| `category: Other`                    | **Not currently accepted** by production category validation; resolve product/contract handling before wiring |
-| `target`                             | `customers`                                                                                                   |
-| `city`                               | `city` (Houston / Los Angeles)                                                                                |
-| `preferences` plus `neighborhoods`   | `areas`; preserve favor/avoid meaning                                                                         |
-| `rent`, `buildout`, `hours`, `staff` | Corresponding intake field, with production validation                                                        |
-| `price: Value / Mid-range / Premium` | `price: Budget / Midrange / Premium`                                                                          |
-| `must`                               | `requirements`                                                                                                |
+| Prototype field/value                | Existing intake field/value                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `concept`                            | `concept`                                                                       |
+| `category: Coffee shop`              | `category: Coffee shop`                                                         |
+| `category: Quick food`               | `category: Quick-service food`                                                  |
+| `category: Salon`                    | `category: Salon or barber`                                                     |
+| `category: Fitness`                  | `category: Fitness studio`                                                      |
+| `category: Other`                    | **Disabled / Coming soon**; a custom-business workflow is outside current scope |
+| `target`                             | `customers`                                                                     |
+| `city`                               | `city` (Houston / Los Angeles)                                                  |
+| `preferences` plus `neighborhoods`   | `areas`; preserve favor/avoid meaning                                           |
+| `rent`, `buildout`, `hours`, `staff` | Corresponding intake field, with production validation                          |
+| `price: Value / Mid-range / Premium` | `price: Budget / Midrange / Premium`                                            |
+| `must`                               | `requirements`                                                                  |
 
 The production intake's founder/default provenance, missing fields, server state,
 pending patches, retries, failures and persistence remain authoritative. This
@@ -86,7 +86,7 @@ Portable handoff checks on the PR candidate passed:
 - `pnpm lint`, `pnpm typecheck`, `pnpm test` (847 passed / 35 skipped), `pnpm build`.
 - Prettier, Node syntax on all three scripts, relative asset resolution, photo checksums.
 - Browser: all 12 question/review states at 1366×768 and 390×844; no overflow,
-  visible CTAs; Other/Continue/Back, city photos and disabled cities, exact entry
+  visible CTAs; Continue/Back, city photos and disabled cities, exact entry
   and keyboard value synchronization, reduced motion and no captured JS errors.
 - Build retained a warning in the existing `recorded-example-loader.ts` about
   broad dynamic filesystem tracing; this PR does not change that loader.
@@ -118,3 +118,11 @@ a separate voice conversation/profile store.
 The HAC-111 session route keeps the OpenAI key server-side and disables automatic
 Realtime responses (`create_response: false`), so business replies still come from
 the app's existing handler. Keep live voice out of this scripted reference.
+
+## Latest scope correction
+
+Other is a disabled Coming soon preview, not an available custom-business flow. Legacy saved Other/unsupported categories return to the category question without selecting a replacement or dropping other answers. The four supported categories remain selectable.
+
+Interior feedback: Akshar reports choppy movement and unclear insight/capabilities. No interior renderer changes are part of this update. Before extending movement, define the operating question, event-derived metrics, one shared exterior/interior clock and a paused/scrubbable comparison. Exterior trip paths and indoor placements are illustrative; neither should imply measured traffic or verified physical geometry. Track legibility and actual foreground performance in the existing interior/simulator work.
+
+Other update checks: targeted ESLint, Node syntax, formatting/diff checks passed. Browser verified four active categories, disabled Other with Coming soon label, Salon continuation, no phone overflow, and legacy Other returning to category with other answers retained and explicit validation.

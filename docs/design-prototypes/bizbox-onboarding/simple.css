@@ -42,3 +42,21 @@
   transition: none !important;
   animation: none !important;
 }
+
+.question-card .choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #ffffff05;
+  transform: none;
+  box-shadow: none;
+  border-color: #ffffff26;
+}
+.choice-coming-soon {
+  font-size: 10px;
+  font-weight: 400;
+  color: #cbd1dc;
+  border: 1px solid #ffffff30;
+  border-radius: 20px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}

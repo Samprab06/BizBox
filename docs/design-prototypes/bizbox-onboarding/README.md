@@ -51,7 +51,7 @@ styles is a possible follow-up, not required to view or edit this handoff.
 - **Stable glass:** constant fill `rgba(16,19,27,.44)`, `blur(12px)`, opacity 1.
   No morphing, surface pulses, animated blur/transparency, or background transition.
   Only the incoming question receives a short 120 ms opacity fade.
-- Business choices include **Other**; the following concept question captures detail.
+- **Other** is disabled and labelled **Coming soon**. Coffee shop, quick food, salon and fitness remain selectable. Older saved Other selections return to the business-type question with the remaining answers preserved.
 - LA/Houston are selectable. New York, Chicago and Miami are disabled **Coming soon**
   placeholders; these are not launch dates or a roadmap commitment.
 - Rent, buildout and staffing use curved rulers inspired by the supplied GetA5

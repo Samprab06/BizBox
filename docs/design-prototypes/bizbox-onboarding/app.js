@@ -41,6 +41,7 @@ const cityPhotos = {
   Houston: "photos/houston-real.jpg",
 };
 const comingSoonCities = ["New York", "Chicago", "Miami"];
+const availableCategories = ["Coffee shop", "Quick food", "Salon", "Fitness"];
 const params = new URLSearchParams(location.search);
 const canonical = (value) => aliases[value] || value;
 let step = steps.includes(canonical(params.get("step")))
@@ -73,6 +74,10 @@ try {
   );
   if (saved && typeof saved === "object") data = { ...data, ...saved };
 } catch {}
+if (!availableCategories.includes(data.category)) {
+  data.category = "";
+  step = "category";
+}
 if (step === "review" || step === "workspace")
   data = {
     ...data,
@@ -238,7 +243,7 @@ function sliderAnswer(
 function answerHTML() {
   switch (step) {
     case "category":
-      return `<div class="choice-grid" role="group" aria-labelledby="step-title">${["Coffee shop", "Quick food", "Salon", "Fitness", "Other"].map((name) => `<button type="button" class="choice" data-category="${name}" aria-pressed="${data.category === name}">${icon(name)}${name}</button>`).join("")}</div>`;
+      return `<div class="choice-grid" role="group" aria-labelledby="step-title">${[...availableCategories, "Other"].map((name) => `<button type="button" class="choice" data-category="${name}" aria-pressed="${data.category === name}" ${name === "Other" ? 'disabled aria-label="Other — Coming soon"' : ""}>${icon(name)}${name}${name === "Other" ? '<span class="choice-coming-soon">Coming soon</span>' : ""}</button>`).join("")}</div>`;
     case "concept":
       return textAnswer("concept", {
         textarea: true,
@@ -350,6 +355,8 @@ function render() {
 function validate() {
   const error = document.querySelector("#form-error");
   let message = "";
+  if (step === "category" && !availableCategories.includes(data.category))
+    message = "Choose an available business type.";
   if (
     ["concept", "target", "hours"].includes(step) &&
     !String(data[step]).trim()
@@ -434,7 +441,12 @@ function bind() {
   main.querySelectorAll("[data-category]").forEach(
     (button) =>
       (button.onclick = () => {
-        if (isTransitioning) return;
+        if (
+          isTransitioning ||
+          button.disabled ||
+          !availableCategories.includes(button.dataset.category)
+        )
+          return;
         data.category = button.dataset.category;
         main
           .querySelectorAll("[data-category]")
