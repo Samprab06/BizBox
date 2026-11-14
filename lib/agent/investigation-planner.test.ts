@@ -2,6 +2,7 @@ import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import type { GroundedLocationPlan } from "@/lib/contracts/plan";
 import {
   createInvestigationService,
   type InvestigationJob,
@@ -87,6 +88,92 @@ const plannerInput = (
 });
 
 describe("trusted investigation planner", () => {
+  it("persists the deterministic final plan without a second model decision", async () => {
+    const f = setup();
+    const job = await create(f);
+    const locationPlan: GroundedLocationPlan = {
+      plan: {
+        id: "plan-1",
+        projectId: job.projectId,
+        synthetic: true,
+        profileId: job.profileId,
+        comparisonId: "comparison-1",
+        recommendedSiteId: null,
+        recommendation: "Budget is unknown.",
+        conditions: [],
+        nextSteps: ["Validate evidence."],
+        evidenceIds: ["comparison-1"],
+        outputKind: "scenario_recommendation",
+        notSalesForecast: true,
+      },
+      status: "budget_unknown",
+      runnerUpSiteId: null,
+      tiedSiteIds: [],
+      why: [],
+      leaseTargets: [],
+      staffingAndStations: [],
+      buildoutBudget: [],
+      firstNinetyDays: [],
+      assumptions: [],
+      sensitivity: [],
+      findings: [],
+      facts: [],
+      narrative: null,
+      demand: {
+        requested: "huff",
+        actual: "huff",
+        fallbackReason: null,
+        huffAgreement: "not_independent",
+        reference: {
+          comparisonId: "comparison-1",
+          metric: "demandSourceCheck",
+        },
+      },
+    };
+    const choose = vi.fn(async () => decision("finish"));
+    const finalizePlan = vi.fn(async () => locationPlan);
+    const planner = createInvestigationPlanner({
+      tools: f.tools,
+      choose,
+      finalizePlan,
+      now: f.now,
+    });
+    const step = await planner(plannerInput(job));
+    const result = await step!.execute({
+      signal: new AbortController().signal,
+      idempotencyKey: "finish",
+    });
+    expect(result.summary).toMatchObject({
+      output: { locationPlan, handoff: "HAC-24" },
+    });
+    expect(choose).toHaveBeenCalledTimes(1);
+    expect(finalizePlan).toHaveBeenCalledTimes(1);
+  });
+  it("keeps verified tool findings separate from model findings for plan consumers", async () => {
+    const f = setup();
+    const job = await create(f);
+    f.execute.mockResolvedValue({
+      summary: { profileId: job.profileId },
+      findings: ["Verified missing parking evidence."],
+    });
+    const planner = createInvestigationPlanner({
+      tools: f.tools,
+      now: f.now,
+      choose: async () => ({
+        ...decision("search_sites"),
+        findings: ["Unverified model prose."],
+      }),
+    });
+    const step = await planner(plannerInput(job));
+    const result = await step!.execute({
+      signal: new AbortController().signal,
+      idempotencyKey: "search",
+    });
+    expect(result.summary).toMatchObject({
+      toolFindings: ["Verified missing parking evidence."],
+      modelFindings: ["Unverified model prose."],
+    });
+  });
   it("runs a complete scripted workflow through the real checkpoint service", async () => {
     const f = setup();
     const job = await create(f);
@@ -123,6 +210,7 @@ describe("trusted investigation planner", () => {
     expect(milestones[0]!.summary).toEqual({
       input: { step: "x" },
       output: { artifactId: "search_sites-artifact" },
+      toolFindings: [],
       modelFindings: [],
     });
     expect(completed.findings).toContain(workflow.at(-1)!.findings[0]);
@@ -298,7 +386,11 @@ describe("trusted investigation planner", () => {
   it("does not construct or call an unconfigured provider until a decision is requested", async () => {
     const f = setup();
     const job = await create(f);
-    const planner = createConfiguredInvestigationPlanner(f.tools, {}, { now: f.now });
+    const planner = createConfiguredInvestigationPlanner(
+      f.tools,
+      {},
+      { now: f.now },
+    );
     await expect(planner(plannerInput(job))).rejects.toThrow("not configured");
     expect(f.execute).not.toHaveBeenCalled();
   });
