@@ -4,6 +4,8 @@ import { CATEGORY_DEFAULTS } from "@/lib/demand/defaults";
 import { buildArrivalSchedule } from "@/lib/demand/model";
 import { repriceBehaviorTable } from "@/lib/evaluation/evaluate";
 import {
+  ArrivalScheduleSchema,
+  type ArrivalSchedule,
   DayTypeSchema,
   HoursSchema,
   SiteConfigSchema,
@@ -103,6 +105,40 @@ export function runExperiment(input: ExperimentInput, raw: ExperimentSettings) {
     weekday: scheduleFor("weekday"),
     weekend: scheduleFor("weekend"),
   };
+  return runScheduledExperiment(config, settings, schedules);
+}
+
+/** Shared helper composition for explicitly prepared schedules, with no demand recalculation. */
+export function runScheduledExperiment(
+  rawConfig: SiteConfig,
+  rawSettings: ExperimentSettings,
+  rawSchedules: Record<DayType, ArrivalSchedule>,
+) {
+  const settings = SettingsSchema.parse(rawSettings);
+  const config = SiteConfigSchema.parse({
+    ...rawConfig,
+    hours: settings.hours,
+    prices: { ...rawConfig.prices, avgTicketUsd: settings.averageTicketUsd },
+    stations: { ...rawConfig.stations, planned: settings.plannedStations },
+    staff: { ...rawConfig.staff, headcount: settings.staffHeadcount },
+  });
+  const schedules = {
+    weekday: ArrivalScheduleSchema.parse(rawSchedules.weekday),
+    weekend: ArrivalScheduleSchema.parse(rawSchedules.weekend),
+  };
+  for (const day of ["weekday", "weekend"] as const) {
+    const schedule = schedules[day];
+    if (
+      schedule.seed !== settings.seed ||
+      schedule.dayType !== day ||
+      schedule.siteId !== schedules.weekday.siteId ||
+      schedule.openMin !== settings.hours[day].openMin ||
+      schedule.closeMin !== settings.hours[day].closeMin
+    )
+      throw new RangeError(
+        "Prepared schedules must match helper site, seed, day and opening hours",
+      );
+  }
   const days = {
     weekday: simulateDay(schedules.weekday, config),
     weekend: simulateDay(schedules.weekend, config),

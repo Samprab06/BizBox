@@ -1,5 +1,4 @@
 import { summarize as summarizeValues } from "@/lib/evaluation/evaluate";
-import type { MetricSummary } from "@/lib/contracts/evaluation";
 import { experimentDelta, type ExperimentResult } from "@/lib/sim/experiment";
 import {
   ArrivalScheduleSchema,
@@ -18,40 +17,11 @@ export type StationExperimentInput = {
   alternatives: readonly { id: string; results: readonly ExperimentResult[] }[];
   origins: readonly Origin[];
 };
-export type StationExperimentCallout = {
-  id: string;
-  kind: "station-experiment";
-  siteId: string;
-  dayType: DayType;
-  label: "Modeled additional monthly revenue";
-  caption: "Modeled, not a forecast";
-  change: {
-    scope: "whole-operating-day";
-    fromPlannedStations: number;
-    toPlannedStations: number;
-    fromEffectiveStations: number;
-    toEffectiveStations: number;
-    fromStaffHeadcount: number;
-    toStaffHeadcount: number;
-    hours: SiteConfig["hours"];
-  };
-  monthlyRevenueChangeUsd: MetricSummary;
-  monthlyContributionChangeUsd: MetricSummary;
-  monthlyWalkAwayChange: MetricSummary;
-  selectedDayWalkAwayChange: MetricSummary;
-  /** Signed operating-capacity proxy, NOT labor time or equipment cost. */
-  addedStationHoursPerMonth: number;
-  /** Signed difference of actual helper monthly.costs.staffHours. */
-  addedStaffHoursPerMonth: number;
-  source: {
-    mode: "aggregate";
-    seedCount: number;
-    seeds: number[];
-    outputKind: "simulation";
-  };
-  origins: Origin[];
-  limitations: string[];
-};
+import {
+  StationExperimentCalloutSchema,
+  type StationExperimentCallout,
+} from "@/lib/contracts/station-experiment";
+export type { StationExperimentCallout } from "@/lib/contracts/station-experiment";
 type Dependencies = {
   delta?: typeof experimentDelta;
   summarize?: typeof summarizeValues;
@@ -396,16 +366,41 @@ export function summarizeStationExperiments(
         outputKind: "simulation",
       },
       origins: [...new Set(input.origins)],
-      limitations: [
-        "Whole-operating-day station counts; no hourly staffing schedule is modeled",
-        "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
-        "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
-        "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
-        "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
-        "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
-        "Variants are unranked; no cheapest recommendation or station purchase cost is inferred",
-      ],
+      limitations: [...STATION_EXPERIMENT_LIMITATIONS],
     });
   }
   return variants;
 }
+
+/** User-approved objective among positive-revenue, added-effective-station variants. */
+export function selectStationExperiment(
+  variants: readonly StationExperimentCallout[],
+): StationExperimentCallout | null {
+  const valid = variants.map((value) =>
+    StationExperimentCalloutSchema.parse(value),
+  );
+  return (
+    valid
+      .filter(
+        (v) =>
+          v.monthlyRevenueChangeUsd.mean > 0 &&
+          v.change.toEffectiveStations > v.change.fromEffectiveStations,
+      )
+      .sort(
+        (a, b) =>
+          b.monthlyRevenueChangeUsd.mean - a.monthlyRevenueChangeUsd.mean ||
+          a.addedStationHoursPerMonth - b.addedStationHoursPerMonth ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      )[0] ?? null
+  );
+}
+
+export const STATION_EXPERIMENT_LIMITATIONS = [
+  "Whole-operating-day station counts; no hourly staffing schedule is modeled",
+  "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
+  "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
+  "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
+  "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
+  "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
+  "Selection compares only tested variants by mean added revenue, then station-hours; station purchase costs are unknown",
+] as const;

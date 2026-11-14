@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createScenarioRunner } from "./run";
+import { createScenarioRunner, scenarioExecutionKey } from "./run";
 import { createMemoryScenarioExecutionStore } from "./run-store-memory";
 import { createRootScenario, deriveScenario } from "./model";
 import { createMemoryComparisonStore } from "@/lib/evaluation/store";
@@ -235,5 +235,33 @@ describe("scenario execution", () => {
     expect(await runner.get("p1", "s1", "execution-1")).toMatchObject({
       status: "failed",
     });
+  });
+});
+
+it("versions helper artifacts in the cache while preserving queued legacy Jev source", async () => {
+  const oldKey = scenarioExecutionKey(base, "jev", null);
+  expect(scenarioExecutionKey(base, "jev")).not.toBe(oldKey);
+  expect(scenarioExecutionKey(base, "jev")).toBe(
+    scenarioExecutionKey(base, "jev"),
+  );
+  const { runner, executions, prepare } = setup();
+  await executions.reserve({
+    id: "legacy",
+    projectId: "p1",
+    scenarioId: "s1",
+    idempotencyKey: oldKey,
+    effectiveKey: oldKey,
+    costUnits: 8,
+    budgetUnits: 1200,
+    confirm: false,
+    now: new Date("2026-11-14T17:00:00.000Z"),
+  });
+  await runner.advance("p1", "s1", "legacy");
+  expect(prepare).toHaveBeenCalledWith(base, "jev");
+  const result = await runner.start("p1", "s1", { demandSource: "jev" });
+  expect(result).toMatchObject({
+    status: "succeeded",
+    cached: false,
+    costUnits: 8,
   });
 });
