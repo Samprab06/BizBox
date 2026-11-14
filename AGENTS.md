@@ -22,8 +22,9 @@ this project.
 | Teammates' agents | `@frank-claude`, `@yasser-claude`, `@akshar-codex` | Teammates' machines | Implement tickets with their own label |
 
 Oracle 1 and Oracle 2 share Sam's queue. `agentorch ticket next` moves a ticket to In
-Development the moment it is claimed, so the other one skips it. If both ever claim the
-same ticket, the one whose "Picked up" comment came second drops it and takes the next.
+Development the moment it is claimed, so the other one skips it. Before you start
+building, run `git ls-remote origin '<printed branch>'`: if the branch already exists,
+the other Oracle has the ticket, so take the next one.
 
 Your name and label are in `AGENTORCH_AGENT`, and your signature is in
 `AGENTORCH_SIGNATURE`. Humans can step in at any time, but the project must never
@@ -45,9 +46,9 @@ Your name and label are in `AGENTORCH_AGENT`, and your signature is in
   `pnpm test` and `pnpm build`.
 - Secrets live in Vercel environment variables and `.env.local`, never in git.
 
-Each Linear ticket description carries the design details it needs. The full design is
-in the mega doc (`final/MEGADOC.md`). If something is still missing, ask `@oracle-lead`
-on the board.
+**The Linear tickets are the spec.** Each ticket's description carries the design details
+and acceptance criteria it needs. If something is missing or contradicts another ticket,
+ask `@oracle-lead` on the board.
 
 ## 2. Implementer loop (everyone except `oracle-lead`)
 
@@ -95,17 +96,20 @@ otherwise hold. Every 10–15 minutes, or whenever it's mentioned, it runs this 
    (the critical path).
 4. **Keep tickets sharp.** If a ticket is vague, add acceptance criteria with
    `agentorch ticket comment`. If it's too big, create smaller tickets with
-   `agentorch ticket new "..." --agent <name> --body "..."` and park the original. Use the
-   mega doc as the source of truth.
+   `agentorch ticket new "..." --agent <name> --body "..."` and park the original. Keep
+   related tickets consistent with each other: the tickets are the only spec.
 5. **Review and merge.** For each open PR:
    - check it against its ticket's acceptance criteria and the stack rules
-   - check that CI and the four `pnpm` checks pass
+   - check that the four `pnpm` checks pass. Until the repo has CI, run them yourself:
+     `gh pr checkout <n> && pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build`,
+     then `git checkout main`. Once the app is bootstrapped, ticket a GitHub Actions
+     workflow that runs these four checks on every PR.
    - if it's good, merge it: `gh pr ready <n>` (for drafts), then `gh pr merge <n> --squash --delete-branch`.
      The ticket moves to Done when the PR merges, through Linear's GitHub integration.
    - if it isn't good, comment on the PR with exactly what to change, and post
      `[REVIEW]` on the board mentioning the author
-6. **Recover failures.** A ticket in Backlog with a "failed" comment from the server
-   worker: either fix the ticket's description and run
+6. **Recover failures.** For a ticket an implementer gave up on (`[BLOCKED]`, or stuck in
+   In Development with no activity for 30 minutes): either fix the ticket's description and run
    `agentorch ticket assign HAC-n <agent> --ready`, or give it to a different agent.
 7. **Report.** After a cycle that changed something, post one `[STATUS]` message: what
    merged, what's in flight, what's blocked, and the critical path. For anything Sam
@@ -176,8 +180,7 @@ When anything conflicts, follow this order:
 1. A human's explicit instruction on the board or in your session
 2. `oracle-lead`'s decision on the board
 3. The ticket's description and acceptance criteria
-4. The mega doc (`final/MEGADOC.md`)
-5. This file
+4. This file
 
 If none of these settles it, make the smallest reasonable choice, note it in the PR body,
 and keep going.
