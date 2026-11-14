@@ -1,4 +1,7 @@
 export * from "./costar-schema";
+export * from "./layout-schema";
+import { layouts } from "./layout-schema";
+export * from "./matterport-schema";
 import { sql } from "drizzle-orm";
 export * from "./public-schema";
 import {
@@ -345,7 +348,7 @@ export const scenarios = pgTable(
     siteIds: jsonb("site_ids").$type<string[]>().notNull(),
     profileVersion: integer("profile_version").notNull(),
     overrides: jsonb("overrides").$type<ScenarioOverrides>().notNull(),
-    /** AGT-7 layout. Deliberately not a foreign key until that table exists. */
+    /** HAC-86: immutable layout in this same project, or null for legacy scenarios. */
     layoutId: text("layout_id"),
     label: text("label").notNull(),
     author: text("author").notNull(),
@@ -366,6 +369,12 @@ export const scenarios = pgTable(
     }),
     index("scenarios_project_idx").on(t.projectId, t.createdAt),
     index("scenarios_parent_idx").on(t.projectId, t.parentId),
+    foreignKey({
+      name: "scenarios_scoped_layout_fk",
+      columns: [t.projectId, t.layoutId],
+      foreignColumns: [layouts.projectId, layouts.id],
+    }),
+    index("scenarios_layout_idx").on(t.projectId, t.layoutId),
     check("scenarios_author_valid", sql`${t.author} in ('founder', 'agent')`),
     check(
       "scenarios_agent_rationale",
