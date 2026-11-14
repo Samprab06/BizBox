@@ -42,7 +42,7 @@
       ]
     }
   ],
-  "screen_status": "Interim actual app map; requested consultant composition pending HAC-118",
+  "screen_status": "Embedded legacy 2D map texture; use live platform screen for landing integration",
   "attribution_url": "./credits.html",
   "triangles": 112625,
   "mesh_objects": 24

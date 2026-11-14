@@ -174,7 +174,7 @@ for label, x, y in [("ScreenTopLeft", min(u), max(v)), ("ScreenTopRight", max(u)
     anchor = empty("HAC115_" + label, lid_pivot)
     anchor.matrix_world = Matrix.Translation(position)
     corners.append({"node": anchor.name, "position_blender": list(position)})
-screen["content_status"] = "Interim actual map capture; consultant composition is HAC-118"
+screen["content_status"] = "Legacy texture inspection; default review hosts live platform UI"
 screen["replace_material"] = True
 root["screen_aspect"] = (max(u) - min(u)) / (max(v) - min(v))
 
@@ -242,7 +242,7 @@ manifest = {
     "screen": screen.name, "units": "metres", "width": 0.3557,
     "source_axis": "Blender Z up; exported glTF Y up",
     "screen_aspect": root["screen_aspect"], "screen_corners": corners,
-    "screen_status": "Interim actual app map; requested consultant composition pending HAC-118",
+    "screen_status": "Embedded legacy 2D map texture; use live platform screen for landing integration",
     "attribution_url": "./credits.html",
     "triangles": sum(len(o.data.polygons) for o in scene.objects if o.type == "MESH"),
     "mesh_objects": sum(o.type == "MESH" for o in scene.objects),

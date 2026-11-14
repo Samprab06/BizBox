@@ -4,12 +4,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BizBox — MacBook asset review</title>
 <style>
-  *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 30%,#434952,#171a20 72%);color:#f1f1f3;font:14px system-ui,sans-serif}canvas{display:block;width:100%;height:100svh}header,footer{position:fixed;left:24px;right:24px;pointer-events:none}header{top:24px;display:flex;justify-content:space-between;gap:16px}h1{font-size:16px;font-weight:550;margin:0}p{color:#c2c6cd;font-size:12px;margin:6px 0}footer{bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px}a,label,input{pointer-events:auto}a{color:inherit}label{display:flex;align-items:center;gap:12px}input{max-width:160px}#error{max-width:500px;color:#ffd0c0}#status{font-size:12px;color:#c2c6cd}@media(max-width:600px){header,footer{left:16px;right:16px}header{flex-direction:column}footer{flex-direction:column;align-items:flex-start}}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% 30%,#434952,#171a20 72%);color:#f1f1f3;font:14px system-ui,sans-serif}canvas{display:block;width:100%;height:100svh}header,footer{position:fixed;left:24px;right:24px;pointer-events:none;z-index:2}header{top:24px;display:flex;justify-content:space-between;gap:16px}h1{font-size:16px;font-weight:550;margin:0}p{color:#c2c6cd;font-size:12px;margin:6px 0}footer{bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px}a,label,input{pointer-events:auto}a{color:inherit}label{display:flex;align-items:center;gap:12px}input{max-width:160px}#error{max-width:500px;color:#ffd0c0}#status{font-size:12px;color:#c2c6cd}#product-screen{position:fixed;top:0;left:0;border:0;transform-origin:0 0;will-change:transform;clip-path:polygon(0 0,44.1% 0,44.7% 2.9%,55.3% 2.9%,55.9% 0,100% 0,100% 100%,0 100%);z-index:1;backface-visibility:hidden}#product-screen[hidden]{display:none}@media(max-width:600px){header,footer{left:16px;right:16px}header{flex-direction:column}footer{flex-direction:column;align-items:flex-start}}
 </style>
-<header><div><h1>BizBox · MacBook asset review</h1><p>Interim actual map texture. Consultant composition follows in HAC-118.</p></div><span id="status" role="status">Loading model…</span></header>
+<header><div><h1>BizBox · MacBook asset review</h1><p id="screen-description">Live platform UI · interactive 3D neighborhood.</p></div><span id="status" role="status">Loading model…</span></header>
 <canvas id="scene" aria-label="Interactive sourced MacBook model"></canvas>
+<div id="screen-surface" hidden><iframe id="product-screen" title="BizBox actual platform: 3D map and consultant" hidden allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+<style>
+  #screen-surface{position:fixed;top:0;left:0;transform-origin:0 0;will-change:transform;clip-path:polygon(0 0,44.1% 0,44.7% 2.9%,55.3% 2.9%,55.9% 0,100% 0,100% 100%,0 100%);z-index:1;overflow:hidden}#screen-surface[hidden]{display:none}#product-screen{position:absolute;z-index:auto;clip-path:none;will-change:auto}
+</style>
 <p id="error" role="alert" hidden></p>
-<footer><label>Lid motion <input id="lid" aria-label="Lid motion test" type="range" min="0" max="0.7" step="0.01" value="0"></label><a href="/assets/credits.html">Model credits</a></footer>
+<footer><label>Lid motion <input id="lid" aria-label="Lid motion test" type="range" min="0" max="0.7" step="0.01" value="0"></label><a id="open-workspace" target="_blank" rel="noopener">Open product screen</a><a href="/assets/credits.html">Model credits</a></footer>
 <script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
 <script type="module" src="/review.js"></script>
 </html>

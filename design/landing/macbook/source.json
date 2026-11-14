@@ -19,5 +19,5 @@
     "interim actual application map texture",
     "mobile mesh simplification"
   ],
-  "screen_status": "Interim actual map capture; final map and consultant composition depends on HAC-118"
+  "screen_status": "Embedded legacy map texture retained; default review uses live shared 3D map and consultant UI"
 }

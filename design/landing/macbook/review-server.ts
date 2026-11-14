@@ -24,11 +24,21 @@ const server = createServer(async (request, response) => {
     const pathname = decodeURIComponent(
       new URL(request.url ?? "/", "http://local").pathname,
     );
+    if (pathname === "/workspace-config.json") {
+      const origin =
+        process.env.BIZBOX_REVIEW_PRODUCT_ORIGIN ?? "http://127.0.0.1:4194";
+      const url = new URL("/landing-workspace", origin);
+      if (!["http:", "https:"].includes(url.protocol))
+        throw new Error("Invalid product origin");
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ workspaceUrl: url.href }));
+      return;
+    }
     let file =
       pathname === "/"
         ? resolve(here, "review.html")
-        : pathname === "/review.js"
-          ? resolve(here, "review.js")
+        : pathname === "/review.js" || pathname === "/screen-transform.js"
+          ? resolve(here, pathname.slice(1))
           : undefined;
     for (const [prefix, directory] of Object.entries(roots)) {
       if (!pathname.startsWith(prefix)) continue;
