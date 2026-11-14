@@ -55,8 +55,13 @@ A later advancement skips finished sites. A deterministic comparison ID lets a
 retry after a comparison commit reuse it rather than write it twice.
 
 Without an explicit idempotency key, immutable effective inputs supply a stable
-key, so a transient failure can retry the same reservation. Equivalent active
-repeats return the current run's status. Explicit keys distinguish client requests.
+key. Transient dependency failures on an active run can resume the same reservation
+through `/advance`; equivalent active repeats return the current run's status.
+Terminal `failed` runs do **not** retry on an identical `POST`, including when the
+caller omits `idempotencyKey`: the same key returns the failed execution. To start
+a new attempt after fixing the cause, supply a **new** explicit `idempotencyKey`.
+Each failed attempt's reserved units remain in the rolling 24-hour budget, and the
+new attempt reserves its full cost again. Explicit keys distinguish client requests.
 An equivalent completed parent/fork reuses its comparison at zero additional cost.
 Labels, author, rationale and lineage do not invalidate an otherwise identical
 execution; project, profile version, sites, overrides, layout and demand source do.
