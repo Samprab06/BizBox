@@ -96,6 +96,12 @@ Sphere geometry/materials are shared; the existing visibility observer and
 demand rendering stop offscreen work. If WebGL is unavailable, a fallback leaves
 playback, metrics and person inspection usable.
 
+In the scan, spheres have a 15 cm world radius at the example's placement scale
+(previously 9 cm). A shared normal-based lighting texture supplies a curved light
+falloff and highlight without changing Matterport's scene lighting. Soft floor
+shadows and ground-level employee/selection rings make depth easier to read.
+These are visual markers, not human body dimensions or measured illumination.
+
 ## Verification
 
 `components/simulator/interior-state.test.ts` checks paired workloads and engine

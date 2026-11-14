@@ -68,6 +68,52 @@ function fakeSdk() {
   };
 }
 
+it("keeps markers readable at scan scale with curved shading and floor contact cues", async () => {
+  const fake = fakeSdk();
+  const { run } = makeDemo()[1];
+  const session = await attachReplayScene(
+    fake.sdk,
+    placement,
+    {
+      frame: interiorFrame(run, 504, 2),
+      selected: "",
+      stationCount: 2,
+    },
+    () => {},
+  );
+  const root = fake.component.outputs.objectRoot!;
+  root.updateMatrixWorld(true);
+  const person = root.children.find(
+    (child) => child.userData.role === "customer",
+  )!;
+  const sphere = person.children[0] as Three.Mesh<
+    Three.SphereGeometry,
+    Three.MeshMatcapMaterial
+  >;
+  sphere.geometry.computeBoundingSphere();
+  const worldRadius =
+    sphere.geometry.boundingSphere!.radius *
+    sphere.getWorldScale(new Three.Vector3()).x;
+  expect(worldRadius).toBeGreaterThanOrEqual(0.15);
+  expect(sphere.material.matcap).toBeDefined();
+  const texture = sphere.material.matcap as Three.DataTexture;
+  const pixels = texture.image.data as Uint8Array;
+  const brightness = Array.from(pixels).filter((_, index) => index % 4 === 0);
+  expect(Math.max(...brightness) - Math.min(...brightness)).toBeGreaterThan(
+    100,
+  );
+  const shadow = person.children.find(
+    (child) => child.userData.role === "contact-shadow",
+  ) as Three.Mesh;
+  expect(shadow).toBeDefined();
+  expect(shadow.position.y).toBeLessThan(0);
+  expect((shadow.material as Three.Material).depthTest).toBe(true);
+  const disposed = vi.fn();
+  texture.addEventListener("dispose", disposed);
+  session.dispose();
+  expect(disposed).toHaveBeenCalledOnce();
+});
+
 it("projects actual customer/employee dots and proposed counters through the iframe Three scene", async () => {
   const fake = fakeSdk();
   const { run, staffing } = makeDemo()[1];
@@ -102,7 +148,7 @@ it("projects actual customer/employee dots and proposed counters through the ifr
   expect(employee.position.x).toBe(replay.frame.employees[1].x);
   const dot = employee.children[0] as Three.Mesh<
     Three.SphereGeometry,
-    Three.MeshBasicMaterial
+    Three.MeshMatcapMaterial
   >;
   expect(dot.material.color.getHexString()).toBe("c084fc");
   expect(dot.material.depthTest).toBe(true);
@@ -112,7 +158,7 @@ it("projects actual customer/employee dots and proposed counters through the ifr
     (
       customers[0].children[0] as Three.Mesh<
         Three.SphereGeometry,
-        Three.MeshBasicMaterial
+        Three.MeshMatcapMaterial
       >
     ).material.color.getHexString(),
   ).toBe("60a5fa");

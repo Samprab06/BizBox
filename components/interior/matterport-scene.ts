@@ -30,6 +30,39 @@ export type MatterportSceneSdk = {
   };
 };
 
+/** Shared view-normal lighting: readable spheres without changing scan lights. */
+function markerTextures(THREE: typeof Three) {
+  const size = 64;
+  const surface = new Uint8Array(size * size * 4);
+  const shadow = new Uint8Array(surface.length);
+  const lightLength = Math.hypot(-0.45, 0.65, 1);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = (x / (size - 1)) * 2 - 1;
+      const ny = (y / (size - 1)) * 2 - 1;
+      const radiusSquared = nx * nx + ny * ny;
+      const nz = Math.sqrt(Math.max(0, 1 - radiusSquared));
+      const diffuse = Math.max(0, (-0.45 * nx + 0.65 * ny + nz) / lightLength);
+      const highlight = Math.exp(
+        -((nx + 0.32) ** 2 + (ny - 0.48) ** 2) / 0.035,
+      );
+      const shade = Math.round(
+        255 * Math.min(1, 0.12 + 0.76 * diffuse + 0.5 * highlight),
+      );
+      const index = (y * size + x) * 4;
+      surface.set([shade, shade, shade, 255], index);
+      shadow[index + 3] = Math.round(80 * Math.max(0, 1 - radiusSquared) ** 2);
+    }
+  }
+  return [surface, shadow].map((pixels) => {
+    const texture = new THREE.DataTexture(pixels, size, size);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    return texture;
+  });
+}
+
 /** All runtime WebGL constructors come from Showcase, never from the app's Three copy. */
 export class ReplayComponent {
   context!: { three: typeof Three };
@@ -42,6 +75,7 @@ export class ReplayComponent {
   private counters: Three.Mesh[] = [];
   private geometries: Three.BufferGeometry[] = [];
   private materials: Three.Material[] = [];
+  private textures: Three.Texture[] = [];
   private destroyed = false;
 
   constructor(
@@ -54,19 +88,35 @@ export class ReplayComponent {
   }
   onInit() {
     const THREE = this.context.three;
+    this.textures = markerTextures(THREE);
     this.geometries = [
-      new THREE.SphereGeometry(0.18, 12, 8),
-      new THREE.TorusGeometry(0.26, 0.035, 5, 16),
+      new THREE.SphereGeometry(0.3, 24, 16),
+      new THREE.TorusGeometry(0.37, 0.025, 5, 24),
       new THREE.BoxGeometry(2.1, 0.06, 0.8),
+      new THREE.PlaneGeometry(0.88, 0.88),
     ];
     this.materials = [
-      new THREE.MeshBasicMaterial({ color: "#60a5fa", depthTest: true }),
-      new THREE.MeshBasicMaterial({ color: "#c084fc", depthTest: true }),
+      new THREE.MeshMatcapMaterial({
+        color: "#60a5fa",
+        matcap: this.textures[0],
+        depthTest: true,
+      }),
+      new THREE.MeshMatcapMaterial({
+        color: "#c084fc",
+        matcap: this.textures[0],
+        depthTest: true,
+      }),
       new THREE.MeshBasicMaterial({ color: "#f8fafc", depthTest: true }),
       new THREE.MeshBasicMaterial({
         color: "#5eead4",
         transparent: true,
         opacity: 0.4,
+        depthWrite: false,
+        depthTest: true,
+      }),
+      new THREE.MeshBasicMaterial({
+        map: this.textures[1],
+        transparent: true,
         depthWrite: false,
         depthTest: true,
       }),
@@ -114,12 +164,18 @@ export class ReplayComponent {
         );
         const outline = new THREE.Mesh(this.geometries[1], this.materials[2]);
         outline.rotation.x = -Math.PI / 2;
+        outline.position.y = -0.28;
         group.add(outline);
+        const shadow = new THREE.Mesh(this.geometries[3], this.materials[4]);
+        shadow.userData.role = "contact-shadow";
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = -0.325;
+        group.add(shadow);
         this.dots.set(dot.id, group);
         root.add(group);
       }
       group.userData = { id: dot.id, role: dot.role, state: dot.state };
-      group.position.set(dot.x, 0.25, dot.z);
+      group.position.set(dot.x, 0.34, dot.z);
       group.children[1].visible =
         dot.role === "employee" || dot.id === replay.selected;
       group.children[1].scale.setScalar(dot.id === replay.selected ? 1.35 : 1);
@@ -167,6 +223,7 @@ export class ReplayComponent {
     this.outputs.objectRoot?.removeFromParent();
     this.geometries.forEach((geometry) => geometry.dispose());
     this.materials.forEach((material) => material.dispose());
+    this.textures.forEach((texture) => texture.dispose());
     this.dots.clear();
     this.counters = [];
     this.outputs.objectRoot = null;
