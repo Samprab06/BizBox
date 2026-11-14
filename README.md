@@ -23,6 +23,13 @@ came from: `costar`, `public`, `founder` or `default`.
 simulated day. Today the screens run on a fixture project, `houston-coffee`. Current scope and
 acceptance criteria live in the team's Linear tickets.
 
+## Landing design checkpoint
+
+The draft **BizBox** landing preview is available at `/landing-preview/index.html` when
+the app is running. It is separate from the homepage. See the
+[landing handoff](docs/landing/README.md) for the current prototype, content wireframe,
+pending UX decisions, and resume instructions.
+
 ## Stack
 
 - **Next.js** (App Router) in **TypeScript** `strict` mode, styled with **Tailwind CSS**,
