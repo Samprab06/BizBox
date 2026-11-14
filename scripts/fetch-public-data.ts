@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
@@ -21,6 +21,7 @@ import {
   type PublicSource,
   type RawRow,
 } from "../lib/data/public";
+import { prepareAcsSummary } from "./acs-summary";
 import { publicBlockGroups, publicJobs } from "../lib/db/public-schema";
 import {
   downloadCached,
@@ -240,10 +241,33 @@ async function overtureForMetro(metro: string, bounds: Bounds, cache: string) {
 /** Local preparation only. Deployed route handlers must query Postgres instead. */
 export async function fetchPublicData(options: {
   cache?: string;
-  censusKey: string;
+  censusKey?: string;
+  acsSource?: "api" | "summary";
+  censusOnly?: boolean;
   databaseUrl?: string;
 }) {
+  if (options.censusOnly && options.databaseUrl)
+    throw new Error(
+      "Census-only preparation cannot replace database source tables",
+    );
+  const acsSource = options.acsSource ?? "api";
+  if (acsSource === "api" && !options.censusKey)
+    throw new Error(
+      "CENSUS_API_KEY is required for API mode; use --acs-summary for keyless downloads",
+    );
   const cache = resolve(options.cache ?? "data/public");
+  const summaryRows =
+    acsSource === "summary"
+      ? await prepareAcsSummary(
+          cache,
+          VINTAGE.acs,
+          METROS.flatMap((m) => [...m.counties]),
+        )
+      : undefined;
+  const countyCounts: Record<
+    string,
+    { blockGroups: number; geometryBlockGroups: number }
+  > = {};
   const acsRows: {
     row: ReturnType<typeof normalizeAcs>[number];
     geometry: GeometryObservation;
@@ -260,17 +284,24 @@ export async function fetchPublicData(options: {
   for (const metro of METROS) {
     const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
     for (const county of metro.counties) {
-      const url = censusUrl(county);
-      const sourceUrl = url.href;
-      url.searchParams.set("key", options.censusKey);
-      const path = resolve(cache, `acs-${VINTAGE.acs}-${county}.json`);
-      const manifest = await downloadCached(path, url.href, sourceUrl);
-      const rows = normalizeAcs(
-        JSON.parse(await readFile(path, "utf8")),
-        observation("ACS 5-year detailed tables", VINTAGE.acs, manifest),
-      );
+      let rows = summaryRows?.get(county);
+      if (!rows) {
+        const url = censusUrl(county);
+        const sourceUrl = url.href;
+        url.searchParams.set("key", options.censusKey!);
+        const path = resolve(cache, `acs-${VINTAGE.acs}-${county}.json`);
+        const manifest = await downloadCached(path, url.href, sourceUrl);
+        rows = normalizeAcs(
+          JSON.parse(await readFile(path, "utf8")),
+          observation("ACS 5-year detailed tables", VINTAGE.acs, manifest),
+        );
+      }
       if (!rows.length) throw new Error("ACS returned no block groups");
       const geometry = await geometryForCounty(county, cache);
+      countyCounts[county] = {
+        blockGroups: rows.length,
+        geometryBlockGroups: geometry.geometries.size,
+      };
       bounds[0] = Math.min(bounds[0], geometry.bounds[0]);
       bounds[1] = Math.min(bounds[1], geometry.bounds[1]);
       bounds[2] = Math.max(bounds[2], geometry.bounds[2]);
@@ -282,6 +313,7 @@ export async function fetchPublicData(options: {
         acsRows.push({ row, geometry: shape });
       }
     }
+    if (options.censusOnly) continue;
     const xwalkUrl = `${LODES}/${metro.abbr}/${metro.abbr}_xwalk.csv.gz`;
     const wacUrl = `${LODES}/${metro.abbr}/wac/${metro.abbr}_wac_S000_JT00_${VINTAGE.lodes}.csv.gz`;
     const xwalk = resolve(cache, `${metro.abbr}_xwalk.csv.gz`);
@@ -308,6 +340,22 @@ export async function fetchPublicData(options: {
       ),
     });
     placeFiles.push(await overtureForMetro(metro.id, bounds, cache));
+  }
+  if (options.censusOnly) {
+    const report = {
+      mode: "census-download-only",
+      acsSource,
+      vintage: VINTAGE.acs,
+      blockGroups: acsRows.length,
+      counties: countyCounts,
+      geometryMatched: acsRows.length,
+      databaseVerified: false,
+    };
+    await writeFile(
+      resolve(cache, "census-preparation.json"),
+      JSON.stringify(report, null, 2),
+    );
+    return report;
   }
   // Keep notices and license texts beside converted provider data. Filtering and
   // GeoJSON conversion are our modifications, not upstream endorsements.
@@ -464,17 +512,22 @@ if (
 ) {
   config({ path: [".env.local", ".env"], quiet: true });
   const downloadOnly = process.argv.includes("--download-only");
+  const acsSource = process.argv.includes("--acs-summary") ? "summary" : "api";
+  const censusOnly = process.argv.includes("--census-only");
   if (
-    !process.env.CENSUS_API_KEY ||
+    (acsSource === "api" && !process.env.CENSUS_API_KEY) ||
+    (censusOnly && !downloadOnly) ||
     (!downloadOnly && !process.env.DATABASE_URL)
   ) {
     console.error(
-      "CENSUS_API_KEY and an approved DATABASE_URL are required (--download-only omits the database requirement).",
+      "API mode requires CENSUS_API_KEY; --acs-summary uses keyless files. An approved DATABASE_URL is required unless --download-only is set. --census-only requires --download-only.",
     );
     process.exitCode = 1;
   } else
     fetchPublicData({
       censusKey: process.env.CENSUS_API_KEY,
+      acsSource,
+      censusOnly,
       databaseUrl: downloadOnly ? undefined : process.env.DATABASE_URL,
     })
       .then((result) => console.log(JSON.stringify(result, null, 2)))
