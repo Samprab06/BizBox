@@ -44,9 +44,9 @@ test.describe("every view passes the axe scan", () => {
     await expectNoA11yViolations(page);
   });
 
-  test("site unavailable state (/sites/unselected)", async ({ page, gotoView }) => {
+  test("site selection prompt (/sites/unselected)", async ({ page, gotoView }) => {
     await gotoView("site");
-    await expect(page.getByRole("heading", { level: 2, name: "Site unavailable" })).toBeVisible();
+    await expect(page.getByRole("status")).toHaveText("Choose a site from the map to view details.");
     await expectNoA11yViolations(page);
   });
 });
