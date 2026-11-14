@@ -13,4 +13,8 @@ export {
   investigationMilestones,
   plans,
   evidence,
+  scenarioRunStatus,
+  scenarios,
+  scenarioRuns,
+  projectActiveScenario,
 } from "./schema";
