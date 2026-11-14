@@ -205,8 +205,9 @@ export function resolveDemandSource(request: EvaluationRequest): {
 }
 
 export function seedList(
-  request: Pick<EvaluationRequest, "seeds" | "baseSeed">,
+  request: Pick<EvaluationRequest, "seeds" | "baseSeed" | "seedSet">,
 ): number[] {
+  if (request.seedSet) return [...request.seedSet];
   return Array.from({ length: request.seeds }, (_, i) => request.baseSeed + i);
 }
 

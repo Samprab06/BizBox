@@ -1,0 +1,125 @@
+import { createHash } from "node:crypto";
+import { z } from "zod";
+import { DEFAULT_SEEDS, EVALUATION_MODEL_VERSION, EvaluationRequestSchema, type DemandSource } from "@/lib/contracts/evaluation";
+import type { Scenario } from "@/lib/contracts/scenario";
+import type { AssembledEvaluation } from "@/lib/evaluation/assemble";
+import { evaluateSitesResumable, seedList } from "@/lib/evaluation/evaluate";
+import { buildStoredComparison, type ComparisonStore } from "@/lib/evaluation/store";
+import type { ScenarioRepository } from "./repository";
+import { parseScenario } from "./model";
+import { ScenarioRunError, type ScenarioExecution, type ScenarioExecutionStore } from "./run-store";
+
+export const DEFAULT_SCENARIO_RUN_BUDGET_UNITS = 1200;
+export const StartScenarioRunSchema = z.object({
+  confirm: z.boolean().default(false),
+  idempotencyKey: z.string().trim().min(1).max(200).optional(),
+  demandSource: z.enum(["huff", "jev"]).default("huff"),
+}).strict();
+const canonical = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k,v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+};
+export function scenarioExecutionKey(scenario: Scenario, demandSource: DemandSource) {
+  return createHash("sha256").update(canonical({
+    model: EVALUATION_MODEL_VERSION, assembly: "hac81-scenario-v1", projectId: scenario.projectId,
+    profileVersion: scenario.profileVersion, siteIds: scenario.siteIds,
+    overrides: scenario.overrides, layoutId: scenario.layoutId, demandSource,
+  })).digest("hex");
+}
+function publicExecution(e: ScenarioExecution) {
+  return {
+    status: e.status, runId: e.id, scenarioId: e.scenarioId, comparisonId: e.comparisonId,
+    runIds: e.runIds, cached: e.cached, costUnits: e.costUnits,
+    completedSiteIds: Object.keys(e.completed),
+  };
+}
+export function createScenarioRunner({
+  scenarios, executions, comparisons, prepare, newId,
+  now = () => new Date(), budgetUnits = DEFAULT_SCENARIO_RUN_BUDGET_UNITS,
+  evaluate = evaluateSitesResumable,
+}: {
+  scenarios: Pick<ScenarioRepository, "get">;
+  executions: ScenarioExecutionStore; comparisons: ComparisonStore;
+  prepare: (scenario: Scenario, demandSource: DemandSource) => Promise<AssembledEvaluation>;
+  newId: () => string; now?: () => Date; budgetUnits?: number;
+  evaluate?: typeof evaluateSitesResumable;
+}) {
+  z.number().int().nonnegative().max(10_000_000).parse(budgetUnits);
+  async function scenario(projectId: string, id: string) {
+    const value = await scenarios.get(projectId, id);
+    if (!value) throw new ScenarioRunError("not_found", "Scenario not found");
+    return parseScenario(value);
+  }
+  async function read(projectId: string, scenarioId: string, runId: string) {
+    const job = await executions.get(projectId, runId);
+    if (!job || job.scenarioId !== scenarioId) throw new ScenarioRunError("not_found", "Scenario execution not found");
+    return job;
+  }
+  async function advance(projectId: string, scenarioId: string, runId: string, maxMs = 45_000) {
+    const existing = await read(projectId, scenarioId, runId);
+    if (existing.status === "succeeded" || existing.status === "failed") return publicExecution(existing);
+    const token = newId();
+    let job = await executions.acquire(projectId, runId, token, now(), maxMs + 30_000);
+    if (!job) throw new ScenarioRunError("busy", "Scenario execution is already being advanced");
+    const deadlineAt = now().getTime() + maxMs;
+    const save = async (next: ScenarioExecution) => { job = await executions.save(next, token, now()); return job; };
+    try {
+      const value = await scenario(projectId, scenarioId);
+      if (!job.request) {
+        // Reservation precedes assembly (and any opt-in Jev calls) or simulation.
+        const source = job.effectiveKey === scenarioExecutionKey(value, "jev") ? "jev" : "huff";
+        const assembled = await prepare(value, source);
+        const request = EvaluationRequestSchema.parse(assembled.request);
+        const actualSites = request.sites.map(s => s.siteId).sort();
+        if (request.projectId !== projectId || request.profileVersion !== value.profileVersion || canonical(actualSites) !== canonical(value.siteIds) || seedList(request).length * actualSites.length * 2 !== job.costUnits)
+          throw new ScenarioRunError("invalid", "Prepared evaluation does not match the reserved scenario");
+        await save({ ...job, status: "running", request, assembly: { findings: assembled.findings, assumptions: assembled.assumptions } });
+      }
+      if (!job.request) throw new ScenarioRunError("invalid", "Execution request unavailable");
+      const comparisonId = `${job.id}:comparison`;
+      let record = await comparisons.load(projectId, comparisonId);
+      if (!record) {
+        const progress = await evaluate(job.request, {
+          completed: job.completed, deadlineAt, now: () => now().getTime(),
+          onSite: async (siteId, outcome) => { await save({ ...job!, completed: { ...job!.completed, [siteId]: outcome } }); },
+        });
+        if (progress.status === "partial") return publicExecution(job);
+        record = buildStoredComparison(comparisonId, job.request, progress.run);
+        if (job.assembly) record.evaluation.assembly = job.assembly;
+        try { await comparisons.save(record); }
+        catch (error) {
+          // Crash after a successful comparison write must not duplicate it on resume.
+          const saved = await comparisons.load(projectId, comparisonId);
+          if (!saved) throw error;
+          record = saved;
+        }
+      }
+      await save({ ...job, status: "succeeded", comparisonId: record.id, runIds: record.runs.map(r => r.id) });
+      return publicExecution(job);
+    } catch (error) {
+      // Transient dependency/storage failures retain checkpoints for a later advance.
+      if (error instanceof ScenarioRunError && error.code === "invalid" && job)
+        await save({ ...job, status: "failed" });
+      throw error;
+    } finally { await executions.release(projectId, runId, token); }
+  }
+  return {
+    async start(projectId: string, scenarioId: string, raw: unknown) {
+      const input = StartScenarioRunSchema.parse(raw);
+      const value = await scenario(projectId, scenarioId);
+      const id = newId();
+      const reservation = await executions.reserve({
+        id, projectId, scenarioId, idempotencyKey: input.idempotencyKey ?? id,
+        effectiveKey: scenarioExecutionKey(value, input.demandSource),
+        costUnits: value.siteIds.length * (value.overrides.seedSet?.value.length ?? DEFAULT_SEEDS) * 2,
+        budgetUnits, confirm: input.confirm, now: now(),
+      });
+      if (reservation.status === "needs_confirmation") return reservation;
+      return advance(projectId, scenarioId, reservation.execution.id);
+    },
+    advance,
+    async get(projectId: string, scenarioId: string, runId: string) { return publicExecution(await read(projectId, scenarioId, runId)); },
+  };
+}
+export type ScenarioRunner = ReturnType<typeof createScenarioRunner>;

@@ -1,0 +1,83 @@
+import { describe, expect, it, vi } from "vitest";
+import { createScenarioRunner } from "./run";
+import { createMemoryScenarioExecutionStore } from "./run-store-memory";
+import { createRootScenario, deriveScenario } from "./model";
+import { createMemoryComparisonStore } from "@/lib/evaluation/store";
+import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
+import { FIXTURE_PERSONA_SET, SITE_A, SITE_B } from "@/lib/demand/fixtures";
+import { evaluateSitesResumable } from "@/lib/evaluation/evaluate";
+
+const config = {
+  hours: { weekday: { openMin: 360, closeMin: 1080 }, weekend: { openMin: 360, closeMin: 1080 } },
+  stations: { planned: 2, usableSf: 1800, sfPerStation: 100 },
+  prices: { avgTicketUsd: 6.5 }, staff: { headcount: 2, wageUsdPerHour: 16 },
+  costs: { cogsPctOfRevenue: .28 },
+  lease: { sf: 1800, askingRentUsdPerSfYear: 24, tripleNet: false, buildoutUsd: 30000, leaseTermMonths: 60 },
+  calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
+};
+const base = createRootScenario({ id: "s1", projectId: "p1", siteIds: [SITE_A.id, SITE_B.id], profileVersion: 1,
+  label: "Baseline", author: "founder", createdAt: "2026-11-14T16:00:00.000Z",
+  overrides: { seedSet: { value: [2, 7], unit: "seeds", origin: "default", evidenceIds: ["fixture"] } },
+});
+function setup(budgetUnits = 1200) {
+  const scenarios = new Map([[base.id, base]]);
+  const executions = createMemoryScenarioExecutionStore();
+  const comparisons = createMemoryComparisonStore({ p1: 1 });
+  let sequence = 0;
+  const prepare = vi.fn(async () => ({ request: EvaluationRequestSchema.parse({
+    projectId: "p1", profileId: "profile-v1", profileVersion: 1, synthetic: true,
+    city: "houston", category: "coffee", priceTier: "mid", personaSet: FIXTURE_PERSONA_SET,
+    demandSource: "huff", seeds: 2, seedSet: [2, 7],
+    sites: [SITE_A, SITE_B].map(storefront => ({ siteId: storefront.id, storefront, config })),
+  }), findings: [], assumptions: {} }));
+  const evaluate = vi.fn(evaluateSitesResumable);
+  const runner = createScenarioRunner({
+    scenarios: { get: async (projectId, id) => scenarios.get(id)?.projectId === projectId ? scenarios.get(id)! : null },
+    executions, comparisons, prepare, evaluate, budgetUnits,
+    newId: () => `execution-${++sequence}`, now: () => new Date("2026-11-14T17:00:00.000Z"),
+  });
+  return { runner, prepare, evaluate, scenarios, comparisons, executions };
+}
+
+describe("scenario execution", () => {
+  it("reserves no work and does not assemble or simulate an over-budget request", async () => {
+    const { runner, prepare, evaluate } = setup(7);
+    expect(await runner.start("p1", "s1", {})).toEqual({ status: "needs_confirmation", costUnits: 8, remainingUnits: 7 });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+  it("requires explicit confirmation and records confirmed cost", async () => {
+    const { runner, executions } = setup(7);
+    const result = await runner.start("p1", "s1", { confirm: true, idempotencyKey: "confirmed" });
+    expect(result).toMatchObject({ status: "succeeded", cached: false, costUnits: 8 });
+    expect((await executions.get("p1", "execution-1"))?.costUnits).toBe(8);
+  });
+  it("reuses a parent's cached comparison for an equivalent fork at zero cost", async () => {
+    const { runner, scenarios, prepare, evaluate } = setup();
+    const parent = await runner.start("p1", "s1", {});
+    scenarios.set("s2", deriveScenario(base, { label: "Same inputs" }, { id: "s2", createdAt: "2026-11-14T17:00:00.000Z", author: "founder" }));
+    const child = await runner.start("p1", "s2", {});
+    expect(child).toMatchObject({ status: "succeeded", cached: true, costUnits: 0, scenarioId: "s2" });
+    expect("comparisonId" in child && "comparisonId" in parent && child.comparisonId).toBe("comparisonId" in parent && parent.comparisonId);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+  it("repeating an idempotency key returns the same run without new work", async () => {
+    const { runner, prepare } = setup();
+    const a = await runner.start("p1", "s1", { idempotencyKey: "same" });
+    const b = await runner.start("p1", "s1", { idempotencyKey: "same" });
+    expect(b).toEqual(a);
+    expect(prepare).toHaveBeenCalledTimes(1);
+  });
+  it("cannot read or advance another project's execution", async () => {
+    const { runner } = setup();
+    const a = await runner.start("p1", "s1", {});
+    if (!("runId" in a)) throw new Error("Expected execution");
+    await expect(runner.advance("p2", "s1", a.runId)).rejects.toMatchObject({ code: "not_found" });
+    await expect(runner.start("p2", "s1", {})).rejects.toMatchObject({ code: "not_found" });
+  });
+  it("rejects unknown confirmation/budget fields", async () => {
+    await expect(setup().runner.start("p1", "s1", { confirm: "yes" })).rejects.toThrow();
+    await expect(setup().runner.start("p1", "s1", { budgetUnits: 999999 })).rejects.toThrow();
+  });
+});
