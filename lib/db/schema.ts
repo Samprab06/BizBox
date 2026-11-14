@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 export * from "./public-schema";
 import {
   boolean,
+  bigint,
   check,
   foreignKey,
   index,
@@ -55,6 +56,64 @@ export const projects = pgTable("projects", {
     .notNull()
     .defaultNow(),
 });
+
+/** One durable consultant conversation and cost ledger per project. */
+export const copilotThreads = pgTable(
+  "copilot_threads",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull().default(0),
+    nextEventSeq: integer("next_event_seq").notNull().default(1),
+    state: jsonb("state").$type<Record<string, unknown>>().notNull(),
+    costMicrousd: bigint("cost_microusd", { mode: "number" })
+      .notNull()
+      .default(0),
+    costCapMicrousd: bigint("cost_cap_microusd", { mode: "number" }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("copilot_threads_revision_nonnegative", sql`${t.revision} >= 0`),
+    check("copilot_threads_event_seq_positive", sql`${t.nextEventSeq} > 0`),
+    check(
+      "copilot_threads_cost_valid",
+      sql`${t.costMicrousd} >= 0 AND ${t.costCapMicrousd} >= ${t.costMicrousd} AND ${t.costCapMicrousd} <= 9007199254740991`,
+    ),
+  ],
+);
+
+export const copilotThreadEvents = pgTable(
+  "copilot_thread_events",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => copilotThreads.projectId, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").$type<unknown>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.seq] }),
+    check("copilot_thread_events_seq_positive", sql`${t.seq} > 0`),
+  ],
+);
+
+export const copilotThreadCommits = pgTable(
+  "copilot_thread_commits",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => copilotThreads.projectId, { onDelete: "cascade" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    inputHash: text("input_hash").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.idempotencyKey] })],
+);
 
 export const profiles = pgTable(
   "profiles",

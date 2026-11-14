@@ -5,6 +5,9 @@ export { layouts } from "./layout-schema";
 export {
   investigationStatus,
   projects,
+  copilotThreads,
+  copilotThreadEvents,
+  copilotThreadCommits,
   profiles,
   personaSets,
   behaviorTables,

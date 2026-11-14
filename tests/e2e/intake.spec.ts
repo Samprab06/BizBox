@@ -206,7 +206,7 @@ test("answers survive a reload", async ({ page }) => {
 });
 
 test("answers saved under another project id do not leak into this project", async ({ page }) => {
-  // Only houston-coffee resolves to a project (other ids render "Project unavailable"),
+  // Only houston-coffee and generated p-… IDs resolve (other ids render "Project unavailable"),
   // so another project's session is simulated by writing its storage key directly.
   const other = JSON.stringify({
     profile: { concept: { value: "Other project concept", origin: "founder" } },
