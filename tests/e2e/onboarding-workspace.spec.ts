@@ -32,6 +32,14 @@ const tab = (page: Page, name: "Text" | "Voice") =>
 const log = (page: Page) =>
   assistant(page).getByRole("log", { name: "Conversation" });
 
+/** Opens the phone sheet once the workspace has rendered (navigation closes the sheet). */
+async function openWorkspaceConsultant(page: Page) {
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Workspace" }),
+  ).toBeVisible();
+  await openConsultant(page);
+}
+
 const reply = (assistantMessage: string) => ({
   persisted: false,
   draft: {},
@@ -207,7 +215,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await completeOnboarding(page);
   state.live = true;
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
 
   // A draft survives the Voice tab, a trip to Edit brief and back, and a reload.
@@ -218,7 +226,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await page.getByRole("link", { name: "Edit brief" }).click();
   await expect(title(page)).toHaveText("Review your business");
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(composer(page)).toHaveValue("Is parking nearby?");
   await page.reload();
   await openConsultant(page);
@@ -265,6 +273,9 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await composer(page).fill("Second thought");
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Edit all fields" }).click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Business profile" }),
+  ).toBeVisible();
   await openConsultant(page);
   await expect(composer(page)).toHaveValue("Second thought");
   await composer(page).press("Enter");
@@ -275,7 +286,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await closeConsultant(page);
   await page.getByRole("link", { name: "Back to guided setup" }).click();
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(log(page)).toContainText("Noted from the form.");
   await expect(log(page)).toContainText("Second thought");
 });
@@ -286,7 +297,7 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
   await mockServices(page);
   await completeOnboarding(page);
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(
     assistant(page).getByText("Offline", { exact: true }),
   ).toBeVisible();
@@ -297,7 +308,7 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
   );
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(composer(page)).toHaveValue("Anyone there?");
   await expect(log(page)).not.toContainText("Anyone there?");
 });
@@ -346,7 +357,7 @@ test("the workspace plays no animation under reduced motion", async ({
   await mockServices(page);
   await completeOnboarding(page);
   await page.getByRole("link", { name: "Open workspace" }).click();
-  await openConsultant(page);
+  await openWorkspaceConsultant(page);
   await expect(assistant(page).getByText("Offline", { exact: true })).toBeVisible();
   const running = () =>
     page.evaluate(
