@@ -1,3 +1,5 @@
+import { DEMO_PROJECT_ID } from "@/lib/projects/ids";
+
 export type SimulatorSearch = Record<string, string | string[] | undefined>;
 
 /** Preserve comparison, site, run and future replay parameters on legacy links. */
@@ -7,7 +9,7 @@ export function simulatorDestination(search: SimulatorSearch) {
     search.project.length > 0 &&
     search.project.length <= 300
       ? search.project
-      : "houston-coffee";
+      : DEMO_PROJECT_ID;
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(search)) {
     for (const item of Array.isArray(value)
