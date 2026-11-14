@@ -186,11 +186,15 @@ export default function Neighborhood({
           warm * 0.7,
           sky,
         );
-        const brightness = 0.37 + 0.63 * light + warm * 0.2;
-        const red = Math.min(1, brightness + 0.15 * warm);
-        const blue = Math.min(1, brightness + 0.1 * (1 - light) - 0.1 * warm);
+        const brightness = 0.86 + 0.14 * Math.sqrt(light);
+        const red = Math.min(1, brightness - 0.035 * (1 - light) + 0.08 * warm);
+        const green = Math.min(1, brightness + 0.025 * warm);
+        const blue = Math.min(
+          1,
+          brightness + 0.035 * (1 - light) - 0.05 * warm,
+        );
         tileset.style = new Cesium3DTileStyle({
-          color: `rgb(${Math.round(red * 255)}, ${Math.round(brightness * 255)}, ${Math.round(blue * 255)})`,
+          color: `rgb(${Math.round(red * 255)}, ${Math.round(green * 255)}, ${Math.round(blue * 255)})`,
         });
       });
 
