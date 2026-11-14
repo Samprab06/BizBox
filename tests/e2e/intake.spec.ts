@@ -181,6 +181,24 @@ test("invalid values typed in the profile panel put the field back in the still-
   }
 });
 
+test("invalid values typed in the profile panel show a validation message", async ({ page }) => {
+  test.fixme(true, "HAC-41: invalid profile-panel edits are saved with no visible message");
+  await openIntake(page);
+  await answerAll(page);
+
+  const invalid = [
+    { label: "Monthly rent ceiling ($)", value: "-5", message: "Enter a nonnegative whole number." },
+    { label: "Buildout budget ($)", value: "1e3", message: "Enter a nonnegative whole number." },
+    { label: "Staff on shift", value: "0", message: "Enter a positive whole number." },
+  ];
+  for (const { label, value, message } of invalid) {
+    await profileField(page, label).fill(value);
+    await expect(page.getByText(message)).toBeVisible();
+    await profileField(page, label).fill("2");
+    await expect(page.getByText(message)).toHaveCount(0);
+  }
+});
+
 test("answers survive a reload", async ({ page }) => {
   await openIntake(page);
   await answerAll(page, 3);
@@ -346,7 +364,7 @@ test("the whole intake can be completed with the keyboard only", async ({ page, 
 test("has no serious or critical accessibility violations", async ({ page }) => {
   test.fixme(
     true,
-    'axe "listitem" (serious): the conversation <ol role="log"> loses its list role, so its <li> children have no list parent',
+    'HAC-40: axe "listitem" (serious): the conversation <ol role="log"> loses its list role, so its <li> children have no list parent',
   );
   await openIntake(page);
   await expectNoA11yViolations(page);
