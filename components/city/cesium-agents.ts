@@ -29,6 +29,8 @@ export function createAgentLayer(
   Cesium: Cesium,
   viewer: Viewer,
   site: Position,
+  /** Other shortlisted sites, drawn as smaller muted pins. */
+  others: readonly Position[] = [],
 ): AgentLayer {
   const { Cartesian3, Color } = Cesium;
   const points = viewer.scene.primitives.add(
@@ -85,9 +87,30 @@ export function createAgentLayer(
       color: color("#818cf8", 0.9),
     }),
   });
+  const otherMaterial = Cesium.Material.fromType("Color", {
+    color: color("#94a3b8", 0.8),
+  });
+  const otherPins = others.map((position) => ({
+    position,
+    line: lines.add({ width: 2, material: otherMaterial }),
+    head: points.add({
+      pixelSize: 9,
+      color: color("#94a3b8"),
+      outlineColor: color("#ffffff", 0.8),
+      outlineWidth: 1,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    }),
+  }));
   const placeSite = () => {
     pin.positions = [at(site, 0), at(site, PIN_METERS)];
     pinHead.position = at(site, PIN_METERS);
+    for (const other of otherPins) {
+      other.line.positions = [
+        at(other.position, 0),
+        at(other.position, PIN_METERS * 0.6),
+      ];
+      other.head.position = at(other.position, PIN_METERS * 0.6);
+    }
   };
   placeSite();
 

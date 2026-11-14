@@ -151,6 +151,22 @@ export default async function Page({
   const cityTrips = site
     ? exampleTrips(makeDemoInputs().schedule, demo[0].run, site)
     : undefined;
+  // HAC-77 Places: shortlisted sites that have a real fixture map point.
+  const cityPlaces = (
+    getPreviewProject(projectId) ?? getPreviewProject("houston-coffee")
+  )?.sites.flatMap((candidate) => {
+    const point = getSiteFixture(candidate.id);
+    return point
+      ? [
+          {
+            id: candidate.id,
+            label: candidate.address,
+            longitude: point.longitude,
+            latitude: point.latitude,
+          },
+        ]
+      : [];
+  });
   return (
     <SimulatorContext projectId={projectId}>
       <WorkspaceView
@@ -171,6 +187,7 @@ export default async function Page({
           }}
           data={demo}
           cityTrips={cityTrips}
+          cityPlaces={cityPlaces}
           plan={demoPlan}
           coordinates={coordinates}
           matterport={

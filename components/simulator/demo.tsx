@@ -7,6 +7,8 @@ import { replayAt } from "../replay/replay-state";
 import { interiorFrame } from "./interior-state";
 import type { DemoData, demoPlan } from "./fixture";
 import { exampleTripsLabel } from "@/components/city/example-trips";
+import { playbackMinutes } from "./playback";
+import type { CityPlace } from "./neighborhood";
 import type { AgentTrip } from "@/lib/sim/trips";
 import type { SimulatorStory } from "./stored";
 import { DecisionHeader } from "@/components/decision/decision-header";
@@ -72,6 +74,7 @@ export function SimulatorDemo({
   profileVersion,
   matterport,
   cityTrips,
+  cityPlaces,
 }: {
   projectId: string;
   robustness?: RobustnessSummary | null;
@@ -90,6 +93,8 @@ export function SimulatorDemo({
   matterport?: MatterportConfig;
   /** HAC-77: modeled trips for this run, drawn in the 3D city when present. */
   cityTrips?: AgentTrip[];
+  /** HAC-77: shortlisted sites for the city Places menu. */
+  cityPlaces?: CityPlace[];
 }) {
   useWorkspaceReport(projectId, context);
   const { openMin, closeMin } = data[0].run.metrics;
@@ -133,7 +138,7 @@ export function SimulatorDemo({
     let request = 0;
     function tick(now: number) {
       if (document.hidden) return;
-      const elapsed = Math.min(now - previous, 100);
+      const elapsed = now - previous;
       previous = now;
       accumulated += elapsed;
       // Keep camera input independent of React/overlay updates on high-Hz displays.
@@ -144,7 +149,8 @@ export function SimulatorDemo({
         setMinute((value) =>
           Math.min(
             playbackEnd,
-            value + (elapsedForFrame * speed) / (coordinates ? 55 : 125),
+            value +
+              playbackMinutes(elapsedForFrame, speed, Boolean(coordinates)),
           ),
         );
       }
@@ -393,6 +399,7 @@ export function SimulatorDemo({
             {...coordinates}
             minute={minute}
             agents={cityAgents}
+            places={cityPlaces}
             quality={quality}
             locationLabel={context.siteId ?? "Selected location"}
             controls={

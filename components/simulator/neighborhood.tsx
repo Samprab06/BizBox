@@ -34,6 +34,14 @@ import { sampleTripFrame } from "@/components/city/trip-frame";
 import type { DayResult } from "@/lib/sim/contracts";
 import type { AgentTrip } from "@/lib/sim/trips";
 
+/** HAC-77: a shortlisted site the camera can fly to. */
+export type CityPlace = {
+  id: string;
+  label: string;
+  longitude: number;
+  latitude: number;
+};
+
 /** HAC-77: modeled customer trips to draw, with the label shown beside the layer. */
 export type CityAgents = {
   trips: AgentTrip[];
@@ -51,6 +59,7 @@ export default function Neighborhood({
   locationLabel,
   controls,
   agents,
+  places = [],
 }: {
   longitude: number;
   latitude: number;
@@ -61,6 +70,8 @@ export default function Neighborhood({
   locationLabel: string;
   controls?: ReactNode;
   agents?: CityAgents;
+  /** Shortlisted sites for the Places menu; the first matching map point is the selected site. */
+  places?: CityPlace[];
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -74,6 +85,14 @@ export default function Neighborhood({
   const updateScene = useRef<() => void>(() => {});
   const agentsRef = useRef(agents);
   const agentLayerRef = useRef<AgentLayer | undefined>(undefined);
+  const flyToRef = useRef<(place: CityPlace) => void>(() => {});
+  const othersRef = useRef(places);
+  const [placeId, setPlaceId] = useState(
+    () =>
+      places.find(
+        (place) => place.longitude === longitude && place.latitude === latitude,
+      )?.id ?? "",
+  );
   const [agentsVisible, setAgentsVisible] = useState(true);
   const agentsVisibleRef = useRef(agentsVisible);
   useEffect(() => {
@@ -211,7 +230,17 @@ export default function Neighborhood({
       viewer.scene.primitives.add(tileset);
       const city = viewer;
       // HAC-77: the selected-site pin and modeled customers, driven by the page clock.
-      const agentLayer = createAgentLayer(Cesium, city, [longitude, latitude]);
+      const agentLayer = createAgentLayer(
+        Cesium,
+        city,
+        [longitude, latitude],
+        othersRef.current
+          .filter(
+            (place) =>
+              place.longitude !== longitude || place.latitude !== latitude,
+          )
+          .map((place) => [place.longitude, place.latitude] as const),
+      );
       agentLayer.setVisible(agentsVisibleRef.current);
       agentLayerRef.current = agentLayer;
       disposers.push(() => {
@@ -511,6 +540,27 @@ export default function Neighborhood({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-10), roll: 0 },
       });
+      // HAC-77 Places: fly to a shortlisted site with the same framing.
+      flyToRef.current = (place) => {
+        if (closed || city.isDestroyed()) return;
+        city.camera.flyTo({
+          destination: Cartesian3.fromDegrees(
+            place.longitude,
+            place.latitude - 0.0037,
+            150,
+          ),
+          orientation: {
+            heading: 0,
+            pitch: CesiumMath.toRadians(-10),
+            roll: 0,
+          },
+          duration: 1.2,
+        });
+        city.scene.requestRender();
+      };
+      disposers.push(() => {
+        flyToRef.current = () => {};
+      });
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
       let revision = 0;
@@ -669,7 +719,30 @@ export default function Neighborhood({
       />
 
       <div className="absolute top-3 left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted">
-        <span>{locationLabel}</span>
+        {places.length > 1 ? (
+          <label className="flex items-center gap-2">
+            Places
+            <select
+              aria-label="Places"
+              value={placeId}
+              onChange={(event) => {
+                const place = places.find((p) => p.id === event.target.value);
+                setPlaceId(event.target.value);
+                if (place) flyToRef.current(place);
+              }}
+              className="rounded border border-white/15 bg-viewport-surface px-1.5 py-1 text-viewport-ink"
+            >
+              {!placeId && <option value="">{locationLabel}</option>}
+              {places.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span>{locationLabel}</span>
+        )}
         {status === "failed" && (
           <button
             type="button"
