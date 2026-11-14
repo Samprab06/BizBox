@@ -20,6 +20,7 @@ import {
   CopilotReadResultSchema,
   ComparisonMetricSchema,
   HourMetricSchema,
+  CopilotComparisonBindingSchema,
   type CopilotReadToolName,
   type CopilotReadResult,
   type CopilotSearchPreferences,
@@ -36,6 +37,10 @@ export type ScopedSiteSearchResult = {
   profileVersion: number;
   result: SiteSearchResult;
 };
+export type CopilotStoredComparison = StoredComparison & {
+  /** Scoped execution receipt; the saved source assembly is never rewritten for a cache hit. */
+  copilotBinding?: z.infer<typeof CopilotComparisonBindingSchema>;
+};
 export type CopilotReadDependencies = {
   scenarios: Pick<ScenarioService, "get">;
   search?: (
@@ -48,12 +53,13 @@ export type CopilotReadDependencies = {
     projectId: string,
     scenarioId: string,
     signal: AbortSignal,
-  ) => Promise<StoredComparison | null>;
+  ) => Promise<CopilotStoredComparison | null>;
   runForId?: (
     projectId: string,
     runId: string,
     signal: AbortSignal,
-  ) => Promise<{ comparison: StoredComparison; run: SiteRun } | null>;
+    scenarioId?: string,
+  ) => Promise<{ comparison: CopilotStoredComparison; run: SiteRun } | null>;
   /** HAC-89 owns classification. Only a scoped delegation receipt crosses this boundary. */
   diagnose?: (
     projectId: string,
@@ -131,7 +137,7 @@ export function createCopilotReadTools(deps: CopilotReadDependencies) {
     return row;
   }
   function verifyComparison(
-    record: StoredComparison,
+    record: CopilotStoredComparison,
     scenario: Scenario,
     context: CopilotMutationContext,
   ) {
@@ -141,8 +147,19 @@ export function createCopilotReadTools(deps: CopilotReadDependencies) {
     const comparison = SiteComparisonSchema.parse(record.comparison);
     const runs = record.runs.map((run) => SiteRunSchema.parse(run));
     const snapshot = record.evaluation.assembly?.scenario;
+    const binding =
+      record.copilotBinding === undefined
+        ? undefined
+        : CopilotComparisonBindingSchema.parse(record.copilotBinding);
+    if (binding)
+      requireScope(
+        binding.projectId === context.projectId &&
+          binding.scenarioId === scenario.id &&
+          binding.comparisonId === record.id,
+      );
     requireScope(
-      snapshot?.id === scenario.id &&
+      !!snapshot &&
+        (snapshot.id === scenario.id || binding?.scenarioId === scenario.id) &&
         snapshot.layoutId === scenario.layoutId &&
         isDeepStrictEqual(snapshot.overrides, scenario.overrides) &&
         comparison.id === record.id &&
@@ -229,10 +246,13 @@ export function createCopilotReadTools(deps: CopilotReadDependencies) {
       context.projectId,
       runId,
       context.signal,
+      context.scenarioId,
     );
     context.signal.throwIfAborted();
     if (!found) throw new ReadBoundaryError("NOT_FOUND");
-    const scenarioId = found.comparison.evaluation.assembly?.scenario?.id;
+    const scenarioId =
+      found.comparison.copilotBinding?.scenarioId ??
+      found.comparison.evaluation.assembly?.scenario?.id;
     if (!scenarioId) throw new ReadBoundaryError("SCOPE_CONFLICT");
     const scenario = await scenarioFor(scenarioId, context);
     verifyComparison(found.comparison, scenario, context);

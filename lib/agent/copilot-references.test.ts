@@ -161,6 +161,65 @@ describe("copilot reference display resolver", () => {
       limitation: expect.stringContaining("not a new panel"),
     });
   });
+  it("resolves a cached fork via its trusted execution receipt while keeping the saved source assembly", () => {
+    const { scope, comparison, scenario, child } = setup();
+    const fork = deriveScenario(
+      scenario,
+      { label: "Equivalent fork" },
+      {
+        id: "fork",
+        author: "agent",
+        rationale: "Review fork",
+        createdAt: "2026-11-14T01:00:00Z",
+      },
+    );
+    const forkPrice = { ...child, id: "fork-price", parentId: fork.id };
+    const bound = {
+      ...comparison,
+      copilotBinding: {
+        projectId: scope.projectId,
+        scenarioId: fork.id,
+        comparisonId: comparison.id,
+        executionId: "cached-execution",
+      },
+    };
+    const reference = {
+      kind: "price_acceptance_shift",
+      comparisonId: comparison.id,
+      scenarioId: forkPrice.id,
+      siteId: scenario.siteIds[0],
+    };
+    expect(
+      resolveCopilotReference({
+        ...scope,
+        scenarios: [fork, forkPrice],
+        comparisons: [bound],
+        reference,
+        issuedReferences: [reference],
+      }),
+    ).toMatchObject({ value: expect.any(Array) });
+    expect(bound.evaluation.assembly?.scenario?.id).toBe(scenario.id);
+    const wrong = {
+      ...fork,
+      overrides: {
+        staffHeadcount: {
+          value: 9,
+          unit: "people",
+          origin: "default" as const,
+          evidenceIds: ["action"],
+        },
+      },
+    };
+    expect(() =>
+      resolveCopilotReference({
+        ...scope,
+        scenarios: [wrong, forkPrice],
+        comparisons: [bound],
+        reference,
+        issuedReferences: [reference],
+      }),
+    ).toThrow();
+  });
   it("refuses foreign artifacts, missing parent context and wrong scenario lineage", () => {
     const { scope, comparison, child, scenario, resolve } = setup();
     const reference = {

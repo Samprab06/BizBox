@@ -20,12 +20,18 @@ BEGIN
       UNION ALL
       SELECT nodes.path || child.key, child.value
       FROM nodes
-      CROSS JOIN LATERAL jsonb_each(
-        CASE WHEN jsonb_typeof(nodes.value) = 'object' THEN nodes.value ELSE '{}'::jsonb END
+      CROSS JOIN LATERAL (
+        SELECT key, value FROM jsonb_each(
+          CASE WHEN jsonb_typeof(nodes.value) = 'object' THEN nodes.value ELSE '{}'::jsonb END
+        )
+        UNION ALL
+        SELECT (ordinality - 1)::text AS key, value FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(nodes.value) = 'array' THEN nodes.value ELSE '[]'::jsonb END
+        ) WITH ORDINALITY
       ) AS child
     )
     SELECT path, value FROM nodes
-    WHERE value ->> 'origin' = 'founder' AND value ? 'evidenceIds'
+    WHERE value ->> 'origin' = 'founder'
   LOOP
     IF inherited IS NULL OR (inherited #> leaf.path) IS DISTINCT FROM leaf.value THEN
       RAISE EXCEPTION 'Agent cannot introduce or change founder provenance at %', leaf.path

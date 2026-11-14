@@ -65,6 +65,15 @@ artifacts. Delta bounds are B.low−A.high / B.high−A.low, explicitly **not pa
 confidence**. Hour data stays representative-run-only; cached acceptance resolves
 per persona with its limitation. No model-authored number is accepted as a value.
 
+Equivalent forks may reuse an earlier comparison. The production loader attaches
+a trusted `copilotBinding` from the selected scenario's **succeeded execution**;
+it never rewrites the artifact's original scenario/assembly. Reads and display
+resolution validate that binding plus identical effective profile/site/layout/
+override inputs. The server can use `createPostgresCopilotToolDependencies().reads`
+to load these bound artifacts for display. A binding is not a model argument and
+must not be fabricated from requested IDs. Load each comparison ID once when
+resolving references; identical cached artifacts need not be duplicated.
+
 `fixtures/copilot.ts` provides deterministic invented example artifacts for
 HAC-83/88 integration. It is never a production fallback. HAC-83 must carry the
 existing investigation/Jev/Nessie tool surface into the durable conversation

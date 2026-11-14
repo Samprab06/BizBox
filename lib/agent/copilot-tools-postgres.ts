@@ -20,7 +20,7 @@ import type { CopilotMutationDependencies } from "./copilot-tools";
 import type { CopilotReadDependencies } from "./copilot-read-tools";
 
 /** Lazy production composition over existing scoped stores; construction performs no I/O. */
-export function createPostgresCopilotTools(
+export function createPostgresCopilotToolDependencies(
   hooks: Pick<CopilotReadDependencies, "diagnose" | "focusView"> = {},
 ) {
   const repository = createPostgresScenarioRepository();
@@ -57,8 +57,16 @@ export function createPostgresCopilotTools(
     if (!latest?.comparisonId) return null;
     const record = await comparisons.load(projectId, latest.comparisonId);
     signal.throwIfAborted();
-    if (record?.evaluation.assembly?.scenario?.id !== scenarioId) return null;
-    return record;
+    if (!record?.evaluation.assembly?.scenario?.id) return null;
+    return {
+      ...record,
+      copilotBinding: {
+        projectId,
+        scenarioId,
+        comparisonId: record.id,
+        executionId: latest.id,
+      },
+    };
   };
   const mutations: CopilotMutationDependencies = {
     scenarios,
@@ -224,16 +232,43 @@ export function createPostgresCopilotTools(
         result,
       };
     },
-    async runForId(projectId, runId, signal) {
+    async runForId(projectId, runId, signal, scenarioId) {
       const comparison = await investigation.comparisonForRun(projectId, runId);
       signal.throwIfAborted();
       const run = comparison?.runs.find((run) => run.id === runId);
-      return comparison && run ? { comparison, run } : null;
+      if (!comparison || !run) return null;
+      if (!scenarioId) return { comparison, run };
+      const executions = await repository.listRuns(projectId, scenarioId);
+      signal.throwIfAborted();
+      const linked = executions.find(
+        (execution) =>
+          execution.status === "succeeded" &&
+          execution.comparisonId === comparison.id,
+      );
+      if (!linked) return null;
+      return {
+        comparison: {
+          ...comparison,
+          copilotBinding: {
+            projectId,
+            scenarioId,
+            comparisonId: comparison.id,
+            executionId: linked.id,
+          },
+        },
+        run,
+      };
     },
   };
-  return createCopilotTools({
+  return {
     mutations,
     reads,
     runs: { scenarios, runner: createPostgresScenarioRunner() },
-  });
+  };
+}
+
+export function createPostgresCopilotTools(
+  hooks: Pick<CopilotReadDependencies, "diagnose" | "focusView"> = {},
+) {
+  return createCopilotTools(createPostgresCopilotToolDependencies(hooks));
 }

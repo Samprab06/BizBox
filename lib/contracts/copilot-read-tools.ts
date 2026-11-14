@@ -3,6 +3,15 @@ import { ScenarioValueReferenceSchema } from "./copilot-tools";
 
 const id = z.string().trim().min(1).max(200);
 const hour = z.number().int().min(0).max(23);
+/** Trusted loader receipt from an existing succeeded scenario execution, not a model argument. */
+export const CopilotComparisonBindingSchema = z
+  .object({
+    projectId: id,
+    scenarioId: id,
+    comparisonId: id,
+    executionId: id,
+  })
+  .strict();
 export const CopilotSearchPreferencesSchema = z
   .object({
     minSizeSqFt: z.number().finite().positive().optional(),

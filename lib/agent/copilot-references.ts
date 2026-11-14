@@ -1,13 +1,16 @@
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
-import { CopilotReadReferenceSchema } from "@/lib/contracts/copilot-read-tools";
+import {
+  CopilotReadReferenceSchema,
+  CopilotComparisonBindingSchema,
+} from "@/lib/contracts/copilot-read-tools";
 import { PriceAcceptanceShiftReferenceSchema } from "@/lib/contracts/copilot-tools";
 import { ScenarioSchema, type Scenario } from "@/lib/contracts/scenario";
 import {
   EvaluationRequestSchema,
   EvaluationResultSchema,
 } from "@/lib/contracts/evaluation";
-import type { StoredComparison } from "@/lib/evaluation/store";
+import type { CopilotStoredComparison } from "./copilot-read-tools";
 import { acceptanceAt } from "@/lib/evaluation/evaluate";
 import { flattenOverrides } from "@/lib/scenario/model";
 
@@ -25,7 +28,7 @@ export function resolveCopilotReference(input: {
   issuedReferences: readonly unknown[];
   projectId: string;
   scenarios: readonly Scenario[];
-  comparisons: readonly StoredComparison[];
+  comparisons: readonly CopilotStoredComparison[];
 }) {
   const reference = CopilotReferenceSchema.parse(input.reference);
   const key = JSON.stringify(reference);
@@ -61,7 +64,18 @@ export function resolveCopilotReference(input: {
       request.profileVersion !== result.profileVersion
     )
       return fail();
-    const scenarioId = found.evaluation.assembly?.scenario?.id;
+    const binding =
+      found.copilotBinding === undefined
+        ? undefined
+        : CopilotComparisonBindingSchema.parse(found.copilotBinding);
+    if (
+      binding &&
+      (binding.projectId !== input.projectId ||
+        binding.comparisonId !== found.id)
+    )
+      return fail();
+    const scenarioId =
+      binding?.scenarioId ?? found.evaluation.assembly?.scenario?.id;
     if (!scenarioId) return fail();
     const scenario = scenarioFor(scenarioId);
     const snapshot = found.evaluation.assembly!.scenario!;
@@ -185,7 +199,9 @@ export function resolveCopilotReference(input: {
       const record = comparisonFor(reference.comparisonId);
       const scenario = scenarioFor(reference.scenarioId);
       if (
-        scenario.parentId !== record.evaluation.assembly?.scenario?.id ||
+        scenario.parentId !==
+          (record.copilotBinding?.scenarioId ??
+            record.evaluation.assembly?.scenario?.id) ||
         scenario.profileVersion !== record.evaluation.request.profileVersion
       )
         return fail();

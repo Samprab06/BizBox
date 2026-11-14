@@ -45,6 +45,13 @@ const candidatesSchema = z
     evidenceIds: z.array(z.string().min(1)).min(1),
   })
   .strict();
+const priceEvidenceSchema = z
+  .object({
+    comparisonId: z.string().min(1).max(200).nullable(),
+    siteIds: z.array(z.string().min(1).max(200)).max(8),
+    status: z.enum(["cached_curve", "unavailable", "tier_requires_run"]),
+  })
+  .strict();
 export type CopilotMutationDependencies = {
   scenarios: Pick<ScenarioService, "get" | "create">;
   priceAcceptance?: (
@@ -188,11 +195,13 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
                     averageTicketCents: Math.round(input.avg_ticket * 100),
                   }
                 : { kind: "price_tier", tier: input.tier! };
-            priceAcceptance = await deps.priceAcceptance(
-              context.projectId,
-              parent,
-              change,
-              context.signal,
+            priceAcceptance = priceEvidenceSchema.parse(
+              await deps.priceAcceptance(
+                context.projectId,
+                parent,
+                change,
+                context.signal,
+              ),
             );
             if (
               priceAcceptance.siteIds.some(
@@ -201,7 +210,8 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
               new Set(priceAcceptance.siteIds).size !==
                 priceAcceptance.siteIds.length ||
               (priceAcceptance.status === "cached_curve" &&
-                (!priceAcceptance.comparisonId ||
+                (change.kind !== "price" ||
+                  !priceAcceptance.comparisonId ||
                   priceAcceptance.siteIds.length !== parent.siteIds.length))
             )
               return rejected(
@@ -327,6 +337,7 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
             ? { idempotencyKey: context.idempotencyKey }
             : undefined,
         );
+        context.signal.throwIfAborted();
         const diff = diffScenarios(parent, child);
         const reference = (scenarioId: string, path: string) => ({
           kind: "scenario_value" as const,

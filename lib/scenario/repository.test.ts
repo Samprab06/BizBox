@@ -238,6 +238,25 @@ describe.skipIf(!enabled)("scenario Postgres adapter [local]", () => {
     );
   });
 
+  it("does not bypass the raw SQL founder guard through missing evidence or nested arrays", async () => {
+    const attempts = [
+      { staffHeadcount: { value: 3, origin: "founder" } },
+      {
+        unexpected: [
+          {
+            nested: { value: 3, origin: "founder", evidenceIds: ["invented"] },
+          },
+        ],
+      },
+    ];
+    for (const [index, overrides] of attempts.entries()) {
+      await expect(client`INSERT INTO scenarios (id,project_id,parent_id,site_ids,profile_version,overrides,label,author,rationale)
+        VALUES (${`malformed-founder-${index}`},${projectId},'sc-1','["site-a","site-b"]',1,${client.json(overrides)},'x','agent','why')`).rejects.toThrow(
+        /Agent cannot introduce or change founder provenance/,
+      );
+    }
+  });
+
   it("recovers concurrent durable action retries through mapped Postgres conflicts", async () => {
     const one = createScenarioService({ repository, newId: randomUUID });
     const two = createScenarioService({ repository, newId: randomUUID });

@@ -116,7 +116,11 @@ function setup() {
     { id: fixture.profile.id, snapshot: fixture.profile },
   ]);
   mocks.listRuns.mockResolvedValue([
-    { status: "succeeded", comparisonId: fixture.comparison.id },
+    {
+      id: "execution-example",
+      status: "succeeded",
+      comparisonId: fixture.comparison.id,
+    },
   ]);
   mocks.load.mockResolvedValue(fixture.comparison);
   mocks.assemble.mockResolvedValue({
@@ -213,6 +217,61 @@ describe("production copilot composition", () => {
       ),
     ).toMatchObject({ status: "needs_confirmation", reason: "human_run" });
     expect(mocks.runner.start).not.toHaveBeenCalled();
+  });
+  it("reads an equivalent fork's cached comparison without rewriting the source scenario", async () => {
+    const { registry, scenario, context, comparison } = setup();
+    const fork = await registry.execute(
+      "fork_scenario",
+      {
+        from_id: scenario.id,
+        label: "Proposed setup",
+        rationale: "Review an equivalent fork",
+      },
+      context,
+    );
+    if (fork.status !== "created") throw new Error("Expected fork");
+    const scoped = {
+      ...context,
+      scenarioId: fork.scenarioId,
+      runConfirmed: true,
+    };
+    mocks.runner.start.mockResolvedValue({
+      status: "succeeded",
+      scenarioId: fork.scenarioId,
+      runId: "cached-execution",
+      comparisonId: comparison.id,
+    });
+    expect(
+      await registry.execute(
+        "run_scenario",
+        { scenario_id: fork.scenarioId },
+        scoped,
+      ),
+    ).toMatchObject({ status: "succeeded", comparisonId: comparison.id });
+    expect(
+      await registry.execute(
+        "compare_scenarios",
+        { a: scenario.id, b: fork.scenarioId },
+        scoped,
+      ),
+    ).toMatchObject({
+      status: "compared",
+      rankingChanged: false,
+      comparisonIdA: comparison.id,
+      comparisonIdB: comparison.id,
+    });
+    const run = comparison.runs[0];
+    const hour =
+      comparison.evaluation.result.sites[0].representative[run.dayType]
+        .hourly[0].hour;
+    expect(
+      await registry.execute("explain_hour", { run_id: run.id, hour }, scoped),
+    ).toMatchObject({ status: "explained", scenarioId: fork.scenarioId });
+    expect(comparison.evaluation.assembly?.scenario?.id).toBe(scenario.id);
+    mocks.listRuns.mockResolvedValue([]);
+    expect(
+      await registry.execute("explain_hour", { run_id: run.id, hour }, scoped),
+    ).toMatchObject({ code: "NOT_FOUND" });
   });
   it("checks every site's area without running a scenario or calling a paid panel", async () => {
     const { registry, scenario, context } = setup();

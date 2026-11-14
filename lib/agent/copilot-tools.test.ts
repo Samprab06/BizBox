@@ -350,6 +350,22 @@ describe("mutation boundaries", () => {
     ).toMatchObject({ status: "unsupported" });
     expect(rows.size).toBe(1);
   });
+  it("validates cached adapter receipts before creating any scenario version", async () => {
+    const { service, context, rows } = await setup();
+    const registry = createCopilotMutationTools({
+      scenarios: service,
+      priceAcceptance: async () => ({
+        status: "unavailable",
+        comparisonId: null,
+        siteIds: [],
+        rawMetric: 42,
+      }),
+    });
+    expect(
+      await registry.execute("set_price", cases[6].args, context),
+    ).toMatchObject({ code: "INVALID_INPUT" });
+    expect(rows.size).toBe(1);
+  });
 
   it("matches the shared service path with identical declared provenance", async () => {
     const { parent, registry, service, rows, context } = await setup();
