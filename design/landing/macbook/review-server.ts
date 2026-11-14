@@ -10,10 +10,12 @@ const root = resolve(here, "../../..");
 const roots = {
   "/assets/": resolve(root, "public/landing-assets/macbook"),
   "/three/": resolve(root, "node_modules/three"),
+  "/story/": resolve(root, "design/landing/story"),
 };
 const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
   ".json": "application/json",
   ".glb": "model/gltf-binary",
   ".png": "image/png",
@@ -28,18 +30,40 @@ const server = createServer(async (request, response) => {
       const origin =
         process.env.BIZBOX_REVIEW_PRODUCT_ORIGIN ?? "http://127.0.0.1:4194";
       const url = new URL("/landing-workspace", origin);
+      const simulation = new URL(
+        process.env.BIZBOX_REVIEW_SIMULATOR_URL ??
+          "/projects/houston-coffee/simulator",
+        origin,
+      );
       if (!["http:", "https:"].includes(url.protocol))
         throw new Error("Invalid product origin");
+      if (!["http:", "https:"].includes(simulation.protocol))
+        throw new Error("Invalid simulation URL");
       response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ workspaceUrl: url.href }));
+      response.end(
+        JSON.stringify({
+          workspaceUrl: url.href,
+          simulationUrl: simulation.href,
+          productUrl: new URL("/projects/houston-coffee/intake", origin).href,
+        }),
+      );
+      return;
+    }
+    if (pathname === "/story-scene.js") {
+      response.writeHead(200, {
+        "Content-Type": "text/javascript; charset=utf-8",
+      });
+      response.end('import "/review.js";');
       return;
     }
     let file =
-      pathname === "/"
-        ? resolve(here, "review.html")
-        : pathname === "/review.js" || pathname === "/screen-transform.js"
-          ? resolve(here, pathname.slice(1))
-          : undefined;
+      pathname === "/story" || pathname === "/story/"
+        ? resolve(root, "design/landing/story/index.html")
+        : pathname === "/"
+          ? resolve(here, "review.html")
+          : pathname === "/review.js" || pathname === "/screen-transform.js"
+            ? resolve(here, pathname.slice(1))
+            : undefined;
     for (const [prefix, directory] of Object.entries(roots)) {
       if (!pathname.startsWith(prefix)) continue;
       const candidate = resolve(directory, pathname.slice(prefix.length));

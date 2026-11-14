@@ -8,10 +8,11 @@
 </style>
 <header><div><h1>BizBox · MacBook asset review</h1><p id="screen-description">Live platform UI · interactive 3D neighborhood.</p></div><span id="status" role="status">Loading model…</span></header>
 <canvas id="scene" aria-label="Interactive sourced MacBook model"></canvas>
-<div id="screen-surface" hidden><iframe id="product-screen" title="BizBox actual platform: 3D map and consultant" hidden allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+<div id="screen-surface" hidden><img id="screen-poster" alt="Illustrative BizBox simulation interface" hidden><iframe id="product-screen" title="BizBox actual platform: 3D map and consultant" hidden allow="fullscreen" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
 <style>
   #screen-surface{position:fixed;top:0;left:0;transform-origin:0 0;will-change:transform;clip-path:polygon(0 0,44.1% 0,44.7% 2.9%,55.3% 2.9%,55.9% 0,100% 0,100% 100%,0 100%);z-index:1;overflow:hidden}#screen-surface[hidden]{display:none}#product-screen{position:absolute;z-index:auto;clip-path:none;will-change:auto}
 </style>
+<style>#screen-poster{position:absolute;top:0;left:0;display:block;object-fit:fill}#screen-poster[hidden]{display:none}</style>
 <p id="error" role="alert" hidden></p>
 <footer><label>Lid motion <input id="lid" aria-label="Lid motion test" type="range" min="0" max="0.7" step="0.01" value="0"></label><a id="open-workspace" target="_blank" rel="noopener">Open product screen</a><a href="/assets/credits.html">Model credits</a></footer>
 <script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>

@@ -1,10 +1,20 @@
 # MacBook screen source — HAC-115
 
-## Current screen: live actual-platform adapter
+## Current screen: approved provisional GPT Image
 
-This bridge reuses current platform components. The later board announcement assigns the canonical final Text/Voice workspace to **HAC-128** at `/projects/[id]/workspace`; use that owner's supported UI/3D-map composition once ready. Do not present this bridge layout as the final accepted product UI or substitute the reference's city photograph for a geographic map. Final canonical screen parity remains an integration dependency.
+Akshar approved `public/landing-assets/macbook/bizbox-simulation-screen-gpt-v2.png` for now; final screen parity is deferred until the product UI is finished. It follows the actual dark `/simulator-demo` controls and the existing Assistant/Text/Voice design. It is a generated illustrative neighborhood, not actual geographic data or a simulated result. Native output is **1558 × 1009**, not 4K. See the [exact prompt](imagegen-screen-v2-prompt.md) and [provenance](imagegen-screen-v2.json).
 
-The intended MacBook display is now the **live `/landing-workspace` route**, not the retained 2D PNG below. The route composes the platform's existing components:
+The default hardware review uses this image. `/story` crosses from the image into one live simulator iframe, then keeps that iframe during the camera return. `?live` directly selects the live screen for inspection. Full-resolution source surfaces replace the prior 1/16-size intermediate raster wrapper; fullscreen uses native viewport dimensions with no CSS projection.
+
+The simulator reference image included only our controls: provider imagery was hidden before capture. No Vexcel or Matterport imagery was exported into the generated asset. The generated background in the landing is the existing immersive-v3 Houston sunset asset.
+
+HAC-128's canonical Text/Voice workspace is now merged. The final supported 3D map and assistant combination remains a follow-up once that UI settles.
+
+## Retained live actual-platform adapter
+
+This bridge reuses current platform components. The later board announcement assigns the canonical final Text/Voice workspace to **HAC-128** at `/projects/[id]/workspace`; use that owner's supported UI/3D-map composition once ready. Do not present this bridge layout as the final accepted product UI or substitute the reference's city photograph for a geographic map. Final canonical screen parity is deferred by Akshar’s latest decision.
+
+The retained **live `/landing-workspace` route** is an optional shared-component composition. The route composes the platform's existing components:
 
 - `components/simulator/neighborhood.tsx`: the actual Cesium/Vexcel 3D neighborhood used in `/projects/houston-coffee/simulator`.
 - `components/simulator/viewport.tsx`: the actual spatial viewport, fullscreen control and error behavior.
@@ -55,7 +65,7 @@ The current application map route does **not** place a consultant/chat panel alo
 
 The separate HAC-112 dark-glass onboarding handoff was inspected read-only. Its own documentation identifies the final workspace as a scripted design preview over a city photograph, not a geographic map or live agent. It was not substituted here or represented as shipped functionality.
 
-The new live adapter above resolves the shared 3D map/consultant composition for this handoff. HAC-118 still owns its later property-selection story integration, and HAC-120 owns synchronized simulation narration. The default MacBook now displays that live adapter; it does not recapture Vexcel imagery into a PNG or GLB. The older image remains available only for explicit legacy texture inspection, preserving the earlier work.
+The new live adapter above resolves the shared 3D map/consultant composition for this handoff. HAC-118 still owns its later property-selection story integration, and HAC-120 owns synchronized simulation narration. The optional live adapter does not recapture Vexcel imagery into a PNG or GLB. The older image remains available only for explicit legacy texture inspection, preserving the earlier work.
 
 ## Verification
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screenTransform } from "./screen-transform.js";
+import { screenTransform, cssScreenTransform } from "./screen-transform.js";
 
 type Point = { x: number; y: number };
 const width = 1600,
@@ -71,5 +71,22 @@ describe("live product screen projection", () => {
     expect(
       screenTransform([{ x: NaN, y: 0 }, ...cases[0].slice(1)], width, height),
     ).toBeNull();
+  });
+  it("keeps a full-resolution UI aligned after CSS coefficient serialization", () => {
+    const corners = cases[1];
+    const matrix = cssScreenTransform(corners, width, height)!;
+    expect(matrix[15]).toBe(16);
+    const css = matrix.map((value) => Number(value.toFixed(6)));
+    [
+      [0, 0],
+      [width, 0],
+      [width, height],
+      [0, height],
+    ].forEach(([x, y], i) => {
+      const actual = project(css, x, y);
+      expect(
+        Math.hypot(actual.x - corners[i].x, actual.y - corners[i].y),
+      ).toBeLessThan(0.05);
+    });
   });
 });

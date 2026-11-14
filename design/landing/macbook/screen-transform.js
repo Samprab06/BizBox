@@ -57,3 +57,18 @@ export function screenTransform(corners, width, height) {
   ];
   return matrix.every(Number.isFinite) ? matrix : null;
 }
+
+/**
+ * Same projective mapping with larger homogeneous coefficients. This avoids a
+ * tiny intermediary DOM layer (which rasterizes the UI at low resolution) and
+ * keeps CSS serialization error small without shrinking the source surface.
+ * @param {{ x: number, y: number }[]} corners
+ * @param {number} width
+ * @param {number} height
+ * @returns {number[] | null}
+ */
+export function cssScreenTransform(corners, width, height) {
+  return (
+    screenTransform(corners, width, height)?.map((value) => value * 16) ?? null
+  );
+}
