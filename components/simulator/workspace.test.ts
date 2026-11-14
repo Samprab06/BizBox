@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceView } from "@/components/workspace-view";
 import { fixture } from "@/lib/agent/__fixtures__/plan";
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), render: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  load: vi.fn(),
+  render: vi.fn(),
+  currentProfileVersion: vi.fn(),
+}));
 vi.mock("@/components/simulator/demo", () => ({
   SimulatorDemo: (props: unknown) => {
     mocks.render(props);
@@ -16,7 +20,10 @@ vi.mock("@/components/shell/context-bar", () => ({
     children,
 }));
 vi.mock("@/lib/evaluation/store-postgres", () => ({
-  createPostgresComparisonStore: () => ({ load: mocks.load }),
+  createPostgresComparisonStore: () => ({
+    load: mocks.load,
+    currentProfileVersion: mocks.currentProfileVersion,
+  }),
 }));
 
 import SimulatorPage from "@/app/(pages)/projects/[projectId]/simulator/page";
@@ -25,6 +32,7 @@ describe("simulator workspace integration", () => {
   beforeEach(() => {
     mocks.load.mockReset();
     mocks.render.mockClear();
+    mocks.currentProfileVersion.mockReset().mockResolvedValue(null);
   });
   it("selects the existing simulator navigation item", () => {
     const html = renderToStaticMarkup(
@@ -104,6 +112,55 @@ describe("simulator workspace integration", () => {
             run: expect.objectContaining({ siteId: "demo-cafe" }),
           }),
         ]),
+      }),
+    );
+  });
+  it("forwards the saved robustness and detects an older profile without rerunning a model", async () => {
+    const stored = fixture().comparison;
+    stored.evaluation.robustness = {
+      headline:
+        "Site A leads under current assumptions; Site B leads below 0.70× demand.",
+      leaderSiteId: stored.evaluation.result.ranking[0],
+      tiedSiteIds: [],
+      mostInfluential: null,
+      robustTo: ["rent"],
+      jevHuffAgree: false,
+      missingInformation: [],
+    };
+    mocks.load.mockResolvedValue(stored);
+    mocks.currentProfileVersion.mockResolvedValue(
+      stored.evaluation.result.profileVersion + 1,
+    );
+    renderToStaticMarkup(
+      await SimulatorPage({
+        params: Promise.resolve({ projectId: "saved-project" }),
+        searchParams: Promise.resolve({ comparison: stored.id }),
+      }),
+    );
+    expect(mocks.currentProfileVersion).toHaveBeenCalledWith("saved-project");
+    expect(mocks.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        robustness: stored.evaluation.robustness,
+        outdated: true,
+      }),
+    );
+  });
+  it("retains the valid stored run if its freshness check is unavailable", async () => {
+    const stored = fixture().comparison;
+    mocks.load.mockResolvedValue(stored);
+    mocks.currentProfileVersion.mockRejectedValue(
+      new Error("Version read unavailable"),
+    );
+    renderToStaticMarkup(
+      await SimulatorPage({
+        params: Promise.resolve({ projectId: "saved-project" }),
+        searchParams: Promise.resolve({ comparison: stored.id }),
+      }),
+    );
+    expect(mocks.render).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileVersionUnknown: true,
+        context: expect.objectContaining({ phase: "ready" }),
       }),
     );
   });

@@ -17,6 +17,7 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
     <WorkspaceView
       projectId={projectId}
       view="comparison"
+      decisionLayout
       siteId={typeof site === "string" ? site : undefined}
     >
       {project && (
