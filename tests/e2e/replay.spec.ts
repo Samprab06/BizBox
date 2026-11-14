@@ -43,9 +43,10 @@ test.describe("stored representative replay", () => {
     await expect(
       page.getByRole("region", { name: "Stored customer events" }),
     ).toBeVisible();
+    await expect(page.getByText("Stay probability at arrival")).toBeVisible();
     await expect(
       page.getByText(
-        "Persona details and choice probabilities are not retained in these stored events.",
+        "No Jev panel answers were used for this persona in this run.",
       ),
     ).toBeVisible();
     await page.getByRole("button", { name: "Replay", exact: true }).click();

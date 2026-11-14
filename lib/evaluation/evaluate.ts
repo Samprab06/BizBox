@@ -693,6 +693,7 @@ export function canonicalEvents(events: readonly SimEvent[]) {
     customerId: string;
     minute: number;
     type: "arrived" | "joined" | "served" | "departed" | "abandoned";
+    arrival?: Pick<Extract<SimEvent, { type: "arrival" }>, "personaId" | "lineLength" | "stayProbability">;
   }[] = [];
   for (const e of events) {
     if (e.type === "arrival") {
@@ -700,6 +701,11 @@ export function canonicalEvents(events: readonly SimEvent[]) {
         customerId: e.customerId,
         minute: e.timeMin,
         type: "arrived",
+        arrival: {
+          personaId: e.personaId,
+          lineLength: e.lineLength,
+          stayProbability: e.stayProbability,
+        },
       });
       if (e.decision === "leave")
         out.push({
