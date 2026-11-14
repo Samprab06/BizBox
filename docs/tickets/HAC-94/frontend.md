@@ -56,3 +56,39 @@ Run narrow checks first; manager serializes the final four repository checks.
 Checkpoint verification: owned ESLint, TypeScript and all three server-rendered
 component tests passed. Browser chart/theme/interaction checks and page mounts
 remain pending at this component checkpoint; this is not full ticket acceptance.
+
+## Site integration checkpoint
+
+The server site page creates authored example data via `lib/insights/fixture` and
+passes only typed aggregates through `SiteScreen` to `SiteDetail`. No client
+imports that fixture builder or the simulation engine. Non-fixture sites mount a
+GET-only `InsightsWorkspace` independently of inventory success: explicit saved
+comparison links work without a local intake. The loader validates canonical
+comparison, project, site, saved profile/version (when present), aggregate seed
+count and synthetic source identity. It aborts abandoned reads, supports retry,
+and retains an outdated-scenario warning. Legacy records without insights stay
+unavailable; opening the page never evaluates or backfills data.
+
+The initial browser audit found the dark header/callout area inheriting dark-theme
+text over a transparent white parent. The panel now paints its local solid surface;
+no global token changed. A separate collection failure from evaluation importing
+fixture JSON was resolved by the backend's fixture-only module extraction, with
+no Playwright loader change.
+
+Narrow verification passed: owned ESLint, TypeScript, seven component/parser
+checks, and seven Chromium browser cases. Browser cases exercise 375/768/1280 px,
+weekday/weekend and revenue toggles, keyboard table/chart interaction, exact peak
+callout values, saved/outdated/legacy/retry/profile states, reduced motion, serious
+and critical axe violations, actual SVG tick contrast >=4.5:1 and line contrast
+
+> =3:1 on both paper and viewport surfaces. At 375, panel width is 277px, each plot
+> 235px and body width 375px with no horizontal overflow; at 1280, panel width 902px,
+> full plots 860px and paired plots 399px. Screenshots are in
+> `/tmp/hac94-evidence/` (`panel-375-paper.png`, `panel-375-viewport.png`,
+> `panel-1280-paper.png`, `panel-1280-viewport.png`, plus demand chart crops).
+
+The city drawer is still pending the manager's fixed71 integration and is not
+claimed complete. It will read the selected stored site's retained insights; the
+simulator's different one-seed fixture will explicitly report unavailable rather
+than borrowing this example aggregate. Final four repository checks and the full
+browser-engine matrix follow that integration.

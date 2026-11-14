@@ -33,7 +33,7 @@ export function InsightsPanel({
       aria-labelledby={id + "-title"}
       data-surface={surface}
       className="mt-8 min-w-0 border-t border-[var(--sw-line)] pt-5"
-      style={{ color: "var(--sw-ink)" }}
+      style={{ color: "var(--sw-ink)", backgroundColor: "var(--sw-surface)" }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

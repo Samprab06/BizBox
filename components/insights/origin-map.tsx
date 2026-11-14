@@ -85,9 +85,9 @@ export function OriginMap({ day }: { day: InsightsDay }) {
       >
         <title id={id + "-title"}>Modeled served-origin hex map</title>
         <desc id={id + "-desc"}>
-          {authored ? "Authored synthetic geography. " : ""}Darker cells mean
-          more modeled served customers. A cross marks the site. Exact mean and
-          seed ranges are in the data table.
+          {authored ? "Authored synthetic geography. " : ""}Fill intensity
+          increases with modeled served customers. A cross marks the site. Exact
+          mean and seed ranges are in the data table.
         </desc>
         {map.cells.map((cell) => (
           <polygon

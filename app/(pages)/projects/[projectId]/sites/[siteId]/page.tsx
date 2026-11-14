@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import { WorkspaceView } from "@/components/workspace-view";
+import { SiteScreen } from "@/components/site/site-screen";
+import { buildFixtureInsights } from "@/lib/insights/fixture";
 
 export default async function SitePage({
   params,
@@ -23,5 +25,17 @@ export default async function SitePage({
   ) {
     notFound();
   }
-  return <WorkspaceView projectId={projectId} view="site" siteId={siteId} />;
+  const fixtureInsights = project.sites.some((site) => site.id === siteId)
+    ? buildFixtureInsights({ siteId })
+    : undefined;
+  return (
+    <WorkspaceView projectId={projectId} view="site" siteId={siteId}>
+      <SiteScreen
+        key={siteId}
+        project={project}
+        siteId={siteId}
+        fixtureInsights={fixtureInsights}
+      />
+    </WorkspaceView>
+  );
 }

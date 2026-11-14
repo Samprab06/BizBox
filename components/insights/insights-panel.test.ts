@@ -1,7 +1,7 @@
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildFixtureInsights } from "@/lib/insights/model";
+import { buildFixtureInsights } from "@/lib/insights/fixture";
 import { InsightsPanel } from "./insights-panel";
 
 describe("Insights presentation", () => {
