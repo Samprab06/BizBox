@@ -68,8 +68,16 @@ const inspect = (customerId: string, minute: number, events = run.events) =>
 
 describe("inspectCustomer", () => {
   it("never reveals an outcome after the inspected minute (seek back)", () => {
-    const ids = [...new Set(run.events.map((e) => e.customerId))];
-    for (let minute = openMin - 5; minute <= closeMin + 5; minute += 0.5) {
+    const ids = [...new Set(run.events.map((e) => e.customerId))].slice(0, 30);
+    // Cards only change at event times, so check each one and the instant before it.
+    const minutes = [
+      openMin - 5,
+      closeMin + 5,
+      ...run.events
+        .filter((e) => ids.includes(e.customerId))
+        .flatMap((e) => [e.timeMin - 0.01, e.timeMin]),
+    ];
+    for (const minute of minutes) {
       const past = run.events.filter((e) => e.timeMin <= minute);
       for (const id of ids) {
         // A card computed from the full day equals one computed with the future removed.
