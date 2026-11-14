@@ -65,7 +65,7 @@ export function canonicalOverrides(overrides: Overrides): Overrides {
 const normalizeSites = (siteIds: readonly string[]) => [...siteIds].sort();
 
 /** Validates and freezes a scenario. Site IDs are sorted so the set has one form. */
-export function parseScenario(input: unknown): Scenario {
+export function parseScenario(input: unknown, parent?: Scenario): Scenario {
   const raw = input as Partial<Scenario> | null;
   const candidate =
     raw && typeof raw === "object"
@@ -87,6 +87,31 @@ export function parseScenario(input: unknown): Scenario {
         .map((i) => `${i.path.join(".") || "scenario"}: ${i.message}`)
         .join("; "),
     );
+  if (parent) {
+    if (
+      parsed.data.parentId !== parent.id ||
+      parsed.data.projectId !== parent.projectId
+    )
+      throw new ScenarioError(
+        "invalid",
+        "Scenario does not belong to this parent",
+      );
+    if (parsed.data.author === "agent") {
+      const inherited = flattenOverrides(parent.overrides);
+      for (const [key, wrapper] of Object.entries(
+        flattenOverrides(parsed.data.overrides),
+      )) {
+        if (
+          wrapper.origin === "founder" &&
+          !same(wrapper, inherited[key as ScenarioOverrideKey])
+        )
+          throw new ScenarioError(
+            "invalid",
+            `An agent cannot introduce or change origin founder at ${key}`,
+          );
+      }
+    }
+  }
   return deepFreeze(parsed.data);
 }
 
@@ -148,19 +173,23 @@ export function deriveScenario(
 ): Scenario {
   if (meta.id === parent.id)
     throw new ScenarioError("invalid", "A new version needs a new id");
-  return parseScenario({
-    id: meta.id,
-    projectId: parent.projectId,
-    parentId: parent.id,
-    siteIds: changes.siteIds ?? parent.siteIds,
-    profileVersion: changes.profileVersion ?? parent.profileVersion,
-    overrides: changes.overrides ?? parent.overrides,
-    layoutId: changes.layoutId === undefined ? parent.layoutId : changes.layoutId,
-    label: changes.label ?? parent.label,
-    author: meta.author,
-    rationale: meta.rationale ?? null,
-    createdAt: meta.createdAt,
-  });
+  return parseScenario(
+    {
+      id: meta.id,
+      projectId: parent.projectId,
+      parentId: parent.id,
+      siteIds: changes.siteIds ?? parent.siteIds,
+      profileVersion: changes.profileVersion ?? parent.profileVersion,
+      overrides: changes.overrides ?? parent.overrides,
+      layoutId:
+        changes.layoutId === undefined ? parent.layoutId : changes.layoutId,
+      label: changes.label ?? parent.label,
+      author: meta.author,
+      rationale: meta.rationale ?? null,
+      createdAt: meta.createdAt,
+    },
+    parent,
+  );
 }
 
 /* ---- diff ------------------------------------------------------------------ */
@@ -181,7 +210,8 @@ export function flattenOverrides(
   if (overrides.averageTicketCents)
     out.averageTicketCents = overrides.averageTicketCents;
   if (overrides.priceTier) out.priceTier = overrides.priceTier;
-  if (overrides.plannedStations) out.plannedStations = overrides.plannedStations;
+  if (overrides.plannedStations)
+    out.plannedStations = overrides.plannedStations;
   if (overrides.demandMultiplier)
     out.demandMultiplier = overrides.demandMultiplier;
   if (overrides.seedSet) out.seedSet = overrides.seedSet;
@@ -281,7 +311,11 @@ export function invertScenarioDiff(
 ): ScenarioDiff {
   return {
     sites: { added: [...diff.sites.removed], removed: [...diff.sites.added] },
-    scalars: diff.scalars.map((c) => ({ field: c.field, from: c.to, to: c.from })),
+    scalars: diff.scalars.map((c) => ({
+      field: c.field,
+      from: c.to,
+      to: c.from,
+    })),
     overrides: diff.overrides.map((c) => ({
       key: c.key,
       from: clone(c.to),
@@ -301,7 +335,10 @@ export function invertScenarioDiff(
  */
 export function applyScenarioDiff(a: Scenario, diff: ScenarioDiff): Scenario {
   const mismatch = (what: string) =>
-    new ScenarioError("diff_mismatch", `Diff does not start from this scenario: ${what}`);
+    new ScenarioError(
+      "diff_mismatch",
+      `Diff does not start from this scenario: ${what}`,
+    );
   const next: Record<string, unknown> = { ...a };
 
   const sites = new Set(a.siteIds);
@@ -342,7 +379,7 @@ export function scenarioLineage(
   const byId = new Map(scenarios.map((s) => [s.id, s]));
   const chain: Scenario[] = [];
   const seen = new Set<string>();
-  for (let id: string | null = leafId; id !== null; ) {
+  for (let id: string | null = leafId; id !== null;) {
     const s = byId.get(id);
     if (!s || seen.has(id))
       throw new ScenarioError("invalid", `Broken scenario lineage at ${id}`);

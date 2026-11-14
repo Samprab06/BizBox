@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   ScenarioAuthorSchema,
@@ -7,7 +9,9 @@ import {
 import type { ScenarioRepository } from "./repository";
 import {
   createRootScenario,
+  deriveScenario,
   diffScenarios,
+  parseScenario,
   type LayoutDiffHook,
 } from "./model";
 
@@ -56,6 +60,34 @@ export class ScenarioServiceError extends Error {
   }
 }
 
+/** Trusted retry metadata, separate from the user-controlled scenario payload. */
+export interface CreateScenarioOptions {
+  idempotencyKey?: string;
+}
+
+function retryId(projectId: string, key: string): string {
+  const hex = createHash("sha256")
+    .update(JSON.stringify(["scenario-create:v1", projectId, key]))
+    .digest("hex");
+  // UUID version/variant bits keep deterministic IDs acceptable to UUID columns.
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${((parseInt(hex[16], 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function uniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  if ("code" in error && error.code === "23505") return true;
+  if (
+    error instanceof Error &&
+    error.name === "ScenarioRepositoryError" &&
+    "code" in error &&
+    error.code === "conflict"
+  )
+    return true;
+  return (
+    "cause" in error && error.cause !== error && uniqueViolation(error.cause)
+  );
+}
+
 /** History operations use the same immutable repository for UI and future tools. */
 export function createScenarioService({
   repository,
@@ -98,9 +130,70 @@ export function createScenarioService({
   });
   return {
     get,
-    async create(projectId: string, raw: unknown): Promise<Scenario> {
+    async create(
+      projectId: string,
+      raw: unknown,
+      options?: CreateScenarioOptions,
+    ): Promise<Scenario> {
       const input = CreateScenarioSchema.parse(raw);
       const project = identity(projectId);
+      const key = options?.idempotencyKey;
+      if (key !== undefined) {
+        z.string()
+          .min(1)
+          .max(2000)
+          .refine((v) => !!v.trim())
+          .parse(key);
+        const fixedMeta = {
+          id: retryId(project, key),
+          createdAt: now().toISOString(),
+          author: input.author,
+          rationale: input.rationale,
+        };
+        const expected =
+          "fromId" in input
+            ? deriveScenario(
+                await get(project, input.fromId),
+                input.patch,
+                fixedMeta,
+              )
+            : createRootScenario({
+                ...input,
+                ...fixedMeta,
+                projectId: project,
+              });
+        const verify = (existing: Scenario) => {
+          const parsed = parseScenario(existing);
+          if (
+            !isDeepStrictEqual(
+              { ...parsed, createdAt: expected.createdAt },
+              expected,
+            )
+          )
+            throw new ScenarioServiceError(
+              "invalid",
+              "Retry key already belongs to a different scenario request",
+            );
+          return parsed;
+        };
+        const existing = await repository.get(project, expected.id);
+        if (existing) return verify(existing);
+        try {
+          return "fromId" in input
+            ? await repository.appendVersion(
+                project,
+                input.fromId,
+                input.patch,
+                fixedMeta,
+              )
+            : await repository.insert(expected);
+        } catch (error) {
+          if (!uniqueViolation(error)) throw error;
+          const raced = await repository.get(project, expected.id);
+          if (!raced) throw error;
+          return verify(raced);
+        }
+      }
       if ("fromId" in input) {
         await get(project, input.fromId);
         return repository.appendVersion(
