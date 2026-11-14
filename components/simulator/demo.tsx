@@ -151,6 +151,7 @@ export function SimulatorDemo({
   const previewFrame = replayAt(previewRun.events, previewMinute);
   const insightsControl = (
     <InsightsDrawer
+      projectId={projectId}
       siteId={context.siteId ?? base.run.siteId}
       comparisonId={context.comparisonId}
       data={context.phase === "ready" ? insights : undefined}
@@ -163,6 +164,7 @@ export function SimulatorDemo({
       outdated={outdated}
       profileVersionUnknown={profileVersionUnknown}
       profileVersion={profileVersion}
+      synthetic={context.synthetic}
     />
   );
 

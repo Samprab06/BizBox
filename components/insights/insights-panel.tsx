@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
+import { StationCallout, type StationCalloutDays } from "./station-callout";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { generateCoreCallouts } from "@/lib/insights/callouts";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
@@ -19,10 +20,14 @@ export function InsightsPanel({
   data,
   sourceLabel,
   surface,
+  stationSlot,
+  fixtureStationCallouts,
 }: {
   data: SiteInsights;
   sourceLabel?: string;
   surface?: "paper" | "viewport";
+  stationSlot?: ReactNode;
+  fixtureStationCallouts?: StationCalloutDays;
 }) {
   const [dayType, setDayType] = useState<"weekday" | "weekend">("weekday");
   const id = useId();
@@ -119,6 +124,17 @@ export function InsightsPanel({
               </p>
             </li>
           ))}
+          {(stationSlot || fixtureStationCallouts?.[dayType]) && (
+            <li className="min-w-0 rounded-card border border-[var(--sw-line)] p-4 md:col-span-2">
+              {stationSlot ??
+                (fixtureStationCallouts?.[dayType] && (
+                  <StationCallout
+                    value={fixtureStationCallouts[dayType]!}
+                    sourceLabel="Authored synthetic example · same baseline and paired seeds as these charts"
+                  />
+                ))}
+            </li>
+          )}
         </ul>
         <DemandChart day={day} />
         <div className="grid min-w-0 gap-5 lg:grid-cols-2">
