@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DecisionReplay } from "@/components/decision/decision-replay";
 import { DecisionHeader } from "@/components/decision/decision-header";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -52,7 +53,20 @@ export function ComparisonScreen({
   return (
     <div className="space-y-8">
       <DecisionHeader
-        decision="Which example site should I shortlist?"
+        compact
+        decision="Which example site should I choose?"
+        scene={
+          <DecisionReplay
+            example={leader.run}
+            label={`Synthetic weekday · ${leader.site.address}`}
+            fullReplayHref={comparisonLink(
+              project.id,
+              "replay",
+              visits,
+              leader.site.id,
+            )}
+          />
+        }
         answer={
           overlaps.length
             ? `${leader.site.address} and ${overlaps.map((row) => row.site.address).join(", ")} have overlapping modeled ranges under these assumptions.`
@@ -65,9 +79,8 @@ export function ComparisonScreen({
               default assumptions.
             </p>
             <p>
-              Contribution after included costs across 24 seeded scenarios. The
-              90% interval describes modeled outcomes, not a sales forecast.
-              This example does not include the live robustness sweep.
+              24 seeded scenarios · 90% modeled intervals, not a sales forecast.
+              No live robustness sweep.
             </p>
           </>
         }

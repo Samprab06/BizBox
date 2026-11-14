@@ -130,8 +130,21 @@ robustness lead to the evidence instead. Outdated results offer an explicit reru
 The synthetic example identifies its source and uses only its computed ranges;
 it does not imply that the live robustness sweep ran.
 
-The scene slot is an integration boundary for DS-4, not a completed simulator
-mount. HAC-69 owns the shell/navigation. The tested two-site saved comparison's
+The comparison scene reads its leader's canonical stored representative run,
+validates project/profile/site/day/run identity, and renders a manual 160 px
+schematic replay. Canonical `served` starts service and `departed` completes it.
+The scene has a time slider, counts and a full-replay link; it invents no measured
+floor geometry. Loading, unavailable and retry states never substitute another
+run. Examples reuse their existing seeded engine events.
+
+`WorkspaceView` accepts opt-in `decisionLayout` for comparison and simulator only.
+It retains navigation destinations, current state, the context bar and an h1;
+its navigation scrolls horizontally within the page at narrow widths and remains
+keyboard reachable. It removes duplicate project-name text, large title spacing
+and nested content-card padding. Other views keep their default wrapper.
+
+The simulator scene slot remains an integration boundary for DS-4.
+HAC-69 owns the remaining shell/navigation. The tested two-site saved comparison's
 decision, qualified answer and action fit at 1280×800 and 375×800 with the disclosure
 closed; the mobile action ends at approximately y787. Expanded evidence, stale
 warnings or longer multi-site summaries may need additional vertical space and

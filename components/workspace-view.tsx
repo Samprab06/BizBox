@@ -23,11 +23,14 @@ export function WorkspaceView({
   view,
   siteId,
   children,
+  decisionLayout = false,
 }: {
   projectId: string;
   view: View;
   siteId?: string;
   children?: ReactNode;
+  /** Compact only decision pages; context and all destinations remain unchanged. */
+  decisionLayout?: boolean;
 }) {
   const project = getPreviewProject(projectId);
   const selectedId = siteId ?? project?.sites[0]?.id;
@@ -37,7 +40,11 @@ export function WorkspaceView({
     <>
       <nav
         aria-label="Project views"
-        className="flex flex-wrap gap-1 border-b border-line pb-3"
+        className={
+          decisionLayout
+            ? "flex min-w-0 gap-1 overflow-x-auto border-b border-line pb-2 [&>a]:shrink-0"
+            : "flex flex-wrap gap-1 border-b border-line pb-3"
+        }
       >
         {(Object.keys(views) as View[]).map((item) => (
           <Link
@@ -51,15 +58,29 @@ export function WorkspaceView({
           </Link>
         ))}
       </nav>
-      <header className="my-10">
-        <p className="mb-2 text-sm font-medium text-muted">
-          {project?.name ?? projectId}
-        </p>
-        <h1 className="text-4xl font-semibold tracking-tight">{views[view]}</h1>
+      <header className={decisionLayout ? "my-2" : "my-10"}>
+        {!decisionLayout && (
+          <p className="mb-2 text-sm font-medium text-muted">
+            {project?.name ?? projectId}
+          </p>
+        )}
+        <h1
+          className={
+            decisionLayout
+              ? "text-lg font-semibold"
+              : "text-4xl font-semibold tracking-tight"
+          }
+        >
+          {views[view]}
+        </h1>
       </header>
       <section
         aria-label={view === "map" ? "Candidate locations" : views[view]}
-        className="rounded-2xl border border-line bg-white p-7"
+        className={
+          decisionLayout
+            ? "min-w-0"
+            : "rounded-2xl border border-line bg-white p-7"
+        }
       >
         {project ? (
           <>

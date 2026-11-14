@@ -1,6 +1,14 @@
 "use client";
 
-import { useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { useSearchParams } from "next/navigation";
+import { ComparisonDecisionScene } from "@/components/decision/comparison-decision-scene";
 import { DecisionHeader } from "@/components/decision/decision-header";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import Link from "next/link";
@@ -45,12 +53,30 @@ export function LiveComparisonScreen({
   example: ReactNode;
 }) {
   const { phase, candidates, payload } = controller;
-  const [assumption, setAssumption] = useState<SensitivityAssumption>("rent");
+  const requested = useSearchParams().get("sensitivity");
+  const requestedAssumption = assumptions.find(
+    ({ value }) => value === requested,
+  )?.value;
+  const [selection, setSelection] = useState<{
+    requested: SensitivityAssumption | undefined;
+    value: SensitivityAssumption;
+  }>({ requested: requestedAssumption, value: requestedAssumption ?? "rent" });
+  const assumption =
+    selection.requested === requestedAssumption
+      ? selection.value
+      : (requestedAssumption ?? "rent");
+  const setAssumption = (value: SensitivityAssumption) =>
+    setSelection({ requested: requestedAssumption, value });
   const sensitivitySelect = useRef<HTMLSelectElement>(null);
   const busy = phase === "running";
   const nextAssumption = assumptions.find(
     ({ value }) => value === payload?.robustness?.mostInfluential?.assumption,
   );
+  const readyComparisonId = payload?.comparisonId;
+  useEffect(() => {
+    if (requestedAssumption && readyComparisonId && !busy)
+      sensitivitySelect.current?.focus();
+  }, [requestedAssumption, readyComparisonId, busy]);
   const address = (siteId: string) =>
     candidates.find(({ candidate }) => candidate.id === siteId)?.candidate
       .address ?? siteId;
@@ -82,7 +108,15 @@ export function LiveComparisonScreen({
     <div className="min-w-0 space-y-8 [overflow-wrap:anywhere]">
       {payload && (
         <DecisionHeader
-          decision="Which site should I shortlist under changing assumptions?"
+          compact
+          decision="Which site should I choose?"
+          scene={
+            <ComparisonDecisionScene
+              projectId={project.id}
+              payload={payload}
+              address={address}
+            />
+          }
           answer={
             payload.robustness
               ? nameSites(payload.robustness.headline, payload, address)
@@ -91,8 +125,7 @@ export function LiveComparisonScreen({
           qualification={
             <>
               <p>
-                <EvidenceBadge kind="Simulation" /> Modeled outcomes, not
-                observed sales or a sales forecast.
+                <EvidenceBadge kind="Simulation" /> Modeled, not a forecast.
               </p>
               {payload.outdated && (
                 <p role="status" className="font-semibold text-warn">
@@ -459,6 +492,7 @@ function Sensitivity({
   const { sensitivity } = controller;
   return (
     <section
+      id="comparison-sensitivity"
       aria-label="Sensitivity"
       className="min-w-0 rounded-xl border border-line p-4"
     >
@@ -619,8 +653,8 @@ function RobustnessDetails({ payload }: { payload: LiveComparisonPayload }) {
         {robustness.jevHuffAgree !== null && (
           <li>
             {robustness.jevHuffAgree
-              ? "The Jev and Huff demand models agree on the leader."
-              : "The Jev and Huff demand models disagree on the leader: treat the ranking as uncertain."}
+              ? "Jev and Huff agree on the leader."
+              : "Jev and Huff disagree on the leader; ranking is uncertain."}
           </li>
         )}
       </ul>

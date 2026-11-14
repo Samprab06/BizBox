@@ -1,6 +1,7 @@
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 import {
   liveComparisonPayload,
+  liveComparisonRecord,
   mockLiveComparison,
 } from "./live-comparison-fixtures";
 
@@ -44,7 +45,7 @@ test("saved answer leads setup and its action selects and focuses the matching s
     .getByRole("button", { name: "Run comparison", exact: true })
     .click();
   const question = page.getByRole("heading", {
-    name: "Which site should I shortlist under changing assumptions?",
+    name: "Which site should I choose?",
   });
   const answer = page.getByRole("region", {
     name: "Recommendation robustness",
@@ -56,11 +57,21 @@ test("saved answer leads setup and its action selects and focuses the matching s
   await expect(answer).toContainText("falls below 0.70×");
   await expect(answer).not.toContainText(leader!);
   await expect(answer).toContainText("disagree on the leader");
+  const scene = page.getByRole("region", {
+    name: "Decision scene",
+    exact: true,
+  });
+  await expect(scene).toContainText("Stored weekday");
+  await expect(scene.getByRole("img")).toHaveAttribute(
+    "aria-label",
+    /in service/,
+  );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(question).toBeInViewport({ ratio: 1 });
   await expect(answer).toBeInViewport({ ratio: 1 });
   await expect(action).toBeInViewport({ ratio: 1 });
+  await expect(scene).toBeInViewport({ ratio: 1 });
   await testInfo.attach("desktop-decision", {
     body: await page.screenshot(),
     contentType: "image/png",
@@ -90,6 +101,11 @@ test("saved answer leads setup and its action selects and focuses the matching s
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await expect(scene).toBeInViewport({ ratio: 1 });
+  await expect(action).toBeInViewport({ ratio: 1 });
+  await scene.getByLabel("Decision replay time").focus();
+  await page.keyboard.press("End");
+  await expect(scene.getByRole("img")).toHaveAttribute("aria-label", /served/);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await action.focus();
   await page.keyboard.press("Enter");
@@ -177,4 +193,50 @@ test("the complete next action fits at 375×800", async ({ page }) => {
   await page.evaluate(() => window.scrollTo(0, 0));
   const bounds = await action.boundingBox();
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(800);
+});
+
+test("invalid stored scene identity fails honestly without substituting another run", async ({
+  page,
+}) => {
+  await mockLiveComparison(page);
+  await page.route("**/api/site-runs/*?*", (route) =>
+    route.fulfill({ status: 200, json: { run: { id: "wrong-run" } } }),
+  );
+  await page.goto("/projects/houston-coffee/comparison");
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "stored scene is unavailable" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry scene", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Decision scene", exact: true })
+      .getByRole("img"),
+  ).toHaveCount(0);
+});
+
+test("an explicit simulator sensitivity link selects and focuses the matching control without a model request", async ({
+  page,
+}) => {
+  await mockLiveComparison(page);
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/(comparisons|sensitivity|profiles)$/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      writes.push(request.url());
+  });
+  await page.goto(
+    `/projects/houston-coffee/comparison?comparison=${liveComparisonPayload.comparisonId}&sensitivity=price#comparison-sensitivity`,
+  );
+  await expect(page.getByLabel("Sensitivity assumption")).toHaveValue("price");
+  await expect(page.getByLabel("Sensitivity assumption")).toBeFocused();
+  expect(writes).toEqual([]);
 });
