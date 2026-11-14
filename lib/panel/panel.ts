@@ -66,11 +66,26 @@ export interface RunPanelOptions {
   pricePoints?: number[];
   /** Called after each persona finishes (for progress reporting). */
   onPersona?: (personaId: string, ok: boolean) => void;
-  /** Epoch deadline. Stop scheduling new Jev work before this time; cached answers remain reusable. */
+  /**
+   * Deadline (HAC-155), epoch ms on `now`'s clock. Near it the panel stops issuing new Jev
+   * calls, keeps every answer already in hand (they are cached by key) and returns a run whose
+   * `progress.inProgress` is true instead of failing; the next run with the same inputs resumes
+   * from the cache. Calls still in flight at `deadlineAt - deadlineReserveMs` are abandoned for
+   * this run (their answers are written to the cache if they arrive in time).
+   */
   deadlineAt?: number;
-  /** Reserve time for one in-flight provider wave and its cache flush (default 20 seconds). */
+  /** Time kept free before `deadlineAt` for the cache flush and the caller's reply. Default 2 s. */
   deadlineReserveMs?: number;
+  /**
+   * Expected duration of one Jev call, used before any call has been timed: a call is only
+   * issued if it is expected to finish before the reserve. Afterwards the slowest observed
+   * call is used. Default 5 s.
+   */
+  estimatedCallMs?: number;
+  /** Aborting stops new Jev calls the same way the deadline does. */
   signal?: AbortSignal;
+  /** Clock for the deadline. Default `Date.now`. */
+  now?: () => number;
 }
 
 export interface PanelStats {
@@ -84,10 +99,21 @@ export interface PanelStats {
   elapsedMs: number;
 }
 
+/** How far a deadline-limited panel got. Failed personas count as completed (nothing to resume). */
+export interface PanelProgress {
+  completedPersonas: number;
+  totalPersonas: number;
+  /** True when some persona still has unasked calls; the table is partial and must not be used. */
+  inProgress: boolean;
+}
+
+export const DEFAULT_DEADLINE_RESERVE_MS = 2_000;
+export const DEFAULT_ESTIMATED_CALL_MS = 5_000;
+
 export interface PanelRun {
   table: BehaviorTable;
   stats: PanelStats;
-  progress?: { completedPersonas: number; totalPersonas: number; inProgress: boolean };
+  progress: PanelProgress;
 }
 
 /** One planned Jev call for a persona: the order index and the request. */
@@ -171,53 +197,51 @@ async function planSite(opts: RunPanelOptions): Promise<SitePlan> {
 }
 
 interface SharedRun {
-  /** Everything the cache already holds for this run's keys, read in one batch. */
+  /** Everything the cache held for this run's keys, plus the answers this run received. */
   known: Map<string, JevAskResult>;
-  writer: CacheWriter;
-  failed: Set<string>;
+  /** Keys answered by Jev during this run (not cache hits). */
+  fresh: Set<string>;
+  /** Keys not asked (or abandoned) because of the deadline; the next run asks them. */
   pending: Set<string>;
   stats: Map<SitePlan, PanelStats>;
+  started: number;
 }
 
-async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
-  const started = performance.now();
-  const { opts, ctx, orders, retries } = sp;
+function execSite(sp: SitePlan, shared: SharedRun): PanelRun {
+  const { opts, ctx, orders } = sp;
   const modelVersion = opts.client.modelVersion;
   const stats = shared.stats.get(sp)!;
   const answeredVersions = new Set<string>();
 
-  const outcomes = await Promise.all(
-    sp.plan.map(async ({ persona, calls }) => {
-      const settled = await Promise.allSettled(
-        calls.map(async (call) => {
-          const hit = shared.known.get(call.key);
-          if (hit) {
-            stats.cacheHits++;
-            answeredVersions.add(hit.modelVersion);
-            return { call, result: hit };
-          }
-          if (shared.pending.has(call.key)) return { call, pending: true };
-          if (shared.failed.has(call.key)) throw new Error("Jev call failed");
-          throw new Error("Unscheduled Jev call");
-        }),
-      );
-      const pending = settled.some((s) => s.status === "fulfilled" && "pending" in s.value);
-      const ok = !pending && settled.every((s) => s.status === "fulfilled");
-      if (!pending) opts.onPersona?.(persona.id, ok);
-      if (!ok) return { personaId: persona.id, behavior: undefined, pending };
-      const answers = settled.map((s) => (s as PromiseFulfilledResult<{ call: KeyedCall; result: JevAskResult }>).value);
-      const views = answers.flatMap((a) => (a.call.bundled ? expandBundled(a.result, orders) : [a.result]));
-      return {
-        personaId: persona.id,
-        behavior: aggregate(
-          persona.id,
-          ctx,
-          views,
-          answers.map((a) => a.call.key),
-        ),
-      };
-    }),
-  );
+  const outcomes = sp.plan.map(({ persona, calls }) => {
+    const results: JevAskResult[] = [];
+    let pending = false;
+    let failed = false;
+    for (const call of calls) {
+      const hit = shared.known.get(call.key);
+      if (hit) {
+        if (!shared.fresh.has(call.key)) stats.cacheHits++;
+        results.push(hit);
+      } else if (shared.pending.has(call.key)) pending = true;
+      else failed = true;
+    }
+    // A persona with unasked calls is resumable, not failed: the next run asks the rest.
+    if (pending) return { personaId: persona.id, behavior: undefined, pending: true };
+    opts.onPersona?.(persona.id, !failed);
+    if (failed) return { personaId: persona.id, behavior: undefined, pending: false };
+    for (const r of results) answeredVersions.add(r.modelVersion);
+    const views = calls.flatMap((c, i) => (c.bundled ? expandBundled(results[i]!, orders) : [results[i]!]));
+    return {
+      personaId: persona.id,
+      pending: false,
+      behavior: aggregate(
+        persona.id,
+        ctx,
+        views,
+        calls.map((c) => c.key),
+      ),
+    };
+  });
 
   // Record the version Jev actually answered with (e.g. jev-1.14.0), not the requested alias.
   // Sorted, not first-arrived, so a mix of versions (cached and fresh answers across an alias
@@ -229,55 +253,104 @@ async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
     personas: outcomes.flatMap((o) => (o.behavior ? [o.behavior] : [])),
     failedPersonaIds: outcomes.filter((o) => !o.behavior && !o.pending).map((o) => o.personaId),
   };
-  stats.elapsedMs = performance.now() - started;
-  return { table: BehaviorTableSchema.parse(table), stats, progress: {
-    completedPersonas: outcomes.filter((o) => Boolean(o.behavior) || !o.pending).length,
-    totalPersonas: outcomes.length,
-    inProgress: outcomes.some((o) => o.pending),
-  } };
+  stats.elapsedMs = performance.now() - shared.started;
+  return {
+    table: BehaviorTableSchema.parse(table),
+    stats,
+    progress: {
+      completedPersonas: outcomes.filter((o) => !o.pending).length,
+      totalPersonas: outcomes.length,
+      inProgress: outcomes.some((o) => o.pending),
+    },
+  };
 }
 
-/** One batched cache read for every key of `plans`, then run them all against one shared writer. */
+/**
+ * One batched cache read for every key of `plans`, then asks the missing keys through a pool
+ * of workers sharing one write buffer. Workers pull the next call only while it is expected to
+ * finish before the deadline (HAC-155); the pool is as wide as the client's limiter, so the
+ * limiter (not this queue) still decides how many are really in flight.
+ */
 async function runPlans(plans: SitePlan[]): Promise<PanelRun[]> {
-  const cache = plans[0]!.opts.cache;
+  const started = performance.now();
+  const opts = plans[0]!.opts;
+  const cache = opts.cache;
   const known = await readCache(cache, plans.flatMap((sp) => sp.plan.flatMap((p) => p.calls.map((c) => c.key))));
   const writer = new CacheWriter(cache);
+  const fresh = new Set<string>();
   const failed = new Set<string>();
   const pending = new Set<string>();
   const stats = new Map(plans.map((sp) => [sp, { calls: 0, cacheHits: 0, failedCalls: 0, retriedCalls: 0, elapsedMs: 0 }]));
-  try {
-    const missing = plans.flatMap((sp) => sp.plan.flatMap((p) => p.calls.map((call) => ({ sp, call }))))
-      .filter(({ call }) => !known.has(call.key));
-    // A bounded wave cannot grow beyond the client's configured limiter. Checking between
-    // waves leaves enough time to finish and flush answers before the function deadline.
-    const width = Math.max(1, Math.min(32, plans[0]!.opts.client.limiter?.().cap ?? 32));
-    for (let i = 0; i < missing.length; i += width) {
-      const opts = plans[0]!.opts;
-      if (opts.signal?.aborted || (opts.deadlineAt !== undefined &&
-          Date.now() + (opts.deadlineReserveMs ?? 20_000) >= opts.deadlineAt)) {
-        for (const item of missing.slice(i)) pending.add(item.call.key);
-        break;
+  const now = opts.now ?? Date.now;
+  const reserveMs = Math.max(0, opts.deadlineReserveMs ?? DEFAULT_DEADLINE_RESERVE_MS);
+  let callMs = Math.max(0, opts.estimatedCallMs ?? DEFAULT_ESTIMATED_CALL_MS);
+  let timed = false;
+  let closed = false;
+  const outOfTime = () =>
+    closed ||
+    Boolean(opts.signal?.aborted) ||
+    (opts.deadlineAt !== undefined && now() + callMs + reserveMs > opts.deadlineAt);
+
+  // Every cache miss, in plan order (deterministic), so a cut-off run resumes where it stopped.
+  const queue = plans.flatMap((sp) =>
+    sp.plan.flatMap((p) => p.calls.filter((call) => !known.has(call.key)).map((call) => ({ sp, call }))),
+  );
+
+  async function ask({ sp, call }: { sp: SitePlan; call: KeyedCall }) {
+    const counters = stats.get(sp)!;
+    for (let attempt = 0; ; attempt++) {
+      if (attempt > 0 && outOfTime()) {
+        pending.add(call.key); // retry next run instead of reporting a failure
+        return;
       }
-      await Promise.all(missing.slice(i, i + width).map(async ({ sp, call }) => {
-        const counters = stats.get(sp)!;
-        let result: JevAskResult | undefined;
-        for (let attempt = 0; !result; attempt++) {
-          counters.calls++;
-          if (attempt > 0) counters.retriedCalls++;
-          try { result = await sp.opts.client.ask(call.request); }
-          catch {
-            if (attempt >= sp.retries) { counters.failedCalls++; failed.add(call.key); break; }
-          }
-        }
-        if (result) {
+      counters.calls++;
+      if (attempt > 0) counters.retriedCalls++;
+      const t0 = now();
+      try {
+        const result = await sp.opts.client.ask(call.request);
+        const took = now() - t0;
+        callMs = timed ? Math.max(callMs, took) : took;
+        timed = true;
+        writer.add(call.key, result); // buffered, flushed in batches as answers arrive
+        if (!closed) {
           known.set(call.key, result);
-          writer.add(call.key, result);
+          fresh.add(call.key);
         }
-      }));
+        return;
+      } catch {
+        if (attempt >= sp.retries) {
+          counters.failedCalls++;
+          if (!closed) failed.add(call.key);
+          return;
+        }
+      }
     }
-    await writer.flush();
-    return await Promise.all(plans.map((sp) => execSite(sp, { known, writer, failed, pending, stats })));
+  }
+
+  let next = 0;
+  const width = Math.max(1, Math.min(queue.length, opts.client.limiter?.().cap ?? 32));
+  const worker = async () => {
+    while (next < queue.length && !outOfTime()) await ask(queue[next++]!);
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const pool = Promise.all(Array.from({ length: queue.length ? width : 0 }, worker));
+    if (opts.deadlineAt === undefined && !opts.signal) await pool;
+    else {
+      // Hard stop: a call slower than expected must not hold the run past the reserve.
+      const cutoff = new Promise<void>((resolve) => {
+        if (opts.deadlineAt !== undefined)
+          timer = setTimeout(resolve, Math.max(0, opts.deadlineAt - reserveMs - now()));
+        opts.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      await Promise.race([pool, cutoff]);
+    }
+    closed = true;
+    // Never-asked and abandoned calls resume next run; calls that exhausted retries stay failed.
+    for (const { call } of queue) if (!known.has(call.key) && !failed.has(call.key)) pending.add(call.key);
+    return plans.map((sp) => execSite(sp, { known, fresh, pending, stats, started }));
   } finally {
+    if (timer) clearTimeout(timer);
     await writer.flush(); // also on a thrown error, so answers already in hand are kept
   }
 }
@@ -294,7 +367,7 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
  */
 export async function runPanelForSites(
   opts: Omit<RunPanelOptions, "site"> & { sites: CandidateSite[] },
-): Promise<{ tables: BehaviorTable[]; stats: PanelStats; progress: { completedPersonas: number; totalPersonas: number; inProgress: boolean } }> {
+): Promise<{ tables: BehaviorTable[]; stats: PanelStats; progress: PanelProgress }> {
   const started = performance.now();
   const { sites, ...rest } = opts;
   const runs =
@@ -307,9 +380,9 @@ export async function runPanelForSites(
     elapsedMs: performance.now() - started,
   };
   return { tables: runs.map((r) => r.table), stats, progress: {
-    completedPersonas: sum(runs.map((r) => r.progress?.completedPersonas ?? 0)),
-    totalPersonas: sum(runs.map((r) => r.progress?.totalPersonas ?? 0)),
-    inProgress: runs.some((r) => r.progress?.inProgress),
+    completedPersonas: sum(runs.map((r) => r.progress.completedPersonas)),
+    totalPersonas: sum(runs.map((r) => r.progress.totalPersonas)),
+    inProgress: runs.some((r) => r.progress.inProgress),
   } };
 }
 

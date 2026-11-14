@@ -30,7 +30,9 @@ import {
   type AssembleEvaluationInput,
   type AssembledEvaluation,
   type AssemblyMetadata,
+  type PanelDeadline,
 } from "@/lib/evaluation/assemble";
+import type { PanelInProgressBody } from "@/lib/panel/progress";
 import type { ProfileStore } from "@/lib/profiles/store";
 
 const RerunSchema = z
@@ -49,8 +51,17 @@ type Dependencies = {
   store: ComparisonStore;
   newId: () => string;
   profiles?: Pick<ProfileStore, "load">;
-  assemble?: (input: AssembleEvaluationInput, deadline?: { deadlineAt: number }) => Promise<AssembledEvaluation>;
+  assemble?: (
+    input: AssembleEvaluationInput,
+    deadline?: PanelDeadline,
+  ) => Promise<AssembledEvaluation>;
+  /** Time the Jev panel may use per request (HAC-155); the rest of maxDuration (60 s) evaluates and saves. */
+  panelBudgetMs?: number;
+  now?: () => number;
 };
+
+/** Leaves about 25 s of the 60 s function for evaluation, sweeps and the save. */
+export const COMPARISON_PANEL_BUDGET_MS = 35_000;
 
 /**
  * POST /api/comparisons
@@ -58,6 +69,9 @@ type Dependencies = {
  *   with current source data, retaining origins/findings alongside the stored evaluation;
  * - an EvaluationRequest: evaluates, stores and returns the comparison (plus the Huff-only
  *   ranking check when Jev demand was used);
+ *   a Jev assembly that reaches the panel deadline returns 202
+ *   { status: "in_progress", message, completedPersonas, totalPersonas } (HAC-155): nothing is
+ *   stored yet, and resending the same body resumes from the Jev answer cache;
  * - { projectId, rerunComparisonId }: reruns a stored comparison from its stored request and
  *   cached behavior tables (no Jev calls) and reports whether the metrics reproduce.
  */
@@ -66,8 +80,11 @@ export function createComparisonsHandler({
   newId,
   profiles,
   assemble,
+  panelBudgetMs = COMPARISON_PANEL_BUDGET_MS,
+  now = Date.now,
 }: Dependencies) {
   return async function POST(request: Request) {
+    const deadlineAt = now() + panelBudgetMs;
     let body: z.infer<typeof CreateSchema>;
     try {
       body = CreateSchema.parse(await readJsonBody(request));
@@ -139,11 +156,14 @@ export function createComparisonsHandler({
             "PROFILE_NOT_FOUND",
             "No such profile in this project.",
           );
-        const assembled = await assemble({
-          ...shortcut,
-          profile,
-          profileVersion: profile.version,
-        }, { deadlineAt: Date.now() + 45_000 });
+        const assembled = await assemble(
+          {
+            ...shortcut,
+            profile,
+            profileVersion: profile.version,
+          },
+          { deadlineAt, now },
+        );
         evaluationRequest = EvaluationRequestSchema.parse(assembled.request);
         assembly = {
           findings: assembled.findings,
@@ -185,8 +205,15 @@ export function createComparisonsHandler({
       );
     } catch (error) {
       if (error instanceof PanelInProgressError)
-        return json({ status: "in_progress", message: error.message,
-          completedPersonas: error.completedPersonas, totalPersonas: error.totalPersonas }, 202);
+        return json(
+          {
+            status: "in_progress",
+            message: error.message,
+            completedPersonas: error.completedPersonas,
+            totalPersonas: error.totalPersonas,
+          } satisfies PanelInProgressBody,
+          202,
+        );
       if (error instanceof AssemblyError)
         return json(
           {

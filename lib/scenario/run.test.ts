@@ -7,6 +7,7 @@ import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
 import { FIXTURE_PERSONA_SET, SITE_A, SITE_B } from "@/lib/demand/fixtures";
 import { evaluateSitesResumable } from "@/lib/evaluation/evaluate";
 import { LayoutInputError } from "@/lib/layout";
+import { PanelInProgressError } from "@/lib/evaluation/assemble";
 
 const config = {
   hours: {
@@ -224,6 +225,28 @@ describe("scenario execution", () => {
     });
     expect((await executions.get("p1", "execution-1"))?.costUnits).toBe(8);
   });
+  it("a deadline-limited Jev panel leaves the run queued with progress, and the next advance resumes (HAC-155)", async () => {
+    const { runner, prepare, executions, evaluate } = setup(8);
+    prepare.mockRejectedValueOnce(new PanelInProgressError(30, 100));
+    const first = await runner.start("p1", "s1", { demandSource: "jev" });
+    expect(first).toMatchObject({
+      status: "queued",
+      runId: "execution-1",
+      panel: { completedPersonas: 30, totalPersonas: 100 },
+    });
+    expect(prepare.mock.calls[0]![2]).toEqual({
+      deadlineAt: Date.parse("2026-11-14T17:00:00.000Z") + 45_000 - 5_000,
+      now: expect.any(Function),
+    });
+    const job = await executions.get("p1", "execution-1");
+    expect(job?.status).toBe("queued");
+    expect(job?.request).toBeNull();
+    expect(evaluate).not.toHaveBeenCalled();
+    const resumed = await runner.advance("p1", "s1", "execution-1");
+    expect(resumed).toMatchObject({ status: "succeeded" });
+    expect(resumed).not.toHaveProperty("panel");
+    expect(prepare).toHaveBeenCalledTimes(2);
+  });
   it("terminalizes deterministic layout errors while preserving their field errors", async () => {
     const { runner, prepare, executions } = setup();
     const invalid = new LayoutInputError({
@@ -257,7 +280,11 @@ it("versions helper artifacts in the cache while preserving queued legacy Jev so
     now: new Date("2026-11-14T17:00:00.000Z"),
   });
   await runner.advance("p1", "s1", "legacy");
-  expect(prepare).toHaveBeenCalledWith(base, "jev");
+  expect(prepare).toHaveBeenCalledWith(
+    base,
+    "jev",
+    expect.objectContaining({ deadlineAt: expect.any(Number) }),
+  );
   const result = await runner.start("p1", "s1", { demandSource: "jev" });
   expect(result).toMatchObject({
     status: "succeeded",
