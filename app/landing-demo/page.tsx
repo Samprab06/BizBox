@@ -1,14 +1,25 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { LandingDemo } from "@/components/landing-demo/landing-demo";
 import { DEMO } from "@/components/landing-demo/demo-data";
-import macbook from "@/public/landing-assets/guided-demo/macbook-frame-v2.json";
+import macbook from "@/public/landing-assets/guided-demo/macbook-gpt-v3.json";
+
+const geist = localFont({
+  src: "../../public/fonts/geist-latin.woff2",
+  display: "swap",
+  weight: "100 900",
+  variable: "--font-bizbox",
+});
 
 export const metadata: Metadata = {
   title: "BizBox — Test your business before you commit.",
-  description:
-    "Explore a location, step inside and test a business decision with BizBox.",
+  description: "A consultant and a sandbox for your next business decision.",
 };
 
 export default function LandingDemoPage() {
-  return <LandingDemo demo={DEMO} macbook={macbook} />;
+  return (
+    <div className={geist.variable}>
+      <LandingDemo demo={DEMO} macbook={macbook} />
+    </div>
+  );
 }

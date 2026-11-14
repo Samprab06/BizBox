@@ -67,3 +67,5 @@ Requested direction:
 Proposed story for discussion: first beat shows a brief becoming a shortlist through consultant investigation, then the camera selects and approaches one building; second beat establishes that building's facts and turns it into the starting scenario, flowing through a matching exterior/interior into the staffed-counter test. The interior is context for testing business decisions, not a separate property-tour feature. No new exterior experiment or ranked recommendation result is accepted or fabricated by this note; any numerical evidence must retain its prepared-data provenance.
 
 Akshar approved implementing the complete visual/narrative refinement with “ok do this”. Exterior establishes location/context; one interior staffed-counter experiment remains the main decision demo.
+
+Project-wide UI priority update from Akshar (Agent Board, 2026-11-14 23:15:51 UTC): desktop-only for current UI work. Preserve responsive fallback and shared checks; skip phone-specific work/screenshots/QA until he resumes it. The current refinement follows that priority.

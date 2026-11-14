@@ -1,5 +1,7 @@
 # BizBox guided product demo — HAC-117
 
+**Current revision:** see [consultant/sandbox refinement](refinement-v2.md). It uses a GPT 2D MacBook, the client Ferris-wheel photo, local Geist, clearer glass and moving location/exterior beats. The initial curated implementation and verification below are retained as history.
+
 This revision follows Akshar's approved full landing direction: preconfigured onboarding in 6–8 seconds, generated location/property/interior scenes, a grounded staffed-counter comparison, and a MacBook return. Exact final product UI parity is deferred. The earlier live-camera prototype and all source assets remain intact.
 
 ## Surfaces

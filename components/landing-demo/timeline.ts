@@ -64,13 +64,47 @@ export function chapterAt(progress: number, reducedMotion = false) {
     scene,
     entry,
     returning,
+    onboardingReady: entry === 1 && chapter === "onboarding",
+    mapPush: reducedMotion ? Number(p >= 0.43) : smooth(0.39, 0.45, p),
+    exteriorZoom: reducedMotion ? 1 : 1 + smooth(0.54, 0.62, p) * 0.1,
     heroOpacity: 1 - smooth(0.085, 0.14, p),
     finalOpacity: reducedMotion ? Number(p >= 0.97) : smooth(0.94, 0.98, p),
-    mapOpacity: smooth(0.32, 0.36, p) * (1 - smooth(0.56, 0.6, p)),
-    interiorOpacity: smooth(0.56, 0.6, p) * (1 - smooth(0.67, 0.71, p)),
+    mapOpacity: smooth(0.32, 0.36, p) * (1 - smooth(0.43, 0.47, p)),
+    closeOpacity: smooth(0.43, 0.47, p) * (1 - smooth(0.51, 0.55, p)),
+    exteriorOpacity: smooth(0.51, 0.55, p) * (1 - smooth(0.6, 0.64, p)),
+    interiorOpacity: smooth(0.6, 0.64, p) * (1 - smooth(0.67, 0.71, p)),
     overheadOpacity: smooth(0.67, 0.71, p),
     experimentProgress: clamp((p - 0.69) / 0.18),
   };
+}
+
+export function onboardingCanPlay(
+  progress: number,
+  elapsed: number,
+  options: {
+    paused?: boolean;
+    visible?: boolean;
+    reducedMotion?: boolean;
+  } = {},
+) {
+  return (
+    chapterAt(progress, options.reducedMotion).onboardingReady &&
+    elapsed < ONBOARDING_MS &&
+    !options.paused &&
+    options.visible !== false &&
+    !options.reducedMotion
+  );
+}
+
+export const RENT_COUNT_MS = 700;
+export function countUpAt(
+  elapsed: number,
+  target: number,
+  reducedMotion = false,
+) {
+  if (reducedMotion) return target;
+  const t = clamp(elapsed / RENT_COUNT_MS);
+  return Math.round(1 + (target - 1) * (1 - (1 - t) ** 3));
 }
 
 const ONBOARDING_BEATS = [

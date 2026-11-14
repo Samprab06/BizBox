@@ -4,6 +4,8 @@ import {
   experimentChoiceAt,
   onboardingAt,
   ONBOARDING_MS,
+  onboardingCanPlay,
+  countUpAt,
 } from "./timeline";
 
 describe("curated landing timeline", () => {
@@ -69,6 +71,16 @@ describe("curated landing timeline", () => {
 });
 
 describe("bounded preconfigured onboarding", () => {
+  it("does not reveal or play onboarding until the MacBook screen is completely full", () => {
+    expect(chapterAt(0.219).onboardingReady).toBe(false);
+    expect(onboardingCanPlay(0.219, 0)).toBe(false);
+    expect(chapterAt(0.22).onboardingReady).toBe(true);
+    expect(onboardingCanPlay(0.22, 0)).toBe(true);
+    expect(onboardingCanPlay(0.25, 0, { visible: false })).toBe(false);
+    expect(onboardingCanPlay(0.25, 0, { paused: true })).toBe(false);
+    expect(onboardingCanPlay(0.25, 0, { reducedMotion: true })).toBe(false);
+    expect(onboardingCanPlay(0.25, 7000)).toBe(false);
+  });
   it("finishes in exactly seven seconds with readable business/city/budget beats", () => {
     expect(ONBOARDING_MS).toBe(7000);
     expect(
@@ -82,6 +94,35 @@ describe("bounded preconfigured onboarding", () => {
     expect(onboardingAt(0, true)).toMatchObject({ step: "review", done: true });
     expect(onboardingAt(ONBOARDING_MS)).toEqual(onboardingAt(20000));
     expect(onboardingAt(1200)).toEqual(onboardingAt(1200));
+  });
+});
+
+describe("selected location progression", () => {
+  it("moves the exterior camera normally but holds it static for reduced motion", () => {
+    expect(chapterAt(0.54).exteriorZoom).toBe(1);
+    expect(chapterAt(0.6).exteriorZoom).toBeGreaterThan(
+      chapterAt(0.54).exteriorZoom,
+    );
+    expect(chapterAt(0.62).exteriorZoom).toBeCloseTo(1.1);
+    expect(
+      [0.54, 0.58, 0.6, 0.62].map((p) => chapterAt(p, true).exteriorZoom),
+    ).toEqual([1, 1, 1, 1]);
+  });
+  it("moves through shortlist, selected building and exterior before the starting interior", () => {
+    expect(chapterAt(0.39).mapPush).toBeLessThan(chapterAt(0.445).mapPush);
+    expect(chapterAt(0.48).closeOpacity).toBe(1);
+    expect(chapterAt(0.565).exteriorOpacity).toBe(1);
+    expect(chapterAt(0.65).interiorOpacity).toBe(1);
+    expect(chapterAt(0.65).exteriorOpacity).toBe(0);
+  });
+  it("counts from one to prepared rent within 700ms and uses final values under reduced motion", () => {
+    expect(countUpAt(0, 3000)).toBe(1);
+    expect(countUpAt(350, 3000)).toBeGreaterThan(1);
+    expect(countUpAt(350, 3000)).toBeLessThan(3000);
+    expect(countUpAt(700, 3000)).toBe(3000);
+    expect(countUpAt(5000, 3000)).toBe(3000);
+    expect(countUpAt(0, 3000, true)).toBe(3000);
+    expect(countUpAt(-30, 3000)).toBe(1);
   });
 });
 
