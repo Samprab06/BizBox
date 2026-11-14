@@ -80,3 +80,33 @@ input preservation, and invalid inputs.
 HAC-77 remains incomplete. The HAC-76 scene payload, Cesium layers, fixture/live
 site integration, Places menu, mobile bottom sheet, and measured 500-agent FPS
 are separate work. This pure sampler establishes no UI or performance claim.
+
+## City renderer (HAC-77, first slice)
+
+`components/city/agent-graphics.ts` turns a `TripFrame` into what the city
+draws: one dot per visible customer, colored only by its event-visible phase or
+outcome (arriving, waiting, in service, served, left), its sampled trail, and a
+ring at the door whose radius grows with the current line. It is pure, so the
+same minute always draws the same picture regardless of speed or seek order.
+
+`components/city/cesium-agents.ts` draws that into the existing Cesium viewer
+with one pooled `PointPrimitiveCollection` (customers and trail dots) and a
+`PolylineCollection` (the selected-site pin and the door ring). Primitives are
+reused every update, and nothing redraws unless the neighborhood requests a
+render, so paused and offscreen scenes still issue no draw calls.
+`neighborhood.tsx` updates the layer from its existing `updateScene` path, so
+the page's one playback clock drives the agents.
+
+Only the labelled Example draws customers for now. The fixture site has a real
+map point but no door, frontage or origin geometry, so
+`components/city/example-trips.ts` builds walking trips on an assumed
+north–south frontage through the door, with `provenance: "assumed"` on the
+street bearing and frontage. The legend states this next to the toggle. The
+trips are built on the server from the same run the page shows, because the
+browser and Node can round the seeded arrival times differently. Stored runs
+show the site pin without trips until real door and origin geometry (HAC-76
+scene payload, SIM-4 origins) is wired in.
+
+Still open on HAC-77: building highlight from the mesh or an extrusion,
+nearby properties and competitors from the scene API, Places menu, the 375 px
+bottom sheet, a measured 500-agent frame rate, and the LA fallback.

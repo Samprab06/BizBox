@@ -1,11 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import { interiorFrame } from "./interior-state";
 import type { DemoData, demoPlan } from "./fixture";
+import { exampleTripsLabel } from "@/components/city/example-trips";
+import type { AgentTrip } from "@/lib/sim/trips";
 import type { SimulatorStory } from "./stored";
 import { DecisionHeader } from "@/components/decision/decision-header";
 import { simulatorAnswer } from "@/components/decision/simulator-answer";
@@ -69,6 +71,7 @@ export function SimulatorDemo({
   insightsUnavailableReason,
   profileVersion,
   matterport,
+  cityTrips,
 }: {
   projectId: string;
   robustness?: RobustnessSummary | null;
@@ -85,11 +88,23 @@ export function SimulatorDemo({
   story?: SimulatorStory;
   /** Public-demo scan only; the SDK key is client-permitted and domain-restricted. */
   matterport?: MatterportConfig;
+  /** HAC-77: modeled trips for this run, drawn in the 3D city when present. */
+  cityTrips?: AgentTrip[];
 }) {
   useWorkspaceReport(projectId, context);
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
   const end = coordinates ? 1440 : closeMin;
+  // HAC-77: modeled walking trips for the labelled Example, built on the server
+  // from this run. Stored runs have no street geometry yet, so they show the site
+  // pin without invented paths.
+  const cityAgents = useMemo(
+    () =>
+      cityTrips
+        ? { trips: cityTrips, run: data[0].run, label: exampleTripsLabel }
+        : undefined,
+    [cityTrips, data],
+  );
   const [minute, setMinute] = useState(
     matterport
       ? Math.min(closeMin, openMin + 24)
@@ -377,6 +392,7 @@ export function SimulatorDemo({
           <Neighborhood
             {...coordinates}
             minute={minute}
+            agents={cityAgents}
             quality={quality}
             locationLabel={context.siteId ?? "Selected location"}
             controls={

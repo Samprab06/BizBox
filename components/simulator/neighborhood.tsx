@@ -25,6 +25,21 @@ import {
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
 import { createAnimatedColor } from "./animated-color";
+import { agentColors, agentGraphics } from "@/components/city/agent-graphics";
+import {
+  createAgentLayer,
+  type AgentLayer,
+} from "@/components/city/cesium-agents";
+import { sampleTripFrame } from "@/components/city/trip-frame";
+import type { DayResult } from "@/lib/sim/contracts";
+import type { AgentTrip } from "@/lib/sim/trips";
+
+/** HAC-77: modeled customer trips to draw, with the label shown beside the layer. */
+export type CityAgents = {
+  trips: AgentTrip[];
+  run: Pick<DayResult, "events" | "metrics">;
+  label: string;
+};
 
 export default function Neighborhood({
   longitude,
@@ -35,6 +50,7 @@ export default function Neighborhood({
   quality = "balanced",
   locationLabel,
   controls,
+  agents,
 }: {
   longitude: number;
   latitude: number;
@@ -44,6 +60,7 @@ export default function Neighborhood({
   quality?: RenderQuality;
   locationLabel: string;
   controls?: ReactNode;
+  agents?: CityAgents;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -55,6 +72,19 @@ export default function Neighborhood({
   const visibleRef = useRef(visible);
   const viewerRef = useRef<Viewer | undefined>(undefined);
   const updateScene = useRef<() => void>(() => {});
+  const agentsRef = useRef(agents);
+  const agentLayerRef = useRef<AgentLayer | undefined>(undefined);
+  const [agentsVisible, setAgentsVisible] = useState(true);
+  const agentsVisibleRef = useRef(agentsVisible);
+  useEffect(() => {
+    agentsRef.current = agents;
+    updateScene.current();
+  }, [agents]);
+  useEffect(() => {
+    agentsVisibleRef.current = agentsVisible;
+    agentLayerRef.current?.setVisible(agentsVisible);
+    viewerRef.current?.scene.requestRender();
+  }, [agentsVisible]);
   useEffect(() => {
     timeRef.current = minute;
     qualityRef.current = quality;
@@ -97,6 +127,7 @@ export default function Neighborhood({
 
     async function load(target: HTMLDivElement) {
       Object.assign(window, { CESIUM_BASE_URL: "/cesium/" });
+      const Cesium = await import("cesium");
       const {
         Viewer,
         Cesium3DTileset,
@@ -115,7 +146,7 @@ export default function Neighborhood({
         Cesium3DTileStyle,
         Expression,
         Math: CesiumMath,
-      } = await import("cesium");
+      } = Cesium;
       if (closed) return;
       viewer = new Viewer(target, {
         baseLayer: false,
@@ -179,6 +210,37 @@ export default function Neighborhood({
       );
       viewer.scene.primitives.add(tileset);
       const city = viewer;
+      // HAC-77: the selected-site pin and modeled customers, driven by the page clock.
+      const agentLayer = createAgentLayer(Cesium, city, [longitude, latitude]);
+      agentLayer.setVisible(agentsVisibleRef.current);
+      agentLayerRef.current = agentLayer;
+      disposers.push(() => {
+        agentLayer.destroy();
+        if (agentLayerRef.current === agentLayer)
+          agentLayerRef.current = undefined;
+      });
+      let groundSampled = false;
+      const updateAgents = () => {
+        if (!groundSampled) {
+          // Sit the dots on the rendered mesh once it has loaded under the site.
+          const height = city.scene.sampleHeight(
+            Cartographic.fromDegrees(longitude, latitude),
+          );
+          if (height !== undefined && Number.isFinite(height)) {
+            groundSampled = true;
+            agentLayer.setGroundHeight(height);
+          }
+        }
+        const current = agentsRef.current;
+        agentLayer.update(
+          current
+            ? agentGraphics(
+                sampleTripFrame(current.trips, current.run, timeRef.current),
+                [longitude, latitude],
+              )
+            : null,
+        );
+      };
       const roadColors = new Map<
         Entity,
         {
@@ -433,6 +495,7 @@ export default function Neighborhood({
         applyQuality();
         updateOverlays();
         updateLighting();
+        updateAgents();
         if (visibleRef.current) city.scene.requestRender();
       };
       const resize = () => {
@@ -643,6 +706,47 @@ export default function Neighborhood({
         aria-label="Illustrative neighborhood overlays"
         className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
       >
+        {agents && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium">Modeled arrivals</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={agentsVisible}
+                aria-label="Modeled arrivals"
+                onClick={() => setAgentsVisible(!agentsVisible)}
+                className={`relative h-4 w-7 rounded-full transition ${agentsVisible ? "bg-indigo-400/90" : "bg-white/15"}`}
+              >
+                <span
+                  className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${agentsVisible ? "left-3.5" : "left-0.5"}`}
+                />
+              </button>
+            </div>
+            <p className="mt-1 text-[11px]">{agents.label}</p>
+            <ul className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] whitespace-nowrap text-viewport-muted">
+              {(
+                [
+                  ["Arriving", agentColors.approaching],
+                  ["Waiting", agentColors.waiting],
+                  ["Served", agentColors.served],
+                  ["Left", agentColors.left],
+                ] as const
+              ).map(([label, color]) => (
+                <li key={label} className="flex items-center gap-1.5">
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  {label}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-[11px] text-viewport-muted">
+              The ring at the door grows with the line.
+            </p>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium">
             Illustrative traffic pattern

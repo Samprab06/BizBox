@@ -3,7 +3,12 @@ import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import { WorkspaceView } from "@/components/workspace-view";
 import { SimulatorDemo } from "@/components/simulator/demo";
-import { demoPlan, makeDemo } from "@/components/simulator/fixture";
+import {
+  demoPlan,
+  makeDemo,
+  makeDemoInputs,
+} from "@/components/simulator/fixture";
+import { exampleTrips } from "@/components/city/example-trips";
 import { storedSimulator } from "@/components/simulator/stored";
 import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
@@ -140,6 +145,12 @@ export default async function Page({
     site && tilesetUrl
       ? { longitude: site.longitude, latitude: site.latitude, tilesetUrl }
       : undefined;
+  // HAC-77: build the example trips here, from the same run the page shows. The
+  // browser and server can round the seeded arrival times differently.
+  const demo = makeDemo();
+  const cityTrips = site
+    ? exampleTrips(makeDemoInputs().schedule, demo[0].run, site)
+    : undefined;
   return (
     <SimulatorContext projectId={projectId}>
       <WorkspaceView
@@ -158,7 +169,8 @@ export default async function Page({
             siteId: "montrose",
             synthetic: true,
           }}
-          data={makeDemo()}
+          data={demo}
+          cityTrips={cityTrips}
           plan={demoPlan}
           coordinates={coordinates}
           matterport={
