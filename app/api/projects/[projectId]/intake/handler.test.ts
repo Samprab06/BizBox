@@ -16,6 +16,8 @@ import {
   UI_FIXTURE,
 } from "@/lib/agent/__fixtures__/scripted-model";
 import { UiActionListSchema } from "@/lib/contracts/agent";
+import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
+import type { ThreadStore } from "@/lib/agent/thread-store";
 
 const context = (projectId = "project-1") => ({
   params: Promise.resolve({ projectId }),
@@ -199,6 +201,58 @@ describe("POST project intake", () => {
       ).toBe(503);
     } finally {
       vi.unstubAllEnvs();
+    }
+  });
+  it("still returns its normal 200 when the copilot thread store throws", async () => {
+    const runAgent = async ({
+      session,
+    }: Parameters<
+      NonNullable<Parameters<typeof createIntakeHandler>[0]["runAgent"]>
+    >[0]) => {
+      session.saveProfile(founderAnswers[0]!);
+      return "Tell me about rent.";
+    };
+    const missingTable = Object.assign(
+      new Error('relation "copilot_threads" does not exist: I want a cafe'),
+      { code: "42P01" },
+    );
+    const store = {
+      ensure: vi.fn(async () => {
+        throw missingTable;
+      }),
+      commit: vi.fn(async () => {
+        throw missingTable;
+      }),
+    } as unknown as ThreadStore;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const baseline = await createIntakeHandler({
+        projectExists: async () => true,
+        runAgent,
+      })(request({ message: "I want a cafe" }), context());
+      for (const onCompleted of [
+        createIntakeThreadRecorder(store),
+        async () => {
+          throw new Error("write failed: I want a cafe");
+        },
+      ]) {
+        const response = await createIntakeHandler({
+          projectExists: async () => true,
+          runAgent,
+          onCompleted,
+        })(request({ message: "I want a cafe" }), context());
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual(await baseline.clone().json());
+      }
+      expect(store.ensure).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(2);
+      for (const [line] of warn.mock.calls) {
+        expect(String(line)).not.toContain("cafe");
+        expect(String(line)).not.toContain("\n");
+      }
+      expect(String(warn.mock.calls[0]?.[0])).toContain("42P01");
+    } finally {
+      warn.mockRestore();
     }
   });
 });
