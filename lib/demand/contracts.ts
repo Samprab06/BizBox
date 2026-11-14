@@ -182,6 +182,11 @@ export const ScheduleRequest = z.object({
   dayType: DayType,
   openMin: z.number().min(0).max(1440),
   closeMin: z.number().min(0).max(1440),
+  /**
+   * Smooth the time-block step function into a continuous curve that keeps every block's
+   * total share (HAC-74). Unset or false: the flat per-block rates, as before.
+   */
+  smoothTimeBlocks: z.boolean().optional(),
 });
 export type ScheduleRequest = z.infer<typeof ScheduleRequest>;
 
