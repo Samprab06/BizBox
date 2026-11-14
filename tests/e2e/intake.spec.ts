@@ -49,7 +49,13 @@ async function answerAll(page: Page, count: number = ANSWERS.length) {
   for (const { text } of ANSWERS.slice(0, count)) await answer(page, text);
 }
 
-test.beforeEach(async ({ clearIntakeStorage }) => {
+test.beforeEach(async ({ page, clearIntakeStorage }) => {
+  // These specs cover the offline fixture; pin it even where the server has a model (HAC-66).
+  await page.route("**/api/projects/*/intake", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { modelConfigured: false } })
+      : route.fallback(),
+  );
   await clearIntakeStorage();
 });
 
@@ -340,10 +346,6 @@ test("the whole intake can be completed with the keyboard only", async ({ page, 
 });
 
 test("has no serious or critical accessibility violations", async ({ page }) => {
-  test.fixme(
-    true,
-    'HAC-40: axe "listitem" (serious): the conversation <ol role="log"> loses its list role, so its <li> children have no list parent',
-  );
   await openIntake(page);
   await expectNoA11yViolations(page);
 
