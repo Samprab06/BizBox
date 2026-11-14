@@ -127,9 +127,16 @@ What this shows:
 - Playback advanced only 62 to 65 simulated minutes in 8 s with the city in view
   (1× is about 144), against 73 minutes in 4 s with it offscreen. On slow GPUs
   the playback clock runs slower than real 1× speed while the city is visible.
-  The single playback clock belongs to HAC-77.
+  HAC-77 addresses this in commit `3a00669`. Capture the clock delta again when
+  measuring a build with that change.
 - The 500-agent case could not be measured here: this example renders the seeded
   café day, not a 500-agent city layer, which HAC-77 adds.
+
+For the follow-up, run the HAC-65 candidate and workspace build on the same
+machine in the same browser. Keep the graphics setting, initial camera, device
+pixel ratio and cache warm-up consistent. Record each build's commit, city
+drawing-buffer size, city-rendered FPS and simulated minutes advanced. Record the
+500-agent workload separately when it is available.
 
 ## Reproduce and verify
 
