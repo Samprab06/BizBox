@@ -60,10 +60,21 @@ The default model is [`gpt-6-luna`](https://developers.openai.com/api/docs/model
 confirmed in official OpenAI documentation on November 14, 2026. `OPENAI_MODEL`
 optionally selects another compatible tool-calling model. Reasoning is set to
 `none` so temperature 0 is supported. The runner keeps a 1,500-token response cap,
-no provider retries, at most three save calls and a graph recursion limit of six.
+no provider retries, at most two save calls per turn (one is normal) and a graph
+recursion limit of twelve. If the limit is hit, the turn still succeeds: the draft keeps
+what was saved and the reply says so and asks the next question.
 Requests have a 20-second intake deadline; the route allows 30 seconds. No paid
 provider fallback is selected. These bounds limit each request's work; they do not
 establish a monthly spending limit.
+
+Unknowns need the founder's words (HAC-113). The prompt says so, and `intake-guard.ts`
+enforces it in the `save_profile` tool: an explicit unknown (`value: null`) is kept only
+when the latest founder message has a don't-know signal ("I don't know", "not sure",
+"no idea", "unknown", "TBD"...) in a clause that names that topic, or a bare "I don't
+know" that answers the question just asked. Other unknowns are dropped, the field stays
+undefined, and the tool result tells the model so. The model-facing tool schema omits
+server-owned `origin` and `evidenceIds` (about half the size), the draft context and tool
+results are compact, and each turn logs one `intake_turn` line with token counts only.
 
 The provider runner is guarded by `server-only`. `next.config.ts` loads
 `deepagents`, `@langchain/core` and `@langchain/openai` as
@@ -79,3 +90,27 @@ Postgres and Vercel preview verification remain separate from these offline test
 To opt into the synthetic paid smoke test, privately export `OPENAI_API_KEY`, then
 run `RUN_OPENAI_LIVE=1 pnpm exec vitest run lib/agent/runner-live.test.ts`. A key
 alone does not enable paid calls during the routine test suite.
+
+
+## Nessie cash-buffer evidence (HAC-106)
+
+The investigation tool registry exposes `read_nessie_cash_buffer` for cash-buffer
+and site-affordability questions. Arguments contain optional `account_id` and a
+paired `comparison_id`/`site_id`, never model-invented balances or costs. A site
+scenario uses only a comparison generated in the active investigation attempt,
+matching its current immutable profile, plus the stored evaluation's buildout
+and contribution. Results remain explicitly simulated and do not change the
+site ranking.
+
+The configured server adapter uses `NESSIE_API_KEY`; credentials never enter the
+model prompt or milestone. Only a sanitized, schema-validated result is saved in
+`milestone.summary.output`. The planner sees the completed output on its next
+step, and trusted tool findings survive the grounded-plan handoff. Normal tool
+budgets, checkpoints, duplicate-step guards and transport cancellation apply.
+The browser renders that saved result inside Consultant activity and makes no
+separate Nessie request.
+
+Unavailable/empty/provider-error and ambiguous-account states are optional
+financial limitations, not invented zero cash and not a reason to fail an
+otherwise useful location investigation. See the final consultant revision in
+[the Nessie spec](../../docs/integrations/nessie.md).

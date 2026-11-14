@@ -5,16 +5,21 @@ export const views = {
   site: "Site detail",
   comparison: "Comparison",
   replay: "Replay",
+  simulator: "Simulator",
 };
 
 export type View = keyof typeof views;
 
-/** Every workspace URL that exists today: the views plus the printable plan (`/plan`). */
-export type WorkspaceRoute = View | "plan";
+/**
+ * Every workspace URL that exists today: the views plus the printable plan (`/plan`) and the
+ * BizBox workspace screen (`/workspace`, HAC-128), which render their own pages.
+ */
+export type WorkspaceRoute = View | "plan" | "workspace";
 
 export const routeLabels: Record<WorkspaceRoute, string> = {
   ...views,
   plan: "Location plan",
+  workspace: "Workspace",
 };
 
 export function workspaceHref(projectId: string, view: WorkspaceRoute, siteId?: string) {
@@ -60,6 +65,7 @@ export const workspaceTasks: readonly WorkspaceTask[] = [
     label: "Find a location",
     entries: [
       { route: "intake", label: views.intake, step: "describe your business" },
+      { route: "workspace", label: routeLabels.workspace, step: "review a space with the BizBox assistant" },
       { route: "map", label: views.map, step: "browse candidate spaces" },
       { route: "site", label: views.site, step: "inspect a space" },
     ],
@@ -71,11 +77,9 @@ export const workspaceTasks: readonly WorkspaceTask[] = [
     entries: [
       { route: "comparison", label: views.comparison, step: "compare your shortlist" },
       { route: "replay", label: views.replay, step: "replay a day at the space" },
+      { route: "simulator", label: views.simulator, step: "watch the plan run in the city simulator" },
     ],
-    planned: [
-      { id: "sensitivity", label: "Sensitivity" },
-      { id: "simulator", label: "City simulator", ticket: "SIM-6" },
-    ],
+    planned: [{ id: "sensitivity", label: "Sensitivity" }],
   },
   {
     id: "decide",

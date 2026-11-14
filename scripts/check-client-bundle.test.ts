@@ -19,6 +19,22 @@ test("rejects a server-only env name in emitted client code", () => {
   }
 });
 
+test("keeps Matterport API credentials out of client chunks while permitting the domain SDK key", () => {
+  const directory = mkdtempSync(join(tmpdir(), "matterport-env-"));
+  const bundle = join(directory, "chunk.js");
+  try {
+    writeFileSync(bundle, "MATTERPORT_API_KEY MATTERPORT_API_TOKEN");
+    expect(scanClientBundle(directory)).toEqual([
+      `${bundle}: found server-only name MATTERPORT_API_KEY`,
+      `${bundle}: found server-only name MATTERPORT_API_TOKEN`,
+    ]);
+    writeFileSync(bundle, "MATTERPORT_SDK_KEY");
+    expect(scanClientBundle(directory)).toEqual([]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("flags public credential names, credential values and reused server values", () => {
   expect(
     publicEnvIssues({

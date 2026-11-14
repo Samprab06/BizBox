@@ -55,7 +55,7 @@ function response(state: IntakeState | undefined, patch: Record<string, unknown>
 }
 
 async function open(page: Page) {
-  await page.goto(workspaceHref("houston-coffee", "intake"));
+  await page.goto(`${workspaceHref("houston-coffee", "intake")}?mode=form`);
   await expect(page.getByText("Live intake agent. Answers are kept in this browser.")).toBeVisible();
 }
 

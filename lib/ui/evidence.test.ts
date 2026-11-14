@@ -11,6 +11,7 @@ const expected = {
   matterport: "Source-backed",
   founder: "Your input",
   default: "Assumption",
+  "agent-proposed": "Assumption",
   none: "Assumption",
   synthetic_personas: "Simulation",
   jev: "Simulation",

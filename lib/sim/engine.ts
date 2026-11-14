@@ -288,7 +288,13 @@ export function simulateParsedDay(schedule: ArrivalSchedule, config: SiteConfig)
     arrivals++;
     const lineLength = line.length;
     const stayProbability = stayProbabilityAt(curves.get(c.personaId) as StayPoint[], lineLength);
-    const decision = c.stayDraw < stayProbability ? "join" : "leave";
+    // A free station admits immediate service even when waiting capacity is zero.
+    // Keep the behavioral probability and legacy event shape unchanged.
+    const full =
+      config.queueCapacity !== undefined &&
+      lineLength >= config.queueCapacity &&
+      stationBusy.indexOf(false) === -1;
+    const decision = c.stayDraw < stayProbability && !full ? "join" : "leave";
     events.push({
       type: "arrival",
       timeMin: t,

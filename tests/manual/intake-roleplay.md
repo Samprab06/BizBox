@@ -25,7 +25,7 @@ Repeat steps 1–7 for **each** persona; keep transcripts/screenshots separate. 
 
 | # | Do | Expected result |
 |---|---|---|
-| 1 | Clear the previous persona's `sitework:intake:v1:houston-coffee` browser draft (or use a fresh private window), then open `<preview>/projects/houston-coffee/intake`. | A live intake conversation starts without a fixture-only message or a provider error. Screenshot the initial state. |
+| 1 | Clear the previous persona's `sitework:intake:v1:houston-coffee` browser draft (or use a fresh private window), then open `<preview>/projects/houston-coffee/intake?mode=form` (the guided onboarding is now the default). | A live intake conversation starts without a fixture-only message or a provider error. Screenshot the initial state. |
 | 2 | Say the persona's introductory sentence, category and city, without volunteering all numbers. | The agent acknowledges those facts and asks a relevant missing question; record whether it repeated a question already answered. |
 | 3 | Answer the agent's questions using only the persona's true values; count each founder message as one turn. | Price, stations/staff, rent ceiling, buildout budget, city and other required fields are recorded correctly with `founder` origin. Record skipped or repeated questions. |
 | 4 | For Leila, explicitly correct the earlier two-chair answer to four chairs after it was saved. | Final profile shows four chairs/stations, not two; the correction has `founder` origin. |

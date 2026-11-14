@@ -12,6 +12,8 @@ import type {
 import type { InvestigationToolName, InvestigationToolRegistry } from "./tools";
 import { milestoneOutput } from "./tools";
 import { DEFAULT_INTAKE_MODEL, modelConfiguration } from "./runner";
+import { NessieConsultantResultSchema } from "@/lib/contracts/nessie";
+import { withoutNessieFindings } from "@/lib/nessie/findings";
 
 const toolNames = [
   "save_profile",
@@ -21,6 +23,7 @@ const toolNames = [
   "evaluate_sites",
   "run_sensitivity",
   "get_site_run",
+  "read_nessie_cash_buffer",
 ] as const;
 export const InvestigationDecisionSchema = z
   .object({
@@ -50,6 +53,7 @@ Business tools execute outside this model graph, after durable budget reservatio
 Completed milestones are the durable checkpoint. Do not repeat a completed tool with the same inputs. Do not invent candidate, profile, comparison, behavior-table, run or evidence IDs.
 Workflow: use the saved founder profile and save_profile only for explicit founder answers in the investigation question; shortlist at most eight sites; inspect each catchment; decide the competitor choice set; poll customers; evaluate the sites; diagnose the top three using demand, capacity, rent, segment-to-competitor and representative-run evidence; test the two weakest assumptions with sensitivity and include the Huff-only ranking check returned by evaluation; then finish with findings for the grounded location-plan stage (HAC-24).
 When Jev is configured, poll_customers uses it and evaluate_sites should request jev; otherwise use huff and state why. Evaluation reuses cached panel work and must not silently poll again.
+For cash, affordability or financing questions, use read_nessie_cash_buffer and retain its findings and limitations. Its banking data belongs to a shared simulated Nessie demo sandbox, not the business's real bank. With exactly one cash account the tool may select it explicitly; with multiple accounts ask which returned demo account to use rather than guessing or summing. For site affordability, first evaluate_sites and then pass its comparison_id and a matching site_id; the server derives modeled upfront buildout and contribution. Never provide financial amounts as tool arguments. Do not claim Nessie was read before its completed milestone exists. An unavailable or empty Nessie result is nonfatal: continue with a clear limitation, without inventing cash evidence. Mock deposits are cash movement, not sales. Any returned cash calculation is a scenario, not a forecast or a financing approval. Only the newest Nessie result for the current attempt/profile is current: a newer selection, failure or empty result supersedes older cash guidance. Do not repeat superseded account questions or cash calculations from accumulated historical findings.
 Never make up founder facts, missing numeric inputs, calibrated demographics, sales forecasts or source origins. Results are seeded scenario ranges, never guaranteed sales. Preserve costar/public/founder/default provenance and cite returned IDs.
 If information is missing, finish with concrete questions as findings instead of waiting for a human. If source data is unavailable or a tool reports missing inputs, preserve findings and explain the limitation.
 At most 25 business/control steps, three polls and three evaluations are allowed. A wall-time limit also applies. Choose finish when the useful investigation is complete or further work cannot proceed.
@@ -81,12 +85,112 @@ function planningPrompt(
 ) {
   // Tool outputs are already summaries; bound each context entry so the model
   // cannot receive raw event histories or an unbounded accumulated transcript.
-  const history = milestones.map((entry) => ({
-    seq: entry.seq,
-    tool: entry.tool,
-    inputHash: entry.inputHash,
-    summary: JSON.stringify(entry.summary).slice(0, 6_000),
-  }));
+  const scoped = milestones
+    .filter(
+      (entry) =>
+        entry.investigationId === job.id && entry.attempt === job.attempt,
+    )
+    .sort((a, b) => a.seq - b.seq);
+  const profileStep = scoped
+    .filter(
+      (entry) =>
+        entry.tool === "save_profile" &&
+        typeof milestoneOutput(entry).profileId === "string",
+    )
+    .at(-1);
+  const profileId = profileStep
+    ? milestoneOutput(profileStep).profileId
+    : job.profileId;
+  const profileVersion = profileStep
+    ? milestoneOutput(profileStep).profileVersion
+    : undefined;
+  const cashSteps = scoped.filter(
+    (entry) => entry.tool === "read_nessie_cash_buffer",
+  );
+  const latestCash = cashSteps
+    .filter((entry) => entry.seq > (profileStep?.seq ?? -1))
+    .at(-1);
+  const cash = NessieConsultantResultSchema.safeParse(
+    latestCash ? milestoneOutput(latestCash) : null,
+  );
+  const validLatest =
+    cash.success &&
+    cash.data.investigationId === job.id &&
+    cash.data.attempt === job.attempt &&
+    cash.data.projectId === job.projectId &&
+    cash.data.profileId === profileId &&
+    (profileVersion === undefined ||
+      cash.data.profileVersion === profileVersion) &&
+    scoped.filter((entry) => entry.seq === latestCash?.seq).length === 1 &&
+    (!cash.data.scenario ||
+      scoped.some((entry) => {
+        const output = milestoneOutput(entry);
+        return (
+          entry.tool === "evaluate_sites" &&
+          entry.seq > (profileStep?.seq ?? -1) &&
+          entry.seq < latestCash!.seq &&
+          output.profileId === profileId &&
+          output.comparisonId === cash.data.scenario!.comparisonId &&
+          Array.isArray(output.siteIds) &&
+          output.siteIds.includes(cash.data.scenario!.siteId)
+        );
+      }));
+  const object = (value: unknown): Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const texts = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value.filter((v): v is string => typeof v === "string")
+      : [];
+  const latestFindings =
+    validLatest && latestCash && cash.success
+      ? [...texts(object(latestCash.summary).toolFindings), cash.data.message]
+      : [];
+  const findings = [
+    ...new Set([
+      ...withoutNessieFindings(job.findings, scoped),
+      ...latestFindings,
+    ]),
+  ];
+  const history = scoped.map((entry) => {
+    let summary = entry.summary;
+    if (
+      entry.tool === "read_nessie_cash_buffer" &&
+      (entry !== latestCash || !validLatest)
+    )
+      summary = { redacted: "Superseded or unavailable banking evidence" };
+    else if (cashSteps.length && entry.seq >= cashSteps[0]!.seq) {
+      // A later model decision may paraphrase the old cash result even when its
+      // business tool is unrelated. Keep business evidence, not derived prose.
+      const envelope = object(entry.summary);
+      const output = object(envelope.output);
+      summary =
+        entry.tool === "finish_investigation"
+          ? { redacted: "Prior financial/model handoff" }
+          : json({
+              ...envelope,
+              modelFindings: [],
+              ...(Array.isArray(output.findings)
+                ? {
+                    output: {
+                      ...output,
+                      findings: withoutNessieFindings(
+                        texts(output.findings),
+                        scoped,
+                      ),
+                    },
+                  }
+                : {}),
+            });
+    }
+    return {
+      seq: entry.seq,
+      tool: entry.tool,
+      inputHash: entry.inputHash,
+      summary: JSON.stringify(summary).slice(0, 6_000),
+    };
+  });
   return JSON.stringify({
     investigation: {
       id: job.id,
@@ -96,7 +200,7 @@ function planningPrompt(
       attempt: job.attempt,
       counters: job.counters,
       limits: job.limits,
-      findings: job.findings.slice(-40),
+      findings: findings.slice(-40),
     },
     tools: tools.definitions.map((entry) => ({
       name: entry.name,
@@ -162,6 +266,11 @@ export function createInvestigationPlanner({
     signal.throwIfAborted();
     const profileId =
       [...milestones]
+        .filter(
+          (entry) =>
+            entry.investigationId === job.id && entry.attempt === job.attempt,
+        )
+        .sort((a, b) => a.seq - b.seq)
         .reverse()
         .map((entry) => ({ tool: entry.tool, output: milestoneOutput(entry) }))
         .find(
@@ -254,6 +363,7 @@ export function createInvestigationPlanner({
         "get_catchment",
         "poll_customers",
         "evaluate_sites",
+        "read_nessie_cash_buffer",
       ].includes(decision.tool);
       const inputHash = investigationInputHash(
         decision.tool,
