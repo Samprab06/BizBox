@@ -6,7 +6,13 @@ import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
-import { glass } from "./glass";
+import { Card } from "@/components/ui/card";
+import { EvidenceBadge } from "@/components/ui/evidence-badge";
+import { GlassControl } from "@/components/ui/glass-control";
+import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import type { WorkspaceObservation } from "@/lib/client/workspace-context";
+import { SimulatorViewport } from "./viewport";
+import { customerLabel } from "./customer-label";
 import type { RenderQuality } from "./render-policy";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
@@ -30,7 +36,7 @@ export const EXAMPLE_STORY: SimulatorStory = {
   eyebrow: "Example · Houston coffee shop",
   title: "Does a second station pay off?",
   intro: "",
-  scenarioLabels: ["Current", "Alternative"],
+  scenarioLabels: ["Baseline", "Alternative"],
   compare: true,
   footnote:
     "Example data, not a researched property: 110 generated customers at a fixture site. Illustrative block and vehicles. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
@@ -41,13 +47,18 @@ export function SimulatorDemo({
   plan,
   coordinates,
   story = EXAMPLE_STORY,
+  projectId,
+  context,
 }: {
+  projectId: string;
+  context: Extract<WorkspaceObservation, { kind: "simulator" }>;
   data: DemoData;
   plan: typeof demoPlan;
   coordinates?: { longitude: number; latitude: number; tilesetUrl: string };
   /** Copy and provenance; defaults to the labelled example. */
   story?: SimulatorStory;
 }) {
+  useWorkspaceReport(projectId, context);
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
   const end = coordinates ? 1440 : closeMin;
@@ -110,94 +121,108 @@ export function SimulatorDemo({
   const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
 
   return (
-    <div className="relative min-h-dvh bg-[#06080d] text-white antialiased">
-      {coordinates ? (
-        <Neighborhood {...coordinates} minute={minute} quality={quality}>
-          <label
-            className={`${glass} absolute top-20 right-4 z-10 flex items-center gap-2 px-3 py-2 text-xs text-white/80`}
-          >
-            Graphics
-            <select
-              aria-label="Graphics quality"
-              value={quality}
-              onChange={(event) =>
-                setQuality(event.target.value as RenderQuality)
-              }
-              className="rounded-md bg-[#11141b] px-2 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-            >
-              <option value="balanced">Balanced</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </label>
-          <Timeline
-            label="Neighborhood timeline"
-            className="absolute inset-x-4 bottom-8 z-10 sm:inset-x-auto sm:left-1/2 sm:w-[min(40rem,calc(100vw-3rem))] sm:-translate-x-1/2"
-            minute={minute}
-            min={start}
-            max={end}
-            step={1}
-            running={running}
-            ended={minute >= end}
-            speed={speed}
-            onSpeed={setSpeed}
-            onToggle={() => {
-              if (minute >= end) setMinute(start);
-              setPlaying(!running);
-            }}
-            onSeek={(value) => {
-              setPlaying(false);
-              setMinute(value);
-            }}
-          />
-        </Neighborhood>
-      ) : (
-        <p
-          role="status"
-          className="mx-auto max-w-5xl px-6 pt-8 text-sm text-white/50"
-        >
-          3D neighborhood unavailable. The operating replay is below.
+    <div className="min-w-0 space-y-5">
+      <header>
+        <p className="text-sm text-muted">Test the plan · Simulator</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+          {story.title}
+        </h2>
+        <p className="mt-2 text-sm text-muted">{story.eyebrow}</p>
+        <p className="mt-3 max-w-2xl text-muted">
+          {story.intro ||
+            `Same 110 modeled customers, same draws. One extra staffed station and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
         </p>
+        <p className="mt-3 text-sm text-muted">
+          <EvidenceBadge kind="Simulation" />{" "}
+          <span className="ml-2">Modeled, not a forecast</span>
+        </p>
+      </header>
+
+      {coordinates ? (
+        <SimulatorViewport
+          label="3D neighborhood"
+          className="h-[40rem] max-h-[80dvh] min-h-[32rem]"
+        >
+          <Neighborhood
+            {...coordinates}
+            minute={minute}
+            quality={quality}
+            locationLabel={context.siteId ?? "Selected location"}
+            controls={
+              <label className="flex flex-wrap items-center gap-2 text-xs">
+                Graphics
+                <select
+                  aria-label="Graphics quality"
+                  value={quality}
+                  onChange={(event) =>
+                    setQuality(event.target.value as RenderQuality)
+                  }
+                  className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </label>
+            }
+          >
+            <Timeline
+              label="Neighborhood timeline"
+              floating
+              className="absolute inset-x-3 bottom-8 z-10"
+              minute={minute}
+              min={start}
+              max={end}
+              step={1}
+              running={running}
+              ended={minute >= end}
+              speed={speed}
+              onSpeed={setSpeed}
+              onToggle={() => {
+                if (minute >= end) setMinute(start);
+                setPlaying(!running);
+              }}
+              onSeek={(value) => {
+                setPlaying(false);
+                setMinute(value);
+              }}
+            />
+          </Neighborhood>
+        </SimulatorViewport>
+      ) : (
+        <Card>
+          <p role="status" className="text-sm text-muted">
+            3D neighborhood unavailable. The modeled operating replay is
+            available below.
+          </p>
+        </Card>
       )}
 
-      <main
-        id="operating-plan"
-        className="relative isolate mx-auto max-w-5xl scroll-mt-4 px-5 py-16 sm:px-6 sm:py-24"
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-        >
-          <div className="absolute -top-20 left-[10%] size-[28rem] rounded-full bg-emerald-500/15 blur-[120px]" />
-          <div className="absolute top-[40%] right-[5%] size-[30rem] rounded-full bg-indigo-500/15 blur-[130px]" />
-        </div>
-
-        <header className="max-w-2xl">
-          <p className="text-xs font-medium tracking-[0.18em] text-white/40 uppercase">
-            {story.eyebrow}
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
-            {story.title}
-          </h1>
-          <p className="mt-4 text-white/50 text-pretty">
-            {story.intro ||
-              `Same 110 customers, same draws. One extra staffed station and ${usd.format(plan.alternativeBuildout - plan.baselineBuildout)} more buildout.`}
-          </p>
-        </header>
-
-        {story.compare && alternative && (
-          <dl
-            className={`${glass} mt-12 grid divide-white/10 sm:grid-cols-3 sm:divide-x`}
-          >
+      {story.compare && alternative && (
+        <Card className="grid gap-5 sm:grid-cols-3">
+          <dl>
             <Stat
-              label="Monthly gain"
+              label="Modeled monthly contribution change"
               value={`${gain >= 0 ? "+" : "−"}${usd.format(Math.abs(gain))}`}
-              accent={gain >= 0}
             />
+            <dd className="mt-2">
+              <details className="text-sm text-muted">
+                <summary className="cursor-pointer underline underline-offset-4">
+                  Time basis and included costs
+                </summary>
+                <p className="mt-2">
+                  22 weekdays · ingredients, labor, rent, buildout amortization.
+                  Taxes and other overhead excluded.
+                </p>
+              </details>
+            </dd>
+          </dl>
+          <dl>
             <Stat
-              label="Customers kept / day"
+              label="Modeled customers retained / weekday"
               value={`${kept >= 0 ? "+" : "−"}${Math.abs(kept)}`}
-              accent={kept >= 0}
             />
+          </dl>
+          <dl>
             <Stat
               label="Extra buildout"
               value={usd.format(
@@ -205,26 +230,32 @@ export function SimulatorDemo({
               )}
             />
           </dl>
-        )}
+        </Card>
+      )}
 
-        <ul className="mt-4 flex flex-wrap gap-2 text-xs text-white/50">
-          {[
-            `${plan.area.toLocaleString("en-US")} sq ft`,
-            `${clock(openMin)} – ${clock(closeMin)}`,
-            `${usd.format(plan.rentPerSquareFoot)}/sq ft/yr rent`,
-            `${usd.format(plan.ticket)} ticket`,
-            `${usd.format(plan.wage)}/hr labor`,
-          ].map((chip) => (
-            <li
-              key={chip}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1"
-            >
-              {chip}
-            </li>
-          ))}
-        </ul>
+      <ul className="flex flex-wrap gap-2 text-xs text-muted">
+        {[
+          `${plan.area.toLocaleString("en-US")} sq ft`,
+          `${clock(openMin)} – ${clock(closeMin)}`,
+          `${usd.format(plan.rentPerSquareFoot)}/sq ft/yr rent`,
+          `${usd.format(plan.ticket)} ticket`,
+          `${usd.format(plan.wage)}/hr labor`,
+        ].map((chip) => (
+          <li
+            key={chip}
+            className="rounded border border-line bg-surface px-3 py-2"
+          >
+            {chip}
+          </li>
+        ))}
+      </ul>
 
-        <div className="sticky top-4 z-20 mt-12 flex flex-wrap items-center gap-2">
+      <section
+        id="operating-plan"
+        aria-label="Operating replay"
+        className="scroll-mt-4 space-y-4"
+      >
+        <div className="flex flex-wrap gap-2">
           <Timeline
             label="Shared playback"
             className="min-w-0 flex-1"
@@ -253,30 +284,35 @@ export function SimulatorDemo({
             type="button"
             aria-pressed={cutaway}
             onClick={() => setCutaway(!cutaway)}
-            className={`${glass} self-stretch rounded-full px-5 text-sm font-medium transition ${cutaway ? "bg-white/[0.16] text-white" : "text-white/60 hover:text-white"}`}
+            className="rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine aria-pressed:bg-mint"
           >
             Focus on shop
           </button>
         </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {data.map(({ run, monthly }, index) => {
             const frame = replayAt(run.events, minute);
             const customer = frame.arrivals.get(selected);
+            const scenario =
+              story.compare && index === 1 ? "alternative" : "baseline";
             return (
-              <section key={index} className={`${glass} p-2`}>
-                <header className="flex items-baseline justify-between px-4 pt-3 pb-3">
-                  <h2 className="font-medium">
-                    {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+              <Card key={index} className="!p-4">
+                <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2
+                    className={`font-semibold ${scenario === "baseline" ? "text-baseline" : "text-alternative"}`}
+                  >
+                    {story.compare
+                      ? story.scenarioLabels[index]
+                      : `Baseline · ${story.scenarioLabels[index]}`}
                   </h2>
-                  <span className="text-xs text-white/40">
+                  <span className="text-xs text-muted">
                     {run.metrics.stations}{" "}
                     {run.metrics.stations === 1 ? "station" : "stations"}
                   </span>
                 </header>
-                <div
-                  className="h-72 overflow-hidden rounded-xl bg-black/20"
-                  aria-label="Modeled block and café"
+                <SimulatorViewport
+                  label={`${story.scenarioLabels[index]} modeled café`}
+                  className="h-72"
                 >
                   <Scene
                     quality={quality}
@@ -286,75 +322,70 @@ export function SimulatorDemo({
                     selected={selected}
                     select={select}
                   />
-                </div>
-                <div className="grid grid-cols-3 px-4 pt-5 pb-1">
+                </SimulatorViewport>
+                <div className="grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4">
+                  <Live label="Modeled arrivals" value={frame.arrivals.size} />
                   <Live label="Served" value={frame.served} />
                   <Live label="Waiting" value={frame.waiting.length} />
                   <Live label="Left" value={frame.left} warn={frame.left > 0} />
                 </div>
-                <dl className="space-y-2 px-4 pt-4 pb-4 text-sm">
+                <dl className="mt-4 space-y-2 text-sm">
                   <Row
-                    label="Day-end"
+                    label="Modeled day-end"
                     value={`${run.metrics.served} served · ${run.metrics.abandoned} left`}
                   />
                   <Row
-                    label="Monthly revenue"
+                    label="Modeled monthly revenue"
                     value={usd.format(monthly.revenueUsd)}
                   />
                   <Row
-                    label="After costs"
+                    label="Modeled monthly contribution"
                     value={usd.format(monthly.contributionUsd)}
                     strong
                   />
                 </dl>
                 {selected && (
-                  <p className="mx-2 mb-2 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-white/50">
-                    <span className="text-white/80">{selected}</span> ·{" "}
+                  <p className="mt-3 rounded-lg bg-paper p-3 text-xs text-muted">
+                    {selected} ·{" "}
                     {customer
-                      ? `${customer.lineLength} in line · ${Math.round(customer.stayProbability * 100)}% join · ${customer.decision === "join" ? "joined" : "left"}`
+                      ? customerLabel(customer, !story.compare)
                       : "not arrived yet"}
                   </p>
                 )}
-              </section>
+              </Card>
             );
           })}
         </div>
-
-        <div className="mt-4 flex justify-end">
+        <label className="flex flex-wrap items-center justify-end gap-2 text-sm text-muted">
+          Modeled customer
           <select
             aria-label="Inspect a customer"
-            className={`${glass} cursor-pointer rounded-full px-4 py-2 text-sm text-white/70 outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&>option]:bg-[#11141b]`}
+            className="max-w-full rounded-lg border border-muted bg-surface px-3 py-2 text-ink"
             value={arrivals.has(selected) ? selected : ""}
             onChange={(event) => select(event.target.value)}
           >
             <option value="">
-              {arrivals.size ? "Inspect a customer" : "No arrivals yet"}
+              {arrivals.size ? "Inspect a customer" : "No modeled arrivals yet"}
             </option>
             {[...arrivals.keys()].map((id) => (
               <option key={id}>{id}</option>
             ))}
           </select>
-        </div>
-
-        {story.provenance && (
-          <section
-            aria-label="Recorded run provenance"
-            className={`${glass} mt-12 p-4 text-xs text-white/60`}
-          >
-            <h2 className="font-medium text-white/80">
-              {story.provenance.label}
-            </h2>
-            <ul className="mt-2 space-y-1">
-              {story.provenance.items.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-        <p className="mt-16 max-w-2xl text-xs leading-relaxed text-white/30">
-          {story.footnote}
-        </p>
-      </main>
+        </label>
+      </section>
+      {story.provenance && (
+        <Card role="region" aria-label="Recorded run provenance">
+          <h2 className="font-medium">{story.provenance.label}</h2>
+          <ul className="mt-2 space-y-1 text-xs text-muted">
+            {story.provenance.items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      <p className="max-w-2xl text-xs leading-relaxed text-muted">
+        {story.footnote}
+      </p>
     </div>
   );
 }
@@ -362,6 +393,7 @@ export function SimulatorDemo({
 function Timeline({
   label,
   className,
+  floating = false,
   minute,
   min,
   max,
@@ -375,6 +407,7 @@ function Timeline({
 }: {
   label: string;
   className: string;
+  floating?: boolean;
   minute: number;
   min: number;
   max: number;
@@ -388,17 +421,14 @@ function Timeline({
 }) {
   const time = clock(minute);
   const action = running ? "Pause" : ended ? "Replay" : "Play";
-  return (
-    <section
-      aria-label={label}
-      className={`${glass} flex items-center gap-4 rounded-full p-2 pr-3 ${className}`}
-    >
+  const content = (
+    <>
       <button
         type="button"
         aria-label={action}
         title={action}
         onClick={onToggle}
-        className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-black transition hover:bg-white/90 active:scale-95"
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-pine text-on-pine hover:opacity-90"
       >
         <svg
           aria-hidden
@@ -448,32 +478,34 @@ function Timeline({
         onClick={() =>
           onSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length])
         }
-        className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium text-white/60 tabular-nums transition hover:bg-white/10 hover:text-white"
+        className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-mint"
       >
         {speed}×
       </button>
-    </section>
+    </>
+  );
+  const classes = `flex items-center gap-2 !p-2 ${className}`;
+  return floating ? (
+    <GlassControl over="viewport" aria-label={label} className={classes}>
+      {content}
+    </GlassControl>
+  ) : (
+    <Card role="group" aria-label={label} className={classes}>
+      {content}
+    </Card>
   );
 }
 
-function Stat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-6 py-5">
-      <dt className="text-xs text-white/40">{label}</dt>
+    <>
+      <dt className="text-xs text-muted">{label}</dt>
       <dd
-        className={`mt-1.5 text-3xl font-semibold tracking-tight tabular-nums ${accent ? "text-emerald-300" : ""}`}
+        className={`mt-1.5 text-3xl font-semibold tracking-tight tabular-nums text-ink`}
       >
         {value}
       </dd>
-    </div>
+    </>
   );
 }
 
@@ -489,11 +521,11 @@ function Live({
   return (
     <div>
       <p
-        className={`text-2xl font-semibold tabular-nums ${warn ? "text-rose-300" : ""}`}
+        className={`text-2xl font-semibold tabular-nums ${warn ? "text-danger" : ""}`}
       >
         {value}
       </p>
-      <p className="text-[11px] text-white/40">{label}</p>
+      <p className="text-xs text-muted">{label}</p>
     </div>
   );
 }
@@ -509,10 +541,8 @@ function Row({
 }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-white/40">{label}</dt>
-      <dd
-        className={`tabular-nums ${strong ? "font-semibold" : "text-white/75"}`}
-      >
+      <dt className="text-muted">{label}</dt>
+      <dd className={`tabular-nums ${strong ? "font-semibold" : "text-ink"}`}>
         {value}
       </dd>
     </div>

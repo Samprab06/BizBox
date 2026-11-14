@@ -23,11 +23,15 @@ export function WorkspaceView({
   view,
   siteId,
   children,
+  title,
+  allowUnknownProject = false,
 }: {
   projectId: string;
   view: View;
   siteId?: string;
   children?: ReactNode;
+  title?: string;
+  allowUnknownProject?: boolean;
 }) {
   const project = getPreviewProject(projectId);
   const selectedId = siteId ?? project?.sites[0]?.id;
@@ -55,22 +59,25 @@ export function WorkspaceView({
         <p className="mb-2 text-sm font-medium text-muted">
           {project?.name ?? projectId}
         </p>
-        <h1 className="text-4xl font-semibold tracking-tight">{views[view]}</h1>
+        <h1 className="text-4xl font-semibold tracking-tight">
+          {title ?? views[view]}
+        </h1>
       </header>
       <section
         aria-label={view === "map" ? "Candidate locations" : views[view]}
         className="rounded-2xl border border-line bg-white p-7"
       >
-        {project ? (
+        {project || allowUnknownProject ? (
           <>
-            {children ?? (
-              <PreviewContent
-                view={view}
-                project={project}
-                site={site}
-                mapSelection={siteId}
-              />
-            )}
+            {children ??
+              (project ? (
+                <PreviewContent
+                  view={view}
+                  project={project}
+                  site={site}
+                  mapSelection={siteId}
+                />
+              ) : null)}
           </>
         ) : (
           <>
@@ -116,6 +123,7 @@ function PreviewContent({
       );
     case "comparison":
     case "replay":
+    case "simulator":
       return null;
   }
 }

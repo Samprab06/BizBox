@@ -4,12 +4,14 @@ export const views = {
   site: "Site detail",
   comparison: "Comparison",
   replay: "Replay",
+  simulator: "Test plan · Simulator",
 };
 
 export type View = keyof typeof views;
 
 export function workspaceHref(projectId: string, view: View, siteId?: string) {
   const base = `/projects/${encodeURIComponent(projectId)}`;
-  if (view === "site") return `${base}/sites/${encodeURIComponent(siteId ?? "unselected")}`;
+  if (view === "site")
+    return `${base}/sites/${encodeURIComponent(siteId ?? "unselected")}`;
   return `${base}/${view}${siteId ? `?site=${encodeURIComponent(siteId)}` : ""}`;
 }
