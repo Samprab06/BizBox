@@ -89,6 +89,7 @@ Put values in `.env.local`, which is gitignored. Never commit secrets. `.env.exa
 | `OPENAI_MODEL`                                              | Optional model override (default `gpt-6-luna`).                                                        |
 | `OPENAI_REALTIME_MODEL`, `OPENAI_VOICE_TRANSCRIPTION_MODEL` | Optional voice model overrides.                                                                        |
 | `JEV_API_KEY`, `JEV_BASE_URL`, `JEV_MODEL`                  | Live Jev customer panel. Without a key, comparisons use the labelled Huff fallback.                    |
+| `JEV_CONCURRENCY`, `JEV_BUNDLE_ORDERS`                      | Jev request ceiling (default 32, adaptive on 429). `JEV_BUNDLE_ORDERS=1` bundles the option orders (off).  |
 | `VEXCEL_API_KEY`                                            | 3D city tiles in the simulator (served through a CDN-cached proxy).                                    |
 | `NESSIE_API_KEY`, `NESSIE_BASE_URL`                         | The consultant's read-only simulated cash-buffer tool ([details](docs/integrations/nessie.md)).        |
 | `MATTERPORT_SDK_KEY`, `MATTERPORT_API_TOKEN`                | Interior scans (fixture-first; licensed display stays off until data terms are cleared).               |

@@ -22,12 +22,55 @@ const CachedResult = z.object({
  * resolved version, which is legitimately different for aliases such as jev-latest.
  * No requests, keys or API credentials are logged.
  */
+const READ_CHUNK = 2000;
+const WRITE_CHUNK = 200;
+
 export function createPostgresJevCache(
   db: CatchmentExecutor,
   projectId: string,
   modelVersion: string,
 ): JevCache {
+  const rowId = (key: string) => `jev:${createHash("sha256").update(`${projectId}\n${key}`).digest("hex")}`;
   return {
+    /** One `SELECT ... WHERE cache_key IN (...)` per chunk of keys (one for any real run). */
+    async getMany(keys) {
+      const out = new Map<string, JevAskResult>();
+      const unique = [...new Set(keys)];
+      for (let i = 0; i < unique.length; i += READ_CHUNK) {
+        const chunk = unique.slice(i, i + READ_CHUNK);
+        const rows = await db.execute(sql`SELECT cache_key,response FROM jev_cache
+        WHERE project_id=${projectId} AND model_version=${modelVersion}
+        AND cache_key IN (${sql.join(
+          chunk.map((k) => sql`${k}`),
+          sql`, `,
+        )})
+        AND (expires_at IS NULL OR expires_at>now())`);
+        if (!Array.isArray(rows)) continue;
+        for (const row of rows) {
+          const parsed = CachedResult.safeParse(row.response);
+          if (parsed.success && typeof row.cache_key === "string") out.set(row.cache_key, parsed.data);
+        }
+      }
+      return out;
+    },
+    /** One multi-row upsert per chunk of answers. Later entries win for a repeated key. */
+    async setMany(entries) {
+      const byKey = new Map<string, JevAskResult>();
+      for (const e of entries) byKey.set(e.key, CachedResult.parse(e.value));
+      const all = [...byKey];
+      for (let i = 0; i < all.length; i += WRITE_CHUNK) {
+        const tuples = all
+          .slice(i, i + WRITE_CHUNK)
+          .map(
+            ([key, value]) =>
+              sql`(${rowId(key)},${projectId},${key},${modelVersion},${JSON.stringify(value)}::jsonb)`,
+          );
+        await db.execute(sql`INSERT INTO jev_cache(id,project_id,cache_key,model_version,response)
+        VALUES ${sql.join(tuples, sql`, `)}
+        ON CONFLICT(project_id,cache_key) DO UPDATE SET
+          model_version=excluded.model_version,response=excluded.response,expires_at=NULL`);
+      }
+    },
     async get(key) {
       const rows = await db.execute(sql`SELECT response FROM jev_cache
         WHERE project_id=${projectId} AND cache_key=${key} AND model_version=${modelVersion}
@@ -38,7 +81,7 @@ export function createPostgresJevCache(
     },
     async set(key, value: JevAskResult) {
       const parsed = CachedResult.parse(value);
-      const id = `jev:${createHash("sha256").update(`${projectId}\n${key}`).digest("hex")}`;
+      const id = rowId(key);
       await db.execute(sql`INSERT INTO jev_cache(id,project_id,cache_key,model_version,response)
         VALUES(${id},${projectId},${key},${modelVersion},${JSON.stringify(parsed)}::jsonb)
         ON CONFLICT(project_id,cache_key) DO UPDATE SET
