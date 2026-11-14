@@ -1,0 +1,62 @@
+/* One constant material; no canvas, morphing, refraction or animated glass. */
+.question-card {
+  border-radius: 32px !important;
+  transform: none !important;
+}
+.question-card .card-surface {
+  inset: 0;
+  border: 1px solid #ffffff3b;
+  border-radius: inherit;
+  overflow: hidden;
+  background: rgba(16, 19, 27, 0.44) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow:
+    0 18px 48px -24px #0009,
+    inset 0 1px 0 #ffffff26;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+  will-change: auto !important;
+}
+.question-card .pool-canvas,
+.question-card .glass-refraction,
+.question-card .glass-light {
+  display: none !important;
+}
+.question-card .card-footer {
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+.question-card .card-content {
+  will-change: auto;
+}
+@media (max-width: 720px) {
+  .question-card {
+    border-radius: 27px !important;
+  }
+}
+.la-scene {
+  transition: none !important;
+  animation: none !important;
+}
+
+.question-card .choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #ffffff05;
+  transform: none;
+  box-shadow: none;
+  border-color: #ffffff26;
+}
+.choice-coming-soon {
+  font-size: 10px;
+  font-weight: 400;
+  color: #cbd1dc;
+  border: 1px solid #ffffff30;
+  border-radius: 20px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}

@@ -1,0 +1,27 @@
+{
+  "checked": "2026-11-14",
+  "photos": [
+    {
+      "file": "la-real.jpg",
+      "city": "Los Angeles",
+      "author": "Rlumstead / Rachel L. Umstead",
+      "source": "https://commons.wikimedia.org/wiki/File:Los_Angeles_at_night_from_Griffith_Observatory.jpg",
+      "license": "CC BY-SA 4.0",
+      "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "display_changes": "CSS crop, dimming and static glass blur; no pixel edits to downloaded file",
+      "sha256": "ce0c0a2b0a059a974bc6d887ea558d710620be2ae835427bcc7406beb6643b9a",
+      "bytes": 1269540
+    },
+    {
+      "file": "houston-real.jpg",
+      "city": "Houston",
+      "author": "Carol M. Highsmith",
+      "source": "https://commons.wikimedia.org/wiki/File:Houston,Texas_by_Carol_M._Highsmith.jpg",
+      "original_collection": "https://hdl.loc.gov/loc.pnp/highsm.28347",
+      "license": "Public domain / no known copyright restrictions",
+      "display_changes": "Wikimedia 3840px derivative; CSS crop and dimming, no further pixel edits",
+      "sha256": "f0d0f4e19710996999ed7e32ac6be1da16a712ad7d39b73a53b60cd9f110abf9",
+      "bytes": 1529435
+    }
+  ]
+}
