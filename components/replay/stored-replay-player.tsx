@@ -56,6 +56,10 @@ export function StoredReplayPlayer({
           (event) => event.customerId === selected && event.minute <= time,
         )
       : [];
+  const arrival = history.find((event) => event.type === "arrived")?.arrival;
+  const persona = run.replayPersonas?.find(
+    (entry) => entry.id === arrival?.personaId,
+  );
   const running = playing && time < closeMin;
 
   useEffect(() => {
@@ -176,10 +180,58 @@ export function StoredReplayPlayer({
               </li>
             ))}
           </ol>
-          <p className="mt-3 text-muted">
-            Persona details and choice probabilities are not retained in these
-            stored events.
-          </p>
+          {arrival ? (
+            <dl className="mt-3 space-y-2">
+              <div>
+                <dt className="font-semibold">Persona</dt>
+                <dd>{persona?.segment ?? arrival.personaId}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold">Stay probability at arrival</dt>
+                <dd>
+                  {percent.format(arrival.stayProbability)} with{" "}
+                  {arrival.lineLength} in line
+                </dd>
+              </div>
+              {persona?.jev ? (
+                <>
+                  <div>
+                    <dt className="font-semibold">Jev panel choice shares</dt>
+                    <dd>
+                      <ul>
+                        {Object.entries(persona.jev.where).map(
+                          ([location, share]) => (
+                            <li key={location}>
+                              {location === run.siteId ? "This site" : location}{" "}
+                              · {percent.format(share)}
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold">
+                      Jev panel visits per month
+                    </dt>
+                    <dd>{decimal.format(persona.jev.visitsPerMonth)}</dd>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <dt className="font-semibold">Jev panel</dt>
+                  <dd className="text-muted">
+                    No Jev panel answers were used for this persona in this run.
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="mt-3 text-muted">
+              Persona details and choice probabilities are not retained in these
+              stored events.
+            </p>
+          )}
         </section>
       )}
       <details className="min-w-0 rounded-xl border border-line p-4">

@@ -205,8 +205,9 @@ export function resolveDemandSource(request: EvaluationRequest): {
 }
 
 export function seedList(
-  request: Pick<EvaluationRequest, "seeds" | "baseSeed">,
+  request: Pick<EvaluationRequest, "seeds" | "baseSeed" | "seedSet">,
 ): number[] {
+  if (request.seedSet) return [...request.seedSet];
   return Array.from({ length: request.seeds }, (_, i) => request.baseSeed + i);
 }
 
@@ -581,7 +582,14 @@ export function runSensitivity(
 ): SensitivityResult {
   const parsed = EvaluationRequestSchema.parse(input);
   const request: EvaluationRequest = options.seeds
-    ? { ...parsed, seeds: options.seeds }
+    ? {
+        ...parsed,
+        seeds: options.seeds,
+        // Preserve selected seed identities while honoring the caller's work limit.
+        ...(parsed.seedSet
+          ? { seedSet: parsed.seedSet.slice(0, options.seeds) }
+          : {}),
+      }
     : parsed;
   const sorted = [...new Set(values)].sort((a, b) => a - b);
   const baseline = evaluateSites(request).result;
@@ -685,6 +693,7 @@ export function canonicalEvents(events: readonly SimEvent[]) {
     customerId: string;
     minute: number;
     type: "arrived" | "joined" | "served" | "departed" | "abandoned";
+    arrival?: Pick<Extract<SimEvent, { type: "arrival" }>, "personaId" | "lineLength" | "stayProbability">;
   }[] = [];
   for (const e of events) {
     if (e.type === "arrival") {
@@ -692,6 +701,11 @@ export function canonicalEvents(events: readonly SimEvent[]) {
         customerId: e.customerId,
         minute: e.timeMin,
         type: "arrived",
+        arrival: {
+          personaId: e.personaId,
+          lineLength: e.lineLength,
+          stayProbability: e.stayProbability,
+        },
       });
       if (e.decision === "leave")
         out.push({

@@ -5,6 +5,7 @@ export * from "./matterport-schema";
 import { sql } from "drizzle-orm";
 export * from "./public-schema";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -32,6 +33,9 @@ import type {
 } from "../contracts/investigations";
 import type { StoredEvaluation } from "../evaluation/store";
 import type { ScenarioOverrides } from "../contracts/scenario";
+import type { EvaluationRequest } from "../contracts/evaluation";
+import type { AssemblyMetadata } from "../evaluation/assemble";
+import type { SiteOutcome } from "../evaluation/evaluate";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -405,6 +409,20 @@ export const scenarioRuns = pgTable(
     /** site_runs ids of the run. */
     runIds: jsonb("run_ids").$type<string[]>().notNull().default([]),
     status: scenarioRunStatus("status").notNull().default("queued"),
+    /** HAC-81: atomic rolling-budget reservation and durable evaluator checkpoints. */
+    costUnits: integer("cost_units").notNull().default(0),
+    cached: boolean("cached").notNull().default(false),
+    effectiveKey: text("effective_key"),
+    idempotencyKey: text("idempotency_key"),
+    request: jsonb("request").$type<EvaluationRequest>(),
+    assembly: jsonb("assembly").$type<AssemblyMetadata>(),
+    completed: jsonb("completed")
+      .$type<Record<string, SiteOutcome>>()
+      .notNull()
+      .default({}),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    revision: integer("revision").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -423,6 +441,22 @@ export const scenarioRuns = pgTable(
     }).onDelete("cascade"),
     index("scenario_runs_scenario_idx").on(t.projectId, t.scenarioId),
     index("scenario_runs_comparison_idx").on(t.projectId, t.comparisonId),
+    unique("scenario_runs_idempotency_unique").on(
+      t.projectId,
+      t.scenarioId,
+      t.idempotencyKey,
+    ),
+    index("scenario_runs_cache_idx").on(t.projectId, t.effectiveKey, t.status),
+    index("scenario_runs_budget_idx").on(t.projectId, t.createdAt),
+    check(
+      "scenario_runs_cost_valid",
+      sql`${t.costUnits} >= 0 AND (NOT ${t.cached} OR ${t.costUnits} = 0)`,
+    ),
+    check("scenario_runs_revision_valid", sql`${t.revision} >= 0`),
+    check(
+      "scenario_runs_lease_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
   ],
 );
 
