@@ -49,7 +49,7 @@ describe("intake without a loadable agent SDK", () => {
 describe("intake provider failure diagnostics", () => {
   it("reports only the error class, HTTP status and provider code", async () => {
     const failure = Object.assign(
-      new Error("Incorrect API key provided: sk-PRIVATE123456"),
+      new Error("Incorrect API key provided: PRIVATE_PROVIDER_KEY"),
       {
         name: "AuthenticationError",
         status: 401,
