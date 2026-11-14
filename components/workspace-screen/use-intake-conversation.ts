@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeSession } from "@/components/intake/profile";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
@@ -37,10 +38,17 @@ export type SendOptions = {
   suffix?: string;
 };
 
-/** Same capability probe as the intake screen: live only when the server reports a model. */
+/**
+ * Live only when the server reports a model. HAC-143: the probe runs once per project
+ * shell; an offline (or unanswered) result is checked again when the founder moves to
+ * another step, so a model configured meanwhile is picked up without a reload.
+ */
 function useAgentAvailability(projectId: string): AgentAvailability {
   const [state, setState] = useState<AgentAvailability>("checking");
+  const pathname = usePathname();
+  const live = state === "live";
   useEffect(() => {
+    if (live) return;
     let active = true;
     fetch(intakeEndpoint(projectId), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -54,7 +62,7 @@ function useAgentAvailability(projectId: string): AgentAvailability {
     return () => {
       active = false;
     };
-  }, [projectId]);
+  }, [projectId, pathname, live]);
   return state;
 }
 

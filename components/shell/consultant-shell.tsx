@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -140,6 +141,14 @@ export function ConsultantShell({
   const [layout, setLayout] = useConsultantLayout(projectId);
   const [mode, setMode] = useState<AssistantMode>("text");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // On a phone the sheet covers the step, so moving to another step closes it. The panel
+  // stays mounted, so the conversation and a running voice session are unaffected.
+  const pathname = usePathname();
+  const [sheetPath, setSheetPath] = useState(pathname);
+  if (sheetPath !== pathname) {
+    setSheetPath(pathname);
+    setSheetOpen(false);
+  }
   const sheetId = useId();
   const pageVoice = useRef<VoiceAdapter | null>(null);
   const registerVoice = useCallback((adapter: VoiceAdapter | null) => {

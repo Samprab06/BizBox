@@ -30,11 +30,12 @@ export default async function ProjectLayout({
           >
             <Image
               src={logo}
-              alt="BizBox"
+              alt=""
               priority
               className="h-7 w-auto"
               sizes="102px"
             />
+            <span className="sr-only">BizBox</span>
           </Link>
         </div>
       </header>

@@ -107,3 +107,9 @@ export async function openConsultant(page: Page) {
     page.getByRole("complementary", { name: "Assistant" }),
   ).toBeVisible();
 }
+
+/** Closes the phone bottom sheet so it does not cover the view; no-op from 768 px. */
+export async function closeConsultant(page: Page) {
+  const toggle = page.getByRole("button", { name: /^Hide assistant/ });
+  if (await toggle.isVisible()) await toggle.click();
+}

@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import {
+  closeConsultant,
   expect,
   expectNoA11yViolations,
   openConsultant,
@@ -153,6 +154,7 @@ for (const viewport of VIEWPORTS) {
       await expect(
         page.getByRole("heading", { level: 1, name: "Workspace" }),
       ).toBeVisible();
+      await openConsultant(page);
       await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
 
       // The header is the founder's brief from the same stored session.
@@ -205,6 +207,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await completeOnboarding(page);
   state.live = true;
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
 
   // A draft survives the Voice tab, a trip to Edit brief and back, and a reload.
@@ -215,8 +218,10 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await page.getByRole("link", { name: "Edit brief" }).click();
   await expect(title(page)).toHaveText("Review your business");
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(composer(page)).toHaveValue("Is parking nearby?");
   await page.reload();
+  await openConsultant(page);
   await expect(composer(page)).toHaveValue("Is parking nearby?");
   await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
 
@@ -239,6 +244,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
 
   // The history lives in the intake session, so a reload and the detailed form show it too.
   await page.reload();
+  await openConsultant(page);
   await tab(page, "Voice").click();
   await assistant(page).getByText("Conversation", { exact: true }).click();
   await expect(log(page)).toContainText("Street parking is limited.");
@@ -259,14 +265,17 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await composer(page).fill("Second thought");
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Edit all fields" }).click();
+  await openConsultant(page);
   await expect(composer(page)).toHaveValue("Second thought");
   await composer(page).press("Enter");
   await expect.poll(() => held.length).toBe(2);
   expect(messages[1]!.message).toBe("Second thought");
   await held[1]!.fulfill({ json: reply("Noted from the form.") });
   await expect(formLog).toContainText("Noted from the form.");
+  await closeConsultant(page);
   await page.getByRole("link", { name: "Back to guided setup" }).click();
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(log(page)).toContainText("Noted from the form.");
   await expect(log(page)).toContainText("Second thought");
 });
@@ -277,6 +286,7 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
   await mockServices(page);
   await completeOnboarding(page);
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(
     assistant(page).getByText("Offline", { exact: true }),
   ).toBeVisible();
@@ -287,6 +297,7 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
   );
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(composer(page)).toHaveValue("Anyone there?");
   await expect(log(page)).not.toContainText("Anyone there?");
 });
@@ -312,6 +323,7 @@ test("the finish and the workspace work from the keyboard, with a visible focus 
   expect(outline).not.toBe("none");
 
   // The assistant tabs are one tab stop; arrows move between Text and Voice.
+  await openConsultant(page);
   await tab(page, "Text").focus();
   await page.keyboard.press("ArrowRight");
   await expect(tab(page, "Voice")).toBeFocused();
@@ -334,6 +346,7 @@ test("the workspace plays no animation under reduced motion", async ({
   await mockServices(page);
   await completeOnboarding(page);
   await page.getByRole("link", { name: "Open workspace" }).click();
+  await openConsultant(page);
   await expect(assistant(page).getByText("Offline", { exact: true })).toBeVisible();
   const running = () =>
     page.evaluate(

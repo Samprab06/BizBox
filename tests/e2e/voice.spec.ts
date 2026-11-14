@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
-import { expect, openConsultant, test } from "./fixtures";
+import { closeConsultant, expect, openConsultant, test } from "./fixtures";
 
 type Harness = {
   deny: boolean;
@@ -195,7 +195,7 @@ async function mockVoice(
 const voice = (page: Page) =>
   page.getByRole("region", { name: "Voice assistant", exact: true });
 async function openIntakeForm(page: Page) {
-  await openIntakeForm(page);
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await openConsultant(page);
   await page
     .getByRole("complementary", { name: "Assistant" })
@@ -224,6 +224,7 @@ test("unconfigured voice has no microphone/setup side effects and typed intake w
   ).toBeDisabled();
   expect(await page.evaluate(() => window.__voice.gets)).toBe(0);
   expect(setups()).toBe(0);
+  await closeConsultant(page);
   await page
     .getByLabel("Your answer · Business concept", { exact: true })
     .fill("Typed café");
