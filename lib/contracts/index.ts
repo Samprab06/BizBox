@@ -353,6 +353,14 @@ export const SiteRunSchema = z
     seed: z.number().int().nonnegative(),
     dayType: DayType,
     outputKind: z.literal("simulated"),
+    replayPersonas: z.array(z.object({
+      id: Id,
+      segment: z.string().min(1),
+      jev: z.object({
+        where: z.record(z.string(), z.number().min(0).max(1)),
+        visitsPerMonth: z.number().nonnegative(),
+      }).optional(),
+    })).optional(),
     metrics: z
       .object({
         completedCustomers: z.number().int().nonnegative(),
@@ -372,6 +380,11 @@ export const SiteRunSchema = z
         customerId: Id,
         minute: z.number().nonnegative().finite(),
         type: z.enum(["arrived", "joined", "served", "departed", "abandoned"]),
+        arrival: z.object({
+          personaId: Id,
+          lineLength: z.number().int().nonnegative(),
+          stayProbability: z.number().min(0).max(1),
+        }).optional(),
       }),
     ),
   })

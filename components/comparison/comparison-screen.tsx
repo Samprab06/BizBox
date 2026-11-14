@@ -6,7 +6,6 @@ import {
   exampleComparisonId,
   exampleDemandLabel,
 } from "./example-comparison";
-import { ConsultantPanel } from "../ConsultantPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -33,12 +32,10 @@ export function ComparisonScreen({
   project,
   visits,
   previousId,
-  investigationId,
 }: {
   project: PreviewProject;
   visits: number;
   previousId?: string;
-  investigationId?: string;
 }) {
   const rows = exampleComparison(project.sites, visits);
   const demandLabel = exampleDemandLabel(project.sites);
@@ -183,10 +180,6 @@ export function ComparisonScreen({
           </p>
         </section>
       </div>
-      <ConsultantPanel
-        key={investigationId}
-        investigationId={investigationId}
-      />
     </div>
   );
 }
