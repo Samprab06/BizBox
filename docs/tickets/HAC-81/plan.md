@@ -20,3 +20,5 @@ merge and deployment remain outside that authorization. Keep the ticket In
 Development until the verified PR handoff.
 
 Scratch database evidence: [Scenario database checks](https://github.com/Samprab06/BizBox/actions/runs/43623212002) ran the five execution cases plus scenario, layout and interior repositories with synthetic data in an isolated PostGIS service. All 22 tests passed; none were skipped.
+
+Latest-main candidate 784e66d includes main d123010 and layout fe5bd67. A reproduced regression showed explicit seed sets bypassed bounded sensitivity sweep counts; the fix uses the original selected seed prefix, with a failing-before/passing-after test. Fresh lint, typecheck, production build, environment/client guards and full suite passed (877 passed /40 gated skips). Subsequent integration of parent d81a804 only updates its verification document.

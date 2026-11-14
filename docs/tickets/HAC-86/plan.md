@@ -37,3 +37,7 @@ Manager authorized project-scoped immutable layout persistence, reserved migrati
 - [x] Reject whitespace-altered project/layout scope IDs before database access instead of normalizing identity. Combined local layout/scenario repository, adapter and legacy-capacity checks: 22 passed.
 - [x] Production build after persistence: passed (TypeScript phase slowed under shared machine contention). Two full-suite attempts passed 760 tests with 24 skipped but each hit one different existing comparison-handler 5000 ms timeout; the unchanged handler file passed all 12 tests in isolation. No timeout or retry settings were changed.
 - [x] Final dependency stack includes interior `bf91a8d` and main `fd5bf33`; layout source candidate `87793c5`. All four checks passed: lint, typecheck, full suite (787 passed / 30 skipped, one worker), production build. Migration-chain and diff checks passed. Integration docs cover scoped persistence, layout precedence, caller validation, and migration preflight. Manager reviews and handles remote PR delivery.
+
+## Latest main integration
+
+The lead merged HAC-96 as PR #75 and retargeted #76 to main. Normal merge fe5bd67 preserves published child history and migration 0005 while incorporating main d123010 (scene API, Jev coverage, three-task navigation and replay fixes). Resolved only journal/layout-export conflicts. Fresh checks on fe5bd67: lint, typecheck, production build and single-worker suite all passed (847 passed /35 gated skips). No hosted migration was applied.
