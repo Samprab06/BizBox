@@ -234,7 +234,7 @@ describe("scenario execution", () => {
       runId: "execution-1",
       panel: { completedPersonas: 30, totalPersonas: 100 },
     });
-    expect(prepare.mock.calls[0]![2]).toEqual({
+    expect((prepare.mock.calls[0] as unknown[])[2]).toEqual({
       deadlineAt: Date.parse("2026-11-14T17:00:00.000Z") + 45_000 - 5_000,
       now: expect.any(Function),
     });
