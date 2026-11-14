@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createRng } from "@/lib/sim/random";
 import { CandidateSiteSchema, type Persona } from "./contracts";
 import { buildPersonas } from "./personas";
-import { buildQuestions, buildState, clockText, travelText, type PanelContext } from "./state";
+import { buildBundledQuestions, buildQuestions, buildState, clockText, travelText, type PanelContext } from "./state";
 import { catchment, coffeeNeed } from "./__fixtures__";
 
 const ctx: PanelContext = { site: catchment.site, competitors: catchment.competitors, need: coffeeNeed };
@@ -129,5 +129,43 @@ describe("buildQuestions", () => {
   it("adds extra price points for sensitivity", () => {
     const { questions } = buildQuestions({ ...ctx, pricePoints: [6, 7.5] });
     expect(questions.map((q) => q.name)).toContain("price_ok_at_750c");
+  });
+});
+
+describe("buildBundledQuestions (HAC-131)", () => {
+  it("carries one Choice per order with its own seeded option order and shared questions once", () => {
+    const { questions, whereOrder } = buildBundledQuestions(ctx, createRng("bundle-test").fork("p"), 4);
+    expect(questions.map((q) => q.name)).toEqual([
+      "where_o0",
+      "where_o1",
+      "where_o2",
+      "where_o3",
+      "how_often",
+      "when_o0",
+      "when_o1",
+      "when_o2",
+      "when_o3",
+      "stay_at_queue_0",
+      "stay_at_queue_2",
+      "stay_at_queue_4",
+      "stay_at_queue_6",
+      "stay_at_queue_10",
+      "price_ok",
+    ]);
+    const optionIds = (name: string) =>
+      (questions.find((q) => q.name === name) as { options: { id: string }[] }).options.map((o) => o.id);
+    const orders = [0, 1, 2, 3].map((i) => optionIds(`where_o${i}`).join(","));
+    expect(new Set(orders).size).toBeGreaterThan(1); // debiasing survives bundling
+    for (const i of [0, 1, 2, 3]) expect([...optionIds(`where_o${i}`)].sort()).toEqual(["comp_1", "comp_2", "none", "site_a"]);
+    // The state follows the first where order, as an unbundled call's state follows its own.
+    expect(whereOrder).toEqual(optionIds("where_o0").filter((id) => id !== "none"));
+  });
+
+  it("is a pure function of the seed", () => {
+    const a = buildBundledQuestions(ctx, createRng("s").fork("p"), 4);
+    const b = buildBundledQuestions(ctx, createRng("s").fork("p"), 4);
+    const c = buildBundledQuestions(ctx, createRng("other").fork("p"), 4);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    expect(JSON.stringify(a)).not.toBe(JSON.stringify(c));
   });
 });

@@ -22,17 +22,20 @@ import {
   type PersonaSet,
   type TimeBlock,
 } from "./contracts";
-import { jevCacheKey, type JevCache } from "./cache";
+import { CacheWriter, jevCacheKey, readCache, type JevCache } from "./cache";
 import type { JevAskRequest, JevAskResult, JevClient } from "./jev-client";
 import {
   HOW_OFTEN_LEVELS,
   VISITS_PER_MONTH,
+  buildBundledQuestions,
   buildQuestions,
   buildState,
   priceQuestionName,
   pricePoints,
   stayQuestionName,
+  whenOrderQuestionName,
   whereOptionIds,
+  whereOrderQuestionName,
   type PanelContext,
 } from "./state";
 
@@ -51,6 +54,13 @@ export interface RunPanelOptions {
   seed?: number | string;
   /** Shuffled orders per persona. Default 4. */
   orders?: number;
+  /**
+   * Send the shuffled orders as separate Choice questions in one request per persona x site
+   * (`where_o0..`, `when_o0..`) instead of one request per order. 4x fewer requests and about
+   * 2.8x fewer tokens, but the answers differ slightly, so it is off until validated against
+   * live Jev (JEV_BUNDLE_ORDERS). Default false.
+   */
+  bundleOrders?: boolean;
   /** Retries per failed call before the persona is given up on. Default 1. */
   retries?: number;
   pricePoints?: number[];
@@ -74,16 +84,28 @@ export interface PanelRun {
   stats: PanelStats;
 }
 
-/** One planned Jev call for a persona: the order index, the request and its cache key. */
+/** One planned Jev call for a persona: the order index and the request. */
 interface PlannedCall {
   order: number;
   request: JevAskRequest;
+  /** True when the request carries every order (`where_o0..`) rather than just this one. */
+  bundled?: boolean;
 }
 
-export function planCalls(personaSet: PersonaSet, ctx: PanelContext, seed: number | string, orders: number) {
+/**
+ * Plans the Jev calls per persona. Unbundled (default): one call per order, each with its own
+ * shuffled `where`/`when`. Bundled: a single call per persona carrying every order.
+ */
+export function planCalls(personaSet: PersonaSet, ctx: PanelContext, seed: number | string, orders: number, bundle = false) {
   const root = createRng(seed);
   return personaSet.personas.map((persona) => {
     const calls: PlannedCall[] = [];
+    if (bundle) {
+      const rng = root.fork(`${persona.id}|${ctx.site.id}|bundle`);
+      const { questions, whereOrder } = buildBundledQuestions(ctx, rng, orders);
+      calls.push({ order: 0, bundled: true, request: { state: buildState(persona, ctx, whereOrder), questions } });
+      return { persona, calls };
+    }
     for (let order = 0; order < orders; order++) {
       const rng = root.fork(`${persona.id}|${ctx.site.id}|order${order}`);
       const { questions, whereOrder } = buildQuestions(ctx, rng);
@@ -93,8 +115,36 @@ export function planCalls(personaSet: PersonaSet, ctx: PanelContext, seed: numbe
   });
 }
 
-export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
-  const started = performance.now();
+/**
+ * Splits a bundled answer into one view per order: order i sees `where_o{i}` and `when_o{i}`
+ * as `where` and `when`, and the shared answers as they are. `aggregate` then averages them
+ * exactly as it averages separate calls, so its mean and spread keep their meaning.
+ */
+export function expandBundled(result: JevAskResult, orders: number): JevAskResult[] {
+  return Array.from({ length: orders }, (_, i) => {
+    const answers = { ...result.answers };
+    for (const [base, name] of [
+      ["where", whereOrderQuestionName(i)],
+      ["when", whenOrderQuestionName(i)],
+    ] as const) {
+      const a = result.answers[name];
+      if (a) answers[base] = a;
+    }
+    return { modelVersion: result.modelVersion, answers };
+  });
+}
+
+type KeyedCall = PlannedCall & { key: string };
+
+interface SitePlan {
+  opts: RunPanelOptions;
+  ctx: PanelContext;
+  orders: number;
+  retries: number;
+  plan: { persona: PersonaSet["personas"][number]; calls: KeyedCall[] }[];
+}
+
+async function planSite(opts: RunPanelOptions): Promise<SitePlan> {
   const ctx: PanelContext = {
     site: opts.site,
     competitors: opts.competitors,
@@ -102,22 +152,40 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
     pricePoints: opts.pricePoints,
   };
   const orders = Math.max(1, opts.orders ?? DEFAULT_ORDERS);
-  const modelVersion = opts.client.modelVersion;
   const retries = Math.max(0, Math.floor(opts.retries ?? DEFAULT_RETRIES));
+  const modelVersion = opts.client.modelVersion;
+  const planned = planCalls(opts.personaSet, ctx, opts.seed ?? 0, orders, opts.bundleOrders ?? false);
+  const plan = await Promise.all(
+    planned.map(async ({ persona, calls }) => ({
+      persona,
+      calls: await Promise.all(calls.map(async (c) => ({ ...c, key: await jevCacheKey(modelVersion, c.request) }))),
+    })),
+  );
+  return { opts, ctx, orders, retries, plan };
+}
+
+interface SharedRun {
+  /** Everything the cache already holds for this run's keys, read in one batch. */
+  known: Map<string, JevAskResult>;
+  writer: CacheWriter;
+}
+
+async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
+  const started = performance.now();
+  const { opts, ctx, orders, retries } = sp;
+  const modelVersion = opts.client.modelVersion;
   const stats: PanelStats = { calls: 0, cacheHits: 0, failedCalls: 0, retriedCalls: 0, elapsedMs: 0 };
-  const plan = planCalls(opts.personaSet, ctx, opts.seed ?? 0, orders);
   const answeredVersions = new Set<string>();
 
   const outcomes = await Promise.all(
-    plan.map(async ({ persona, calls }) => {
+    sp.plan.map(async ({ persona, calls }) => {
       const settled = await Promise.allSettled(
         calls.map(async (call) => {
-          const key = await jevCacheKey(modelVersion, call.request);
-          const hit = await opts.cache.get(key);
+          const hit = shared.known.get(call.key);
           if (hit) {
             stats.cacheHits++;
             answeredVersions.add(hit.modelVersion);
-            return { key, result: hit };
+            return { call, result: hit };
           }
           try {
             let result: JevAskResult | undefined;
@@ -130,9 +198,9 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
                 if (attempt >= retries) throw e;
               }
             }
-            await opts.cache.set(key, result); // write as it arrives
+            shared.writer.add(call.key, result); // buffered, flushed in batches as answers arrive
             answeredVersions.add(result.modelVersion);
-            return { key, result };
+            return { call, result };
           } catch (e) {
             stats.failedCalls++;
             throw e;
@@ -142,21 +210,24 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
       const ok = settled.every((s) => s.status === "fulfilled");
       opts.onPersona?.(persona.id, ok);
       if (!ok) return { personaId: persona.id, behavior: undefined };
-      const answers = settled.map((s) => (s as PromiseFulfilledResult<{ key: string; result: JevAskResult }>).value);
+      const answers = settled.map((s) => (s as PromiseFulfilledResult<{ call: KeyedCall; result: JevAskResult }>).value);
+      const views = answers.flatMap((a) => (a.call.bundled ? expandBundled(a.result, orders) : [a.result]));
       return {
         personaId: persona.id,
         behavior: aggregate(
           persona.id,
           ctx,
-          answers.map((a) => a.result),
-          answers.map((a) => a.key),
+          views,
+          answers.map((a) => a.call.key),
         ),
       };
     }),
   );
 
   // Record the version Jev actually answered with (e.g. jev-1.14.0), not the requested alias.
-  const answered: string | undefined = answeredVersions.values().next().value;
+  // Sorted, not first-arrived, so a mix of versions (cached and fresh answers across an alias
+  // roll) gives the same table in any response-arrival order (HAC-131).
+  const answered: string | undefined = [...answeredVersions].sort()[0];
   const table: BehaviorTable = {
     siteId: opts.site.id,
     modelVersion: answered ?? modelVersion,
@@ -167,13 +238,35 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
   return { table: BehaviorTableSchema.parse(table), stats };
 }
 
-/** Runs the panel for several candidate sites on the same personas, one table per site. */
+/** One batched cache read for every key of `plans`, then run them all against one shared writer. */
+async function runPlans(plans: SitePlan[]): Promise<PanelRun[]> {
+  const cache = plans[0]!.opts.cache;
+  const known = await readCache(cache, plans.flatMap((sp) => sp.plan.flatMap((p) => p.calls.map((c) => c.key))));
+  const writer = new CacheWriter(cache);
+  try {
+    return await Promise.all(plans.map((sp) => execSite(sp, { known, writer })));
+  } finally {
+    await writer.flush(); // also on a thrown error, so answers already in hand are kept
+  }
+}
+
+export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
+  const [run] = await runPlans([await planSite(opts)]);
+  return run!;
+}
+
+/**
+ * Runs the panel for several candidate sites on the same personas, one table per site. All
+ * sites share one cache read (a single round trip) and one write buffer, and all their calls
+ * share the client's limiter.
+ */
 export async function runPanelForSites(
   opts: Omit<RunPanelOptions, "site"> & { sites: CandidateSite[] },
 ): Promise<{ tables: BehaviorTable[]; stats: PanelStats }> {
   const started = performance.now();
   const { sites, ...rest } = opts;
-  const runs = await Promise.all(sites.map((site) => runPanel({ ...rest, site })));
+  const runs =
+    sites.length === 0 ? [] : await runPlans(await Promise.all(sites.map((site) => planSite({ ...rest, site }))));
   const stats: PanelStats = {
     calls: sum(runs.map((r) => r.stats.calls)),
     cacheHits: sum(runs.map((r) => r.stats.cacheHits)),

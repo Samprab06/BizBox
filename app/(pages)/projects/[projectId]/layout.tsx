@@ -1,6 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
-import logo from "@/branding/bizbox-logo-dark.png";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { ConsultantShell } from "@/components/shell/consultant-shell";
 import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
@@ -26,16 +25,9 @@ export default async function ProjectLayout({
         <div className="flex h-full items-center px-5 sm:px-8">
           <Link
             href="/projects/houston-coffee/intake"
-            className="inline-flex items-center rounded-md"
+            className="inline-flex items-center"
           >
-            <Image
-              src={logo}
-              alt=""
-              priority
-              className="h-7 w-auto"
-              sizes="102px"
-            />
-            <span className="sr-only">BizBox</span>
+            <BrandLogo priority className="h-8 w-auto" />
           </Link>
         </div>
       </header>
