@@ -32,6 +32,22 @@ const unavailable = () =>
     },
     503,
   );
+/** A credential- and content-free tag for a failed thread append (e.g. "42P01"). */
+function threadErrorTag(error: unknown): string {
+  if (error && typeof error === "object") {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^[A-Za-z0-9_]{1,40}$/.test(code))
+      return code;
+    const cause = (error as { cause?: { code?: unknown } }).cause;
+    if (
+      cause &&
+      typeof cause.code === "string" &&
+      /^[A-Za-z0-9_]{1,40}$/.test(cause.code)
+    )
+      return cause.code;
+  }
+  return error instanceof Error ? error.name.slice(0, 60) : "unknown";
+}
 function invalid(error: unknown) {
   const field_errors: Record<string, string[]> = {};
   if (error instanceof z.ZodError) {
@@ -186,8 +202,13 @@ export function createIntakeHandler(dependencies: Dependencies) {
           assistantMessage,
           session.snapshot(),
         );
-      } catch {
-        return unavailable();
+      } catch (error) {
+        // Recording the exchange in the copilot thread is best-effort: a missing
+        // table (migration 0008 not applied) or a failed write never changes the
+        // intake response. Log one short line without any message text.
+        console.warn(
+          `[intake] copilot thread append skipped: ${threadErrorTag(error)}`,
+        );
       }
     }
     return json({ ...session.snapshot(), assistantMessage }, 200);
