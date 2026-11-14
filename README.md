@@ -72,11 +72,11 @@ project.
 
 Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example` lists the names.
 
-| Variable | Used by | Needed for |
-|---|---|---|
-| `DATABASE_URL` | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations. |
-| `JEV_API_KEY` | `lib/panel/jev-client.ts` | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
-| `JEV_BASE_URL` | `lib/panel/jev-client.ts` | The Jev endpoint (to be confirmed in HAC-14). |
+| Variable       | Used by                                 | Needed for                                                                                                           |
+| -------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations.                                       |
+| `JEV_API_KEY`  | `lib/panel/jev-client.ts`               | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
+| `JEV_BASE_URL` | `lib/panel/jev-client.ts`               | The Jev endpoint (to be confirmed in HAC-14).                                                                        |
 
 The fixture screens, offline tests and production build run without these credentials.
 The optional live Jev test needs its configured endpoint and API key. Model-provider and
@@ -92,16 +92,36 @@ changes. Migrations change the target database; confirm the target before runnin
 `GET /api/health` checks database and PostGIS readiness and returns 503 when they are unavailable.
 Hosted Neon setup and Vercel deployment still require configuration and verification.
 
+### Run locally with Docker
+
+The checked-in `compose.yaml` supports native ARM64 and amd64 PostGIS 16/3.x.
+Configure ignored `.env.local` with the local database settings, install DuckDB
+for the one-off public-data conversion, and place the licensed kit at
+`costar-hackathon-kit/`. Then:
+
+```sh
+pnpm db:up
+pnpm db:load
+docker compose --profile app up -d --build --wait
+pnpm db:verify
+```
+
+The loader includes migrations and prints actual SQL counts. A second run reuses
+download caches and replaces rows. Ports bind to localhost, and no env files or
+datasets enter app images. `pnpm db:down` preserves the named volume; destructive
+`pnpm db:reset --confirm` requires explicit confirmation. Full setup, Podman
+support and native alternatives: [Local PostGIS](docs/local-postgis.md).
+
 ## Scripts
 
-| Command | What it does |
-|---|---|
-| `pnpm dev` | Starts the Next.js dev server with hot reload, on port 3000 by default. |
-| `pnpm lint` | Runs ESLint over the repo with the Next.js config (`eslint.config.mjs`). |
-| `pnpm typecheck` | Generates Next.js route types (`next typegen`), then type-checks everything with `tsc --noEmit`. |
-| `pnpm test` | Runs Vitest once. Tests run offline by default; the optional live Jev test is skipped without its configuration. |
-| `pnpm build` | Builds the production app, the same build Vercel runs. |
-| `pnpm start` | Serves the production build from `pnpm build`. |
+| Command          | What it does                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`       | Starts the Next.js dev server with hot reload, on port 3000 by default.                                          |
+| `pnpm lint`      | Runs ESLint over the repo with the Next.js config (`eslint.config.mjs`).                                         |
+| `pnpm typecheck` | Generates Next.js route types (`next typegen`), then type-checks everything with `tsc --noEmit`.                 |
+| `pnpm test`      | Runs Vitest once. Tests run offline by default; the optional live Jev test is skipped without its configuration. |
+| `pnpm build`     | Builds the production app, the same build Vercel runs.                                                           |
+| `pnpm start`     | Serves the production build from `pnpm build`.                                                                   |
 
 Every PR must pass `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
 
