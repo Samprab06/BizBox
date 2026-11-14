@@ -1,50 +1,60 @@
-# Nessie cash-flow integration for BizBox
+# BizBox consultant integration with Capital One Nessie
 
-Ticket: [HAC-106](https://linear.app/hackprinceton/issue/HAC-106/nessie-add-a-simulated-banking-cash-buffer-to-bizbox-comparisons). Local branch: `codex/hac-106-nessie-cash-flow`, based on `origin/main` at `2e15874`.
+Ticket: [HAC-106](https://linear.app/hackprinceton/issue/HAC-106/nessie-add-a-simulated-banking-cash-buffer-to-bizbox-comparisons). Review: [PR #86](https://github.com/Samprab06/BizBox/pull/86). Branch: `codex/hac-106-nessie-cash-flow`.
 
-## Intent and approach
-Akshar requested a spec, Linear ticket, and implementation after reviewing the Capital One challenge. Add a bounded, read-only sponsor banking layer to the existing site comparison. Use the existing Next.js/TypeScript/Zod stack and UI tokens; no dependencies, database migrations, auth changes, or changes to site ranking. Alternatives considered: a standalone banking dashboard would distract from the decision flow; replacing demand with mock transaction data would misrepresent the data. The manager chooses a comparison panel attached to existing modeled economics.
+## User-visible behavior
 
-## Sponsor and API source
-The official On-Site Hacker Handbook linked in Discord lists Best Usage of Nessie, $250 per person for first place, and https://v2.nessieisreal.com. Reference: https://docs.google.com/document/d/1sifGjJ_WePpTG7EaCPkWB89p3g1qEEyEvNmJ8Ef191A/edit . Current docs: https://v2.nessieisreal.com/docs ; machine contract: https://v2.nessieisreal.com/openapi.json (v2.1.3, checked November 14, 2026). This is mock banking, never an actual owner bank connection, sales evidence, or a CoStar data layer.
+Nessie is a tool the consultant can use during an investigation, not a separate banking form. For a cash-buffer or site-affordability question, the consultant calls `read_nessie_cash_buffer`, receives validated mock banking evidence and, when a current site comparison is supplied, a server-calculated cash scenario. A read-only card appears within **Consultant activity** after the completed tool step. The user never puts a key or Nessie-specific command in their prompt.
 
-## Server contract
-- GET /api/integrations/nessie optionally accepts one accountId; no project ownership mapping is claimed. This is the shared configured Nessie demo sandbox.
-- Server-only NESSIE_API_KEY and NESSIE_BASE_URL (default https://v2-prod-api.nessieisreal.com). Bearer header only. Production base URL is restricted to this exact HTTPS origin, no credentials/path/query overrides. No automatic writes, seeding, settlement, or POST retries. Native fetch, no-store, bounded timeouts; safe errors without key, raw upstream body, URLs containing secrets, or stack traces.
-- Key absent: HTTP 200 status unconfigured, accounts [], snapshot null, meaningful message. Configured but no cash accounts: status empty. Success: status ready, checking/savings accounts and optionally selected-account snapshot. Malformed/duplicate accountId: 422; unknown or credit-card accountId: 404; bad key/provider failure/malformed response/timeouts: safe 502/503/504.
-- Public schemas live in lib/contracts/nessie.ts. Response schema NessieCashFlowResponseSchema exports type NessieCashFlowResponse. Shape: {status: 'unconfigured'|'empty'|'ready', source: 'nessie', synthetic: true, accounts: NessieAccount[], snapshot: NessieSnapshot|null, message: string}. Account shape: {id, nickname, type: 'Checking'|'Savings', balanceCents, availableCents}. No account numbers/customer PII/raw descriptions returned.
-- Snapshot shape: {accountId, asOf, windowStart, windowEnd, windowDays:30, inflowCents, outflowCents, netCashFlowCents, completedTransactionCount, excludedTransfersCount, upcomingBillsCents}. All monetary fields integer safe cents (balance and net may be negative); inflow/outflow/bills nonnegative. Timestamps ISO UTC, windowEnd=asOf. Fetch selected account data only after selection.
-- Traverse /accounts (100/page), /transactions (5000/page), /bills (100/page), all with documented cursor pagination. Validate upstream DTO subsets with Zod, accepting null items as empty. Bound pagination at 20 pages and reject incomplete/repeated-cursor data rather than silently truncate. Dedupe or reject conflicting transaction IDs. Reject arithmetic overflow. Honor caller cancellation and a total request deadline.
-- Read-only account list excludes Credit Card because its balance is debt and available amount is borrowing capacity. No automatic account choice or ownership claim. An account must be in this key's returned list before data access.
-- A 30-day snapshot includes only selected-account completed balance-medium transactions in [asOf-30 days,asOf]. Deposits, interest credits, refunds are inflows; purchases, withdrawals, bill payments, fees, chargebacks are outflows. All transfers are excluded and counted separately: internal funding is not operating revenue. Pending/declined/cancelled and rewards are excluded. Validate transaction direction with payer_id/payee_id and never include another account's transactions. Ledger flows are cash movement, not sales or profit.
-- Upcoming bills: this account's pending/recurring bills with a valid upcoming_payment_date within [asOf,asOf+30 days]. Date-only values include the whole UTC calendar day at either boundary, including today. Bills use USD payment_amount: safely convert to cents. Cancelled/completed/overdue bills excluded. No double subtraction from projections.
-- Snapshot output remains a read-time comparison aid, not persisted into evaluations. Explicit refresh replaces the displayed snapshot. Existing deterministic evaluation is unchanged.
+The earlier standalone comparison panel was removed following Akshar's clarified workflow. Its provider client, cash-flow arithmetic, projection math, HTTP diagnostics and tests are reused. No changes to demand, site ranking, existing evaluation costs, authentication, database schema or deployment policy.
 
-## UI contract
-- components/nessie/nessie-cash-flow-panel.tsx exports NessieCashFlowPanel with props { projections: Array<{siteId:string,label:string,monthlyContributionUsd:{low:number,mean:number,high:number}}>, outdated?:boolean }. components/live-comparison-workspace.tsx mounts it after the comparison screen and passes controller.payload.result.sites with candidate addresses. If no current comparison, snapshot still works but projection is unavailable; no fabricated comparison values.
-- Section heading Cash buffer; visible Capital One Nessie / simulated banking label; loading, missing configuration, provider error with Retry, empty sandbox, account selection, explicit refresh, snapshot timestamp and period.
-- Show available cash, last-30-day inflow/outflow/net and upcoming bills separately. Explain transfers excluded and pending payments reflected by available balance. Never describe deposits as sales or available credit as cash.
-- After a current comparison exists, choose a site and enter nonnegative upfront cost in USD (default zero, explicitly entered assumption). The percentile interval need not contain the arithmetic mean. Calculate projected cash after one month = availableCents - upfrontCostCents + monthlyContributionUsd * 100 for low/mean/high, rounded to cents; allow negative result. Model scenarios, not forecasts. Show cash coverage months only for negative operating contribution; no-loss and depleted-cash are explicit states. Historical net flow and upcoming bills are context only, not matched to site costs; the projection uses available cash, entered upfront cost, and modeled contribution only. Outdated comparisons disable projection and prompt rerun.
-- Pure projection math in lib/nessie/projection.ts is client safe; no imports of server client or env. Existing typography/colors/responsive classes only, keyboard labels and status announcements. Abort requests on unmount/account change; do not show a previous account's snapshot as the next one's. Refresh clears/reconciles removed accounts and old snapshots.
+## Sponsor and provider
 
-## Acceptance and verification
-1. No key still renders the comparison and an honest unavailable panel.
-2. A configured key loads only its checking/savings accounts and produces a selected-account validated snapshot from actual v2 responses.
-3. Cash arithmetic and projection tests cover pending/rewards/transfer exclusion, unrelated accounts, credit cards, window boundaries, refunds/chargebacks, USD bill conversion, cursor traversal/cycles/caps, unsafe inputs/overflow, missing/bad key, malformed responses, timeout, and cancellation.
-4. Browser check panel and responsive interaction; mock upstream at the HTTP boundary in tests; one live read-only smoke when key is supplied. Do not seed automatically if sandbox is empty.
-5. pnpm lint, pnpm typecheck, pnpm test, pnpm build and env/client-bundle checks pass or pre-existing failures are documented.
-6. Update .env.example, server secret bundle scanning policy, README setup, and this spec with ticket/verification. Never commit local .env files.
-7. No push, merge, deploy, production mutation, or public publishing in this task.
+The official [On-Site Hacker Handbook](https://docs.google.com/document/d/1sifGjJ_WePpTG7EaCPkWB89p3g1qEEyEvNmJ8Ef191A/edit), linked in HackPrinceton Discord, lists Best Usage of Nessie and $250 per person for first place. Its resource is [Nessie v2](https://v2.nessieisreal.com). This is a shared mock banking sandbox, not an actual owner's bank connection, measured sales evidence, financing approval, or a qualifying CoStar data layer.
 
+Provider contract checked November 14, 2026: [v2 documentation](https://v2.nessieisreal.com/docs) and [OpenAPI JSON](https://v2.nessieisreal.com/openapi.json), version 2.1.3.
 
-## Verification record — November 14, 2026
+## Configuration and provider client
 
-- Branch: `codex/hac-106-nessie-cash-flow`; base `2e15874`.
-- Clean baseline: 73 test files / 702 tests passed, 19 optional tests skipped.
-- Completed: `pnpm lint`, `pnpm typecheck`, `pnpm test` (78 files / 750 tests passed; 19 optional tests skipped), `pnpm build`.
-- Environment-file policy, public-env policy, client-bundle server-name scan, and direct emitted-client scan against configured secret values passed with no credential matches.
-- Targeted browser tests: 12 passed across Chromium and mobile Chrome. Covered missing configuration, empty sandbox, provider failure/retry, account switch/races, deleted-account refresh, current/stale scenario projections, upfront-cost validation, serious/critical Axe checks, and 390/768/1440px widths. Successful banking responses in browser tests were mocked at the API boundary; they are not evidence of a live provider connection.
-- Manager visually checked the real configured-key error on desktop and 390px mobile, with no horizontal overflow. Local route rejects POST with 405 and duplicate accountId with 422.
-- Independent read-only review: no material findings; fresh 48 targeted tests passed.
-- Initial live check: the original key returned HTTP 401; the app safely translated this to 503 `nessie_auth`. Akshar subsequently replaced the key with a v2 key. A fresh direct account read returned HTTP 200 with zero accounts and no next page. After restarting the preview, the actual app route returned HTTP 200, `status: empty`, `source: nessie`, and `synthetic: true`. Authentication and the live empty-sandbox path are now verified. A nonempty live snapshot remains unverified until the sandbox contains checking/savings accounts and transactions; no fallback to the older API or sandbox seeding was performed.
-- No dependencies, migrations, provider mutations, push, merge, deployment or publication.
+- `NESSIE_API_KEY` is server only. Obtain a v2 key with GitHub sign-in at https://v2.nessieisreal.com/account and put it in ignored `.env.local`.
+- `NESSIE_BASE_URL` defaults to `https://v2-prod-api.nessieisreal.com`. Only that exact HTTPS origin is accepted; credentials, alternate paths, query strings and fragments are rejected. Keys travel in an Authorization Bearer header, never in query parameters or client code.
+- Native read-only fetches use no-store, no redirects, a total deadline and caller cancellation. No seeding, account creation, settlement, payments, resets, automatic writes or POST retries.
+- Traverse `/accounts` at 100/page, `/transactions` at 5000/page and `/bills` at 100/page. Validate DTO subsets with Zod; null item arrays mean empty. A 20-page limit, repeated cursor or conflicting duplicate IDs fails explicitly rather than silently truncating financial data.
+- Return sanitized errors, never raw provider response bodies, keys, account numbers, customer PII or transaction descriptions. Missing configuration, empty data and provider errors are explicit states, never fabricated zero cash.
+
+## Cash evidence and scenario meaning
+
+Checking and savings accounts are eligible. Credit cards are excluded because their balance is debt and their available amount is borrowing capacity. With exactly one eligible account, the tool explicitly identifies it as the sole available demo account. With multiple accounts and no ID, return a selection question and safe choices. Never sum accounts or claim their ownership. Any supplied ID must be in the configured sandbox's returned list.
+
+The snapshot includes selected-account, completed, balance-medium transactions in the inclusive UTC interval `[asOf - 30 days, asOf]`. Deposits are attributed to payee; all other non-transfer postings use payer, per v2. Deposits, interest credits and refunds are inflows; purchases, withdrawals, bill payments, fees and chargebacks are outflows. Transfers are excluded and counted separately. Pending/declined/cancelled transactions and rewards are excluded. Available cash already reflects pending holds. Cash movement is not sales or profit.
+
+Upcoming bills include this account's pending/recurring records due in the next 30 days. Date-only values include the whole UTC calendar day at either boundary, including today. Timestamp values use exact instant bounds. Bills use dollar `payment_amount`, converted to safe integer cents. Cancelled/completed/overdue/invalid-date bills are excluded. All financial arithmetic rejects unsafe cents and aggregate overflow.
+
+With a valid stored comparison/site, the tool derives upfront buildout from `evaluation.request.sites[].config.lease.buildoutUsd`, not a founder budget or model-supplied amount. Monthly operating contribution comes from that site's `evaluation.result.sites[].monthlyContributionUsd` before buildout amortization. One-month cash = available cash minus modeled upfront buildout plus modeled monthly operating contribution. Low/high are scenario percentiles; the arithmetic mean may lie outside them. Coverage is cash after buildout divided by mean modeled loss only when that loss is negative. Depleted cash and no modeled loss are explicit states. Recent cash flow and upcoming bills remain context only; they are not matched to site costs or deducted again. These are conditional scenarios, not forecasts.
+
+## Consultant tool and durable contract
+
+- `InvestigationToolSchemas.read_nessie_cash_buffer` accepts optional `account_id` and paired optional `comparison_id`/`site_id`. It accepts no balances, contribution values, costs, arbitrary URLs or keys.
+- `lib/nessie/consultant.ts` supplies the server-only reader. `lib/agent/tools-postgres.ts` binds it into the actual configured investigation runtime. Tool execution, planning, findings and UI use the existing registration and checkpoint flow.
+- A site scenario must use a comparison produced by this investigation's current attempt after its latest saved profile. Stored request/result project, profile/version, comparison and site identities must agree. Foreign, stale or missing comparisons return a safe limitation without a cash recommendation.
+- `NessieConsultantResultSchema` / `NessieConsultantResult` in `lib/contracts/nessie.ts` validates saved output. It includes kind `nessie_cash_buffer`, source `nessie`, synthetic true, investigation/attempt/project/profile identity, status/message, safe account choices, nullable selected account/snapshot, and nullable scenario with comparison/site IDs, modeled upfront buildout, contribution interval and cash projection.
+- Missing key, empty sandbox, provider errors, invalid/ambiguous accounts and stale comparisons are nonfatal financial limitations. They do not fail an otherwise useful location investigation or establish affordability.
+- The planner allowlist/instructions expose this tool for cash/affordability/financing questions. Site affordability requires evaluated site evidence first. The tool uses the existing durable step budget, argument validation, input hashing, duplicate-step guard, resume and cancellation. No expanded filesystem/delegation permissions, budget or paid-provider limits.
+- Only completed, typed, current-attempt/profile banking output may be used as evidence. Newest Nessie evidence supersedes prior account questions/cash claims in model context, displayed notes and the grounded-plan handoff. Retry preserves unrelated findings but drops superseded banking findings. Historical milestones remain durable; they are not active financial guidance.
+
+## Consultant UI and public diagnostics
+
+`components/ConsultantPanel.tsx` retains milestone summaries, validates job identity and renders `components/nessie/consultant-cash-card.tsx` using the newest scoped tool result. `consultant-results.ts` filters identity, attempt, latest save_profile, preceding evaluation and malformed/foreign output. Old investigation responses cannot overwrite the active one. Outdated/running comparison context suppresses financial guidance and prompts rerun; a valid consultant-owned scenario can display without an unrelated external comparison.
+
+The card shows simulated-source labels, the assessed demo account, available cash, recent inflow/outflow/net, upcoming bills and snapshot time. Scenario evidence adds the assessed site/comparison, modeled upfront buildout, cash after one month with interval, cash coverage and an explicit scenario limitation. Missing/empty/error/selection states are read-only consultant findings. There are no standalone account/upfront controls or direct browser Nessie calls.
+
+Consultant activity is mounted once in the shared comparison workspace for live and example routes, using the existing investigation URL context. Existing polling/advance/retry behavior, design tokens, responsive layout and evidence labels remain.
+
+`GET /api/integrations/nessie?accountId=...` remains a read-only integration diagnostic: absent key returns200 unconfigured; no cash accounts returns200 empty; ready accounts/optional snapshot returns200; malformed/duplicate ID422; unknown/credit-card account404; provider failures use safe502/503/504. The HTTP diagnostic performs no default account selection and returns no ownership assertion. The consultant uses the server reader directly rather than making a browser or loopback request to this endpoint.
+
+## Verification and known limits
+
+- The original panel iteration passed lint/typecheck/build, 750 tests with 19 optional skips, 12 browser tests, secret scans and independent review. It was revised because Akshar clarified that Nessie belongs in the consultant tool flow.
+- The original old-format key returned 401. Akshar replaced it with a v2 key; direct account reads and the actual app route returned 200 with an empty sandbox. Authentication and empty live data are verified. No populated live snapshot or live paid model execution is claimed; no seeding was performed.
+- Consultant revision acceptance: scripted financial question -> real tool registry/provider transport -> durable milestone -> checkpoint/resume without duplicate read -> grounded numerical findings; scoped comparison and missing/error/account cases; saved UI evidence with stale-note/attempt/profile/identity handling; no direct banking fetch or standalone form; responsive/accessibility browser checks; full four repo checks and secret scans. Final results recorded after integration below.
+- No PR merge or deployment is authorized. Akshar approved revising the existing PR; retain its explicit do-not-merge instruction.

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { exampleComparison, exampleComparisonId } from "./example-comparison";
-import { ConsultantPanel } from "../ConsultantPanel";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,12 +28,10 @@ export function ComparisonScreen({
   project,
   visits,
   previousId,
-  investigationId,
 }: {
   project: PreviewProject;
   visits: number;
   previousId?: string;
-  investigationId?: string;
 }) {
   const rows = exampleComparison(project.sites, visits);
   const id = exampleComparisonId(visits);
@@ -176,7 +173,6 @@ export function ComparisonScreen({
           </p>
         </section>
       </div>
-      <ConsultantPanel key={investigationId} investigationId={investigationId} />
     </div>
   );
 }

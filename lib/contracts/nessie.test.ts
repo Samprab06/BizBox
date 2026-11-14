@@ -62,3 +62,36 @@ describe("Nessie public response", () => {
     ).toBe(true);
   });
 });
+
+import { NessieConsultantResultSchema } from "./nessie";
+
+describe("saved Nessie consultant result", () => {
+  const result = {
+    kind: "nessie_cash_buffer",
+    source: "nessie",
+    synthetic: true,
+    investigationId: "job1",
+    attempt: 1,
+    projectId: "project1",
+    profileId: "profile1",
+    profileVersion: 1,
+    status: "unconfigured",
+    message: "Demo banking is unavailable.",
+    accounts: [],
+    selectedAccount: null,
+    snapshot: null,
+    scenario: null,
+  };
+  it("keeps durable investigation/profile identity on optional evidence", () => {
+    expect(NessieConsultantResultSchema.parse(result)).toEqual(result);
+    expect(
+      NessieConsultantResultSchema.safeParse({ ...result, attempt: 0 }).success,
+    ).toBe(false);
+  });
+  it("rejects a ready result without actual selected-account evidence", () => {
+    expect(
+      NessieConsultantResultSchema.safeParse({ ...result, status: "ready" })
+        .success,
+    ).toBe(false);
+  });
+});

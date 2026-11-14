@@ -80,34 +80,45 @@ Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example
 | `JEV_MODEL`      | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
 | `OPENAI_API_KEY` | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
 | `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
-| `NESSIE_API_KEY` | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the simulated cash-buffer panel on comparisons. Server only. |
+| `NESSIE_API_KEY` | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the consultant’s simulated cash-buffer tool. Server only. |
 | `NESSIE_BASE_URL` | `lib/nessie/client.ts`                 | Optional; defaults to `https://v2-prod-api.nessieisreal.com`. Only this HTTPS origin is accepted. |
 
 The fixture screens, offline tests and production build run without these credentials.
 The optional live Jev test needs its configured endpoint and API key. The OpenAI live
 intake test additionally requires explicit opt-in; Census variables are for data loading.
 
-### Nessie cash buffer
+### Nessie consultant tool
 
 Sign in with GitHub at [Nessie v2](https://v2.nessieisreal.com/account), place the
 v2 key in `NESSIE_API_KEY` in ignored `.env.local`, and restart the dev server.
-The comparison screen's **Cash buffer** panel lets you choose a checking or savings
-account from that sandbox. It shows available cash, completed cash movements over
-the last 30 days, and upcoming bills. With a current site comparison, select a site
-and enter upfront costs to see the modeled cash buffer after one month.
+For cash-buffer or site-affordability questions, the consultant can call
+`read_nessie_cash_buffer` during its normal investigation. Users do not put keys
+or Nessie-specific commands into their prompt.
 
-This is **simulated banking data**, not an actual owner's bank connection. Deposits
-are not treated as sales, transfers are excluded from the flow summary, and credit
-card limits are not treated as cash. Recent cash flows and upcoming bills are
-context only; they are not matched to the site's modeled operating costs. The
-projection uses available cash, entered upfront costs, and modeled contribution.
-Nessie does not change the demand model, rankings, or CoStar evidence requirements.
+The tool reads simulated checking/savings accounts, available cash, completed
+cash movements over the last 30 days and upcoming bills. With a current
+investigation comparison and site, the server combines that evidence with the
+site's stored modeled upfront buildout and monthly operating contribution. A
+read-only cash-buffer card appears inside **Consultant activity** after the
+completed tool call. It is saved investigation evidence, not a separate banking
+form or a fresh browser request to Nessie.
 
-The app makes read-only requests and never seeds or resets the sandbox. An empty
-sandbox needs data created separately in Nessie before the panel can show an
-account. A 401 means the saved key is not accepted by the v2 API; get a valid v2
-key rather than using the older `?key=` authentication. Setup, public API contract,
-and acceptance criteria: [Nessie integration spec](docs/integrations/nessie.md).
+These are **simulated accounts**, not an actual owner's bank connection. A sole
+cash account can be identified explicitly as the only demo choice; if several
+exist, the consultant asks which to use rather than adding them together or
+assuming ownership. Deposits are not sales, transfers and rewards are excluded
+from the cash-flow totals, and credit-card limits are not cash. Recent movements
+and upcoming bills are context only; they are not matched to site costs. The
+scenario uses available cash minus modeled upfront buildout plus modeled monthly
+operating contribution. It does not change demand, rankings or CoStar evidence.
+
+The integration never creates accounts, moves money, or seeds/resets a sandbox.
+Missing configuration, an empty sandbox or a provider error becomes an explicit
+consultant limitation, with no fabricated cash recommendation. A 401 means the
+saved key is not accepted by v2; get a valid v2 key rather than using the older
+`?key=` authentication. The read-only `/api/integrations/nessie` endpoint remains
+available for integration diagnostics. Setup, contracts and verification:
+[Nessie integration spec](docs/integrations/nessie.md).
 
 ### Database
 

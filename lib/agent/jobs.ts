@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { withoutNessieFindings } from "@/lib/nessie/findings";
 import {
   CreateInvestigationSchema,
   INVESTIGATION_LIMITS,
@@ -182,11 +183,16 @@ export function createInvestigationService(
             "invalid_state",
             "Only failed or interrupted investigations can be retried",
           );
+        // Findings otherwise survive retry. Optional banking evidence belongs to
+        // its old snapshot/attempt, including model prose derived from it.
+        const history = await repository.listMilestones(job.id);
+        const findings = withoutNessieFindings(job.findings, history);
         return save(
           {
             ...job,
             status: "queued",
             attempt: job.attempt + 1,
+            findings,
             counters: zeroCounters(),
             lastAdvanceAt: null,
             reason: null,

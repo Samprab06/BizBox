@@ -69,3 +69,100 @@ export const NessieCashFlowResponseSchema = z
 export type NessieCashFlowResponse = z.infer<
   typeof NessieCashFlowResponseSchema
 >;
+
+const ContributionIntervalSchema = z
+  .object({
+    low: z.number().finite(),
+    mean: z.number().finite(),
+    high: z.number().finite(),
+  })
+  .strict()
+  .refine((r) => r.low <= r.high, "Invalid percentile interval");
+export const NessieCashProjectionSchema = z
+  .object({
+    cashAfterOneMonthCents: z
+      .object({ low: cents, mean: cents, high: cents })
+      .strict(),
+    coverage: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("depleted"), months: z.literal(0) }).strict(),
+      z
+        .object({
+          kind: z.literal("burning"),
+          months: z.number().nonnegative().finite(),
+        })
+        .strict(),
+      z.object({ kind: z.literal("no_loss"), months: z.null() }).strict(),
+    ]),
+  })
+  .strict();
+export const NessieConsultantScenarioSchema = z
+  .object({
+    comparisonId: z.string().min(1),
+    siteId: z.string().min(1),
+    modeledUpfrontBuildoutCents: count,
+    monthlyContributionUsd: ContributionIntervalSchema,
+    projection: NessieCashProjectionSchema,
+  })
+  .strict();
+export type NessieConsultantScenario = z.infer<
+  typeof NessieConsultantScenarioSchema
+>;
+
+/** Saved tool evidence, scoped to one investigation attempt and immutable profile. */
+export const NessieConsultantResultSchema = z
+  .object({
+    kind: z.literal("nessie_cash_buffer"),
+    source: z.literal("nessie"),
+    synthetic: z.literal(true),
+    investigationId: z.string().min(1),
+    attempt: z.number().int().positive(),
+    projectId: z.string().min(1),
+    profileId: z.string().min(1),
+    profileVersion: z.number().int().positive(),
+    status: z.enum([
+      "ready",
+      "unconfigured",
+      "empty",
+      "provider_error",
+      "account_selection_required",
+      "account_not_found",
+      "comparison_unavailable",
+    ]),
+    message: z.string().min(1),
+    accounts: z.array(NessieAccountSchema),
+    selectedAccount: NessieAccountSchema.nullable(),
+    snapshot: NessieSnapshotSchema.nullable(),
+    scenario: NessieConsultantScenarioSchema.nullable(),
+  })
+  .strict()
+  .superRefine((r, ctx) => {
+    const ids = r.accounts.map((a) => a.id);
+    if (new Set(ids).size !== ids.length)
+      ctx.addIssue({ code: "custom", message: "Duplicate account choices" });
+    if (r.status === "ready") {
+      if (
+        !r.selectedAccount ||
+        !r.snapshot ||
+        r.snapshot.accountId !== r.selectedAccount.id ||
+        !r.accounts.some(
+          (a) => JSON.stringify(a) === JSON.stringify(r.selectedAccount),
+        )
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Ready evidence requires a listed account and its snapshot",
+        });
+    } else if (r.selectedAccount || r.snapshot || r.scenario)
+      ctx.addIssue({
+        code: "custom",
+        message: "Unavailable evidence cannot contain financial guidance",
+      });
+    if (r.status === "account_selection_required" && r.accounts.length < 2)
+      ctx.addIssue({
+        code: "custom",
+        message: "Account choice requires multiple accounts",
+      });
+  });
+export type NessieConsultantResult = z.infer<
+  typeof NessieConsultantResultSchema
+>;
