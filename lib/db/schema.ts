@@ -27,6 +27,7 @@ import type {
   InvestigationJob,
   InvestigationMilestone,
 } from "../contracts/investigations";
+import type { StoredEvaluation } from "../evaluation/store";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -147,6 +148,8 @@ export const comparisons = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     profileId: text("profile_id").notNull(),
     data: jsonb("data").$type<SiteComparison>().notNull(),
+    /** HAC-22: request (with cached behavior tables), full result and sensitivity, for exact reruns. */
+    evaluation: jsonb("evaluation").$type<StoredEvaluation>(),
     createdAt: createdAt(),
   },
   (t) => [
