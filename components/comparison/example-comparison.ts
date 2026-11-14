@@ -4,12 +4,48 @@ import { percentile, simulateDay } from "@/lib/sim/engine";
 import { createRng } from "@/lib/sim/random";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
+import { loadRecordedExample } from "@/lib/panel/recorded-example-loader";
+import {
+  type RecordedJevExample,
+  recordedExampleLabel,
+  recordedExamplePersonas,
+  recordedExampleSchedule,
+} from "@/lib/panel/recorded-example";
 
 export const comparisonId = "houston-coffee-example-v1";
 const fixture = syntheticHoustonFixture;
 const hours = { openMin: 420, closeMin: 900 };
+// HAC-101: a recorded Jev panel, only if one is checked in. Without it the example stays Huff.
+const recorded = loadRecordedExample();
+const recordingFor = (sites: PreviewProject["sites"]) =>
+  recorded && sites.every((s) => recorded.sites.some((r) => r.siteId === s.id))
+    ? recorded
+    : undefined;
+/** "Recorded Jev answers, <model>, <date>" when the example runs on recorded Jev answers. */
+export function exampleDemandLabel(sites: PreviewProject["sites"]) {
+  const recording = recordingFor(sites);
+  return recording ? recordedExampleLabel(recording) : null;
+}
+
+// A recorded panel yields far more customers than the hand-built example and the result is
+// deterministic, so run each recorded scenario once per process.
+const recordedRows = new Map<string, ReturnType<typeof computeExample>>();
 
 export function exampleComparison(sites: PreviewProject["sites"], visits = 1) {
+  const recording = recordingFor(sites);
+  if (!recording) return computeExample(sites, visits, undefined);
+  const key = `${visits}:${sites.map((s) => `${s.id}/${s.squareFeet}`).join(",")}`;
+  const cached =
+    recordedRows.get(key) ?? computeExample(sites, visits, recording);
+  recordedRows.set(key, cached);
+  return cached;
+}
+
+function computeExample(
+  sites: PreviewProject["sites"],
+  visits: number,
+  recording: RecordedJevExample | undefined,
+) {
   const rows = sites.map((site, index) => {
     const config: SiteConfigInput = {
       hours: { weekday: hours, weekend: hours },
@@ -27,6 +63,16 @@ export function exampleComparison(sites: PreviewProject["sites"], visits = 1) {
       calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
     };
     const simulate = (seed: number, dayType: "weekday" | "weekend") => {
+      if (recording)
+        return simulateDay(
+          recordedExampleSchedule(recording, site.id, {
+            seed,
+            dayType,
+            ...hours,
+            scale: visits,
+          }),
+          config,
+        );
       const random = createRng(seed).next;
       const customerCount = Math.round(
         (index === 0 ? 125 : 114) * visits * (dayType === "weekday" ? 1 : 0.85),
@@ -94,7 +140,7 @@ export function exampleComparisonId(visits: number) {
   return `${comparisonId}-${visits}`;
 }
 
-export const examplePersonas = fixture.personaSet.personas.map(
+const fixturePersonas = fixture.personaSet.personas.map(
   ({ id, label }) => ({
     id,
     label,
@@ -115,3 +161,7 @@ export const examplePersonas = fixture.personaSet.personas.map(
         })) ?? [],
   }),
 );
+
+export const examplePersonas = recorded
+  ? recordedExamplePersonas(recorded)
+  : fixturePersonas;
