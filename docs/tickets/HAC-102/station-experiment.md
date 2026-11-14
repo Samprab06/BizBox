@@ -117,5 +117,17 @@ economics and representative-event parity with exactly two engine days per seed,
 identity/source/workload rejection, legacy absence, bounded payloads, no-op/cap
 suppression, ranking/ties, negative contribution, closing-time eligibility, cache
 versioning/legacy Jev resume and static fixture parity with adjacent chart inputs.
-Full integrated verification and mounted API/UI acceptance remain pending the
-manager's orchestration and frontend integration.
+The mounted API and UI are implemented. On functional checkpoint dd449b6, all
+four repository checks passed across the final verification sequence: lint and
+full single-worker suite1015 passed/40 gated skips; after a copy-only change,
+final57cb0d0 passed typecheck, production build and env/client guards. The copy
+change also passed focused SSR, owned lint and9 tests. All54 browser cases pass
+across Chromium/WebKit/mobile on the functional checkpoint. Frozen-lock,
+migration-chain, environment and diff guards pass. Manager inspected actual
+mobile confirmation and negative-contribution screenshots. Independent review of
+API/budget/snapshot/resume boundaries found no unresolved findings.
+
+The subsequent94 dependency merge changes documentation only; runtime content
+matches the verified57cb0d0. GitHub CI for HAC-102 requires publication and is not
+claimed by these local results. PR publication for HAC-94 was explicitly approved;
+this completion does not assume additional102 push/merge/deploy permission.
