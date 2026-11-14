@@ -3,12 +3,179 @@
 @theme {
   --font-sans: "DM Sans", "Segoe UI", sans-serif;
   --color-paper: #f6f5ef;
+  --color-surface: #ffffff;
   --color-ink: #1c3028;
   --color-muted: #50655a;
   --color-line: #d9dfd5;
   --color-pine: #1b4937;
+  --color-on-pine: #ffffff;
   --color-mint: #e2efdf;
+  --color-warn: #754900;
+  --color-danger: #a02828;
+  --color-baseline: #1b4937;
+  --color-alternative: #315b83;
+
+  --color-evidence-source-ink: #1b4937;
+  --color-evidence-source-surface: #e2efdf;
+  --color-evidence-input-ink: #284d78;
+  --color-evidence-input-surface: #e7eef8;
+  --color-evidence-assumption-ink: #754900;
+  --color-evidence-assumption-surface: #fff0cc;
+  --color-evidence-simulation-ink: #514178;
+  --color-evidence-simulation-surface: #eae8f5;
+
+  /* The viewport is a contained mode, never a global dark page theme. */
+  --color-viewport-canvas: #101b16;
+  --color-viewport-surface: #172720;
+  --color-viewport-ink: #f1f3eb;
+  --color-viewport-muted: #bac7be;
+  --color-viewport-line: #46594c;
+  --color-viewport-warn: #ffe3a2;
+  --color-viewport-danger: #ffb4b4;
+  --color-viewport-baseline: #a7d5b7;
+  --color-viewport-alternative: #a8c9ec;
+  --color-viewport-evidence-source-ink: #c6ebd0;
+  --color-viewport-evidence-source-surface: #243b31;
+  --color-viewport-evidence-input-ink: #c5ddfa;
+  --color-viewport-evidence-input-surface: #24364b;
+  --color-viewport-evidence-assumption-ink: #ffe3a2;
+  --color-viewport-evidence-assumption-surface: #45371b;
+  --color-viewport-evidence-simulation-ink: #e0d5fc;
+  --color-viewport-evidence-simulation-surface: #353048;
+
+  --radius-card: 0.75rem;
+  --spacing-card: 1.25rem;
 }
 
-body { @apply bg-paper font-sans text-ink antialiased; }
-a:focus-visible, button:focus-visible { @apply outline-2 outline-offset-4 outline-pine; }
+body {
+  @apply bg-paper font-sans text-ink antialiased;
+}
+a:focus-visible,
+button:focus-visible {
+  @apply outline-2 outline-offset-4 outline-pine;
+}
+
+/* Local surface variables inherit through primitives, including nested badges. */
+:root,
+[data-surface="paper"] {
+  --sw-surface: var(--color-surface);
+  --sw-ink: var(--color-ink);
+  --sw-muted: var(--color-muted);
+  --sw-line: var(--color-line);
+  --sw-baseline: var(--color-baseline);
+  --sw-alternative: var(--color-alternative);
+  --sw-source-ink: var(--color-evidence-source-ink);
+  --sw-source-surface: var(--color-evidence-source-surface);
+  --sw-input-ink: var(--color-evidence-input-ink);
+  --sw-input-surface: var(--color-evidence-input-surface);
+  --sw-assumption-ink: var(--color-evidence-assumption-ink);
+  --sw-assumption-surface: var(--color-evidence-assumption-surface);
+  --sw-simulation-ink: var(--color-evidence-simulation-ink);
+  --sw-simulation-surface: var(--color-evidence-simulation-surface);
+}
+
+[data-surface="viewport"] {
+  --sw-surface: var(--color-viewport-surface);
+  --sw-ink: var(--color-viewport-ink);
+  --sw-muted: var(--color-viewport-muted);
+  --sw-line: var(--color-viewport-line);
+  --sw-baseline: var(--color-viewport-baseline);
+  --sw-alternative: var(--color-viewport-alternative);
+  --sw-source-ink: var(--color-viewport-evidence-source-ink);
+  --sw-source-surface: var(--color-viewport-evidence-source-surface);
+  --sw-input-ink: var(--color-viewport-evidence-input-ink);
+  --sw-input-surface: var(--color-viewport-evidence-input-surface);
+  --sw-assumption-ink: var(--color-viewport-evidence-assumption-ink);
+  --sw-assumption-surface: var(--color-viewport-evidence-assumption-surface);
+  --sw-simulation-ink: var(--color-viewport-evidence-simulation-ink);
+  --sw-simulation-surface: var(--color-viewport-evidence-simulation-surface);
+  color: var(--sw-ink);
+}
+
+.sw-viewport {
+  background: var(--color-viewport-canvas);
+}
+
+.sw-card,
+.sw-glass-control {
+  min-width: 0;
+  border: 1px solid var(--sw-line);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-card);
+  color: var(--sw-ink);
+  background: var(--sw-surface);
+  overflow-wrap: anywhere;
+}
+
+.sw-glass-control {
+  background: color-mix(in srgb, var(--sw-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.sw-glass-control :is(a, button):focus-visible {
+  outline-color: var(--sw-baseline);
+}
+
+.sw-stat {
+  min-width: 0;
+  color: var(--sw-ink);
+  overflow-wrap: anywhere;
+}
+
+.sw-stat dt {
+  color: var(--sw-muted);
+  font-size: 0.875rem;
+}
+
+.sw-stat-value {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.sw-stat-qualifier {
+  margin: 0.5rem 0 0;
+  color: var(--sw-muted);
+  font-size: 0.875rem;
+}
+
+.sw-stat .sw-scenario {
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+.sw-stat .sw-scenario-baseline {
+  color: var(--sw-baseline);
+}
+.sw-stat .sw-scenario-alternative {
+  color: var(--sw-alternative);
+}
+
+.sw-evidence {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+.sw-evidence-source {
+  color: var(--sw-source-ink);
+  background: var(--sw-source-surface);
+}
+.sw-evidence-input {
+  color: var(--sw-input-ink);
+  background: var(--sw-input-surface);
+}
+.sw-evidence-assumption {
+  color: var(--sw-assumption-ink);
+  background: var(--sw-assumption-surface);
+}
+.sw-evidence-simulation {
+  color: var(--sw-simulation-ink);
+  background: var(--sw-simulation-surface);
+}
