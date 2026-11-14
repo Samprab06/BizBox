@@ -573,7 +573,12 @@ export default function Neighborhood({
     void load(element).catch(() => {
       if (!closed) setStatus("failed");
       roadRequests.abort();
+      trafficEntities.current = () => {};
+      updateScene.current = () => {};
       dispose();
+      // A constructor that throws can leave Cesium's own error panel behind
+      // before assigning viewer. This div contains only the unmanaged SDK UI.
+      if (!closed) element.replaceChildren();
     });
     return () => {
       closed = true;
@@ -628,7 +633,7 @@ export default function Neighborhood({
               Loading 3D neighborhood
             </span>
           ) : (
-            "Vexcel tiles could not load."
+            "3D neighborhood unavailable. Check WebGL support or retry imagery."
           )}
         </div>
       )}

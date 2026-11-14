@@ -55,6 +55,20 @@ tested** beside it. Example and stored weekday/weekend labels retain their exist
 meaning. The next action opens the real assumptions/evidence when no matching
 saved sensitivity condition exists.
 
+## Neighborhood WebGL fallback
+
+The neighborhood's existing rejected-load handler catches Cesium import and
+Viewer-construction failures. It clears failed SDK UI and stale control callbacks,
+shows a local WebGL/imagery fallback, and retains Retry. An offline Chromium
+regression exercises unavailable WebGL on the real workspace city branch; run
+the local app with a dummy `VEXCEL_API_KEY`, then set `E2E_SIMULATOR_CITY=1` for
+`simulator-workspace.spec.ts`. Test imagery requests are intercepted and never
+reach Vexcel. The gate is unset when the server does not expose the city branch.
+This guard covers the Cesium neighborhood only. The replay floor-plan fallback
+from HAC-103 is retained from main; café scenes keep their existing React Three
+Fiber fallback. The offline city check does not establish café WebGL-failure
+coverage.
+
 ## Remaining integration checks
 
 HAC-69 still owns the three-task navigation layout. This change provides the

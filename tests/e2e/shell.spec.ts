@@ -227,7 +227,11 @@ test.describe("bad input", () => {
   test("a malformed percent-escape in the URL does not produce a bare server error", async ({ page, projectId }) => {
     test.fixme(
       true,
-      "QUESTION: GET /projects/houston-coffee/sites/%ZZ answers 500 with a plain-text Internal Server Error (no page, no way back)",
+      // Next.js fails to decode the dynamic [siteId] param before the page runs (the page's own
+      // decodeURIComponent guard never executes), so `next start` answers a plain-text 500.
+      // Vercel's edge rejects the URL with 400 first, so production never shows the 500.
+      // A proxy.ts guard would add middleware to every request; not worth it for this.
+      "Known: local `next start` answers 500 for a malformed escape in a dynamic segment; production answers 400 at the edge",
     );
     const response = await page.goto(`/projects/${projectId}/sites/%ZZ`);
     expect(response?.status()).toBeLessThan(500);
