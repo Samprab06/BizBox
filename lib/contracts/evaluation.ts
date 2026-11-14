@@ -32,6 +32,10 @@ export const EvaluationSiteSchema = z
     /** Cached Jev answers for this site. Without one, the site cannot use demandSource "jev". */
     behaviorTable: BehaviorTable.optional(),
     behaviorTableId: z.string().min(1).optional(),
+    /** Origin of config.service.meanServiceMin (founder when the profile states it). */
+    serviceMeanOrigin: z
+      .enum(["costar", "public", "founder", "default"])
+      .optional(),
   })
   .strict()
   .refine((s) => s.storefront.id === s.siteId, {
@@ -80,7 +84,10 @@ export const EvaluationRequestSchema = z
       .array(EvaluationSiteSchema)
       .min(1)
       .max(MAX_EVALUATION_SITES)
-      .refine((sites) => new Set(sites.map((s) => s.siteId)).size === sites.length, "Site IDs must be unique"),
+      .refine(
+        (sites) => new Set(sites.map((s) => s.siteId)).size === sites.length,
+        "Site IDs must be unique",
+      ),
     demandSource: DemandSourceSchema.default("jev"),
     seeds: z.number().int().min(1).max(100).default(DEFAULT_SEEDS),
     baseSeed: z.number().int().nonnegative().default(1),
@@ -141,7 +148,10 @@ export const SiteEvaluationSchema = z.object({
   weekdayUtilization: MetricSummarySchema,
   /** Per-seed operating contribution, in seed order. Kept so ties and reruns are checkable. */
   contributionBySeed: z.array(z.number().finite()),
-  representative: z.object({ weekday: RepresentativeRunSchema, weekend: RepresentativeRunSchema }),
+  representative: z.object({
+    weekday: RepresentativeRunSchema,
+    weekend: RepresentativeRunSchema,
+  }),
   excludedPersonaIds: z.array(z.string()),
 });
 export type SiteEvaluation = z.infer<typeof SiteEvaluationSchema>;
@@ -197,7 +207,11 @@ export const SensitivityResultSchema = z.object({
    * tested values that bracket the change), or null when it never changes.
    */
   breakEven: z
-    .object({ value: z.number().finite(), fromSiteId: z.string().min(1), toSiteId: z.string().min(1) })
+    .object({
+      value: z.number().finite(),
+      fromSiteId: z.string().min(1),
+      toSiteId: z.string().min(1),
+    })
     .nullable(),
   conclusion: z.string().min(1),
 });
@@ -214,7 +228,10 @@ export const SensitivityRequestSchema = z
 export type SensitivityRequest = z.infer<typeof SensitivityRequestSchema>;
 
 /** Default sweep per assumption (rent is ±10% as the ticket asks). */
-export const DEFAULT_SENSITIVITY_VALUES: Record<SensitivityAssumption, number[]> = {
+export const DEFAULT_SENSITIVITY_VALUES: Record<
+  SensitivityAssumption,
+  number[]
+> = {
   market_share_scale: [0.5, 0.75, 1, 1.25, 1.5],
   visit_frequency: [0.5, 0.75, 1, 1.25, 1.5],
   ticket_size: [0.8, 0.9, 1, 1.1, 1.2],
