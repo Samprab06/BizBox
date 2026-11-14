@@ -4,7 +4,7 @@ import { isMain, isSensitiveName, serverEnvNames } from "./env-policy";
 
 const credentialPattern = /(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|(?:postgres(?:ql)?|mysql|redis):\/\/[^\s:/]+:[^\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----)/;
 
-export function publicEnvIssues(env: NodeJS.ProcessEnv) {
+export function publicEnvIssues(env: Record<string, string | undefined>) {
   const serverValues = serverEnvNames.map((name) => env[name]).filter(Boolean);
   return Object.entries(env).flatMap(([name, value]) => {
     if (!name.startsWith("NEXT_PUBLIC_") || !value?.trim()) return [];
