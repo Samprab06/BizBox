@@ -1,9 +1,10 @@
+import type { Page } from "@playwright/test";
 import { expect, expectNoA11yViolations, test, PROJECT_ID } from "./fixtures";
 
 /**
- * HAC-84: the copilot dock lives in the project layout. Until HAC-83's runtime adapter is
- * wired, it says so instead of showing scripted activity; the scenario list comes from
- * the existing scenario route, stubbed here so the spec needs no database.
+ * HAC-84: the copilot dock lives in the project layout and talks to HAC-83's runtime.
+ * The copilot and scenario routes are stubbed here so the spec needs no database and
+ * makes no model call; the stubbed events follow lib/contracts/copilot-runtime.ts.
  */
 const tree = {
   tree: [
@@ -30,18 +31,88 @@ const tree = {
   ],
 };
 
-test.beforeEach(async ({ page }) => {
+const context = {
+  projectId: PROJECT_ID,
+  scenarioId: "base",
+  page: `/projects/${PROJECT_ID}/map`,
+  view: "city",
+  revision: 1,
+};
+const envelope = (turnId: string, sequence: number) => ({
+  threadId: "thread",
+  turnId,
+  sequence,
+  context,
+});
+const proposal = (status: string) => ({
+  id: "call-1",
+  baseScenarioId: "base",
+  proposedScenarioId: "early",
+  title: "Proposed change",
+  description: "Review the set_hours change before running or keeping it.",
+  status,
+  evidenceIds: [],
+});
+const snapshotEvents = [
+  { type: "turn_started", requestId: "r0" },
+  { type: "tool_started", callId: "call-1", tool: "set_hours" },
+  {
+    type: "tool_completed",
+    callId: "call-1",
+    tool: "set_hours",
+    sources: [],
+    result: {
+      status: "created",
+      scenarioId: "early",
+      parentId: "base",
+      diff: {
+        sites: { added: [], removed: [] },
+        changedPaths: ["overrides.hours.weekday.openMinute"],
+        values: [],
+      },
+    },
+  },
+  { type: "proposal", proposal: proposal("pending") },
+  { type: "turn_finished", status: "completed", message: "Proposal saved." },
+].map((event, i) => ({
+  seq: i + 1,
+  payload: { ...envelope("t0", i), ...event },
+}));
+
+const sse = (turnId: string, events: Record<string, unknown>[]) =>
+  events
+    .map(
+      (event, i) =>
+        `data: ${JSON.stringify({ ...envelope(turnId, i), ...event })}\n\n`,
+    )
+    .join("");
+
+async function stubScenarios(page: Page) {
   await page.route(`**/api/projects/${PROJECT_ID}/scenarios`, (route) =>
     route.fulfill({ json: tree }),
   );
-});
+}
 
-test("the dock opens, keeps its state across navigation and passes axe", async ({
+function dockOf(page: Page) {
+  return page.getByRole("complementary", { name: /^Copilot/ });
+}
+
+test("a 503 shows a useful unavailable state; the dock survives navigation and passes axe", async ({
   page,
   gotoView,
 }) => {
+  await stubScenarios(page);
+  await page.route(`**/api/projects/${PROJECT_ID}/copilot`, (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        code: "COPILOT_UNAVAILABLE",
+        message: "Copilot is temporarily unavailable.",
+      },
+    }),
+  );
   await gotoView("map");
-  const dock = page.getByRole("complementary", { name: /^Copilot/ });
+  const dock = dockOf(page);
   const toggle = dock.getByRole("button", { name: "Show copilot" });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
 
@@ -51,11 +122,13 @@ test("the dock opens, keeps its state across navigation and passes axe", async (
     dock.getByRole("button", { name: "Hide copilot" }),
   ).toHaveAttribute("aria-expanded", "true");
   await expect(
-    dock.getByText(/copilot runtime isn't connected yet/),
+    dock.getByText(/copilot is unavailable right now/i),
   ).toBeVisible();
+  await expect(dock.getByRole("button", { name: "Try again" })).toBeVisible();
+  // No composer while the runtime is down, so nothing can be sent into a void.
+  await expect(dock.getByLabel("Message the copilot")).toHaveCount(0);
 
-  const scenario = dock.getByLabel(/Active scenario/);
-  await scenario.selectOption("early");
+  await dock.getByLabel(/Active scenario/).selectOption("early");
   await expectNoA11yViolations(page);
 
   // Client navigation keeps the layout, and with it the dock, mounted.
@@ -75,25 +148,92 @@ test("the dock opens, keeps its state across navigation and passes axe", async (
   await expect(dock.getByLabel(/Active scenario/)).toHaveValue("early");
 });
 
-test("an unavailable scenario service shows a useful, retryable state", async ({
+test("one diff card per mutation; Keep and Revert work from the keyboard", async ({
   page,
   gotoView,
 }) => {
-  await page.route(`**/api/projects/${PROJECT_ID}/scenarios`, (route) =>
-    route.fulfill({
-      status: 503,
-      json: {
-        code: "SCENARIO_UNAVAILABLE",
-        message: "Scenario service is temporarily unavailable.",
-        field_errors: {},
-      },
-    }),
-  );
+  await stubScenarios(page);
+  const turns: unknown[] = [];
+  await page.route(`**/api/projects/${PROJECT_ID}/copilot`, async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ json: { messages: [], events: snapshotEvents } });
+    const body = route.request().postDataJSON() as {
+      proposalAction?: { action: string };
+    };
+    turns.push(body);
+    const status = body.proposalAction?.action === "keep" ? "kept" : "reverted";
+    const turnId = `t${turns.length}`;
+    return route.fulfill({
+      headers: { "Content-Type": "text/event-stream" },
+      body: sse(turnId, [
+        { type: "turn_started", requestId: `r${turns.length}` },
+        { type: "proposal", proposal: proposal(status) },
+        { type: "turn_finished", status: "completed", message: "Saved." },
+      ]),
+    });
+  });
   await gotoView("map");
-  const dock = page.getByRole("complementary", { name: /^Copilot/ });
+  const dock = dockOf(page);
   await dock.getByRole("button", { name: "Show copilot" }).click();
+  const cards = dock.getByTestId("copilot-diff-card");
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toContainText("Changed opening hours");
+  await expect(cards.first()).toContainText("Weekday opening time");
+  await expectNoA11yViolations(page);
+
+  const keep = cards.first().getByRole("button", { name: /^Keep:/ });
+  await keep.focus();
+  await page.keyboard.press("Enter");
+  await expect(cards.first().getByRole("status")).toContainText("Kept");
+  await expect(cards).toHaveCount(1);
+  expect(turns[0]).toMatchObject({
+    proposalAction: { proposalId: "call-1", action: "keep" },
+    context: { scenarioId: "base", projectId: PROJECT_ID },
+  });
+  // Keep makes the proposed scenario the active one for every page.
+  await expect(dock.getByLabel(/Active scenario/)).toHaveValue("early");
   await expect(
-    dock.getByText("Scenario service is temporarily unavailable."),
-  ).toBeVisible();
-  await expect(dock.getByRole("button", { name: "Retry" })).toBeVisible();
+    cards.first().getByRole("button", { name: /^Revert:/ }),
+  ).toBeDisabled();
+});
+
+test("Revert saves a revert version through the scenario route", async ({
+  page,
+  gotoView,
+}) => {
+  await stubScenarios(page);
+  await page.route(`**/api/projects/${PROJECT_ID}/copilot`, async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ json: { messages: [], events: snapshotEvents } });
+    return route.fulfill({
+      headers: { "Content-Type": "text/event-stream" },
+      body: sse("t1", [
+        { type: "turn_started", requestId: "r1" },
+        { type: "proposal", proposal: proposal("reverted") },
+        { type: "turn_finished", status: "completed", message: "Saved." },
+      ]),
+    });
+  });
+  let revertBody: unknown = null;
+  await page.route(
+    `**/api/projects/${PROJECT_ID}/scenarios/early/revert-to`,
+    async (route) => {
+      revertBody = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        json: { scenario: { id: "early-revert" } },
+      });
+    },
+  );
+
+  await gotoView("map");
+  const dock = dockOf(page);
+  await dock.getByRole("button", { name: "Show copilot" }).click();
+  const card = dock.getByTestId("copilot-diff-card").first();
+  const revert = card.getByRole("button", { name: /^Revert:/ });
+  await revert.focus();
+  await page.keyboard.press("Space");
+  await expect(card).toContainText("revert version (early-revert)");
+  expect(revertBody).toMatchObject({ targetId: "base", author: "founder" });
+  await expect(dock.getByTestId("copilot-diff-card")).toHaveCount(1);
 });
