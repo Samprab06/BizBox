@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS costar_properties (
   point geometry(Point,4326), data jsonb NOT NULL, source jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS costar_properties_point_idx ON costar_properties USING gist(point);
+CREATE INDEX IF NOT EXISTS costar_properties_geog_idx ON costar_properties USING gist((point::geography));
 CREATE INDEX IF NOT EXISTS costar_properties_city_idx ON costar_properties(city);
 CREATE TABLE IF NOT EXISTS costar_spaces (
   id text PRIMARY KEY, listing_id text NOT NULL,

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   customType,
   doublePrecision,
@@ -26,6 +27,10 @@ export const publicBlockGroups = pgTable(
   },
   (t) => [
     index("public_block_groups_geom_idx").using("gist", t.geom),
+    index("public_block_groups_geog_idx").using(
+      "gist",
+      sql`(${t.geom}::geography)`,
+    ),
     index("public_block_groups_county_idx").on(t.countyFips),
   ],
 );
@@ -46,6 +51,7 @@ export const publicJobs = pgTable(
   },
   (t) => [
     index("public_jobs_point_idx").using("gist", t.point),
+    index("public_jobs_geog_idx").using("gist", sql`(${t.point}::geography)`),
     index("public_jobs_county_idx").on(t.countyFips),
   ],
 );
@@ -67,6 +73,7 @@ export const publicPlaces = pgTable(
   },
   (t) => [
     index("public_places_point_idx").using("gist", t.point),
+    index("public_places_geog_idx").using("gist", sql`(${t.point}::geography)`),
     index("public_places_category_idx").on(t.category),
   ],
 );
