@@ -72,7 +72,24 @@ migration, server errors, keyboard focus, reduced motion, responsive layout and 
 submission through the existing intake service. This reference does not establish
 production accessibility contrast over every image crop or production performance.
 
-Voice integration is tracked separately in **HAC-111**. Keep its production intake
-mount and reusable adapter separate from this static reference. Coordinate with
-that work before positioning voice controls; this handoff does not add a second
-profile/chat store or wire scripted replies to a live voice service.
+## Voice integration: HAC-111
+
+HAC-111 is parallel production work, with intake as its first intended mount.
+Its shared `VoiceAdapter` in `lib/voice/contracts.ts` defines:
+
+- `readContext()`: current `projectId`, `mode`, optional `selectedSiteId`, `scenarioId`,
+  `prompt` and `summary`.
+- `submitTranscript(text): Promise<string | null>`: invoke the **same typed-message
+  action** and return its actual assistant reply, or `null` when nothing should be
+  spoken. The existing action owns conversation/profile state and validation.
+
+That work targets a reusable `VoicePanel` under `components/voice`. Confirm its
+completed export/props when integrating the HAC-111 branch; it is not included in
+this reference. When moving the glass design into the app, position/style that
+component's wrapper and replace scripted `sendChat` with the real action first.
+Keep validation and explicit Keep/Revert authority in the existing UI; never add
+a separate voice conversation/profile store.
+
+The HAC-111 session route keeps the OpenAI key server-side and disables automatic
+Realtime responses (`create_response: false`), so business replies still come from
+the app's existing handler. Keep live voice out of this scripted reference.
