@@ -28,6 +28,7 @@ import {
   type ScenarioSummary,
 } from "./scenario-api";
 import type { CopilotRuntimeAdapter, CopilotRuntimeStatus } from "./types";
+import { viewContextFor } from "./view-context";
 
 export type ScenarioTreeState =
   | { state: "idle" }
@@ -175,8 +176,11 @@ export function CopilotProvider({
           text: trimmed,
           context: {
             projectId,
-            ...view.current,
-            activeScenarioId: stateRef.current.activeScenarioId,
+            view: viewContextFor(
+              view.current.pathname,
+              view.current.search,
+              stateRef.current.activeScenarioId,
+            ),
           },
         });
       } catch (error) {

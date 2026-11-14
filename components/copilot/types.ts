@@ -1,3 +1,4 @@
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import type {
   CopilotMutationResult,
   CopilotMutationToolName,
@@ -68,9 +69,8 @@ export type CopilotEvent =
 /** What the founder is looking at when they act, so the runtime can scope its reply. */
 export type CopilotViewContext = {
   projectId: string;
-  pathname: string;
-  search: string;
-  activeScenarioId: string | null;
+  /** HAC-134's shared view context (lib/contracts/agent.ts). */
+  view: AgentViewContext;
 };
 
 export type CopilotRuntimeStatus =
