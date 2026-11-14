@@ -6,7 +6,12 @@ import { catchmentRadiusMiles, evidenceDate, getSiteFixture } from "./site-fixtu
 
 export function SiteDetail({ project, site }: { project: PreviewProject; site: PreviewProject["sites"][number] }) {
   const fixture = getSiteFixture(site.id);
-  if (!fixture) return <p>Listing details are unavailable.</p>;
+  if (!fixture) return (
+    <div>
+      <p role="status">No listing details are available for this candidate yet.</p>
+      <Link className="mt-3 inline-block font-semibold text-pine underline" href={workspaceHref(project.id, "map", site.id)}>Back to map</Link>
+    </div>
+  );
 
   const facts = [
     ["Suite", fixture.suite],
@@ -46,7 +51,7 @@ export function SiteDetail({ project, site }: { project: PreviewProject; site: P
 }
 
 function Evidence({ source, children }: { source: "listing" | "catchment"; children: ReactNode }) {
-  return <a href={`#${source}-source`} className="text-pine underline decoration-dotted underline-offset-4">{children}</a>;
+  return <a href={`#${source}-source`} className="text-pine underline decoration-dotted underline-offset-4">{children} <span className="text-xs text-muted">default</span></a>;
 }
 
 function format(value: number) {

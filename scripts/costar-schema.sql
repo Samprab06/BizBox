@@ -10,6 +10,13 @@ CREATE TABLE IF NOT EXISTS costar_properties (
 CREATE INDEX IF NOT EXISTS costar_properties_point_idx ON costar_properties USING gist(point);
 CREATE INDEX IF NOT EXISTS costar_properties_geog_idx ON costar_properties USING gist((point::geography));
 CREATE INDEX IF NOT EXISTS costar_properties_city_idx ON costar_properties(city);
+-- HAC-59: the site search reads only a few property fields. Each property's data blob
+-- averages ~0.5 MB (its per-field provenance map), and reading any key detoasts all of it,
+-- so search reads this slim per-property projection instead (built at load time).
+CREATE TABLE IF NOT EXISTS costar_property_search (
+  property_id text PRIMARY KEY REFERENCES costar_properties(id) ON DELETE CASCADE,
+  data jsonb NOT NULL
+);
 CREATE TABLE IF NOT EXISTS costar_spaces (
   id text PRIMARY KEY, listing_id text NOT NULL,
   property_id text NOT NULL,

@@ -55,7 +55,23 @@ export function sizeBand(size: number | null): string {
   return ">=10000";
 }
 
-export async function loadKit(kitPath: string, databaseUrl?: string) {
+export interface LoadKitOptions {
+  /**
+   * Count attachment references but do not insert them. No runtime route reads
+   * costar_attachments (about 300 MB loaded), and it does not fit hosted plans
+   * with a 1 GB cluster limit alongside the public data.
+   */
+  skipAttachments?: boolean;
+  /** Rows per INSERT. Default 250; small hosted computes need fewer (large JSONB rows). */
+  batchSize?: number;
+}
+
+export async function loadKit(
+  kitPath: string,
+  databaseUrl?: string,
+  options: LoadKitOptions = {},
+) {
+  const batchSize = options.batchSize ?? 250;
   const enums = JSON.parse(
     await readFile(resolve(kitPath, "schemas/enums.json"), "utf8"),
   ) as EnumLookup;
@@ -160,7 +176,7 @@ export async function loadKit(kitPath: string, databaseUrl?: string) {
       // Concurrent imports serialize. A failure rolls the whole replacement back.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(481101)`);
       await tx.execute(
-        sql`TRUNCATE costar_attachments, costar_tenancies, costar_spaces, costar_properties`,
+        sql`TRUNCATE costar_property_search, costar_attachments, costar_tenancies, costar_spaces, costar_properties`,
       );
       const attachmentBatch: (typeof costarAttachments.$inferInsert)[] = [];
       const addAttachments = async (
@@ -168,9 +184,10 @@ export async function loadKit(kitPath: string, databaseUrl?: string) {
         dataset: "commercial-property" | "commercial-listing-summary",
       ) => {
         for (const a of normalizeAttachments(raw, dataset, enums)) {
-          attachmentBatch.push(a);
           counts.attachments++;
-          if (attachmentBatch.length >= 250) {
+          if (options.skipAttachments) continue;
+          attachmentBatch.push(a);
+          if (attachmentBatch.length >= batchSize) {
             await tx.insert(costarAttachments).values(attachmentBatch);
             attachmentBatch.length = 0;
           }
@@ -191,7 +208,7 @@ export async function loadKit(kitPath: string, databaseUrl?: string) {
               : [p.longitude, p.latitude],
         });
         counts.properties++;
-        if (propertyBatch.length >= 250) {
+        if (propertyBatch.length >= batchSize) {
           await tx.insert(costarProperties).values(propertyBatch);
           propertyBatch.length = 0;
         }
@@ -206,7 +223,7 @@ export async function loadKit(kitPath: string, databaseUrl?: string) {
           countSpace(space, raw);
           spaceBatch.push(space);
           counts.spaces++;
-          if (spaceBatch.length >= 250) {
+          if (spaceBatch.length >= batchSize) {
             await tx.insert(costarSpaces).values(spaceBatch);
             spaceBatch.length = 0;
           }
@@ -226,13 +243,22 @@ export async function loadKit(kitPath: string, databaseUrl?: string) {
         if (!tenancy) continue;
         tenancyBatch.push(tenancy);
         counts.tenancies++;
-        if (tenancyBatch.length >= 250) {
+        if (tenancyBatch.length >= batchSize) {
           await tx.insert(costarTenancies).values(tenancyBatch);
           tenancyBatch.length = 0;
         }
       }
       if (tenancyBatch.length)
         await tx.insert(costarTenancies).values(tenancyBatch);
+      // HAC-59: slim projection read by site search, built in the same transaction.
+      await tx.execute(
+        sql.raw(
+          await readFile(
+            new URL("./costar-property-search.sql", import.meta.url),
+            "utf8",
+          ),
+        ),
+      );
     });
     return { mode: "loaded", counts, report };
   } finally {
