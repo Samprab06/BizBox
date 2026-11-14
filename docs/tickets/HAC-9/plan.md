@@ -10,12 +10,14 @@ Execution is authorized by Akshar's overnight implementation request. Local impl
 
 ## Tasks
 
-- [ ] Establish the app/tooling files and exact dependency lockfile. Verify install compatibility with Node 22.
-- [ ] Write health behavior tests first, observe the expected failures, then add the pure evaluator, server-only database probe and uncached route. Prove missing dependencies yield a sanitized 503.
-- [ ] Backend specialist defines contracts and synthetic fixtures, with validation tests for provenance, unknowns, probability bounds and cross-entity references.
-- [ ] Backend specialist adds foundational Drizzle tables and a reviewable first migration, preserving versioned profiles and project-scoped integrity. Check generated migration consistency.
-- [ ] Integrate backend changes serially, run all four required commands plus formatting, inspect the actual diff, and perform a read-only merge preview against current origin/main.
-- [ ] Record setup commands, contract usage, actual verification evidence, and external acceptance blockers. Commit locally and checkpoint the ticket as prepared for review, not delivered or deployed.
+- [x] Establish the app/tooling files and exact dependency lockfile. Verify install compatibility with Node 22.
+- [x] Write health behavior tests first, observe the expected failures, then add the pure evaluator, server-only database probe and uncached route. Prove missing dependencies yield a sanitized 503.
+- [x] Backend specialist defines contracts and synthetic fixtures, with validation tests for provenance, unknowns, probability bounds and cross-entity references.
+- [x] Backend specialist adds foundational Drizzle tables and a reviewable first migration, preserving versioned profiles and project-scoped integrity. Check generated migration consistency.
+- [x] Integrate backend changes serially, run all four required commands plus formatting, inspect the actual diff, and perform a read-only merge preview against current origin/main.
+- [x] Record setup commands, contract usage, actual verification evidence, and external acceptance blockers. Commit locally and checkpoint the ticket as prepared for review, not delivered or deployed.
+
+See [verification.md](verification.md) for the local evidence and acceptance items that still require hosted setup or publication approval.
 
 ## Review focus
 
