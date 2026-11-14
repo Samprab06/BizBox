@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CreateInvestigationSchema,
   InvestigationMilestoneSchema,
+  type InvestigationMilestone,
 } from "@/lib/contracts/investigations";
 import {
   createInvestigationService,
@@ -351,4 +352,62 @@ describe("durable investigation jobs", () => {
       }).success,
     ).toBe(false);
   });
+});
+
+it("retry retains unrelated findings while dropping prior banking and cash-derived model prose", async () => {
+  const f = setup();
+  await f.service.create(input);
+  await f.service.advance("job-1", async ({ nextSeq }) => ({
+    tool:
+      nextSeq === 1
+        ? "read_nessie_cash_buffer"
+        : nextSeq === 2
+          ? "finish_investigation"
+          : "search_sites",
+    inputHash: `step-${nextSeq}`,
+    execute: async (): Promise<{
+      summary: InvestigationMilestone["summary"];
+      findings: string[];
+    }> => {
+      if (nextSeq === 3) throw new Error("Stop this attempt");
+      if (nextSeq === 0)
+        return {
+          summary: {
+            toolFindings: ["Useful"],
+            modelFindings: ["Useful pre-bank model note"],
+          },
+          findings: ["Useful", "Useful pre-bank model note"],
+        };
+      if (nextSeq === 1)
+        return {
+          summary: {
+            output: { message: "Old available cash" },
+            toolFindings: ["Old cash arithmetic"],
+            modelFindings: ["Old model affordability"],
+          },
+          findings: [
+            "Old available cash",
+            "Old cash arithmetic",
+            "Old model affordability",
+          ],
+        };
+      return {
+        summary: {
+          output: { findings: ["Final model derived cash"] },
+          toolFindings: ["Useful independent evidence"],
+          modelFindings: ["Final model derived cash"],
+        },
+        findings: ["Useful independent evidence", "Final model derived cash"],
+      };
+    },
+  }));
+  expect((await f.service.load("job-1")).status).toBe("failed");
+  const retried = await f.service.retry("job-1");
+  expect(retried.findings).toEqual([
+    "Useful",
+    "Useful pre-bank model note",
+    "Useful independent evidence",
+  ]);
+  expect(await f.repository.listMilestones("job-1", 1)).toHaveLength(3);
+  expect(retried.attempt).toBe(2);
 });

@@ -1,0 +1,292 @@
+// Authored synthetic example, generated offline from the exact HAC-94 schedules/config.
+// Regenerate: pnpm exec tsx scripts/generate-station-experiment-fixture.ts
+import type { StationExperimentCallout } from "@/lib/contracts/station-experiment";
+export const STATION_EXPERIMENT_FIXTURE_SOURCE =
+  "Authored synthetic example · same 12 seeds and baseline configuration as the adjacent example charts";
+export const STATION_EXPERIMENT_FIXTURES: Readonly<
+  Record<
+    string,
+    Readonly<Record<"weekday" | "weekend", StationExperimentCallout | null>>
+  >
+> = {
+  montrose: {
+    weekday: {
+      id: "stations-4",
+      kind: "station-experiment",
+      siteId: "montrose",
+      dayType: "weekday",
+      label: "Modeled additional monthly revenue",
+      caption: "Modeled, not a forecast",
+      change: {
+        scope: "whole-operating-day",
+        fromPlannedStations: 2,
+        toPlannedStations: 4,
+        fromEffectiveStations: 2,
+        toEffectiveStations: 4,
+        fromStaffHeadcount: 2,
+        toStaffHeadcount: 4,
+        hours: {
+          weekday: {
+            openMin: 420,
+            closeMin: 900,
+          },
+          weekend: {
+            openMin: 420,
+            closeMin: 900,
+          },
+        },
+      },
+      monthlyRevenueChangeUsd: {
+        mean: 1291.3333333333333,
+        low: 156,
+        median: 1170,
+        high: 2262,
+      },
+      monthlyContributionChangeUsd: {
+        mean: -8056.066666666666,
+        low: -8850.8,
+        median: -8141,
+        high: -7376.5999999999985,
+      },
+      monthlyWalkAwayChange: {
+        mean: -196.33333333333334,
+        low: -344,
+        median: -204,
+        high: -24,
+      },
+      selectedDayWalkAwayChange: {
+        mean: -7.583333333333333,
+        low: -16,
+        median: -7,
+        high: 0,
+      },
+      addedStationHoursPerMonth: 448,
+      addedStaffHoursPerMonth: 448,
+      source: {
+        mode: "aggregate",
+        seedCount: 12,
+        seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        outputKind: "simulation",
+      },
+      origins: ["default"],
+      limitations: [
+        "Whole-operating-day station counts; no hourly staffing schedule is modeled",
+        "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
+        "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
+        "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
+        "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
+        "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
+        "Selection compares only tested variants by mean added revenue, then station-hours; station purchase costs are unknown",
+      ],
+    },
+    weekend: {
+      id: "stations-4",
+      kind: "station-experiment",
+      siteId: "montrose",
+      dayType: "weekend",
+      label: "Modeled additional monthly revenue",
+      caption: "Modeled, not a forecast",
+      change: {
+        scope: "whole-operating-day",
+        fromPlannedStations: 2,
+        toPlannedStations: 4,
+        fromEffectiveStations: 2,
+        toEffectiveStations: 4,
+        fromStaffHeadcount: 2,
+        toStaffHeadcount: 4,
+        hours: {
+          weekday: {
+            openMin: 420,
+            closeMin: 900,
+          },
+          weekend: {
+            openMin: 420,
+            closeMin: 900,
+          },
+        },
+      },
+      monthlyRevenueChangeUsd: {
+        mean: 1291.3333333333333,
+        low: 156,
+        median: 1170,
+        high: 2262,
+      },
+      monthlyContributionChangeUsd: {
+        mean: -8056.066666666666,
+        low: -8850.8,
+        median: -8141,
+        high: -7376.5999999999985,
+      },
+      monthlyWalkAwayChange: {
+        mean: -196.33333333333334,
+        low: -344,
+        median: -204,
+        high: -24,
+      },
+      selectedDayWalkAwayChange: {
+        mean: -5.583333333333333,
+        low: -12,
+        median: -5,
+        high: -1,
+      },
+      addedStationHoursPerMonth: 448,
+      addedStaffHoursPerMonth: 448,
+      source: {
+        mode: "aggregate",
+        seedCount: 12,
+        seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        outputKind: "simulation",
+      },
+      origins: ["default"],
+      limitations: [
+        "Whole-operating-day station counts; no hourly staffing schedule is modeled",
+        "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
+        "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
+        "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
+        "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
+        "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
+        "Selection compares only tested variants by mean added revenue, then station-hours; station purchase costs are unknown",
+      ],
+    },
+  },
+  heights: {
+    weekday: {
+      id: "stations-4",
+      kind: "station-experiment",
+      siteId: "heights",
+      dayType: "weekday",
+      label: "Modeled additional monthly revenue",
+      caption: "Modeled, not a forecast",
+      change: {
+        scope: "whole-operating-day",
+        fromPlannedStations: 2,
+        toPlannedStations: 4,
+        fromEffectiveStations: 2,
+        toEffectiveStations: 4,
+        fromStaffHeadcount: 2,
+        toStaffHeadcount: 4,
+        hours: {
+          weekday: {
+            openMin: 420,
+            closeMin: 900,
+          },
+          weekend: {
+            openMin: 420,
+            closeMin: 900,
+          },
+        },
+      },
+      monthlyRevenueChangeUsd: {
+        mean: 1291.3333333333333,
+        low: 156,
+        median: 1170,
+        high: 2262,
+      },
+      monthlyContributionChangeUsd: {
+        mean: -8056.066666666666,
+        low: -8850.8,
+        median: -8141,
+        high: -7376.5999999999985,
+      },
+      monthlyWalkAwayChange: {
+        mean: -196.33333333333334,
+        low: -344,
+        median: -204,
+        high: -24,
+      },
+      selectedDayWalkAwayChange: {
+        mean: -7.583333333333333,
+        low: -16,
+        median: -7,
+        high: 0,
+      },
+      addedStationHoursPerMonth: 448,
+      addedStaffHoursPerMonth: 448,
+      source: {
+        mode: "aggregate",
+        seedCount: 12,
+        seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        outputKind: "simulation",
+      },
+      origins: ["default"],
+      limitations: [
+        "Whole-operating-day station counts; no hourly staffing schedule is modeled",
+        "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
+        "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
+        "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
+        "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
+        "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
+        "Selection compares only tested variants by mean added revenue, then station-hours; station purchase costs are unknown",
+      ],
+    },
+    weekend: {
+      id: "stations-4",
+      kind: "station-experiment",
+      siteId: "heights",
+      dayType: "weekend",
+      label: "Modeled additional monthly revenue",
+      caption: "Modeled, not a forecast",
+      change: {
+        scope: "whole-operating-day",
+        fromPlannedStations: 2,
+        toPlannedStations: 4,
+        fromEffectiveStations: 2,
+        toEffectiveStations: 4,
+        fromStaffHeadcount: 2,
+        toStaffHeadcount: 4,
+        hours: {
+          weekday: {
+            openMin: 420,
+            closeMin: 900,
+          },
+          weekend: {
+            openMin: 420,
+            closeMin: 900,
+          },
+        },
+      },
+      monthlyRevenueChangeUsd: {
+        mean: 1291.3333333333333,
+        low: 156,
+        median: 1170,
+        high: 2262,
+      },
+      monthlyContributionChangeUsd: {
+        mean: -8056.066666666666,
+        low: -8850.8,
+        median: -8141,
+        high: -7376.5999999999985,
+      },
+      monthlyWalkAwayChange: {
+        mean: -196.33333333333334,
+        low: -344,
+        median: -204,
+        high: -24,
+      },
+      selectedDayWalkAwayChange: {
+        mean: -5.583333333333333,
+        low: -12,
+        median: -5,
+        high: -1,
+      },
+      addedStationHoursPerMonth: 448,
+      addedStaffHoursPerMonth: 448,
+      source: {
+        mode: "aggregate",
+        seedCount: 12,
+        seeds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        outputKind: "simulation",
+      },
+      origins: ["default"],
+      limitations: [
+        "Whole-operating-day station counts; no hourly staffing schedule is modeled",
+        "Station-hours are a capacity proxy, not labor hours, staffing requirements or equipment dollars",
+        "The engine does not bind station capacity to staff headcount; actual helper staff-hours are reported separately",
+        "Additional revenue includes all extra completed services, including customers otherwise unfinished at closing; it is not attributed exclusively to walk-away recovery",
+        "Walk-away changes count balked plus reneged customers only, excluding unfinished customers at closing",
+        "Empirical p5–p95 paired-seed outcomes are simulations, not a forecast or a confidence interval for realized sales",
+        "Selection compares only tested variants by mean added revenue, then station-hours; station purchase costs are unknown",
+      ],
+    },
+  },
+};

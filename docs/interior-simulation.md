@@ -1,12 +1,12 @@
 # BizBox café interior replay
 
 HAC-104 adds a dots-only operating comparison to
-`/simulator-demo#operating-plan`. With a domain-authorized `MATTERPORT_SDK_KEY`,
+`/projects/houston-coffee/simulator#operating-plan`. With a domain-authorized `MATTERPORT_SDK_KEY`,
 the example opens the real **The Coffee Port** Matterport scan and adds simulated
 people and proposed service markers through the Bundle SDK's 3D Scene API. The
 demand remains the existing seeded toy café, not observed activity in that scan.
 
-Use `http://localhost:3016/simulator-demo#scanned-interior` to open the interior directly.
+Use `http://localhost:3016/projects/houston-coffee/simulator#scanned-interior` to open the interior directly.
 The supplied development key was verified on `localhost`; the `127.0.0.1` origin
 did not load the model. Domain authorization belongs to the SDK key's settings.
 

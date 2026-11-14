@@ -9,7 +9,7 @@ test("real cafe SDK starts its 3D layer and switches plans without replacing the
   );
   test.setTimeout(90_000);
   await page.route("**/api/vexcel/**", (route) => route.abort());
-  await page.goto("/simulator-demo#scanned-interior");
+  await page.goto("/projects/houston-coffee/simulator#scanned-interior");
   await expect(
     page.getByRole("region", { name: "Interior view controls" }),
   ).toBeInViewport();

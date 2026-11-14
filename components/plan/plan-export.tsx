@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import {
+  planContextSource,
+  type WorkspaceObservation,
+} from "@/lib/client/workspace-context";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import {
   PlanExportRefusal,
@@ -33,6 +38,23 @@ export function PlanExport({
   investigationId?: string;
 }) {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const contextOwner = JSON.stringify([
+    projectId,
+    comparisonId,
+    investigationId,
+  ]);
+  const [contextState, setContextState] = useState<{
+    owner: string;
+    observation: Extract<WorkspaceObservation, { kind: "plan" }>;
+  } | null>(null);
+  const context = useMemo<WorkspaceObservation>(
+    () =>
+      contextState?.owner === contextOwner
+        ? contextState.observation
+        : { kind: "plan", phase: "loading", comparisonId, siteIds: [] },
+    [contextState, contextOwner, comparisonId],
+  );
+  useWorkspaceReport(projectId, context);
 
   useEffect(() => {
     if (!comparisonId) return;
@@ -42,6 +64,7 @@ export function PlanExport({
     const planQuery = new URLSearchParams(query);
     if (investigationId) planQuery.set("investigationId", investigationId);
     (async () => {
+      let source: ReturnType<typeof planContextSource> = null;
       try {
         const [comparison, plan] = await Promise.all(
           [
@@ -57,17 +80,40 @@ export function PlanExport({
             return response.json();
           }),
         );
-        setState({
-          kind: "ready",
-          plan: preparePlanExport({
-            projectId,
-            comparisonId,
-            comparison,
-            plan,
-          }),
+        source = planContextSource(comparison, projectId, comparisonId);
+        const printable = preparePlanExport({
+          projectId,
+          comparisonId,
+          comparison,
+          plan,
         });
+        setState({ kind: "ready", plan: printable });
+        if (!controller.signal.aborted)
+          setContextState({
+            owner: contextOwner,
+            observation: {
+              kind: "plan",
+              phase: "ready",
+              comparisonId: printable.comparisonId,
+              siteIds: [],
+              ...source,
+            },
+          });
       } catch (error) {
         if (controller.signal.aborted) return;
+        setContextState({
+          owner: contextOwner,
+          observation: {
+            kind: "plan",
+            phase:
+              error instanceof PlanExportRefusal && error.code === "outdated"
+                ? "outdated"
+                : "error",
+            comparisonId,
+            siteIds: [],
+            ...source,
+          },
+        });
         if (error instanceof PlanExportRefusal && error.code === "outdated")
           setState({ kind: "outdated" });
         else
@@ -81,7 +127,7 @@ export function PlanExport({
       }
     })();
     return () => controller.abort();
-  }, [projectId, comparisonId, investigationId]);
+  }, [projectId, comparisonId, investigationId, contextOwner]);
 
   const comparisonLink = workspaceHref(projectId, "comparison");
   if (!comparisonId)

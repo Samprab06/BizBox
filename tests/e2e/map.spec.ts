@@ -279,9 +279,11 @@ test.describe("intake-backed map", () => {
       .getByRole("link");
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("101 Invented St");
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("region", { name: "Search diagnostics" }),
     ).toContainText("city");
@@ -328,9 +330,11 @@ test.describe("intake-backed map", () => {
     await expect(
       page.getByRole("list", { name: "Candidate sites" }),
     ).toHaveCount(0);
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
   });
 
   test("failed search is labelled example data and retry recovers live results", async ({
@@ -350,15 +354,23 @@ test.describe("intake-backed map", () => {
         .getByRole("alert")
         .filter({ hasText: /Candidate search unavailable/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     failed = false;
     await page.getByRole("button", { name: "Retry search" }).click();
     await expect(
-      page.getByRole("link", { name: /101 Invented St/ }).first(),
+      page
+        .getByRole("list", { name: "Candidate sites", exact: true })
+        .getByRole("link", { name: /101 Invented St/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
   });
 });
 
@@ -378,7 +390,11 @@ test.describe("live map boundaries", () => {
       await route.fulfill({ status: 503, json: {} });
     });
     await page.goto("/projects/houston-coffee/map");
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
@@ -464,7 +480,11 @@ test.describe("live map boundaries", () => {
         .getByRole("alert")
         .filter({ hasText: /Candidate search unavailable/ }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
   });
 
   test("live map works across widths with reduced motion and no blocking accessibility issues", async ({
@@ -487,4 +507,114 @@ test.describe("live map boundaries", () => {
     }
     await expectNoA11yViolations(page);
   });
+});
+
+// HAC-109: the lazily loaded map must not move the candidate list when it arrives.
+test.describe("map loading geometry", () => {
+  /** Only the dynamic map chunk contains the style URL, which the gate keys on. */
+  const MAP_CHUNK_MARKER = "tiles.openfreemap.org";
+
+  /** Holds the map's JavaScript chunk until `release()` is called. */
+  async function gateMapChunk(page: Page) {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/_next\/static\/.*\.js(\?.*)?$/, async (route) => {
+      try {
+        const response = await route.fetch();
+        const body = await response.text();
+        if (body.includes(MAP_CHUNK_MARKER)) await gate;
+        await route.fulfill({ response, body });
+      } catch {
+        // The test finished (or the page closed) while this request was in flight.
+      }
+    });
+    return release;
+  }
+
+  /** Page-relative top and height of an element, independent of scroll position. */
+  async function pageBox(locator: Locator) {
+    return locator.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return { top: rect.top + window.scrollY, height: rect.height };
+    });
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await stubMapStyle(page);
+  });
+
+  test("a click held across map initialisation still selects the pressed row", async ({
+    page,
+    gotoView,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const release = await gateMapChunk(page);
+    await gotoView("map");
+
+    await expect(page.getByText("Loading map…")).toBeVisible();
+    const row = page
+      .getByRole("list", { name: "Candidate sites" })
+      .getByRole("link", { name: /Montrose storefront/ });
+    await row.scrollIntoViewIfNeeded();
+    const before = await row.boundingBox();
+    expect(before).not.toBeNull();
+    const x = before!.x + before!.width / 2;
+    const y = before!.y + before!.height / 2;
+
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    release();
+    await expect(page.getByLabel("Catchment layer")).toBeVisible();
+    await expect(page.getByText("Loading map…")).toHaveCount(0);
+
+    expect(await row.boundingBox()).toEqual(before);
+    await page.mouse.up();
+    await expect(page).toHaveURL(
+      /\/projects\/houston-coffee\/map\?site=montrose$/,
+    );
+  });
+
+  for (const [label, width, height] of [
+    ["desktop", 1280, 720],
+    ["mobile", 390, 844],
+  ] as const) {
+    test(`the loading placeholder reserves the loaded geometry at ${label} width (${width}px)`, async ({
+      page,
+      gotoView,
+    }) => {
+      await page.setViewportSize({ width, height });
+      const release = await gateMapChunk(page);
+      await gotoView("map");
+
+      const placeholder = page.getByText("Loading map…");
+      const canvas = page.locator(".maplibregl-map");
+      const list = page.getByRole("list", { name: "Candidate sites" });
+      await expect(placeholder).toBeVisible();
+      await expect(list).toBeVisible();
+      const loading = {
+        canvas: await pageBox(placeholder),
+        list: await pageBox(list),
+      };
+
+      release();
+      await expect(page.getByLabel("Catchment layer")).toBeVisible();
+      await expect(placeholder).toHaveCount(0);
+      const loaded = {
+        canvas: await pageBox(canvas),
+        list: await pageBox(list),
+      };
+
+      // The placeholder fills the canvas (440px) and, with the toolbar row above it, the
+      // candidate list ends up exactly where it was.
+      expect(loaded.canvas.height).toBe(440);
+      expect(loading).toEqual(loaded);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+    });
+  }
 });

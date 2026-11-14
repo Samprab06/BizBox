@@ -33,6 +33,7 @@ import {
   expectedVisitsByHour,
   generateArrivals,
   ratePerMinuteByHour,
+  type RateOptions,
 } from "./arrivals";
 import {
   CATEGORY_DEFAULTS,
@@ -266,11 +267,12 @@ export function hourlyRates(
   dayType: DayType,
   openMin: number,
   closeMin: number,
+  options: RateOptions = {},
 ): number[] {
   const total = new Array<number>(24).fill(0);
   for (const p of estimate.personas) {
     const byHour = expectedVisitsByHour(
-      ratePerMinuteByHour(p.dailyVisits[dayType], p.timeBlocks[dayType]),
+      ratePerMinuteByHour(p.dailyVisits[dayType], p.timeBlocks[dayType], options),
       openMin,
       closeMin,
     );
@@ -285,8 +287,9 @@ export function expectedDailyCustomers(
   dayType: DayType,
   openMin: number,
   closeMin: number,
+  options: RateOptions = {},
 ): number {
-  return hourlyRates(estimate, dayType, openMin, closeMin).reduce(
+  return hourlyRates(estimate, dayType, openMin, closeMin, options).reduce(
     (s, v) => s + v,
     0,
   );
@@ -300,6 +303,7 @@ export function buildArrivalSchedule(
   if (!(req.closeMin > req.openMin))
     throw new Error("closeMin must be after openMin");
   const estimate = estimateDemand(input);
+  const rateOptions: RateOptions = { smooth: req.smoothTimeBlocks === true };
   const { customers, clippedPersonaHours } = generateArrivals(
     estimate.personas.map((p) => ({
       personaId: p.personaId,
@@ -307,6 +311,7 @@ export function buildArrivalSchedule(
       ratesByHour: ratePerMinuteByHour(
         p.dailyVisits[req.dayType],
         p.timeBlocks[req.dayType],
+        rateOptions,
       ),
     })),
     {
@@ -322,7 +327,13 @@ export function buildArrivalSchedule(
 
   const origin = derivedOrigin();
   const params: Record<string, Sourced<number>> = { ...estimate.params };
-  const hourly = hourlyRates(estimate, req.dayType, req.openMin, req.closeMin);
+  const hourly = hourlyRates(
+    estimate,
+    req.dayType,
+    req.openMin,
+    req.closeMin,
+    rateOptions,
+  );
   hourly.forEach((v, h) => {
     if (h * 60 < req.closeMin && (h + 1) * 60 > req.openMin) {
       params[`rate.h${String(h).padStart(2, "0")}`] = { value: v, origin };
@@ -336,6 +347,7 @@ export function buildArrivalSchedule(
     value: clippedPersonaHours,
     origin: "default",
   };
+  if (rateOptions.smooth) params["arrivals.smoothed"] = def(1);
 
   const schedule: ArrivalSchedule = {
     siteId: estimate.siteId,

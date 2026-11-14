@@ -1,4 +1,9 @@
-import { SiteComparisonSchema, SiteRunSchema, type SiteComparison, type SiteRun } from "@/lib/contracts";
+import {
+  SiteComparisonSchema,
+  SiteRunSchema,
+  type SiteComparison,
+  type SiteRun,
+} from "@/lib/contracts";
 import type {
   EvaluationRequest,
   EvaluationResult,
@@ -7,6 +12,7 @@ import type {
 import type { DayType } from "@/lib/demand/contracts";
 import type { DayResult, SiteConfig } from "@/lib/sim/contracts";
 import { canonicalEvents, isOutdated, type EvaluationRun } from "./evaluate";
+import type { RobustnessSummary } from "./robustness";
 import type { AssemblyMetadata } from "./assemble";
 
 /** What a stored comparison keeps so it reruns exactly from cache (comparisons.evaluation). */
@@ -16,6 +22,8 @@ export interface StoredEvaluation {
   sensitivity: SensitivityResult[];
   /** Input origins and exclusions from deterministic assembly, when used. */
   assembly?: AssemblyMetadata;
+  /** HAC-62: headline robustness summary, computed when the comparison was created. */
+  robustness?: RobustnessSummary;
 }
 
 export interface StoredComparison {
@@ -27,10 +35,17 @@ export interface StoredComparison {
 
 export interface ComparisonStore {
   save(record: StoredComparison): Promise<void>;
-  load(projectId: string, comparisonId: string): Promise<StoredComparison | null>;
+  load(
+    projectId: string,
+    comparisonId: string,
+  ): Promise<StoredComparison | null>;
   /** Latest profile version of the project, or null when it has no profile. */
   currentProfileVersion(projectId: string): Promise<number | null>;
-  saveSensitivity(projectId: string, comparisonId: string, record: StoredComparison): Promise<void>;
+  saveSensitivity(
+    projectId: string,
+    comparisonId: string,
+    record: StoredComparison,
+  ): Promise<void>;
 }
 
 const cents = (usd: number) => Math.round(usd * 100);
@@ -43,13 +58,38 @@ export function toSiteRun(args: {
   day: DayResult;
   dayType: DayType;
   modelVersion: string;
+  demandSource: EvaluationResult["demandSource"];
 }): SiteRun {
   const { id, request, config, day, dayType } = args;
+  const events = canonicalEvents(day.events);
+  const arrivingPersonas = new Set(events.flatMap((event) =>
+    event.arrival ? [event.arrival.personaId] : [],
+  ));
+  const table = args.demandSource === "jev"
+    ? request.sites.find((site) => site.siteId === day.siteId)?.behaviorTable
+    : undefined;
+  const answers = new Map(table?.personas.filter((persona) =>
+    !table.failedPersonaIds.includes(persona.personaId),
+  ).map((persona) => [persona.personaId, persona]));
+  const replayPersonas = request.personaSet.personas
+    .filter((persona) => arrivingPersonas.has(persona.id))
+    .map(({ id, segment }) => {
+      const answer = answers.get(id);
+      return { id, segment, jev: answer && {
+        where: answer.where,
+        visitsPerMonth: answer.visitsPerMonth,
+      } };
+    });
   const m = day.metrics;
   const hours = config.hours[dayType];
-  const laborUsd = (config.staff.headcount * (hours.closeMin - hours.openMin) * config.staff.wageUsdPerHour) / 60;
+  const laborUsd =
+    (config.staff.headcount *
+      (hours.closeMin - hours.openMin) *
+      config.staff.wageUsdPerHour) /
+    60;
   const revenueCents = cents(m.revenueUsd);
-  const includedCostCents = cents(m.revenueUsd * config.costs.cogsPctOfRevenue) + cents(laborUsd);
+  const includedCostCents =
+    cents(m.revenueUsd * config.costs.cogsPctOfRevenue) + cents(laborUsd);
   return SiteRunSchema.parse({
     id,
     projectId: request.projectId,
@@ -69,12 +109,17 @@ export function toSiteRun(args: {
       operatingContributionCents: revenueCents - includedCostCents,
       averageWaitMinutes: m.meanWaitMin ?? 0,
     },
-    events: canonicalEvents(day.events),
+    events,
+    replayPersonas,
   });
 }
 
 /** Builds the stored record: canonical comparison, canonical runs, and the full evaluation. */
-export function buildStoredComparison(id: string, request: EvaluationRequest, run: EvaluationRun): StoredComparison {
+export function buildStoredComparison(
+  id: string,
+  request: EvaluationRequest,
+  run: EvaluationRun,
+): StoredComparison {
   const { result } = run;
   const runId = (localId: string) => `${id}:${localId}`;
   const runs: SiteRun[] = [];
@@ -90,6 +135,7 @@ export function buildStoredComparison(id: string, request: EvaluationRequest, ru
           day: run.representativeDays[site.siteId]![dayType],
           dayType,
           modelVersion: result.modelVersion,
+          demandSource: result.demandSource,
         }),
       );
     }
@@ -100,16 +146,37 @@ export function buildStoredComparison(id: string, request: EvaluationRequest, ru
     sites: result.sites.map((s) => ({
       ...s,
       representative: {
-        weekday: { ...s.representative.weekday, runId: runId(s.representative.weekday.runId), eventIds: s.representative.weekday.eventIds.map(runId) },
-        weekend: { ...s.representative.weekend, runId: runId(s.representative.weekend.runId), eventIds: s.representative.weekend.eventIds.map(runId) },
+        weekday: {
+          ...s.representative.weekday,
+          runId: runId(s.representative.weekday.runId),
+          eventIds: s.representative.weekday.eventIds.map(runId),
+        },
+        weekend: {
+          ...s.representative.weekend,
+          runId: runId(s.representative.weekend.runId),
+          eventIds: s.representative.weekend.eventIds.map(runId),
+        },
       },
     })),
   };
-  const evaluation: StoredEvaluation = { request, result: stored, sensitivity: [] };
-  return { id, evaluation, comparison: toSiteComparison(id, evaluation, runs), runs };
+  const evaluation: StoredEvaluation = {
+    request,
+    result: stored,
+    sensitivity: [],
+  };
+  return {
+    id,
+    evaluation,
+    comparison: toSiteComparison(id, evaluation, runs),
+    runs,
+  };
 }
 
-export function toSiteComparison(id: string, evaluation: StoredEvaluation, runs: readonly SiteRun[]): SiteComparison {
+export function toSiteComparison(
+  id: string,
+  evaluation: StoredEvaluation,
+  runs: readonly SiteRun[],
+): SiteComparison {
   const { request, result } = evaluation;
   return SiteComparisonSchema.parse({
     id,
@@ -143,21 +210,40 @@ export function toSiteComparison(id: string, evaluation: StoredEvaluation, runs:
 }
 
 /** Adds a sensitivity result to a stored comparison (replacing an earlier one for the same assumption). */
-export function withSensitivity(record: StoredComparison, sensitivity: SensitivityResult): StoredComparison {
+export function withSensitivity(
+  record: StoredComparison,
+  sensitivity: SensitivityResult,
+): StoredComparison {
   const evaluation: StoredEvaluation = {
     ...record.evaluation,
-    sensitivity: [...record.evaluation.sensitivity.filter((s) => s.assumption !== sensitivity.assumption), sensitivity],
+    sensitivity: [
+      ...record.evaluation.sensitivity.filter(
+        (s) => s.assumption !== sensitivity.assumption,
+      ),
+      sensitivity,
+    ],
   };
-  return { ...record, evaluation, comparison: toSiteComparison(record.id, evaluation, record.runs) };
+  return {
+    ...record,
+    evaluation,
+    comparison: toSiteComparison(record.id, evaluation, record.runs),
+  };
 }
 
-export async function outdatedFlag(store: ComparisonStore, record: StoredComparison): Promise<boolean> {
-  const current = await store.currentProfileVersion(record.evaluation.request.projectId);
+export async function outdatedFlag(
+  store: ComparisonStore,
+  record: StoredComparison,
+): Promise<boolean> {
+  const current = await store.currentProfileVersion(
+    record.evaluation.request.projectId,
+  );
   return current !== null && isOutdated(record.evaluation.result, current);
 }
 
 /** In-memory store for tests and fixture demos. */
-export function createMemoryComparisonStore(profileVersions: Record<string, number> = {}): ComparisonStore & {
+export function createMemoryComparisonStore(
+  profileVersions: Record<string, number> = {},
+): ComparisonStore & {
   profileVersions: Record<string, number>;
   records: Map<string, StoredComparison>;
 } {
@@ -167,7 +253,10 @@ export function createMemoryComparisonStore(profileVersions: Record<string, numb
     profileVersions,
     records,
     async save(record) {
-      records.set(key(record.evaluation.request.projectId, record.id), structuredClone(record));
+      records.set(
+        key(record.evaluation.request.projectId, record.id),
+        structuredClone(record),
+      );
     },
     async load(projectId, id) {
       const r = records.get(key(projectId, id));

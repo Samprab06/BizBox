@@ -22,6 +22,34 @@
       "when": 1794642473999,
       "tag": "0002_comparison_evaluation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794670496035,
+      "tag": "0003_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794673232738,
+      "tag": "0004_matterport_models",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794674775164,
+      "tag": "0005_layouts",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794675261055,
+      "tag": "0006_scenario-executions",
+      "breakpoints": true
     }
   ]
 }

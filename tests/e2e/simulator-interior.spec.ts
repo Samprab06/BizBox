@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("paired cafe replay seeks both plans together and resets their counts and selection", async ({
   page,
 }) => {
-  await page.goto("/simulator-demo#operating-plan");
+  await page.goto("/projects/houston-coffee/simulator#operating-plan");
   const modeled = page.getByRole("button", {
     name: "Modeled layout",
     exact: true,
@@ -80,7 +80,7 @@ test("paired cafe replay seeks both plans together and resets their counts and s
 test("staffing roles can be inspected without relying on dot color at each layout width", async ({
   page,
 }) => {
-  await page.goto("/simulator-demo#operating-plan");
+  await page.goto("/projects/houston-coffee/simulator#operating-plan");
   const modeled = page.getByRole("button", {
     name: "Modeled layout",
     exact: true,
@@ -132,7 +132,7 @@ test("WebGL-unavailable interior keeps the comparison, staffing and playback usa
       return Reflect.apply(original, this, [kind, ...args]);
     } as typeof original;
   });
-  await page.goto("/simulator-demo#operating-plan");
+  await page.goto("/projects/houston-coffee/simulator#operating-plan");
   const modeled = page.getByRole("button", {
     name: "Modeled layout",
     exact: true,

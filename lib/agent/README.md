@@ -79,3 +79,27 @@ Postgres and Vercel preview verification remain separate from these offline test
 To opt into the synthetic paid smoke test, privately export `OPENAI_API_KEY`, then
 run `RUN_OPENAI_LIVE=1 pnpm exec vitest run lib/agent/runner-live.test.ts`. A key
 alone does not enable paid calls during the routine test suite.
+
+
+## Nessie cash-buffer evidence (HAC-106)
+
+The investigation tool registry exposes `read_nessie_cash_buffer` for cash-buffer
+and site-affordability questions. Arguments contain optional `account_id` and a
+paired `comparison_id`/`site_id`, never model-invented balances or costs. A site
+scenario uses only a comparison generated in the active investigation attempt,
+matching its current immutable profile, plus the stored evaluation's buildout
+and contribution. Results remain explicitly simulated and do not change the
+site ranking.
+
+The configured server adapter uses `NESSIE_API_KEY`; credentials never enter the
+model prompt or milestone. Only a sanitized, schema-validated result is saved in
+`milestone.summary.output`. The planner sees the completed output on its next
+step, and trusted tool findings survive the grounded-plan handoff. Normal tool
+budgets, checkpoints, duplicate-step guards and transport cancellation apply.
+The browser renders that saved result inside Consultant activity and makes no
+separate Nessie request.
+
+Unavailable/empty/provider-error and ambiguous-account states are optional
+financial limitations, not invented zero cash and not a reason to fail an
+otherwise useful location investigation. See the final consultant revision in
+[the Nessie spec](../../docs/integrations/nessie.md).

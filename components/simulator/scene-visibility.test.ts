@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { observeSceneVisibility } from "./scene-visibility";
 
 function fixture() {
-  const document = Object.assign(new EventTarget(), { hidden: false });
+  const document = Object.assign(new EventTarget(), {
+    hidden: false,
+    fullscreenElement: null as {
+      contains: (element: Element) => boolean;
+    } | null,
+  });
   const element = { ownerDocument: document } as unknown as Element;
   let intersect: (entries: { isIntersecting: boolean }[]) => void = () => {};
   let disconnected = false;
@@ -46,6 +51,28 @@ describe("scene visibility", () => {
     f.intersect(true);
     expect(changes).toEqual([false, true, false, true]);
     stop();
+  });
+
+  it("suspends a covered scene while another viewport is fullscreen and restores it on exit", () => {
+    const f = fixture();
+    const changes: boolean[] = [];
+    const stop = observeSceneVisibility(f.element, (active) =>
+      changes.push(active),
+    );
+    f.intersect(true);
+    f.document.fullscreenElement = { contains: () => false };
+    f.document.dispatchEvent(new Event("fullscreenchange"));
+    f.document.fullscreenElement = {
+      contains: (element) => element === f.element,
+    };
+    f.document.dispatchEvent(new Event("fullscreenchange"));
+    f.document.fullscreenElement = null;
+    f.document.dispatchEvent(new Event("fullscreenchange"));
+    expect(changes).toEqual([false, true, false, true]);
+    stop();
+    f.document.fullscreenElement = { contains: () => false };
+    f.document.dispatchEvent(new Event("fullscreenchange"));
+    expect(changes).toEqual([false, true, false, true]);
   });
 
   it("disconnects observation and ignores late visibility notifications after cleanup", () => {

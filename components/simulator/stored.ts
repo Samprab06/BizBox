@@ -215,7 +215,7 @@ export function storedSimulator(input: {
     story: {
       eyebrow: `Stored comparison · rank ${evaluation.rank} of ${input.result.sites.length}`,
       title: label,
-      intro: `Recorded representative weekday and weekend runs (seed ${weekdayRun.seed}) from comparison ${input.comparisonId}, using ${input.result.demandSource === "jev" ? "Jev" : "Huff"} demand.`,
+      intro: `Recorded representative weekday and weekend runs (seed ${weekdayRun.seed}) from comparison ${input.comparisonId}, using ${input.result.demandSource === "jev" ? "Jev" : "Huff"} modeled arrivals.`,
       scenarioLabels: ["Weekday", "Weekend"],
       compare: false,
       footnote: `Monthly figures combine this run's weekday and weekend over the saved calendar; the comparison's 90% range for monthly operating contribution is ${usd(range.low)} – ${usd(range.high)}. Modelled scenarios, not a sales forecast.`,

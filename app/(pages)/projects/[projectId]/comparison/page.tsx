@@ -17,12 +17,16 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
     <WorkspaceView
       projectId={projectId}
       view="comparison"
+      decisionLayout
       siteId={typeof site === "string" ? site : undefined}
     >
       {project && (
         <ComparisonWorkspace
           project={project}
           comparisonId={typeof comparison === "string" ? comparison : undefined}
+          investigationId={
+            typeof investigation === "string" ? investigation : undefined
+          }
           example={
             <>
               <ComparisonScreen
@@ -30,9 +34,6 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
                 visits={comparisonScenario(visits)}
                 previousId={
                   typeof comparison === "string" ? comparison : undefined
-                }
-                investigationId={
-                  typeof investigation === "string" ? investigation : undefined
                 }
               />
               <p className="mt-6 text-xs text-muted">Example data</p>

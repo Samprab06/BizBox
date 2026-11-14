@@ -19,9 +19,11 @@ test.describe("stored representative replay", () => {
     await expect(
       page.getByRole("button", { name: "Play", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Replay", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
     const weekday = liveComparisonPayload.result.sites.find(
       (site) => site.siteId === liveCandidateIds[0],
     )!.representative.weekday;
@@ -41,9 +43,10 @@ test.describe("stored representative replay", () => {
     await expect(
       page.getByRole("region", { name: "Stored customer events" }),
     ).toBeVisible();
+    await expect(page.getByText("Stay probability at arrival")).toBeVisible();
     await expect(
       page.getByText(
-        "Persona details and choice probabilities are not retained in these stored events.",
+        "No Jev panel answers were used for this persona in this run.",
       ),
     ).toBeVisible();
     await page.getByRole("button", { name: "Replay", exact: true }).click();
@@ -95,15 +98,21 @@ test.describe("stored representative replay", () => {
     ).toHaveText(
       "The stored run is unavailable. Showing an example replay below.",
     );
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Replay", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Play", exact: true }),
     ).toBeVisible();
     failed = false;
     await page.getByRole("button", { name: "Retry stored run" }).click();
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
+    await expect(
+      page
+        .getByRole("region", { name: "Replay", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Play", exact: true }),
     ).toBeVisible();
@@ -125,7 +134,11 @@ test.describe("stored representative replay", () => {
     await expect(
       page.getByRole("button", { name: "Retry stored run" }),
     ).toBeVisible();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Replay", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
   });
 
   test("shows progress while the canonical run is loading", async ({
@@ -159,7 +172,11 @@ test.describe("stored representative replay", () => {
 
   test("keeps fixture replay without completed intake", async ({ page }) => {
     await page.goto("/projects/houston-coffee/replay?site=montrose");
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Replay", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Play", exact: true }),
     ).toBeVisible();

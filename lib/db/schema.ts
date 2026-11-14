@@ -1,7 +1,11 @@
 export * from "./costar-schema";
+export * from "./layout-schema";
+import { layouts } from "./layout-schema";
+export * from "./matterport-schema";
 import { sql } from "drizzle-orm";
 export * from "./public-schema";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -28,6 +32,10 @@ import type {
   InvestigationMilestone,
 } from "../contracts/investigations";
 import type { StoredEvaluation } from "../evaluation/store";
+import type { ScenarioOverrides } from "../contracts/scenario";
+import type { EvaluationRequest } from "../contracts/evaluation";
+import type { AssemblyMetadata } from "../evaluation/assemble";
+import type { SiteOutcome } from "../evaluation/evaluate";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -316,4 +324,158 @@ export const evidence = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("evidence_project_idx").on(t.projectId)],
+);
+
+export const scenarioRunStatus = pgEnum("scenario_run_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+/**
+ * HAC-80: immutable scenario versions. Rows are insert-only (a trigger rejects
+ * UPDATE); a change is a new row whose parent_id is the previous version.
+ */
+export const scenarios = pgTable(
+  "scenarios",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    parentId: text("parent_id"),
+    siteIds: jsonb("site_ids").$type<string[]>().notNull(),
+    profileVersion: integer("profile_version").notNull(),
+    overrides: jsonb("overrides").$type<ScenarioOverrides>().notNull(),
+    /** HAC-86: immutable layout in this same project, or null for legacy scenarios. */
+    layoutId: text("layout_id"),
+    label: text("label").notNull(),
+    author: text("author").notNull(),
+    rationale: text("rationale"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("scenarios_project_id_id_unique").on(t.projectId, t.id),
+    foreignKey({
+      name: "scenarios_scoped_parent_fk",
+      columns: [t.projectId, t.parentId],
+      foreignColumns: [t.projectId, t.id],
+    }),
+    foreignKey({
+      name: "scenarios_scoped_profile_version_fk",
+      columns: [t.projectId, t.profileVersion],
+      foreignColumns: [profiles.projectId, profiles.version],
+    }),
+    index("scenarios_project_idx").on(t.projectId, t.createdAt),
+    index("scenarios_parent_idx").on(t.projectId, t.parentId),
+    foreignKey({
+      name: "scenarios_scoped_layout_fk",
+      columns: [t.projectId, t.layoutId],
+      foreignColumns: [layouts.projectId, layouts.id],
+    }),
+    index("scenarios_layout_idx").on(t.projectId, t.layoutId),
+    check("scenarios_author_valid", sql`${t.author} in ('founder', 'agent')`),
+    check(
+      "scenarios_agent_rationale",
+      sql`${t.author} <> 'agent' or (${t.rationale} is not null and btrim(${t.rationale}) <> '')`,
+    ),
+    check(
+      "scenarios_agent_never_founder",
+      sql`${t.author} <> 'agent' or not jsonb_path_exists(${t.overrides}, '$.**.origin ? (@ == "founder")')`,
+    ),
+    check(
+      "scenarios_site_ids_valid",
+      sql`jsonb_typeof(${t.siteIds}) = 'array' and jsonb_array_length(${t.siteIds}) between 1 and 8`,
+    ),
+    check(
+      "scenarios_not_own_parent",
+      sql`${t.parentId} is distinct from ${t.id}`,
+    ),
+    check("scenarios_profile_version_positive", sql`${t.profileVersion} > 0`),
+  ],
+);
+
+export const scenarioRuns = pgTable(
+  "scenario_runs",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    scenarioId: text("scenario_id").notNull(),
+    /** The HAC-22 comparison this run produced; null until it exists. */
+    comparisonId: text("comparison_id"),
+    /** site_runs ids of the run. */
+    runIds: jsonb("run_ids").$type<string[]>().notNull().default([]),
+    status: scenarioRunStatus("status").notNull().default("queued"),
+    /** HAC-81: atomic rolling-budget reservation and durable evaluator checkpoints. */
+    costUnits: integer("cost_units").notNull().default(0),
+    cached: boolean("cached").notNull().default(false),
+    effectiveKey: text("effective_key"),
+    idempotencyKey: text("idempotency_key"),
+    request: jsonb("request").$type<EvaluationRequest>(),
+    assembly: jsonb("assembly").$type<AssemblyMetadata>(),
+    completed: jsonb("completed")
+      .$type<Record<string, SiteOutcome>>()
+      .notNull()
+      .default({}),
+    leaseToken: text("lease_token"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    revision: integer("revision").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "scenario_runs_scoped_scenario_fk",
+      columns: [t.projectId, t.scenarioId],
+      foreignColumns: [scenarios.projectId, scenarios.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "scenario_runs_scoped_comparison_fk",
+      columns: [t.projectId, t.comparisonId],
+      foreignColumns: [comparisons.projectId, comparisons.id],
+    }).onDelete("cascade"),
+    index("scenario_runs_scenario_idx").on(t.projectId, t.scenarioId),
+    index("scenario_runs_comparison_idx").on(t.projectId, t.comparisonId),
+    unique("scenario_runs_idempotency_unique").on(
+      t.projectId,
+      t.scenarioId,
+      t.idempotencyKey,
+    ),
+    index("scenario_runs_cache_idx").on(t.projectId, t.effectiveKey, t.status),
+    index("scenario_runs_budget_idx").on(t.projectId, t.createdAt),
+    check(
+      "scenario_runs_cost_valid",
+      sql`${t.costUnits} >= 0 AND (NOT ${t.cached} OR ${t.costUnits} = 0)`,
+    ),
+    check("scenario_runs_revision_valid", sql`${t.revision} >= 0`),
+    check(
+      "scenario_runs_lease_pair",
+      sql`(${t.leaseToken} IS NULL) = (${t.leaseExpiresAt} IS NULL)`,
+    ),
+  ],
+);
+
+export const projectActiveScenario = pgTable(
+  "project_active_scenario",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    scenarioId: text("scenario_id").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "project_active_scenario_scoped_scenario_fk",
+      columns: [t.projectId, t.scenarioId],
+      foreignColumns: [scenarios.projectId, scenarios.id],
+    }).onDelete("cascade"),
+  ],
 );
