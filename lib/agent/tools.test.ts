@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { NessieConsultantResultSchema } from "@/lib/contracts/nessie";
+import { createNessieConsultantReader } from "@/lib/nessie/consultant";
+import { createInvestigationService } from "./jobs";
+import { createMemoryInvestigationRepository } from "./jobs-memory";
+import { createInvestigationPlanner } from "./investigation-planner";
+import { createInvestigationPlanFinalizer } from "./plan-finalizer";
+vi.mock("server-only", () => ({}));
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 import type { BusinessProfile } from "@/lib/contracts";
 import { EvaluationRequestSchema } from "@/lib/contracts/evaluation";
@@ -243,9 +250,9 @@ function setup(configured = false) {
 }
 
 describe("investigation tools over existing scoped services", () => {
-  it("exposes exactly seven bounded Zod tools and rejects untrusted scope fields", () => {
+  it("exposes exactly eight bounded Zod tools and rejects untrusted scope fields", () => {
     const f = setup();
-    expect(f.registry.definitions).toHaveLength(7);
+    expect(f.registry.definitions).toHaveLength(8);
     const schema = f.registry.definitions.find(
       (d) => d.name === "poll_customers",
     )!.schema;
@@ -411,20 +418,15 @@ describe("investigation tools over existing scoped services", () => {
   it("finishes with source findings and a question when every candidate has unknown rent", async () => {
     const f = setup();
     await f.execute("search_sites", {});
-    f.deps.assemble = vi
-      .fn()
-      .mockRejectedValue(
-        new AssemblyError(
-          "No candidates have enough known inputs to evaluate",
-          [
-            {
-              code: "SITE_INPUT_UNKNOWN",
-              message: "Excluded: unknown rent.",
-              siteId: f.ids[0],
-            },
-          ],
-        ),
-      );
+    f.deps.assemble = vi.fn().mockRejectedValue(
+      new AssemblyError("No candidates have enough known inputs to evaluate", [
+        {
+          code: "SITE_INPUT_UNKNOWN",
+          message: "Excluded: unknown rent.",
+          siteId: f.ids[0],
+        },
+      ]),
+    );
     const result = await f.execute("evaluate_sites", { site_ids: f.ids });
     expect(result.done).toBe(true);
     expect(result.findings).toContain("Excluded: unknown rent.");
@@ -435,4 +437,256 @@ describe("investigation tools over existing scoped services", () => {
     });
     expect(f.store.records.size).toBe(0);
   });
+});
+
+describe("scoped Nessie consultant tool", () => {
+  function banking(f: ReturnType<typeof setup>) {
+    const fetcher = vi.fn<typeof fetch>(async (url) =>
+      Response.json({
+        items:
+          new URL(String(url)).pathname === "/accounts"
+            ? [
+                {
+                  id: "acct_demo",
+                  nickname: "Shared demo",
+                  type: "Checking",
+                  balance_cents: 2000000,
+                  available_cents: 1900000,
+                },
+              ]
+            : [],
+      }),
+    );
+    f.deps.readNessieCashBuffer = vi.fn(
+      createNessieConsultantReader({
+        env: { NESSIE_API_KEY: "test" },
+        fetcher,
+        now: () => new Date("2026-11-14T17:00:00Z"),
+      }),
+    );
+    return fetcher;
+  }
+  it("accepts paired stored IDs only and never accepts model-supplied financial amounts", () => {
+    const f = setup();
+    const schema = f.registry.definitions.find(
+      (d) => d.name === "read_nessie_cash_buffer",
+    )!.schema;
+    expect(schema.safeParse({}).success).toBe(true);
+    for (const args of [
+      { comparison_id: "cmp1" },
+      { site_id: "101:1" },
+      { available_cents: 10000 },
+      { upfront_cost: 0 },
+      { monthly_contribution: 100 },
+      { account_id: "../bad" },
+    ])
+      expect(schema.safeParse(args).success).toBe(false);
+  });
+  it("derives buildout and operating contribution only from this attempt's stored evaluation", async () => {
+    const f = setup();
+    banking(f);
+    await f.execute("search_sites", {});
+    const evaluation = await f.execute("evaluate_sites", {
+      site_ids: ["101:1"],
+      demand_source: "huff",
+      seeds: 1,
+    });
+    const comparisonId = (evaluation.summary as { comparisonId: string })
+      .comparisonId;
+    const result = await f.execute("read_nessie_cash_buffer", {
+      comparison_id: comparisonId,
+      site_id: "101:1",
+    });
+    const evidence = NessieConsultantResultSchema.parse(result.summary);
+    const stored = await f.store.load(f.profile.projectId, comparisonId);
+    expect(evidence).toMatchObject({
+      status: "ready",
+      investigationId: f.context.job.id,
+      attempt: 1,
+      profileId: f.profile.id,
+      profileVersion: f.profile.version,
+      scenario: {
+        comparisonId,
+        siteId: "101:1",
+        modeledUpfrontBuildoutCents: 1000000,
+      },
+    });
+    expect(evidence.scenario?.monthlyContributionUsd).toEqual(
+      expect.objectContaining({
+        low: stored!.evaluation.result.sites[0]!.monthlyContributionUsd.low,
+        mean: stored!.evaluation.result.sites[0]!.monthlyContributionUsd.mean,
+        high: stored!.evaluation.result.sites[0]!.monthlyContributionUsd.high,
+      }),
+    );
+    expect(result.done).not.toBe(true);
+    expect(result.findings?.join(" ")).toMatch(/simulated.*not.*forecast/i);
+  });
+  it("does not access provider data for foreign, stale-attempt, wrong-site or stale-profile comparisons", async () => {
+    const f = setup();
+    const fetcher = banking(f);
+    await f.execute("search_sites", {});
+    const e = await f.execute("evaluate_sites", {
+      site_ids: ["101:1"],
+      demand_source: "huff",
+      seeds: 1,
+    });
+    const comparisonId = (e.summary as { comparisonId: string }).comparisonId;
+    for (const args of [
+      { comparison_id: "foreign", site_id: "101:1" },
+      { comparison_id: comparisonId, site_id: "999:9" },
+    ])
+      expect(
+        NessieConsultantResultSchema.parse(
+          (await f.execute("read_nessie_cash_buffer", args)).summary,
+        ).status,
+      ).toBe("comparison_unavailable");
+    f.profile.version++;
+    expect(
+      NessieConsultantResultSchema.parse(
+        (
+          await f.execute("read_nessie_cash_buffer", {
+            comparison_id: comparisonId,
+            site_id: "101:1",
+          })
+        ).summary,
+      ).status,
+    ).toBe("comparison_unavailable");
+    f.profile.version--;
+    f.context.job.attempt++;
+    expect(
+      NessieConsultantResultSchema.parse(
+        (
+          await f.execute("read_nessie_cash_buffer", {
+            comparison_id: comparisonId,
+            site_id: "101:1",
+          })
+        ).summary,
+      ).status,
+    ).toBe("comparison_unavailable");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("reports optional unavailable banking as typed nonfatal findings", async () => {
+    const f = setup();
+    const result = await f.execute("read_nessie_cash_buffer", {});
+    expect(NessieConsultantResultSchema.parse(result.summary).status).toBe(
+      "unconfigured",
+    );
+    expect(result.done).not.toBe(true);
+    expect(result.findings?.join(" ")).toMatch(/cash.*unavailable/i);
+  });
+});
+
+it("grounds a financial question through actual Nessie transport, durable resume, and final plan findings", async () => {
+  const f = setup();
+  let time = Date.parse("2026-11-14T17:00:00Z");
+  const now = () => new Date(time);
+  const transport = vi.fn<typeof fetch>(async (url) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/bills") time += 1000;
+    return Response.json({
+      items:
+        path === "/accounts"
+          ? [
+              {
+                id: "acct_demo",
+                nickname: "Shared demo",
+                type: "Checking",
+                balance_cents: 2000000,
+                available_cents: 1900000,
+              },
+            ]
+          : [],
+    });
+  });
+  f.deps.readNessieCashBuffer = createNessieConsultantReader({
+    env: { NESSIE_API_KEY: "test" },
+    fetcher: transport,
+    now,
+  });
+  const repository = createMemoryInvestigationRepository({ now });
+  const service = createInvestigationService(repository, {
+    now,
+    id: () => "cash-job",
+  });
+  const job = await service.create({
+    projectId: f.profile.projectId,
+    profileId: f.profile.id,
+    question: "Can this demo cash buffer cover opening the coffee shop?",
+  });
+  const choose = vi.fn(
+    async ({
+      nextSeq,
+      milestones,
+    }: import("./investigation-planner").InvestigationDecisionInput) => {
+      const comparison = milestones.find((m) => m.tool === "evaluate_sites");
+      const comparisonId = comparison
+        ? (comparison.summary as { output: { comparisonId: string } }).output
+            .comparisonId
+        : undefined;
+      const steps = [
+        { tool: "search_sites", args: {} },
+        {
+          tool: "evaluate_sites",
+          args: { site_ids: ["101:1"], demand_source: "huff", seeds: 1 },
+        },
+        {
+          tool: "read_nessie_cash_buffer",
+          args: { comparison_id: comparisonId, site_id: "101:1" },
+        },
+        { tool: "finish", args: {} },
+      ];
+      const step = steps[nextSeq]!;
+      return {
+        tool: step.tool,
+        argsJson: JSON.stringify(step.args),
+        findings: [],
+        done: step.tool === "finish",
+      };
+    },
+  );
+  const planner = () =>
+    createInvestigationPlanner({
+      tools: f.registry,
+      choose,
+      now,
+      finalizePlan: createInvestigationPlanFinalizer({
+        store: f.store,
+        profiles: { load: f.deps.loadProfile },
+      }),
+    });
+  const first = await service.advance(job.id, planner(), {
+    maxDurationMs: 1000,
+  });
+  expect(first.status).toBe("queued");
+  expect(first.counters).toMatchObject({
+    toolCalls: 3,
+    evaluateSites: 1,
+    pollCustomers: 0,
+  });
+  const checkpoints = await repository.listMilestones(job.id, 1);
+  const cash = checkpoints.find((m) => m.tool === "read_nessie_cash_buffer")!;
+  const output = NessieConsultantResultSchema.parse(
+    (cash.summary as { output: unknown }).output,
+  );
+  expect(output).toMatchObject({
+    status: "ready",
+    investigationId: job.id,
+    scenario: { modeledUpfrontBuildoutCents: 1000000, siteId: "101:1" },
+  });
+  expect(transport).toHaveBeenCalledTimes(3);
+  const finished = await service.advance(job.id, planner());
+  expect(finished.status).toBe("succeeded");
+  expect(finished.counters.toolCalls).toBe(4);
+  expect(transport).toHaveBeenCalledTimes(3);
+  const final = (await repository.listMilestones(job.id, 1)).at(-1)!;
+  const finalOutput = (
+    final.summary as { output: { locationPlan: { findings: unknown[] } } }
+  ).output;
+  expect(JSON.stringify(finalOutput.locationPlan.findings)).toContain(
+    "Capital One Nessie simulated cash",
+  );
+  expect(JSON.stringify(finalOutput.locationPlan.findings)).toContain(
+    "not a forecast",
+  );
+  expect(choose.mock.calls[0]![0].job.question).toContain("cash buffer");
 });

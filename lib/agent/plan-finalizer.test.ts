@@ -248,3 +248,123 @@ describe("investigation plan finalizer", () => {
     },
   );
 });
+
+it("preserves only schema-valid current-attempt Nessie caveats in the grounded plan", async () => {
+  const f = setup();
+  f.milestone("evaluate_sites", {
+    profileId: f.profile.id,
+    comparisonId: "cmp1",
+  });
+  const result = {
+    kind: "nessie_cash_buffer",
+    source: "nessie",
+    synthetic: true,
+    investigationId: f.job.id,
+    attempt: f.job.attempt,
+    projectId: f.job.projectId,
+    profileId: f.profile.id,
+    profileVersion: f.profile.version,
+    status: "empty",
+    message:
+      "Shared simulated Nessie sandbox is empty; cash affordability is unknown.",
+    accounts: [],
+    selectedAccount: null,
+    snapshot: null,
+    scenario: null,
+  };
+  f.milestone("read_nessie_cash_buffer", { ...result, attempt: 1 }, [
+    "OLD_NESSIE_ATTEMPT",
+  ]);
+  f.milestone("read_nessie_cash_buffer", { ...result, projectId: "foreign" }, [
+    "FOREIGN_NESSIE",
+  ]);
+  f.milestone("read_nessie_cash_buffer", { ...result, synthetic: false }, [
+    "MALFORMED_NESSIE",
+  ]);
+  f.milestone("read_nessie_cash_buffer", result, [result.message]);
+  const plan = JSON.stringify((await f.run())?.findings);
+  expect(plan).toContain(result.message);
+  for (const ignored of [
+    "OLD_NESSIE_ATTEMPT",
+    "FOREIGN_NESSIE",
+    "MALFORMED_NESSIE",
+  ])
+    expect(plan).not.toContain(ignored);
+});
+
+it("keeps only the latest Nessie state and never falls back after a malformed newest result", async () => {
+  for (const newest of ["ready", "provider_error", "malformed"] as const) {
+    const f = setup();
+    f.milestone("evaluate_sites", {
+      profileId: f.profile.id,
+      comparisonId: "cmp1",
+    });
+    const account = {
+      id: "acct_a",
+      nickname: "Demo",
+      type: "Checking",
+      balanceCents: 10000,
+      availableCents: 9000,
+    };
+    const base = {
+      kind: "nessie_cash_buffer",
+      source: "nessie",
+      synthetic: true,
+      investigationId: f.job.id,
+      attempt: f.job.attempt,
+      projectId: f.job.projectId,
+      profileId: f.profile.id,
+      profileVersion: f.profile.version,
+      message: "Nessie demo evidence",
+      accounts: [account],
+      selectedAccount: account,
+      snapshot: {
+        accountId: "acct_a",
+        asOf: "2026-11-14T17:00:00.000Z",
+        windowStart: "2026-10-15T17:00:00.000Z",
+        windowEnd: "2026-11-14T17:00:00.000Z",
+        windowDays: 30,
+        inflowCents: 0,
+        outflowCents: 0,
+        netCashFlowCents: 0,
+        completedTransactionCount: 0,
+        excludedTransfersCount: 0,
+        upcomingBillsCents: 0,
+      },
+      scenario: null,
+      status: "ready",
+    };
+    f.milestone("read_nessie_cash_buffer", base, [
+      "OLDER_NESSIE_CASH_GUIDANCE",
+    ]);
+    f.milestone(
+      "read_nessie_cash_buffer",
+      {
+        ...base,
+        status: "account_selection_required",
+        selectedAccount: null,
+        snapshot: null,
+        accounts: [account, { ...account, id: "acct_b" }],
+      },
+      ["OLDER_NESSIE_ACCOUNT_QUESTION"],
+    );
+    const last =
+      newest === "ready"
+        ? base
+        : newest === "provider_error"
+          ? {
+              ...base,
+              status: "provider_error",
+              selectedAccount: null,
+              snapshot: null,
+              accounts: [],
+            }
+          : { ...base, projectId: "foreign" };
+    f.milestone("read_nessie_cash_buffer", last, ["CURRENT_NESSIE_STATE"]);
+    const findings = JSON.stringify((await f.run())?.findings);
+    expect(findings).not.toContain("OLDER_NESSIE");
+    if (newest === "malformed")
+      expect(findings).not.toContain("CURRENT_NESSIE_STATE");
+    else expect(findings).toContain("CURRENT_NESSIE_STATE");
+  }
+});
