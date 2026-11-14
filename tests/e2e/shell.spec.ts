@@ -327,13 +327,7 @@ test.describe("history", () => {
   }) => {
     await gotoView("intake");
     await expandProjectNavigation(page);
-    const visited: WorkspaceRoute[] = [
-      "map",
-      "site",
-      "comparison",
-      "replay",
-      "plan",
-    ];
+    const visited: WorkspaceRoute[] = ["map", "site", "comparison", "replay", "simulator", "plan"];
     for (const view of visited) {
       await expandProjectNavigation(page);
       await navLink(page, view).click();

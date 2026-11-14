@@ -58,8 +58,28 @@ export function toSiteRun(args: {
   day: DayResult;
   dayType: DayType;
   modelVersion: string;
+  demandSource: EvaluationResult["demandSource"];
 }): SiteRun {
   const { id, request, config, day, dayType } = args;
+  const events = canonicalEvents(day.events);
+  const arrivingPersonas = new Set(events.flatMap((event) =>
+    event.arrival ? [event.arrival.personaId] : [],
+  ));
+  const table = args.demandSource === "jev"
+    ? request.sites.find((site) => site.siteId === day.siteId)?.behaviorTable
+    : undefined;
+  const answers = new Map(table?.personas.filter((persona) =>
+    !table.failedPersonaIds.includes(persona.personaId),
+  ).map((persona) => [persona.personaId, persona]));
+  const replayPersonas = request.personaSet.personas
+    .filter((persona) => arrivingPersonas.has(persona.id))
+    .map(({ id, segment }) => {
+      const answer = answers.get(id);
+      return { id, segment, jev: answer && {
+        where: answer.where,
+        visitsPerMonth: answer.visitsPerMonth,
+      } };
+    });
   const m = day.metrics;
   const hours = config.hours[dayType];
   const laborUsd =
@@ -89,7 +109,8 @@ export function toSiteRun(args: {
       operatingContributionCents: revenueCents - includedCostCents,
       averageWaitMinutes: m.meanWaitMin ?? 0,
     },
-    events: canonicalEvents(day.events),
+    events,
+    replayPersonas,
   });
 }
 
@@ -114,6 +135,7 @@ export function buildStoredComparison(
           day: run.representativeDays[site.siteId]![dayType],
           dayType,
           modelVersion: result.modelVersion,
+          demandSource: result.demandSource,
         }),
       );
     }
