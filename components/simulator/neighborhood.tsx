@@ -37,6 +37,7 @@ export default function Neighborhood({
   controls,
   illustrativeOverlays = true,
   birdseye = false,
+  showLocationLabel = true,
 }: {
   longitude: number;
   latitude: number;
@@ -49,6 +50,8 @@ export default function Neighborhood({
   /** The founder workspace shows source imagery without invented traffic/demand. */
   illustrativeOverlays?: boolean;
   birdseye?: boolean;
+  /** The workspace already names the city/selected space in its own controls. */
+  showLocationLabel?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -627,22 +630,26 @@ export default function Neighborhood({
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.55))]"
       />
 
-      <div className="absolute top-3 left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted">
-        <span>{locationLabel}</span>
-        {status === "failed" && (
-          <button
-            type="button"
-            className="ml-2 underline"
-            onClick={() => {
-              setTrafficVisible(true);
-              setStatus("loading");
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Retry
-          </button>
-        )}
-      </div>
+      {(showLocationLabel || status === "failed") && (
+        <div
+          className={`absolute ${showLocationLabel ? "top-3" : "top-20"} left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted`}
+        >
+          {showLocationLabel && <span>{locationLabel}</span>}
+          {status === "failed" && (
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={() => {
+                setTrafficVisible(true);
+                setStatus("loading");
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       {status !== "ready" && (
         <div

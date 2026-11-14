@@ -49,6 +49,7 @@ export function WorkspaceBackdrop({
         }
         illustrativeOverlays={false}
         birdseye
+        showLocationLabel={false}
       >
         {null}
       </Neighborhood>
