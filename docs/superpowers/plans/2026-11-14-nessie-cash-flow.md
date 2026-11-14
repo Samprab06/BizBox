@@ -31,19 +31,19 @@ Files: lib/contracts/nessie{,.test}.ts, lib/nessie/consultant{,.test}.ts, lib/ne
 - [x] Register read_nessie_cash_buffer with optional account_id and paired comparison_id/site_id; derive modeled buildout and contribution exclusively from a current stored evaluation.
 - [x] Bind the actual server reader and planner allowlist/instructions; retain nonfatal empty/provider/selection limitations.
 - [x] Prove scripted financial question -> provider transport -> durable milestone -> resume without duplicate fetch -> grounded numerical findings.
-- [ ] Remove superseded financial notes from retry/planner context while preserving unrelated findings; verify latest-only final-plan handling with observed red->green regressions.
+- [x] Remove superseded financial notes from retry/planner context while preserving unrelated findings; verify latest-only final-plan handling with observed red->green regressions.
 
 ### Task 2: Frontend specialist
-Files: components/ConsultantPanel.tsx, components/nessie/consultant-{results,results.test,cash-card}.tsx/ts as appropriate, components/live-comparison-workspace.tsx, components/comparison/comparison-screen.tsx, comparison page and tests/e2e/nessie.spec.ts.
+Files: components/ConsultantPanel.tsx, components/nessie/consultant-results.ts, components/nessie/consultant-results.test.ts, components/nessie/consultant-cash-card.tsx, components/live-comparison-workspace.tsx, components/comparison/comparison-screen.tsx, comparison page and tests/e2e/nessie.spec.ts.
 - [x] Remove standalone controls and mount Consultant activity once for live/example comparison contexts.
 - [x] Retain validated milestone summaries and show the newest scoped saved cash result; no direct browser banking request.
 - [x] Add meaningful identity/attempt/profile/checkpoint/switching tests and read-only scenario/limitation rendering with accessibility and responsive checks.
-- [ ] Verify raw findings and outdated comparison cannot leak old cash guidance after the review fixes.
+- [x] Verify raw findings and outdated comparison cannot leak old cash guidance after the review fixes.
 
 ### Task 3: Manager integration and delivery
 Files: docs/integrations/nessie.md, this plan, README.md, lib/agent/README.md; conflict resolutions limited to preserving current main and this feature.
 - [x] Record Akshar's revised acceptance criteria on HAC-106 and the Agent Board; retain do-not-merge instruction.
-- [ ] Review the combined tool/provider/checkpoint/card paths and re-review material fixes independently.
-- [ ] Sync the PR branch with current main, preserve concurrent work, and run pnpm lint/typecheck/test/build plus browser and secret checks on the integrated result.
-- [ ] Recheck real Nessie read-only connection/empty data; do not claim populated live data or paid-model execution.
-- [ ] Update final spec/verification and PR description, commit and push the approved consultant revision to existing PR #86, update HAC-106, and confirm PR remains open/unmerged.
+- [x] Review the combined tool/provider/checkpoint/card paths and re-review material fixes independently.
+- [x] Sync the PR branch with current main, preserve concurrent work, and run pnpm lint/typecheck/test/build plus browser and secret checks on the integrated result.
+- [x] Recheck real Nessie read-only connection/empty data; do not claim populated live data or paid-model execution.
+- [x] Update final spec/verification and PR description, commit and push the approved consultant revision to existing PR #86, update HAC-106, and confirm PR remains open/unmerged.

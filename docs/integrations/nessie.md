@@ -58,3 +58,14 @@ Consultant activity is mounted once in the shared comparison workspace for live 
 - The original old-format key returned 401. Akshar replaced it with a v2 key; direct account reads and the actual app route returned 200 with an empty sandbox. Authentication and empty live data are verified. No populated live snapshot or live paid model execution is claimed; no seeding was performed.
 - Consultant revision acceptance: scripted financial question -> real tool registry/provider transport -> durable milestone -> checkpoint/resume without duplicate read -> grounded numerical findings; scoped comparison and missing/error/account cases; saved UI evidence with stale-note/attempt/profile/identity handling; no direct banking fetch or standalone form; responsive/accessibility browser checks; full four repo checks and secret scans. Final results recorded after integration below.
 - No PR merge or deployment is authorized. Akshar approved revising the existing PR; retain its explicit do-not-merge instruction.
+
+
+### Consultant revision verification — November 14, 2026
+
+- Checked against current main at `b871537`; resolved only the overlap in comparison activity placement and server-env scanning, preserving upstream Jev labels and Matterport token policy. No target-branch PR merge occurred.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` passed. Full suite: 97 test files / 928 tests passed; 35 optional tests skipped. The build retains an upstream warning in `lib/panel/recorded-example-loader.ts` about dynamic filesystem tracing. No local env files appeared in server trace manifests.
+- Production-build browser checks: 32 passed across Chromium and mobile Chrome, including existing consultant polling/retry behavior, saved/scoped results, newest-only evidence, stale accumulated notes, old attempts/profiles, outdated/running comparisons, investigation races, a11y and 390/768/1440px widths. No standalone banking form or direct browser Nessie request.
+- Scripted model/provider transport verification exercised actual tool registration, real cash/projection arithmetic, durable milestones, cutoff/resume without repeated provider fetch and numerical grounded-plan findings. No live paid-model calls.
+- Independent review's two stale-evidence findings were reproduced in failing tests, fixed, and re-reviewed with no remaining material findings. Fresh manager targeted check: 87 tests passed before latest-main integration; final full suite and browser checks passed afterward.
+- Actual new server consultant reader, using the saved v2 key, returned typed `empty`, source `nessie`, synthetic true, zero accounts, no snapshot/scenario. No populated live data or owner bank connection is claimed.
+- Environment-file/public-env/client-bundle scans passed, with zero configured-secret byte matches in emitted client assets. Secrets remain ignored. No provider writes/seeding, migrations, added dependencies, deployment or PR merge.
