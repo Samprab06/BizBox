@@ -7,6 +7,7 @@ import {
   comparisonScenario,
 } from "@/components/comparison/comparison-screen";
 import { getPreviewProject } from "@/lib/workspace-preview";
+import { ComparisonWorkspace } from "@/components/live-comparison-workspace";
 
 export default async function Page({ params, searchParams }: PreviewPageProps) {
   const [{ projectId }, { site, visits, comparison, investigation }] =
@@ -19,12 +20,23 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
       siteId={typeof site === "string" ? site : undefined}
     >
       {project && (
-        <ComparisonScreen
+        <ComparisonWorkspace
           project={project}
-          visits={comparisonScenario(visits)}
-          previousId={typeof comparison === "string" ? comparison : undefined}
-          investigationId={
-            typeof investigation === "string" ? investigation : undefined
+          comparisonId={typeof comparison === "string" ? comparison : undefined}
+          example={
+            <>
+              <ComparisonScreen
+                project={project}
+                visits={comparisonScenario(visits)}
+                previousId={
+                  typeof comparison === "string" ? comparison : undefined
+                }
+                investigationId={
+                  typeof investigation === "string" ? investigation : undefined
+                }
+              />
+              <p className="mt-6 text-xs text-muted">Example data</p>
+            </>
           }
         />
       )}

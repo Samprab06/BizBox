@@ -19,7 +19,7 @@ type SearchState =
     };
 
 /** Browser intake is local to this device; search never claims to persist a project. */
-export function useSiteSearch(projectId: string) {
+export function useSiteSearch(projectId: string, revision = 0) {
   const [state, setState] = useState<SearchState>({ mode: "loading" });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -91,7 +91,7 @@ export function useSiteSearch(projectId: string) {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [projectId, attempt]);
+  }, [projectId, attempt, revision]);
   return {
     state,
     retry: () => {

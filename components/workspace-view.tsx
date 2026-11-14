@@ -14,6 +14,7 @@ export type PreviewPageProps = {
     visits?: string | string[];
     comparison?: string | string[];
     investigation?: string | string[];
+    day?: string | string[];
   }>;
 };
 
@@ -69,9 +70,6 @@ export function WorkspaceView({
                 site={site}
                 mapSelection={siteId}
               />
-            )}
-            {view !== "intake" && view !== "map" && view !== "site" && (
-              <p className="mt-6 text-xs text-muted">Example data</p>
             )}
           </>
         ) : (
