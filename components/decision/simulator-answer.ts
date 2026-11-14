@@ -19,15 +19,15 @@ export function simulatorAnswer({
     );
   const service =
     additionalServed === 0
-      ? "serves the same number of modeled customers"
+      ? "the same modeled customer count per weekday"
       : additionalServed > 0
-        ? `serves ${additionalServed} more modeled customers per weekday`
-        : `serves ${Math.abs(additionalServed)} fewer modeled customers per weekday`;
+        ? `${additionalServed} more modeled customers per weekday`
+        : `${Math.abs(additionalServed)} fewer modeled customers per weekday`;
   const contribution =
     contributionChange > 0
       ? "higher"
       : contributionChange < 0
         ? "lower"
         : "unchanged";
-  return `In this seeded example, a second staffed station ${service}; contribution after included costs is ${contribution}.`;
+  return `In this seeded example: ${service}; contribution after included costs is ${contribution}.`;
 }

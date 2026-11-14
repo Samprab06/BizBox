@@ -55,7 +55,12 @@ export function DecisionHeader({
         </div>
       </section>
       {scene && <div className="min-w-0">{scene}</div>}
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <div
+        className={
+          "flex min-w-0 flex-wrap items-center gap-3" +
+          (compact ? " text-sm" : "")
+        }
+      >
         {nextAction}
       </div>
     </Card>
