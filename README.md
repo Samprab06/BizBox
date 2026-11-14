@@ -1,44 +1,140 @@
-# HackPrinceton
+# HackPrinceton: where should my shop go?
 
-HackPrinceton project. Work is planned in Linear (team HAC) and built by humans and coding agents; see AGENTS.md.
+People opening a new **service business** (a coffee shop, quick food, a salon or barber, a
+fitness studio) have to pick a retail space to lease, usually from gut feel and a broker's
+pitch. This app ranks real for-lease spaces in **Houston** and **Los Angeles** for one
+founder's business, and shows why each one ranks where it does.
 
-## Local platform setup
+For each candidate space, the app:
 
-Requires Node.js 22 or 24 and pnpm 11.25.0. The app uses the Next.js App Router, strict TypeScript, Tailwind, Zod and Drizzle/Postgres. Dependency versions and the lockfile are pinned; pnpm permits installation scripts only for esbuild.
+1. collects the founder's plan in an intake conversation (category, price, stations, budget);
+2. pulls for-lease retail spaces from CoStar;
+3. builds the space's catchment from public census, workplace and competitor data;
+4. polls a panel of simulated local customers (TypeSafe Jev) on where they'd go, how often and when;
+5. turns their answers into a demand model and seeded customer arrivals;
+6. runs a queue simulation of a day at the shop, then works out monthly economics;
+7. compares the spaces, tests how sensitive the ranking is to each assumption, and writes a
+   location plan grounded in those results.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+The output is a **ranking with ranges, never a sales forecast**. Every number records where it
+came from: `costar`, `public`, `founder` or `default`.
+
+**Demo flow:** Intake → Map of candidate spaces → Site detail → Comparison → Replay of a
+simulated day. Today the screens run on a fixture project, `houston-coffee`. Current scope and
+acceptance criteria live in the team's Linear tickets.
+
+## Stack
+
+- **Next.js** (App Router) in **TypeScript** `strict` mode, styled with **Tailwind CSS**,
+  hosted on **Vercel**. One app; no separate backend and no Python.
+- **Postgres with PostGIS** (Neon through Vercel), accessed with **Drizzle**.
+- **`deepagents`** (JavaScript) for the orchestrator agent.
+- **TypeSafe Jev** over its REST API for the simulated customer panel.
+- **Zod** for shared request and response types, **Vitest** for tests, **pnpm** for packages.
+
+## Quick start
+
+### Prerequisites
+
+- **Node.js 22 or 24**.
+- **pnpm 11.25.0**, matching `packageManager` in `package.json`. If you don't have it:
+
+  ```bash
+  npm install -g pnpm@11.25.0
+  ```
+
+### Install and run
+
+```bash
+git clone https://github.com/Samprab06/HackPrinceton.git
 ```
 
-These offline checks must work without provider credentials. The product UI already merged on main is preserved; this change adds the shared platform foundation. ESLint 9.39.5 is pinned to satisfy the current Next.js lint plugins' peer ranges; npm reports its upstream support deprecation. Upgrade the plugin set together before moving to ESLint 10. Drizzle Kit also brings deprecated esbuild-kit transitive dependencies; no peer conflicts are being suppressed.
+```bash
+cd HackPrinceton
+```
 
-## Database and hosted setup
+```bash
+pnpm install
+```
 
-The intended hosted stack is a Vercel project with Neon Postgres through the Vercel Marketplace and PostGIS enabled. Creating/linking resources, remote migrations, deployments and publishing require Akshar's approval. No matching Vercel project was returned during the bootstrap lookup, so the actual project plan and preview deployment are not yet verified.
+```bash
+cp .env.example .env.local
+```
 
-After approval, select the correct Vercel team/project, provision or connect Neon, verify the required environment variable names, and pull the environment privately. Keep secrets in ignored `.env.local` or provider environment settings; `.env.example` lists keys only. The Census key is reserved for data-loading scripts. Model keys are not used by the bootstrap, and the later agent ticket must choose its provider explicitly.
-
-```sh
-# Once the approved project/database linkage and environment are verified:
-pnpm db:generate
-pnpm db:migrate
+```bash
 pnpm dev
 ```
 
-Inspect the generated SQL before applying a migration. The first migration enables PostGIS, which requires an appropriately privileged database role. Migrations are an explicit setup operation, never executed automatically by the web app. Do not aim these commands at an unapproved or production database.
+Open http://localhost:3000. It redirects to the intake screen of the `houston-coffee` fixture
+project.
 
-`GET /api/health` returns an uncached 200 only when PostgreSQL responds and PostGIS is enabled. Missing configuration, missing PostGIS or a connection failure returns sanitized 503 JSON with `code`, `message` and `field_errors`, plus dependency status. It never returns connection strings or raw provider errors. The client is server-only and uses a bounded single-connection pool, a five-second connection/query timeout, and no persistent runtime files.
+### Environment variables
 
-## Function duration
+Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example` lists the names.
 
-The health route exports `maxDuration = 10` seconds. The actual Vercel project's plan/configuration remains unverified. The [published Fluid Compute limits](https://vercel.com/docs/functions/configuring-functions/duration), checked November 13, 2026, list Hobby at 300 seconds maximum and Pro/Enterprise at 800 seconds, with a conditional extended-duration beta. These are reference limits, not evidence of this project's entitlement. Verify deployed timeouts with `vercel inspect <deployment-url> --json` after an approved deployment. Long-running feature work must checkpoint into Postgres.
+| Variable | Used by | Needed for |
+|---|---|---|
+| `DATABASE_URL` | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations. |
+| `JEV_API_KEY` | `lib/panel/jev-client.ts` | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
+| `JEV_BASE_URL` | `lib/panel/jev-client.ts` | The Jev endpoint (to be confirmed in HAC-14). |
 
-## Shared data and ownership
+The fixture screens, offline tests and production build run without these credentials.
+The optional live Jev test needs its configured endpoint and API key. Model-provider and
+Census variables in `.env.example` are reserved for later integrations.
 
-Shared Zod contracts live in `lib/contracts/`, database tables in `lib/db/schema.ts`, and explicitly synthetic examples in `fixtures/`. See `docs/tickets/HAC-9/contracts.md` for schema choices and fixture usage. Assumed values retain units, origin and evidence links; missing values are explicit unknowns, not zero. Synthetic defaults do not establish actual property availability or a revenue forecast.
+### Database
 
-Keep package/config and contract changes coordinated with Akshar. Yasser owns product pages/components, Samridh owns property/public data, and Frank owns panel/demand/simulation work under their respective tickets. See [the HAC-9 spec](docs/tickets/HAC-9/spec.md) and [implementation plan](docs/tickets/HAC-9/plan.md) for bootstrap boundaries and checks.
+The fixture screens run without a database. The Drizzle schema and initial PostGIS migration
+are included. Set `DATABASE_URL` to an approved development database, then run
+`pnpm db:migrate` to apply migrations. `pnpm db:generate` generates a migration after schema
+changes. Migrations change the target database; confirm the target before running them.
+
+`GET /api/health` checks database and PostGIS readiness and returns 503 when they are unavailable.
+Hosted Neon setup and Vercel deployment still require configuration and verification.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Starts the Next.js dev server with hot reload, on port 3000 by default. |
+| `pnpm lint` | Runs ESLint over the repo with the Next.js config (`eslint.config.mjs`). |
+| `pnpm typecheck` | Generates Next.js route types (`next typegen`), then type-checks everything with `tsc --noEmit`. |
+| `pnpm test` | Runs Vitest once. Tests run offline by default; the optional live Jev test is skipped without its configuration. |
+| `pnpm build` | Builds the production app, the same build Vercel runs. |
+| `pnpm start` | Serves the production build from `pnpm build`. |
+
+Every PR must pass `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
+
+## Repo layout
+
+```
+app/                  Next.js routes (App Router)
+  (pages)/projects/[projectId]/
+                      intake, map, sites/[siteId], comparison, replay screens
+  api/health/         database and PostGIS readiness route
+components/           React components (intake screen, workspace view)
+lib/
+  contracts/          shared Zod schemas for requests and responses
+  db/                 server-only database client and Drizzle schema
+  sim/                queue engine, monthly economics, the shared seeded RNG (random.ts)
+  demand/             demand model: Jev behaviour table or Huff fallback, then seeded arrivals
+  panel/              persona builder and the Jev customer panel client
+  client/             browser-side API client and workspace routes
+fixtures/             synthetic contract fixtures
+drizzle/              generated database migrations
+AGENTS.md             rules for every contributor, human or agent
+```
+
+All simulation code in `lib/` is pure TypeScript and uses the seeded generator in
+`lib/sim/random.ts`, never `Math.random`, so the same inputs always give the same results.
+
+## Contributing
+
+Read [`AGENTS.md`](AGENTS.md) before you start. In short:
+
+- Work is planned in **Linear**, team **HAC**. Each ticket is labelled `agent:<name>` for its owner.
+- Agents coordinate on the **Agent Board**, the comments on Linear ticket **HAC-6**.
+- Branch from a fresh `main` using the ticket's branch name, which contains the ticket ID
+  (for example `hac-12-...`).
+- Open a PR titled `[HAC-12] <ticket title>` with `Fixes HAC-12` in the body. Keep PRs small, and
+  never force-push to `main`.
