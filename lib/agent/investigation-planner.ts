@@ -143,11 +143,15 @@ export function createDeepInvestigationDecisionModel(
 export function createInvestigationPlanner({
   tools,
   choose,
+  finalizePlan,
   now = () => new Date(),
   maxWallTimeMs = INVESTIGATION_WALL_TIME_MS,
 }: {
   tools: InvestigationToolRegistry;
   choose: InvestigationDecisionModel;
+  finalizePlan?: (
+    input: Parameters<InvestigationStepPlanner>[0],
+  ) => Promise<import("@/lib/contracts/plan").GroundedLocationPlan | null>;
   now?: () => Date;
   maxWallTimeMs?: number;
 }): InvestigationStepPlanner {
@@ -175,6 +179,10 @@ export function createInvestigationPlanner({
         idempotencyKey: string;
       }) => {
         executionSignal.throwIfAborted();
+        const locationPlan = finalizePlan
+          ? await finalizePlan({ ...input, signal: executionSignal })
+          : null;
+        executionSignal.throwIfAborted();
         return {
           summary: json({
             input: {},
@@ -182,6 +190,7 @@ export function createInvestigationPlanner({
               handoff: "HAC-24",
               completedToolCalls: milestones.length,
               findings,
+              ...(locationPlan ? { locationPlan } : {}),
             },
             modelFindings: findings,
           }),
@@ -276,6 +285,7 @@ export function createInvestigationPlanner({
             summary: json({
               input: args,
               output: result.summary,
+              toolFindings: result.findings ?? [],
               modelFindings: decision.findings,
             }),
             findings: [
@@ -296,7 +306,12 @@ export function createInvestigationPlanner({
 export function createConfiguredInvestigationPlanner(
   tools: InvestigationToolRegistry,
   env: Record<string, string | undefined> = process.env,
-  options: { now?: () => Date } = {},
+  options: {
+    now?: () => Date;
+    finalizePlan?: (
+      input: Parameters<InvestigationStepPlanner>[0],
+    ) => Promise<import("@/lib/contracts/plan").GroundedLocationPlan | null>;
+  } = {},
 ): InvestigationStepPlanner {
   let configured: InvestigationDecisionModel | undefined;
   const choose: InvestigationDecisionModel = async (input) => {
@@ -321,6 +336,7 @@ export function createConfiguredInvestigationPlanner(
   return createInvestigationPlanner({
     tools,
     choose,
+    ...(options.finalizePlan ? { finalizePlan: options.finalizePlan } : {}),
     ...(options.now ? { now: options.now } : {}),
   });
 }
