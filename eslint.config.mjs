@@ -7,6 +7,7 @@ export default defineConfig([
   ...nextTypescript,
   globalIgnores([
     "public/cesium/**",
+    "public/matterport/**",
     ".next/**",
     "coverage/**",
     "node_modules/**",
