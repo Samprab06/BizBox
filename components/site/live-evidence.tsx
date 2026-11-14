@@ -48,7 +48,7 @@ export function LiveEvidence({
   return (
     <aside
       aria-label="Evidence"
-      className="mt-8 grid gap-4 border-t border-line pt-5 text-sm break-words"
+      className="mt-8 grid grid-cols-1 gap-4 border-t border-line pt-5 text-sm break-words"
     >
       <h3 className="font-semibold">Evidence and limitations</h3>
       {search.map((entry) => (
