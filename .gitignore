@@ -16,3 +16,5 @@ data/public/
 next-env.d.ts
 .env*.local
 !.env.example
+
+/public/cesium/
