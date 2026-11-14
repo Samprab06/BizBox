@@ -8,7 +8,7 @@
 
 **Tech stack:** Existing Next.js, React, Tailwind, Vitest and Playwright; no dependencies added by HAC-71.
 
-**Spec:** HAC-71; `docs/design-system.md`; stable HAC-70 handoff `6cd4174` and current main `fd5bf33`.
+**Spec:** HAC-71; `docs/design-system.md`; stable refreshed HAC-70 publication base `f4f726b` (including current main `5d3134b` and the earlier intake `fd5bf33`).
 
 ## Constraints and decisions
 
@@ -58,3 +58,18 @@ backend/config changes.
 - The full answer, real scene and action fit at 1280×800, 820×800 and 375×800. Mobile action bottoms were approximately y714 for comparison and y736 for simulator (WebKit y729). Both canvases/replays were visually inspected.
 - Forecast, no-automatic-model-request, source-identity, unknown/stale data, manual replay, keyboard evidence, reduced-motion and axe guards remain active. No skipped acceptance test or added retry/timeout masks a failure.
 - Local tests use invented fixtures and mocked comparison/run responses; stored simulator loading/robustness/freshness is covered at its frontend page boundary. Hosted database/imagery verification and publication remain the manager's delivery steps.
+
+## Publication-base refresh
+
+The manager requested the exact newer HAC-70 base `f4f726b`. Its runtime WebGL
+fallback and upstream replay renderer updates were merged, preserving all decision
+mounts, compact wrapper APIs and test adapters. The sole merge conflict was this
+simulator documentation; both sections were retained.
+
+Fresh lint, typecheck, full unit suite (734 passed, 19 environment-gated skips) and
+production build passed. The affected three-engine decision/simulator matrix had
+27 passes and three existing city-environment gates. That city test was then
+enabled separately with a dummy local Vexcel key and intercepted imagery: the
+actual neighborhood WebGL fallback and Retry passed with no page errors. Three
+upstream replay/floor-plan/fallback Chromium cases also passed. No added skip,
+retry, timeout or product workaround was needed for the refreshed base.
