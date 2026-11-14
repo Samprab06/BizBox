@@ -72,7 +72,7 @@ function HourlyPlot({
     return <p role="status">No open-hour observations were retained.</p>;
   const currency = kind === "revenue" || kind === "cumulative";
   return (
-    <div className="h-64 min-w-0">
+    <div className="h-64 min-w-0 overflow-hidden">
       <ResponsiveContainer
         width="100%"
         height="100%"

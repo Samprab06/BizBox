@@ -350,3 +350,21 @@ for (const width of [375, 1280]) {
     expect(writes).toEqual([]);
   });
 }
+
+test.describe("server-rendered chart layout", () => {
+  test.use({ javaScriptEnabled: false });
+  test("initial chart geometry stays within a phone before hydration", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/projects/houston-coffee/sites/montrose");
+    await expect(
+      page.getByRole("region", { name: "Insights", exact: true }),
+    ).toBeVisible();
+    const dimensions = await page.evaluate(() => ({
+      page: document.documentElement.scrollWidth,
+      viewport: innerWidth,
+    }));
+    expect(dimensions.page).toBeLessThanOrEqual(dimensions.viewport);
+  });
+});
