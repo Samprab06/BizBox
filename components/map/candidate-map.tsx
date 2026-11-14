@@ -52,7 +52,15 @@ export default function CandidateMap({ projectId, sites, selectedId }: { project
   const [failed, setFailed] = useState(false);
   const selected = selectedId ? getSiteFixture(selectedId) : undefined;
 
-  if (failed) return <p role="status" className="rounded-lg bg-paper p-4">The map is unavailable. Choose a candidate below.</p>;
+  if (failed) return (
+    <div className="rounded-lg bg-paper p-4">
+      <p role="alert">The map is unavailable. Choose a candidate below.</p>
+      <button type="button" className="mt-3 rounded bg-pine px-3 py-2 text-white" onClick={() => {
+        loaded.current = false;
+        setFailed(false);
+      }}>Retry map</button>
+    </div>
+  );
 
   return (
     <>
@@ -94,7 +102,7 @@ export default function CandidateMap({ projectId, sites, selectedId }: { project
           if (!location) return null;
           return (
             <Marker ref={setSiteMarkerElement} key={site.id} longitude={location.longitude} latitude={location.latitude}>
-              <Link href={site.href} aria-label={`Open ${site.address}`} className="rounded-full border-2 border-white bg-pine px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow">
+              <Link href={site.href} aria-label={`Open ${site.address}`} aria-current={site.id === selectedId || undefined} className="rounded-full border-2 border-white bg-pine px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow aria-[current=true]:ring-4 aria-[current=true]:ring-amber-400">
                 {site.address}
               </Link>
             </Marker>
