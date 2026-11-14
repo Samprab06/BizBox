@@ -96,11 +96,15 @@ async function body(request: Request, allowEmpty = false): Promise<unknown> {
 export function createInvestigationHandlers({
   repository,
   planner,
+  resumeToolTimeouts = false,
 }: {
   repository: InvestigationRepository;
   planner?: InvestigationStepPlanner;
+  resumeToolTimeouts?: boolean;
 }) {
-  const service = createInvestigationService(repository);
+  const service = createInvestigationService(repository, {
+    resumeToolTimeouts,
+  });
   const response = async (
     job: Awaited<ReturnType<typeof service.load>>,
     status = 200,
