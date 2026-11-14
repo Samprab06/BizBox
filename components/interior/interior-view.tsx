@@ -137,9 +137,10 @@ export function InteriorView({
     >
       <header className="flex flex-wrap items-center justify-between gap-2">
         <p
-          aria-label="Interior source"
+          data-interior-label
           className="rounded-full border border-indigo-300/40 bg-indigo-400/15 px-3 py-1 text-xs font-medium text-indigo-100"
         >
+          <span className="sr-only">Interior source: </span>
           {display.label}
         </p>
         <span className="text-xs text-white/65">
@@ -148,24 +149,23 @@ export function InteriorView({
         </span>
       </header>
 
-      <dl
-        aria-label="Interior counts"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-      >
-        {(
-          [
-            ["In line", counts.inLine],
-            ["In service", counts.inService],
-            ["Served", counts.served],
-            ["Left", counts.left],
-          ] as const
-        ).map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-white/5 px-3 py-2">
-            <dt className="text-xs text-white/60">{label}</dt>
-            <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
+      <div role="group" aria-label="Interior counts">
+        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(
+            [
+              ["In line", counts.inLine],
+              ["In service", counts.inService],
+              ["Served", counts.served],
+              ["Left", counts.left],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="rounded-lg bg-white/5 px-3 py-2">
+              <dt className="text-xs text-white/60">{label}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
 
       {display.kind === "scan" && display.modelId && display.sdkKey ? (
         <MatterportView

@@ -82,7 +82,7 @@ function fitCamera(
   // Leave room for the outside point and a margin around the bounds.
   camera.zoom = Math.max(
     4,
-    Math.min(size.width / (maxX - minX + 6), size.height / (maxZ - minZ + 6)),
+    Math.min(size.width / (maxX - minX + 5), size.height / (maxZ - minZ + 5)),
   );
   camera.updateProjectionMatrix();
 }
