@@ -8,7 +8,11 @@ import {
   type CatchmentExecutor,
 } from "@/lib/data/catchment-repository";
 import { getDb } from "@/lib/db/client";
-import { createJevClientFromEnv, type JevClient } from "@/lib/panel/jev-client";
+import {
+  createJevClientFromEnv,
+  jevBundleOrdersFromEnv,
+  type JevClient,
+} from "@/lib/panel/jev-client";
 import { createPostgresJevCache } from "@/lib/panel/cache-postgres";
 import {
   assembleEvaluation,
@@ -50,6 +54,9 @@ export function createPostgresAssemblyDependencies(
       ? {
           jev: {
             client: jevClient,
+            // HAC-131: one request per persona x site instead of one per order. Opt-in
+            // (JEV_BUNDLE_ORDERS) until validated against live Jev.
+            bundleOrders: jevBundleOrdersFromEnv(),
             cache: createPostgresJevCache(
               db,
               projectId,

@@ -186,37 +186,36 @@ export function priceQuestionName(price: number, index: number): string {
   return index === 0 ? "price_ok" : `price_ok_at_${Math.round(price * 100)}c`;
 }
 
-/**
- * All questions for one call. `rng` shuffles the Choice options (`where`, `when`); pass
- * none for canonical order.
- */
-export function buildQuestions(rawCtx: PanelContext, rng?: Rng): { questions: JevQuestion[]; whereOrder: string[] } {
-  const ctx = sanitizeContext(rawCtx);
-  const whereOrder = whereOptionIds(ctx);
-  const whenOrder: TimeBlock[] = [...TIME_BLOCKS];
-  if (rng) {
-    rng.shuffle(whereOrder);
-    rng.shuffle(whenOrder);
-  }
-  const questions: JevQuestion[] = [
-    {
-      name: "where",
-      type: "choice",
-      prompt: "Where would this person usually go for this?",
-      options: whereOrder.map((id) => ({ id, label: id === NONE_OPTION ? "None of these" : id })),
-    },
-    {
-      name: "how_often",
-      type: "score",
-      prompt: "How often would this person visit the place they chose?",
-      levels: HOW_OFTEN_LEVELS.map((id) => ({ id, label: HOW_OFTEN_LABELS[id] })),
-    },
-    {
-      name: "when",
-      type: "choice",
-      prompt: "When in the day would this person usually go?",
-      options: whenOrder.map((id) => ({ id, label: TIME_BLOCK_LABELS[id] })),
-    },
+function whereQuestion(whereOrder: string[], name = "where"): JevQuestion {
+  return {
+    name,
+    type: "choice",
+    prompt: "Where would this person usually go for this?",
+    options: whereOrder.map((id) => ({ id, label: id === NONE_OPTION ? "None of these" : id })),
+  };
+}
+
+function whenQuestion(whenOrder: TimeBlock[], name = "when"): JevQuestion {
+  return {
+    name,
+    type: "choice",
+    prompt: "When in the day would this person usually go?",
+    options: whenOrder.map((id) => ({ id, label: TIME_BLOCK_LABELS[id] })),
+  };
+}
+
+function howOftenQuestion(): JevQuestion {
+  return {
+    name: "how_often",
+    type: "score",
+    prompt: "How often would this person visit the place they chose?",
+    levels: HOW_OFTEN_LEVELS.map((id) => ({ id, label: HOW_OFTEN_LABELS[id] })),
+  };
+}
+
+/** The Noul questions (queue tolerance and price), which do not depend on option order. */
+function noulQuestions(ctx: PanelContext): JevQuestion[] {
+  return [
     ...ASKED_LINE_LENGTHS.map(
       (n): JevQuestion => ({
         name: stayQuestionName(n),
@@ -235,7 +234,64 @@ export function buildQuestions(rawCtx: PanelContext, rng?: Rng): { questions: Je
       }),
     ),
   ];
+}
+
+/**
+ * All questions for one call. `rng` shuffles the Choice options (`where`, `when`); pass
+ * none for canonical order.
+ */
+export function buildQuestions(rawCtx: PanelContext, rng?: Rng): { questions: JevQuestion[]; whereOrder: string[] } {
+  const ctx = sanitizeContext(rawCtx);
+  const whereOrder = whereOptionIds(ctx);
+  const whenOrder: TimeBlock[] = [...TIME_BLOCKS];
+  if (rng) {
+    rng.shuffle(whereOrder);
+    rng.shuffle(whenOrder);
+  }
+  const questions: JevQuestion[] = [
+    whereQuestion(whereOrder),
+    howOftenQuestion(),
+    whenQuestion(whenOrder),
+    ...noulQuestions(ctx),
+  ];
   return { questions, whereOrder: whereOrder.filter((id) => id !== NONE_OPTION) };
+}
+
+export function whereOrderQuestionName(order: number): string {
+  return `where_o${order}`;
+}
+
+export function whenOrderQuestionName(order: number): string {
+  return `when_o${order}`;
+}
+
+/**
+ * Bundled form of `orders` calls (HAC-131): one request carries `where_o0..` and `when_o0..`,
+ * each its own Choice question with its own seeded option order, while `how_often` and the
+ * Nouls are asked once. Questions are answered independently, so each Choice keeps the
+ * order-debiasing the separate calls gave it. The state's `options` follow the first `where`
+ * order, as an unbundled call's state follows its own. `rng` must be the bundle's own stream.
+ */
+export function buildBundledQuestions(
+  rawCtx: PanelContext,
+  rng: Rng,
+  orders: number,
+): { questions: JevQuestion[]; whereOrder: string[] } {
+  const ctx = sanitizeContext(rawCtx);
+  const wheres: JevQuestion[] = [];
+  const whens: JevQuestion[] = [];
+  let stateOrder: string[] = [];
+  for (let order = 0; order < orders; order++) {
+    const orderRng = rng.fork(`order${order}`);
+    const whereOrder = whereOptionIds(ctx);
+    const whenOrder: TimeBlock[] = [...TIME_BLOCKS];
+    orderRng.shuffle(whereOrder);
+    orderRng.shuffle(whenOrder);
+    if (order === 0) stateOrder = whereOrder.filter((id) => id !== NONE_OPTION);
+    wheres.push(whereQuestion(whereOrder, whereOrderQuestionName(order)));
+    whens.push(whenQuestion(whenOrder, whenOrderQuestionName(order)));
+  }
+  return { questions: [...wheres, howOftenQuestion(), ...whens, ...noulQuestions(ctx)], whereOrder: stateOrder };
 }
 
 export function pricePoints(ctx: PanelContext): number[] {

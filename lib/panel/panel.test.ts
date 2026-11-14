@@ -3,7 +3,7 @@ import { hashString } from "@/lib/sim/random";
 import { BehaviorTableSchema } from "./contracts";
 import { MemoryJevCache } from "./cache";
 import { createJevClient, fromWireResponse } from "./jev-client";
-import { aggregate, planCalls, runPanel, runPanelForSites } from "./panel";
+import { aggregate, expandBundled, planCalls, runPanel, runPanelForSites } from "./panel";
 import { buildPersonas } from "./personas";
 import type { PanelContext } from "./state";
 import { catchment, coffeeNeed, fakeJevClient, makeSites, recorded, recordedFetch } from "./__fixtures__";
@@ -123,6 +123,72 @@ describe("runPanel with recorded Jev responses (offline)", () => {
     expect(healthy.calls).toBe(3); // only the cut-off calls are re-asked
     expect(run2.table.failedPersonaIds).toEqual([]);
     expect(run2.table.personas).toHaveLength(50);
+  });
+});
+
+describe("bundled orders (HAC-131, JEV_BUNDLE_ORDERS)", () => {
+  it("plans one request per persona that carries every order", () => {
+    const plan = planCalls(personaSet, ctx, 0, 4, true);
+    expect(plan).toHaveLength(50);
+    for (const p of plan) {
+      expect(p.calls).toHaveLength(1);
+      expect(p.calls[0]!.bundled).toBe(true);
+      expect(p.calls[0]!.request.questions.map((q) => q.name)).toContain("where_o3");
+    }
+  });
+
+  it("sends 4x fewer requests with far fewer question bytes, and writes a valid table", async () => {
+    const plain = fakeJevClient();
+    const bundled = fakeJevClient();
+    const a = await runPanel({ ...base, client: plain, cache: new MemoryJevCache() });
+    const b = await runPanel({ ...base, client: bundled, cache: new MemoryJevCache(), bundleOrders: true });
+    expect(plain.calls).toBe(200);
+    expect(bundled.calls).toBe(50);
+    expect(() => BehaviorTableSchema.parse(b.table)).not.toThrow();
+    expect(b.table.failedPersonaIds).toEqual([]);
+    expect(b.table.personas).toHaveLength(50);
+    expect(b.table.personas.every((p) => p.cacheKeys.length === 1)).toBe(true);
+    expect(a.table.personas.every((p) => p.cacheKeys.length === 4)).toBe(true);
+    const bytes = (calls: ReturnType<typeof planCalls>) =>
+      calls.reduce((n, p) => n + p.calls.reduce((m, c) => m + JSON.stringify(c.request).length, 0), 0);
+    expect(bytes(planCalls(personaSet, ctx, 0, 4, true))).toBeLessThan(bytes(planCalls(personaSet, ctx, 0, 4)) / 2);
+  });
+
+  it("aggregates a bundled answer exactly as the same four answers sent separately", () => {
+    // Give every order the same answers: where_o{i} / when_o{i} are what an unbundled call
+    // would have called where / when.
+    const [unbundled] = planCalls(personaSet, ctx, 0, 4);
+    const [bundled] = planCalls(personaSet, ctx, 0, 4, true);
+    const wire = recorded.variants[0]!;
+    const separate = unbundled!.calls.map((c) => fromWireResponse(wire, c.request));
+
+    const answers: Record<string, unknown> = { ...wire.answers };
+    for (let i = 0; i < 4; i++) {
+      answers[`where_o${i}`] = wire.answers.where;
+      answers[`when_o${i}`] = wire.answers.when;
+    }
+    const request = bundled!.calls[0]!.request;
+    const bundledResult = fromWireResponse({ ...wire, answers }, request);
+    const views = expandBundled(bundledResult, 4);
+
+    expect(views).toHaveLength(4);
+    expect(aggregate("p", ctx, views, ["k"])).toEqual(aggregate("p", ctx, separate, ["k"]));
+  });
+
+  it("measures the spread across the where_o questions", () => {
+    const [bundled] = planCalls(personaSet, ctx, 0, 4, true);
+    const wire = recorded.variants[0]!;
+    const high = { ...wire.answers.where, probabilities: { site_a: 0.7, comp_1: 0.1, comp_2: 0.1, none: 0.1 } };
+    const low = { ...wire.answers.where, probabilities: { site_a: 0.3, comp_1: 0.3, comp_2: 0.2, none: 0.2 } };
+    const answers: Record<string, unknown> = { ...wire.answers };
+    for (let i = 0; i < 4; i++) {
+      answers[`where_o${i}`] = i % 2 === 0 ? high : low;
+      answers[`when_o${i}`] = wire.answers.when;
+    }
+    const result = fromWireResponse({ ...wire, answers }, bundled!.calls[0]!.request);
+    const b = aggregate("p", ctx, expandBundled(result, 4), ["k"]);
+    expect(b.orderSpread).toBeCloseTo(0.4, 9);
+    expect(b.where.site_a).toBeCloseTo(0.5, 9);
   });
 });
 

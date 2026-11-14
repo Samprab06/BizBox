@@ -8,10 +8,16 @@
  * panel only sees `JevAskRequest` and `JevAskResult`.
  */
 import { z } from "zod";
+import { createAdaptiveLimiter, type AdaptiveLimiterState } from "./limiter";
 
 /** Model requested from System One. `GET /v1/models` lists `jev-latest` and `jev-preview`. */
 export const JEV_MODEL_VERSION = "jev-latest";
 export const DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai";
+/** Default ceiling for requests in flight, pending the org limit from the TypeSafe console. */
+export const DEFAULT_JEV_CONCURRENCY = 32;
+const MAX_JEV_CONCURRENCY = 256;
+/** 429s are paced by the shared limiter, so they get a larger retry budget than other errors. */
+const DEFAULT_RATE_LIMIT_RETRIES = 10;
 
 // ---------------------------------------------------------------------------
 // Panel-facing types (stable)
@@ -50,6 +56,8 @@ export interface JevAskResult {
 export interface JevClient {
   readonly modelVersion: string;
   ask(request: JevAskRequest): Promise<JevAskResult>;
+  /** Snapshot of the shared concurrency limiter, when the client has one. */
+  limiter?(): AdaptiveLimiterState;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,10 +172,12 @@ export interface JevHttpClientOptions {
   baseUrl: string;
   apiKey: string;
   modelVersion?: string;
-  /** Max requests in flight. Default 8. */
+  /** Ceiling for requests in flight (adaptive: halves on 429, regrows on success). Default 32. */
   concurrency?: number;
-  /** Retries after the first attempt. Default 3. */
+  /** Retries after the first attempt for 5xx and network errors. Default 3. */
   maxRetries?: number;
+  /** Retries reserved for 429s, which wait on the shared limiter pause. Default 10. */
+  maxRateLimitRetries?: number;
   /** Backoff base; attempt n waits base * 2^n (or Retry-After). Default 500 ms. */
   baseDelayMs?: number;
   /** Per-attempt timeout. Default 20 s. */
@@ -183,7 +193,8 @@ export function createJevClient(opts: JevHttpClientOptions): JevClient {
   const maxRetries = opts.maxRetries ?? 3;
   const baseDelayMs = opts.baseDelayMs ?? 500;
   const timeoutMs = opts.timeoutMs ?? 20_000;
-  const limit = createLimiter(opts.concurrency ?? 8);
+  const maxRateLimitRetries = opts.maxRateLimitRetries ?? DEFAULT_RATE_LIMIT_RETRIES;
+  const limiter = createAdaptiveLimiter({ max: opts.concurrency ?? DEFAULT_JEV_CONCURRENCY, sleep });
   const url = opts.baseUrl.replace(/\/+$/, "") + JEV_PATH;
 
   async function attempt(req: JevAskRequest): Promise<{ ok: true; value: JevAskResult } | { ok: false; error: JevError; retryAfterMs?: number }> {
@@ -222,23 +233,60 @@ export function createJevClient(opts: JevHttpClientOptions): JevClient {
 
   return {
     modelVersion,
-    ask(req) {
-      return limit(async () => {
-        let last: JevError | undefined;
-        for (let n = 0; n <= maxRetries; n++) {
-          const r = await attempt(req);
-          if (r.ok) return r.value;
-          last = r.error;
-          if (!r.error.retryable || n === maxRetries) break;
-          await sleep(r.retryAfterMs ?? baseDelayMs * 2 ** n);
+    limiter: () => limiter.state(),
+    async ask(req) {
+      let last: JevError | undefined;
+      let failures = 0;
+      let rateLimits = 0;
+      for (;;) {
+        const permit = await limiter.acquire(); // also waits out any global 429 pause
+        const r = await attempt(req).catch((e: unknown) => {
+          permit.release("error");
+          throw e;
+        });
+        if (r.ok) {
+          permit.release("ok");
+          return r.value;
         }
-        throw last ?? new JevError("Jev request failed", false);
-      });
+        last = r.error;
+        const limited = r.error.status === 429;
+        permit.release(
+          limited ? "rate_limited" : "error",
+          limited ? (r.retryAfterMs ?? baseDelayMs * 2 ** Math.min(rateLimits, 5)) : undefined,
+        );
+        if (!r.error.retryable) break;
+        if (limited) {
+          if (rateLimits++ >= maxRateLimitRetries) break;
+          continue; // the limiter's pause is the back-off
+        }
+        if (failures >= maxRetries) break;
+        await sleep(baseDelayMs * 2 ** failures++);
+      }
+      throw last ?? new JevError("Jev request failed", false);
     },
   };
 }
 
-/** Client from environment: JEV_API_KEY (required), JEV_BASE_URL and JEV_MODEL (optional). */
+/**
+ * JEV_CONCURRENCY: integer ceiling for requests in flight. Unset, blank or invalid falls back
+ * to the default; values are clamped to 1..256.
+ */
+export function parseJevConcurrency(raw: string | undefined): number {
+  const text = raw?.trim();
+  const n = Number(text);
+  return text && Number.isInteger(n) && n >= 1 ? Math.min(n, MAX_JEV_CONCURRENCY) : DEFAULT_JEV_CONCURRENCY;
+}
+
+/** JEV_BUNDLE_ORDERS: "1" or "true" sends one request per persona x site instead of one per order. */
+export function jevBundleOrdersFromEnv(env: Record<string, string | undefined> = process.env): boolean {
+  const v = env.JEV_BUNDLE_ORDERS?.trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
+/**
+ * Client from environment: JEV_API_KEY (required), JEV_BASE_URL, JEV_MODEL and JEV_CONCURRENCY
+ * (optional).
+ */
 export function createJevClientFromEnv(
   env: Record<string, string | undefined> = process.env,
   overrides: Partial<JevHttpClientOptions> = {},
@@ -247,7 +295,13 @@ export function createJevClientFromEnv(
   if (!apiKey) throw new Error("JEV_API_KEY is not set");
   const baseUrl = env.JEV_BASE_URL?.trim() || DEFAULT_JEV_BASE_URL;
   const modelVersion = env.JEV_MODEL?.trim() || undefined;
-  return createJevClient({ baseUrl, apiKey, ...(modelVersion ? { modelVersion } : {}), ...overrides });
+  return createJevClient({
+    baseUrl,
+    apiKey,
+    concurrency: parseJevConcurrency(env.JEV_CONCURRENCY),
+    ...(modelVersion ? { modelVersion } : {}),
+    ...overrides,
+  });
 }
 
 /** Simple FIFO concurrency limiter. */

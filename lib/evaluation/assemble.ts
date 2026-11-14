@@ -123,7 +123,7 @@ export type AssemblyDependencies = {
     siteId: string,
     profile: BusinessProfile,
   ): Promise<AssemblyCatchment>;
-  jev?: { client: JevClient; cache: JevCache };
+  jev?: { client: JevClient; cache: JevCache; bundleOrders?: boolean };
 };
 
 const optionId = (id: string) =>
