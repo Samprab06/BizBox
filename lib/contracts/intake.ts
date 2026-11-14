@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentViewContextSchema, UiActionListSchema } from "./agent";
 import { AssumedValueSchema, BusinessProfileSchema } from "./index";
 
 const shape = BusinessProfileSchema.shape;
@@ -84,8 +85,22 @@ export const IntakeRequestSchema = z
     state: IntakeStateSchema.optional(),
     patch: IntakePatchSchema.optional(),
     message: z.string().trim().min(1).max(8000).optional(),
+    /** HAC-134: the screen the founder is on, so the consultant can act on it. */
+    view: AgentViewContextSchema.optional(),
   })
   .strict();
+/**
+ * HAC-134: fields the intake reply may add beside the session snapshot and
+ * `assistantMessage`. Optional, so replies without them stay valid; the client schema
+ * (components/intake/live.ts) merges these in when it renders actions.
+ */
+export const IntakeResponseAgentFieldsSchema = z.object({
+  actions: UiActionListSchema.optional(),
+});
 export type IntakeDraft = z.infer<typeof IntakeDraftSchema>;
 export type IntakeAssumptions = z.infer<typeof IntakeAssumptionsSchema>;
 export type IntakeState = z.infer<typeof IntakeStateSchema>;
+export type IntakeRequest = z.infer<typeof IntakeRequestSchema>;
+export type IntakeResponseAgentFields = z.infer<
+  typeof IntakeResponseAgentFieldsSchema
+>;

@@ -42,7 +42,7 @@ describe.skipIf(!enabled)("public-scan discovery on PostgreSQL [local]", () => {
     // reduced here to the columns the discovery query reads (no PostGIS needed).
     for (const file of [
       "drizzle/0004_matterport_models.sql",
-      "drizzle/0008_matterport-public-scans.sql",
+      "drizzle/0009_matterport-public-scans.sql",
     ])
       for (const statement of (await readFile(file, "utf8")).split(
         "--> statement-breakpoint",

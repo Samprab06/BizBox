@@ -1,5 +1,5 @@
 {
-  "id": "88ff9995-742f-405b-b07a-19171cb3a29d",
+  "id": "61823717-a0a5-4484-b7ae-acc972ea844d",
   "prevId": "6f9a9675-c59c-40b2-b97b-2f26e5bb67e6",
   "version": "7",
   "dialect": "postgresql",
@@ -258,6 +258,223 @@
       },
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.copilot_thread_commits": {
+      "name": "copilot_thread_commits",
+      "schema": "",
+      "columns": {
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "copilot_thread_commits_project_id_copilot_threads_project_id_fk": {
+          "name": "copilot_thread_commits_project_id_copilot_threads_project_id_fk",
+          "tableFrom": "copilot_thread_commits",
+          "tableTo": "copilot_threads",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "project_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "copilot_thread_commits_project_id_idempotency_key_pk": {
+          "name": "copilot_thread_commits_project_id_idempotency_key_pk",
+          "columns": [
+            "project_id",
+            "idempotency_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.copilot_thread_events": {
+      "name": "copilot_thread_events",
+      "schema": "",
+      "columns": {
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "copilot_thread_events_project_id_copilot_threads_project_id_fk": {
+          "name": "copilot_thread_events_project_id_copilot_threads_project_id_fk",
+          "tableFrom": "copilot_thread_events",
+          "tableTo": "copilot_threads",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "project_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "copilot_thread_events_project_id_seq_pk": {
+          "name": "copilot_thread_events_project_id_seq_pk",
+          "columns": [
+            "project_id",
+            "seq"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "copilot_thread_events_seq_positive": {
+          "name": "copilot_thread_events_seq_positive",
+          "value": "\"copilot_thread_events\".\"seq\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.copilot_threads": {
+      "name": "copilot_threads",
+      "schema": "",
+      "columns": {
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "next_event_seq": {
+          "name": "next_event_seq",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "state": {
+          "name": "state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cost_microusd": {
+          "name": "cost_microusd",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cost_cap_microusd": {
+          "name": "cost_cap_microusd",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "copilot_threads_project_id_projects_id_fk": {
+          "name": "copilot_threads_project_id_projects_id_fk",
+          "tableFrom": "copilot_threads",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "copilot_threads_revision_nonnegative": {
+          "name": "copilot_threads_revision_nonnegative",
+          "value": "\"copilot_threads\".\"revision\" >= 0"
+        },
+        "copilot_threads_event_seq_positive": {
+          "name": "copilot_threads_event_seq_positive",
+          "value": "\"copilot_threads\".\"next_event_seq\" > 0"
+        },
+        "copilot_threads_cost_valid": {
+          "name": "copilot_threads_cost_valid",
+          "value": "\"copilot_threads\".\"cost_microusd\" >= 0 AND \"copilot_threads\".\"cost_cap_microusd\" >= \"copilot_threads\".\"cost_microusd\" AND \"copilot_threads\".\"cost_cap_microusd\" <= 9007199254740991"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.evidence": {
@@ -921,18 +1138,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "is_public": {
-          "name": "is_public",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "checked_at": {
-          "name": "checked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -992,10 +1197,6 @@
         "matterport_models_dimensions_pair": {
           "name": "matterport_models_dimensions_pair",
           "value": "(\"matterport_models\".\"dimensions\" IS NULL) = (\"matterport_models\".\"dimensions_recorded_at\" IS NULL)"
-        },
-        "matterport_models_public_check_pair": {
-          "name": "matterport_models_public_check_pair",
-          "value": "(\"matterport_models\".\"is_public\" IS NULL) = (\"matterport_models\".\"checked_at\" IS NULL)"
         }
       },
       "isRLSEnabled": false

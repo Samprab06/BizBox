@@ -1,13 +1,17 @@
 /**
- * HAC-129: where the BizBox landing sends a visitor. The landing keeps no state of its own:
- * "has this visitor started?" is answered from the existing intake session (the same
- * localStorage record IntakeScreen, the workspace assistant and the context bar share).
+ * HAC-129: where the BizBox landing sends a visitor. "Has this visitor started?" is answered
+ * from the existing intake session (the same localStorage record IntakeScreen, the workspace
+ * assistant and the context bar share).
+ *
+ * HAC-136: a first visit gets its own project (`POST /api/projects`); the landing remembers
+ * that project's ID on this device so a returning founder resumes their own brief.
  */
 import { missingFields, type IntakeSession } from "@/components/intake/profile";
 import { workspaceHref } from "@/lib/client/workspace-routes";
+import { DEMO_PROJECT_ID, isKnownProjectId } from "@/lib/projects/ids";
 
-/** The example project the landing opens. */
-export const ENTRY_PROJECT_ID = "houston-coffee";
+/** localStorage key holding the ID of the project this device's founder is working on. */
+export const CURRENT_PROJECT_KEY = "bizbox:current-project:v1";
 
 export type EntryTarget =
   | { kind: "onboarding"; href: string }
@@ -17,6 +21,10 @@ export type EntryTarget =
       onboardingHref: string;
       workspaceHref: string;
     };
+
+/** What /start does: open an existing project, or create one for a first visit. */
+export type EntryPlan =
+  { kind: "create" } | (EntryTarget & { projectId: string });
 
 /** A session counts as started once the founder has answered or said something. */
 export function hasStarted(session: IntakeSession | null): boolean {
@@ -30,7 +38,7 @@ export function hasStarted(session: IntakeSession | null): boolean {
 
 export function entryTarget(
   session: IntakeSession | null,
-  projectId = ENTRY_PROJECT_ID,
+  projectId: string,
 ): EntryTarget {
   // The guided onboarding is the intake view's default (HAC-127).
   const onboardingHref = workspaceHref(projectId, "intake");
@@ -42,4 +50,22 @@ export function entryTarget(
     onboardingHref,
     workspaceHref: workspaceHref(projectId, "workspace"),
   };
+}
+
+/**
+ * The remembered project wins. Without one, a brief already started on the demo project
+ * (saved before HAC-136) is resumed rather than abandoned; otherwise a new project is made.
+ */
+export function entryPlan(
+  currentProjectId: string | null,
+  readSession: (projectId: string) => IntakeSession | null,
+): EntryPlan {
+  const projectId =
+    currentProjectId && isKnownProjectId(currentProjectId)
+      ? currentProjectId
+      : hasStarted(readSession(DEMO_PROJECT_ID))
+        ? DEMO_PROJECT_ID
+        : null;
+  if (!projectId) return { kind: "create" };
+  return { ...entryTarget(readSession(projectId), projectId), projectId };
 }
