@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { test as base, expect, type Page } from "@playwright/test";
-import { workspaceHref, type View } from "../../lib/client/workspace-routes";
+import { workspaceHref, type WorkspaceRoute } from "../../lib/client/workspace-routes";
 
 export const PROJECT_ID = "houston-coffee";
 
@@ -10,7 +10,7 @@ export const SITE_IDS = ["montrose", "heights"] as const;
 type Fixtures = {
   projectId: string;
   /** Opens a workspace view; `siteId` selects a site (the "site" view needs one). */
-  gotoView: (view: View, siteId?: string) => Promise<void>;
+  gotoView: (view: WorkspaceRoute, siteId?: string) => Promise<void>;
   /** Removes every saved intake session from localStorage, for a clean start. */
   clearIntakeStorage: () => Promise<void>;
 };
