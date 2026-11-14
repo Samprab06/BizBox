@@ -327,7 +327,14 @@ test.describe("history", () => {
   }) => {
     await gotoView("intake");
     await expandProjectNavigation(page);
-    const visited: WorkspaceRoute[] = ["map", "site", "comparison", "replay", "simulator", "plan"];
+    const visited: WorkspaceRoute[] = [
+      "map",
+      "site",
+      "comparison",
+      "replay",
+      "simulator",
+      "plan",
+    ];
     for (const view of visited) {
       await expandProjectNavigation(page);
       await navLink(page, view).click();
@@ -588,10 +595,30 @@ test.describe("responsive layout", () => {
         const h1Box = (await page
           .getByRole("heading", { level: 1 })
           .boundingBox())!;
-        expect(
-          navBox.y + navBox.height,
-          "nav bottom vs h1 top",
-        ).toBeLessThanOrEqual(h1Box.y);
+        if (view === "workspace") {
+          // The immersive workspace has one header/menu and a screen-reader
+          // heading. Verify its actual two-pane content instead of that hidden heading.
+          const scene = (await page
+            .getByRole("region", { name: "Location and interior workspace" })
+            .boundingBox())!;
+          const assistant = (await page
+            .getByRole("complementary", { name: "Assistant" })
+            .boundingBox())!;
+          const panesOverlap =
+            scene.x < assistant.x + assistant.width &&
+            assistant.x < scene.x + scene.width &&
+            scene.y < assistant.y + assistant.height &&
+            assistant.y < scene.y + scene.height;
+          expect(
+            panesOverlap,
+            "workspace visualization and assistant do not overlap",
+          ).toBe(false);
+        } else {
+          expect(
+            navBox.y + navBox.height,
+            "nav bottom vs h1 top",
+          ).toBeLessThanOrEqual(h1Box.y);
+        }
 
         // The "Next:" step is reachable and inside the viewport too.
         if (nextStep(view)) {

@@ -2,7 +2,7 @@ import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import { expect, expectNoA11yViolations, test } from "./fixtures";
 
-// HAC-128: the BizBox workspace screen. Every network boundary is a page.route mock: no
+// HAC-128/HAC-130: the connected BizBox workspace screen. Every network boundary is a page.route mock: no
 // model, voice, listing or database service is called.
 
 const VIEWPORTS = [
@@ -53,6 +53,9 @@ async function mockServices(page: Page, options: { live?: boolean } = {}) {
   await page.route("**/api/sites", (route) =>
     route.fulfill({ status: 503, json: { message: "not used" } }),
   );
+  await page.route("**/api/comparisons/capabilities", (route) =>
+    route.fulfill({ json: { jevConfigured: false } }),
+  );
   return { calls, pending };
 }
 
@@ -92,38 +95,42 @@ for (const viewport of VIEWPORTS) {
   test.describe(`at ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("Text and Voice share the draft, history and location disclosure", async ({
+    test("Text and Voice share the draft and history without fabricated listings", async ({
       page,
       projectId,
     }) => {
       const { calls, pending } = await mockServices(page);
       await open(page, projectId);
 
-      // One header, one selected location (an example, labelled as such) and a labelled city photo.
+      // Missing listing service/intake must not invent properties or substitute a city photo.
       await expect(
         page
           .getByRole("region", { name: "Workspace", exact: true })
           .getByText("Houston", { exact: true }),
       ).toBeVisible();
-      const location = page.getByRole("region", { name: "Selected location" });
-      await expect(
-        location.getByRole("heading", { name: "Montrose storefront" }),
-      ).toBeVisible();
-      await expect(
-        location.getByText("Example", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        location.getByText("City preview · photo, not a map"),
-      ).toBeVisible();
-      const details = location.getByRole("button", {
-        name: "Details",
-        exact: true,
+      const location = page.getByRole("region", {
+        name: "Location and interior workspace",
       });
-      await details.click();
-      await expect(details).toHaveAttribute("aria-expanded", "true");
       await expect(
-        location.getByRole("link", { name: "Open site detail" }),
+        location.getByText(
+          "No verified spaces are available for this brief right now.",
+        ),
       ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Montrose storefront" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText("City preview · photo, not a map", { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        location.getByRole("button", {
+          name: "Compare locations",
+          exact: true,
+        }),
+      ).toBeDisabled();
+      await expect(
+        location.getByRole("button", { name: "Interior", exact: true }),
+      ).toBeDisabled();
 
       // A draft survives a round trip through the Voice tab.
       await composer(page).fill("Is parking nearby?");
@@ -180,7 +187,11 @@ for (const viewport of VIEWPORTS) {
       await expect(textLog).toContainText(
         "Street parking is limited near Montrose.",
       );
-      await expect(details).toHaveAttribute("aria-expanded", "true");
+      await expect(
+        location.getByText(
+          "No verified spaces are available for this brief right now.",
+        ),
+      ).toBeVisible();
 
       // Later messages carry the round-tripped intake state, as the intake screen does.
       await composer(page).press("Enter");

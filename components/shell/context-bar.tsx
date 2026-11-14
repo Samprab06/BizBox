@@ -152,7 +152,7 @@ export function ProjectContextProvider({
   });
   return (
     <WorkspacePublicationContext.Provider value={publish}>
-      <ContextBar model={model} />
+      {!pathname.endsWith("/workspace") && <ContextBar model={model} />}
       {children}
     </WorkspacePublicationContext.Provider>
   );

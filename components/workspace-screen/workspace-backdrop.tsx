@@ -1,0 +1,73 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { candidateCoordinates, type WorkspaceCandidate } from "./client-model";
+import { supportedCity } from "./model";
+import { SelectedInterior } from "./selected-interior";
+import styles from "./workspace-glass.module.css";
+
+const Neighborhood = dynamic(
+  () => import("@/components/simulator/neighborhood"),
+  { ssr: false },
+);
+const centers = {
+  Houston: { latitude: 29.7604, longitude: -95.3698 },
+  "Los Angeles": { latitude: 34.0522, longitude: -118.2437 },
+};
+
+export function WorkspaceBackdrop({
+  city: label,
+  interior,
+  selected,
+  tilesetUrl,
+}: {
+  city: string;
+  interior: boolean;
+  selected?: WorkspaceCandidate;
+  tilesetUrl?: string;
+}) {
+  const city = supportedCity(label);
+  const coords =
+    candidateCoordinates(selected) ?? (city ? centers[city] : null);
+  if (interior && selected)
+    return (
+      <SelectedInterior
+        key={selected.candidate.id}
+        siteId={selected.candidate.id}
+        address={selected.candidate.address}
+      />
+    );
+  // The current proxy's collection is Houston-only. HAC77 owns verified LA collection selection.
+  if (tilesetUrl && coords && city === "Houston")
+    return (
+      <Neighborhood
+        {...coords}
+        tilesetUrl={tilesetUrl}
+        minute={720}
+        quality="balanced"
+        locationLabel={
+          selected?.candidate.address ?? label + " · 3D neighborhood"
+        }
+        illustrativeOverlays={false}
+        birdseye
+      >
+        {null}
+      </Neighborhood>
+    );
+  return (
+    <div
+      className={
+        styles.empty +
+        " h-full !items-start !justify-center !pl-10 !pr-[35%] !text-left"
+      }
+    >
+      <span className={styles.badge}>3D neighborhood</span>
+      <h2>{city ? "3D imagery unavailable" : "Choose a supported city"}</h2>
+      <p>
+        {city
+          ? "A verified Vexcel collection must be available for this city. Listing details and your conversation remain available."
+          : "Review your brief to explore Houston or Los Angeles."}
+      </p>
+    </div>
+  );
+}

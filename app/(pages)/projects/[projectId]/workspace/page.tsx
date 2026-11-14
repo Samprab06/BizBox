@@ -1,4 +1,3 @@
-import { TaskNav } from "@/components/shell/task-nav";
 import type { PreviewPageProps } from "@/components/workspace-view";
 import { WorkspaceScreen } from "@/components/workspace-screen/workspace-screen";
 import { getPreviewProject } from "@/lib/workspace-preview";
@@ -10,17 +9,16 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
   const siteId =
     typeof site === "string" && site.length <= 200 ? site : undefined;
   return (
-    <>
-      <TaskNav
-        projectId={projectId}
-        route="workspace"
-        siteId={siteId ?? project?.sites[0]?.id}
-      />
-      <WorkspaceScreen
-        projectId={projectId}
-        project={project}
-        siteId={siteId}
-      />
-    </>
+    <WorkspaceScreen
+      key={projectId}
+      projectId={projectId}
+      project={project}
+      siteId={siteId}
+      tilesetUrl={
+        process.env.VEXCEL_API_KEY?.trim()
+          ? "/api/vexcel/3d/tileset"
+          : undefined
+      }
+    />
   );
 }

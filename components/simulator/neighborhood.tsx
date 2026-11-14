@@ -35,6 +35,8 @@ export default function Neighborhood({
   quality = "balanced",
   locationLabel,
   controls,
+  illustrativeOverlays = true,
+  birdseye = false,
 }: {
   longitude: number;
   latitude: number;
@@ -44,6 +46,9 @@ export default function Neighborhood({
   quality?: RenderQuality;
   locationLabel: string;
   controls?: ReactNode;
+  /** The founder workspace shows source imagery without invented traffic/demand. */
+  illustrativeOverlays?: boolean;
+  birdseye?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -209,7 +214,7 @@ export default function Neighborhood({
         radius: InstanceType<typeof ConstantProperty>;
         color: ReturnType<typeof createAnimatedColor>;
       }[] = [];
-      for (const anchor of demandAnchors) {
+      for (const anchor of illustrativeOverlays ? demandAnchors : []) {
         const position = Cartesian3.fromDegrees(
           longitude + anchor.east,
           latitude + anchor.north,
@@ -445,8 +450,16 @@ export default function Neighborhood({
       updateScene.current();
 
       viewer.camera.setView({
-        destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(-10), roll: 0 },
+        destination: Cartesian3.fromDegrees(
+          longitude,
+          latitude - 0.0037,
+          birdseye ? 650 : 150,
+        ),
+        orientation: {
+          heading: 0,
+          pitch: CesiumMath.toRadians(birdseye ? -60 : -10),
+          roll: 0,
+        },
       });
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
@@ -461,6 +474,7 @@ export default function Neighborhood({
         pendingTiles.clear();
       });
       async function updateRoads() {
+        if (!illustrativeOverlays) return;
         const current = ++revision;
         setRoadStatus("loading");
         try {
@@ -587,7 +601,15 @@ export default function Neighborhood({
       updateScene.current = () => {};
       dispose();
     };
-  }, [longitude, latitude, tilesetUrl, attempt, hasBeenVisible]);
+  }, [
+    longitude,
+    latitude,
+    tilesetUrl,
+    attempt,
+    hasBeenVisible,
+    illustrativeOverlays,
+    birdseye,
+  ]);
 
   return (
     <div
@@ -638,88 +660,90 @@ export default function Neighborhood({
         </div>
       )}
 
-      <GlassControl
-        over="viewport"
-        aria-label="Illustrative neighborhood overlays"
-        className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium">
-            Illustrative traffic pattern
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={trafficVisible}
-            aria-label="Illustrative traffic pattern"
-            onClick={() => {
-              const show = !trafficVisible;
-              setTrafficVisible(show);
-              trafficEntities.current(show);
-            }}
-            className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
-          >
-            <span
-              className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
-            />
-          </button>
-        </div>
-        <div
-          className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
-        />
-
-        {trafficVisible && roadStatus !== "ready" && (
-          <p role="status" className="mt-2 text-[11px] text-viewport-muted">
-            {roadStatus === "loading"
-              ? "Loading nearby roads…"
-              : "Some roads didn’t load. Move the map or toggle to retry."}
-          </p>
-        )}
-
-        <p className="mt-2 text-[11px]">
-          Time-of-day curves and invented offsets; not observed traffic.
-        </p>
-        <details className="mt-4">
-          <summary className="cursor-pointer text-xs font-medium">
-            Assumed activity by time of day
-          </summary>
-          <p className="mt-1 text-[11px]">
-            Hand-placed anchors; not measured trips.
-          </p>
-          <ul className="mt-2.5 space-y-2">
-            {demandAnchors.map((anchor) => {
-              const level = demandLevel(minute, anchor.peaks);
-              return (
-                <li
-                  key={anchor.label}
-                  className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
-                  title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
-                >
-                  {anchor.label}
-                  <span className="h-1 overflow-hidden rounded-full bg-white/10">
-                    <span
-                      className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
-                      style={{
-                        width: `${Math.max(3, level * 100)}%`,
-                        backgroundColor: anchor.color,
-                      }}
-                    />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </details>
-        <label className="mt-4 flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={atmosphereEnabled}
-            onChange={(event) => setAtmosphere(event.target.checked)}
+      {illustrativeOverlays && (
+        <GlassControl
+          over="viewport"
+          aria-label="Illustrative neighborhood overlays"
+          className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium">
+              Illustrative traffic pattern
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={trafficVisible}
+              aria-label="Illustrative traffic pattern"
+              onClick={() => {
+                const show = !trafficVisible;
+                setTrafficVisible(show);
+                trafficEntities.current(show);
+              }}
+              className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
+            >
+              <span
+                className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
+              />
+            </button>
+          </div>
+          <div
+            className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
           />
-          Sky and clouds
-        </label>
-        <div className="mt-3">{controls}</div>
-      </GlassControl>
+
+          {trafficVisible && roadStatus !== "ready" && (
+            <p role="status" className="mt-2 text-[11px] text-viewport-muted">
+              {roadStatus === "loading"
+                ? "Loading nearby roads…"
+                : "Some roads didn’t load. Move the map or toggle to retry."}
+            </p>
+          )}
+
+          <p className="mt-2 text-[11px]">
+            Time-of-day curves and invented offsets; not observed traffic.
+          </p>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs font-medium">
+              Assumed activity by time of day
+            </summary>
+            <p className="mt-1 text-[11px]">
+              Hand-placed anchors; not measured trips.
+            </p>
+            <ul className="mt-2.5 space-y-2">
+              {demandAnchors.map((anchor) => {
+                const level = demandLevel(minute, anchor.peaks);
+                return (
+                  <li
+                    key={anchor.label}
+                    className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
+                    title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
+                  >
+                    {anchor.label}
+                    <span className="h-1 overflow-hidden rounded-full bg-white/10">
+                      <span
+                        className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
+                        style={{
+                          width: `${Math.max(3, level * 100)}%`,
+                          backgroundColor: anchor.color,
+                        }}
+                      />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+          <label className="mt-4 flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={atmosphereEnabled}
+              onChange={(event) => setAtmosphere(event.target.checked)}
+            />
+            Sky and clouds
+          </label>
+          <div className="mt-3">{controls}</div>
+        </GlassControl>
+      )}
 
       {children}
 

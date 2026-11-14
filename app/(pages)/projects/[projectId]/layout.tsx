@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ProjectFrame } from "@/components/shell/project-frame";
 import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
@@ -11,26 +11,14 @@ export default async function ProjectLayout({
 }) {
   const project = getPreviewProject((await params).projectId);
   return (
-    <>
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto max-w-5xl px-5 py-5 sm:px-8">
-          <Link
-            href="/projects/houston-coffee/intake"
-            className="text-xl font-bold tracking-tight text-pine"
-          >
-            BizBox
-          </Link>
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-5 py-7 sm:px-8">
-        {project ? (
-          <ProjectContextProvider project={project}>
-            {children}
-          </ProjectContextProvider>
-        ) : (
-          children
-        )}
-      </main>
-    </>
+    <ProjectFrame>
+      {project ? (
+        <ProjectContextProvider project={project}>
+          {children}
+        </ProjectContextProvider>
+      ) : (
+        children
+      )}
+    </ProjectFrame>
   );
 }
