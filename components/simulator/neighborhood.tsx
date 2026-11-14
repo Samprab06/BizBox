@@ -61,6 +61,8 @@ export default function Neighborhood({
         Cartesian3,
         Cartographic,
         Cartesian2,
+        CloudCollection,
+        ShadowMode,
         Sun,
         ClassificationType,
         Color,
@@ -93,12 +95,23 @@ export default function Neighborhood({
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
         maximumScreenSpaceError: 1,
+        shadows: ShadowMode.DISABLED,
+        lightColor: new Cartesian3(0.22, 0.22, 0.22),
         dynamicScreenSpaceError: false,
       });
       if (closed) {
         tileset.destroy();
         return;
       }
+      // Only the constant spherical harmonic contributes, giving every face even diffuse fill.
+      tileset.imageBasedLighting.sphericalHarmonicCoefficients = [
+        new Cartesian3(1.35, 1.35, 1.35),
+        ...Array.from({ length: 8 }, () => new Cartesian3()),
+      ];
+      tileset.imageBasedLighting.imageBasedLightingFactor = new Cartesian2(
+        1,
+        0,
+      );
       viewer.scene.primitives.add(tileset);
       const city = viewer;
       const createRoad = ({ roadClass, points, seed }: Road) =>
@@ -160,6 +173,34 @@ export default function Neighborhood({
       const { addVolumetricClouds } = await import("./volumetric-clouds");
       if (closed) return;
       addVolumetricClouds(city.scene, () => timeRef.current);
+      const lowClouds = new CloudCollection({ noiseDetail: 32 });
+      city.scene.primitives.add(lowClouds);
+      const cloudPatches = [
+        [-0.006, 0.007, 230, 200, 80, 0.35],
+        [-0.004, 0.009, 280, 145, 105, 0.5],
+        [-0.002, 0.009, 260, 260, 110, 0.44],
+        [0.001, 0.011, 320, 190, 115, 0.4],
+        [0.004, 0.008, 240, 275, 95, 0.5],
+        [0.007, 0.012, 290, 220, 130, 0.32],
+        [-0.01, 0.015, 360, 340, 128, 0.47],
+        [0.009, 0.017, 380, 315, 150, 0.4],
+        [0.014, 0.011, 315, 170, 95, 0.42],
+      ].map(([east, north, height, width, depth, slice], index) => ({
+        east,
+        north,
+        height,
+        drift: 0.0025 + (index % 3) * 0.0009,
+        cloud: lowClouds.add({
+          position: Cartesian3.fromDegrees(
+            longitude + east,
+            latitude + north,
+            height,
+          ),
+          scale: new Cartesian2(width, depth),
+          maximumSize: new Cartesian3(width, depth, depth * 0.9),
+          slice,
+        }),
+      }));
       const nightSky = Color.fromCssColorString("#10182e");
       const daySky = Color.fromCssColorString("#87bce6");
       const twilightSky = Color.fromCssColorString("#ee9e83");
@@ -186,6 +227,14 @@ export default function Neighborhood({
           warm * 0.7,
           sky,
         );
+        for (const { cloud, east, north, height, drift } of cloudPatches) {
+          cloud.position = Cartesian3.fromDegrees(
+            longitude + east + (step / 1440) * drift,
+            latitude + north + (step / 1440) * 0.0007,
+            height,
+          );
+          cloud.brightness = 0.48 + 0.4 * light + 0.12 * warm;
+        }
         const brightness = 0.86 + 0.14 * Math.sqrt(light);
         const red = Math.min(1, brightness - 0.035 * (1 - light) + 0.08 * warm);
         const green = Math.min(1, brightness + 0.025 * warm);
