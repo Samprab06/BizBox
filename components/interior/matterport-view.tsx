@@ -19,6 +19,8 @@ import {
   scanTargets,
   type CameraSdk,
 } from "./camera";
+import { pickAnchorEnabled, type PointerSdk } from "./pick-anchor";
+import PickAnchorPanel from "./pick-anchor-panel";
 
 export type MatterportConfig = {
   sdkKey: string;
@@ -194,7 +196,7 @@ export default function MatterportView({
       : !sdk
         ? "Connecting to the Matterport café…"
         : !config.placement
-          ? "Scanned interior connected. Simulation overlay is awaiting placement calibration."
+          ? "Scanned interior connected. This scan has no placement calibration, so the simulation overlay uses Modeled layout."
           : overlay === "failed"
             ? "The scan connected, but simulation dots could not start. Choose Modeled layout to inspect the replay."
             : overlay === "ready"
@@ -227,6 +229,9 @@ export default function MatterportView({
         >
           Show service area
         </button>
+      )}
+      {sdk && pickAnchorEnabled() && "Pointer" in sdk && (
+        <PickAnchorPanel sdk={sdk as unknown as PointerSdk} />
       )}
       {focusFailed && (
         <p className="px-4 pb-3 text-xs text-white/65">
