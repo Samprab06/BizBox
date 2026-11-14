@@ -55,6 +55,8 @@ export default async function Page({
     ? "/api/vexcel/3d/tileset"
     : undefined;
   const stored = await loadStored(projectId, search);
+  if (!stored && !getPreviewProject(projectId) && !one(search.comparison))
+    return <WorkspaceView projectId={projectId} view="simulator" />;
   if (stored)
     return (
       <SimulatorContext projectId={projectId}>
