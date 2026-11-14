@@ -253,6 +253,59 @@ export type DayResult = {
   metrics: DailyMetrics;
 };
 
+/** Numeric observations in one local-clock hour (HAC-73). */
+export type HourlyValues = Pick<
+  DailyMetrics,
+  | "arrivals"
+  | "joined"
+  | "served"
+  | "balked"
+  | "reneged"
+  | "meanWaitMin"
+  | "p90WaitMin"
+  | "stationUtilization"
+  | "revenueUsd"
+> & {
+  /** Queue person-minutes / openMinutes; zero when closed. */
+  meanQueueLength: number;
+  /** Largest queue sustained for a positive-duration interval; excludes instant joins/exits. */
+  maxQueueLength: number;
+};
+
+export type HourlyMetadata = {
+  /** Local-clock hour, 0 through 23. Overnight hours are unsupported by the engine. */
+  hour: number;
+  /** Intersection of this hour with [openMin, closeMin); denominator for queue/utilization. */
+  openMinutes: number;
+  closed: boolean;
+};
+
+/**
+ * Counts use event time: arrival/join/balk at arrival, served/revenue at completion,
+ * reneged at abandonment. Waits include completed customers only, in their service-start
+ * hour (null with none). Events at closing time belong to the last open hour, including
+ * midnight. Queue and busy intervals are clipped at closing time; unfinished service
+ * contributes utilization but no served count, wait observation or revenue.
+ */
+export type HourlyMetrics = HourlyMetadata & HourlyValues;
+
+/** Seed distribution; nearest-rank p5/p95. Null wait observations are omitted. */
+export type HourlyEstimate<T extends number | null = number> = {
+  mean: T;
+  p5: T;
+  p95: T;
+};
+
+export type AggregatedHourlyMetrics = HourlyMetadata & {
+  [K in keyof HourlyValues]: HourlyEstimate<HourlyValues[K]>;
+};
+
+/** Ranked open buckets; ties use earlier hour, unknown waits are omitted. */
+export type PeakHours = {
+  arrivals: HourlyMetrics[];
+  p90WaitMin: HourlyMetrics[];
+};
+
 export type MonthlyEconomics = {
   revenueUsd: number;
   servedCustomers: number;
