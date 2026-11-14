@@ -225,7 +225,9 @@ async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
   );
 
   // Record the version Jev actually answered with (e.g. jev-1.14.0), not the requested alias.
-  const answered: string | undefined = answeredVersions.values().next().value;
+  // Sorted, not first-arrived, so a mix of versions (cached and fresh answers across an alias
+  // roll) gives the same table in any response-arrival order (HAC-131).
+  const answered: string | undefined = [...answeredVersions].sort()[0];
   const table: BehaviorTable = {
     siteId: opts.site.id,
     modelVersion: answered ?? modelVersion,

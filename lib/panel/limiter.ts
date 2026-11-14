@@ -5,7 +5,7 @@
  * how hard the TypeSafe organisation limit is being pushed. It runs AIMD:
  *   - a rate-limited response (429) halves the cap and pauses *all* dispatch for `retry-after`,
  *     so the rest of the queue does not keep hammering a limit that was just hit;
- *   - each success adds `1 / cap` (about +1 per full window of successes), up to the maximum.
+ *   - each success adds 1 to the cap, up to the maximum (the ticket's "+1 per success").
  * A burst of 429s that were all dispatched before the first decrease counts as one event: they
  * extend the pause but do not halve the cap again (`epoch`).
  *

@@ -192,6 +192,28 @@ describe("bundled orders (HAC-131, JEV_BUNDLE_ORDERS)", () => {
   });
 });
 
+describe("answered model version (HAC-131 determinism)", () => {
+  it("is the same in any response-arrival order when versions are mixed", async () => {
+    const run = async (reverse: boolean) => {
+      const inner = fakeJevClient();
+      let n = 0;
+      const client = {
+        modelVersion: inner.modelVersion,
+        async ask(req: Parameters<typeof inner.ask>[0]) {
+          const i = n++;
+          const r = await inner.ask(req);
+          // Two resolved versions; the arrival order of the first answers is flipped between runs.
+          await new Promise((res) => setTimeout(res, reverse ? 20 - (i % 20) : i % 20));
+          return { ...r, modelVersion: i % 2 === 0 ? "jev-1.14.0" : "jev-1.15.0" };
+        },
+      };
+      const { table } = await runPanel({ ...base, client, cache: new MemoryJevCache() });
+      return table.modelVersion;
+    };
+    expect(await run(false)).toBe(await run(true));
+  });
+});
+
 describe("retrying failed calls", () => {
   const plan = planCalls(personaSet, ctx, 0, 4);
   const target = plan[0]!;
