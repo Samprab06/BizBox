@@ -9,7 +9,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
-        <SpeedInsights />
+        {/* Vercel serves the script; on any other host it 404s into the console. */}
+        {process.env.VERCEL ? <SpeedInsights /> : null}
       </body>
     </html>
   );

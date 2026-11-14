@@ -23,7 +23,7 @@ test("paired cafe replay seeks both plans together and resets their counts and s
     name: "Two staffed counters",
     exact: true,
   });
-  const playback = page.getByRole("region", {
+  const playback = page.getByRole("group", {
     name: "Shared playback",
     exact: true,
   });
@@ -97,13 +97,13 @@ test("staffing roles can be inspected without relying on dot color at each layou
   for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(
-      one.getByRole("button", { name: "Inspect employee 1", exact: true }),
+      one.getByRole("button", { name: "Employee 1 · counter 1", exact: true }),
     ).toBeVisible();
     await expect(
-      one.getByRole("button", { name: "Inspect employee 2", exact: true }),
+      one.getByRole("button", { name: "Employee 2 · counter 2", exact: true }),
     ).toHaveCount(0);
     await two
-      .getByRole("button", { name: "Inspect employee 2", exact: true })
+      .getByRole("button", { name: "Employee 2 · counter 2", exact: true })
       .click();
     await expect(
       two.getByRole("status", { name: "Person inspection" }),
@@ -144,16 +144,16 @@ test("WebGL-unavailable interior keeps the comparison, staffing and playback usa
   });
   await expect(one).toBeVisible();
   await one
-    .locator('[aria-label="Modeled block and café"]')
+    .locator('[aria-label="One staffed counter modeled café"]')
     .scrollIntoViewIfNeeded();
   await expect(one.getByText(/3D requires WebGL/)).toBeVisible();
   await one
-    .getByRole("button", { name: "Inspect employee 1", exact: true })
+    .getByRole("button", { name: "Employee 1 · counter 1", exact: true })
     .click();
   await expect(
     one.getByRole("status", { name: "Person inspection" }),
   ).toContainText(/Employee 1/i);
-  const playback = page.getByRole("region", {
+  const playback = page.getByRole("group", {
     name: "Shared playback",
     exact: true,
   });

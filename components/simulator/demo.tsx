@@ -770,7 +770,6 @@ export function SimulatorDemo({
                         <button
                           key={employee}
                           type="button"
-                          aria-label={`Inspect employee ${employee + 1}`}
                           aria-pressed={selected === `employee-${employee + 1}`}
                           onClick={() => select(`employee-${employee + 1}`)}
                           className="min-h-11 rounded-full border border-pine px-3 text-xs text-pine aria-pressed:bg-mint"

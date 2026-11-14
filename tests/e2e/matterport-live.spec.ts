@@ -21,7 +21,7 @@ test("real cafe SDK starts its 3D layer and switches plans without replacing the
   const frame = page.getByTitle("Matterport café interior", { exact: true });
   await expect(frame).toHaveCount(1);
   const originalFrame = await frame.elementHandle();
-  const playback = page.getByRole("region", {
+  const playback = page.getByRole("group", {
     name: "Shared playback",
     exact: true,
   });
