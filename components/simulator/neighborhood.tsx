@@ -60,7 +60,6 @@ export default function Neighborhood({
         Cartesian3,
         Cartographic,
         Cartesian2,
-        CloudCollection,
         Sun,
         ClassificationType,
         Color,
@@ -157,29 +156,9 @@ export default function Neighborhood({
       }
       const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
       city.clock.shouldAnimate = false;
-      // Native cumulus primitives, configured like the Cesium Sandcastle clouds example.
-      const clouds = new CloudCollection({ noiseDetail: 32 });
-      city.scene.primitives.add(clouds);
-      const cloudPositions = [
-        [-0.019, 0.029, 320, 570],
-        [-0.008, 0.025, 290, 460],
-        [0.001, 0.034, 340, 680],
-        [0.012, 0.031, 310, 600],
-        [0.024, 0.037, 350, 720],
-        [0.004, -0.035, 690, 590],
-      ];
-      const cumulus = cloudPositions.map(([east, north, height, width]) =>
-        clouds.add({
-          position: Cartesian3.fromDegrees(
-            longitude + east,
-            latitude + north,
-            height,
-          ),
-          scale: new Cartesian2(width, width * 0.44),
-          maximumSize: new Cartesian3(width, width * 0.44, width * 0.47),
-          slice: 0.4,
-        }),
-      );
+      const { addVolumetricClouds } = await import("./volumetric-clouds");
+      if (closed) return;
+      addVolumetricClouds(city.scene, () => timeRef.current);
       const nightSky = Color.fromCssColorString("#10182e");
       const daySky = Color.fromCssColorString("#87bce6");
       const twilightSky = Color.fromCssColorString("#ee9e83");
@@ -206,15 +185,6 @@ export default function Neighborhood({
           warm * 0.7,
           sky,
         );
-        cumulus.forEach((cloud, index) => {
-          const [east, north, height] = cloudPositions[index];
-          cloud.position = Cartesian3.fromDegrees(
-            longitude + east + (step / 1440) * 0.005,
-            latitude + north,
-            height,
-          );
-          cloud.brightness = 0.22 + 0.68 * light + 0.1 * warm;
-        });
         const brightness = 0.37 + 0.63 * light + warm * 0.2;
         const red = Math.min(1, brightness + 0.15 * warm);
         const blue = Math.min(1, brightness + 0.1 * (1 - light) - 0.1 * warm);
