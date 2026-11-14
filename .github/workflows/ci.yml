@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check env files
+        run: pnpm exec tsx scripts/check-env-files.ts
+      - name: Check public env before building
+        run: pnpm exec tsx scripts/check-client-bundle.ts --env-only
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Check client bundle
+        run: pnpm exec tsx scripts/check-client-bundle.ts
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Gitleaks
+        env:
+          VERSION: 8.24.3
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          archive="gitleaks_${VERSION}_linux_x64.tar.gz"
+          checksums="gitleaks_${VERSION}_checksums.txt"
+          release="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}"
+          curl --fail --silent --show-error --location --remote-name "$release/$archive"
+          curl --fail --silent --show-error --location --remote-name "$release/$checksums"
+          grep "  $archive$" "$checksums" | sha256sum --check
+          tar -xzf "$archive" gitleaks
+      - name: Scan pull request commits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: '"$RUNNER_TEMP/gitleaks" git --redact=100 --log-opts="$BASE_SHA..$HEAD_SHA" .'
+      - name: Scan main history
+        if: github.event_name == 'push'
+        run: '"$RUNNER_TEMP/gitleaks" git --redact=100 --log-opts=HEAD .'
