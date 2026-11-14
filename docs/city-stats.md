@@ -23,7 +23,9 @@ services. No new API, database, persisted contract or dependency is introduced.
 
 Verification covers arbitrary fractional seek times, reversal, exact closing
 totals, agreement with hourly bucket totals, aggregation, current queue waits,
-invalid clocks and duplicate sites. This standalone component is not mounted in
-a route yet: city-view integration, browser interaction and narrow-screen checks
-belong to HAC-77 and remain outstanding. HAC-78 is not complete until that
-integration is exercised.
+invalid clocks and duplicate sites. The standalone component passed a temporary local browser harness at 375, 768
+and 1440 px with no horizontal overflow, keyboard Play/Pause and Home/End seek,
+speed selection, site/area selection and zero axe WCAG A/AA violations. The
+harness used real seeded engine outputs and a controlled parent; it has been
+removed from the app. City-view mounting and end-to-end integration remain
+HAC-77-dependent. HAC-78 is not complete until that integration is exercised.
