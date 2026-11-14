@@ -207,7 +207,7 @@ test("unconfigured voice has no microphone/setup side effects and typed intake w
   page,
 }) => {
   const setups = await mockVoice(page, { configured: false });
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await expect(
     voice(page).getByRole("button", { name: "Start voice" }),
   ).toBeDisabled();
@@ -225,7 +225,7 @@ test("voice and typed answers share the current offline profile, validation and 
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await start(page);
   await page.evaluate(() => window.__voice.complete("A", "Voice café"));
   await expect(profileConcept(page)).toHaveValue("Voice café");
@@ -280,7 +280,7 @@ test("permission denial permits retry and leaves typed input available", async (
   page,
 }) => {
   const setups = await mockVoice(page, { denied: true });
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await voice(page).getByRole("button", { name: "Start voice" }).click();
   await expect(voice(page).getByRole("status")).toContainText(
     "microphone access was denied",
@@ -302,7 +302,7 @@ test("mute cancels identified speech without treating its cancellation race as a
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await start(page);
   await page.evaluate(() => window.__voice.complete("A", "Coffee"));
   await expect(profileConcept(page)).toHaveValue("Coffee");
@@ -360,7 +360,7 @@ test("live voice uses the typed endpoint and stop suppresses late speech while p
       },
     });
   });
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await expect(
     page.getByLabel("Message the intake agent", { exact: true }),
   ).toBeVisible();
@@ -399,7 +399,7 @@ test("out-of-order transcription never applies an answer to a changed prompt", a
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await start(page);
   await page.evaluate(() => {
     window.__voice.emit({
@@ -441,7 +441,7 @@ test("responsive reduced-motion and WebGL fallback keep accessible voice control
 }, testInfo) => {
   await mockVoice(page, { noWebGL: true });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await start(page);
   for (const width of [375, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -472,7 +472,7 @@ test("a manual edit between speech capture and transcription cannot move the ans
   page,
 }) => {
   await mockVoice(page);
-  await page.goto("/projects/houston-coffee/intake");
+  await page.goto("/projects/houston-coffee/intake?mode=form");
   await start(page);
   await page.evaluate(() => {
     window.__voice.emit({
