@@ -66,6 +66,11 @@ export interface RunPanelOptions {
   pricePoints?: number[];
   /** Called after each persona finishes (for progress reporting). */
   onPersona?: (personaId: string, ok: boolean) => void;
+  /** Epoch deadline. Stop scheduling new Jev work before this time; cached answers remain reusable. */
+  deadlineAt?: number;
+  /** Reserve time for one in-flight provider wave and its cache flush (default 20 seconds). */
+  deadlineReserveMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface PanelStats {
@@ -82,6 +87,7 @@ export interface PanelStats {
 export interface PanelRun {
   table: BehaviorTable;
   stats: PanelStats;
+  progress?: { completedPersonas: number; totalPersonas: number; inProgress: boolean };
 }
 
 /** One planned Jev call for a persona: the order index and the request. */
@@ -168,13 +174,16 @@ interface SharedRun {
   /** Everything the cache already holds for this run's keys, read in one batch. */
   known: Map<string, JevAskResult>;
   writer: CacheWriter;
+  failed: Set<string>;
+  pending: Set<string>;
+  stats: Map<SitePlan, PanelStats>;
 }
 
 async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
   const started = performance.now();
   const { opts, ctx, orders, retries } = sp;
   const modelVersion = opts.client.modelVersion;
-  const stats: PanelStats = { calls: 0, cacheHits: 0, failedCalls: 0, retriedCalls: 0, elapsedMs: 0 };
+  const stats = shared.stats.get(sp)!;
   const answeredVersions = new Set<string>();
 
   const outcomes = await Promise.all(
@@ -187,29 +196,15 @@ async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
             answeredVersions.add(hit.modelVersion);
             return { call, result: hit };
           }
-          try {
-            let result: JevAskResult | undefined;
-            for (let attempt = 0; !result; attempt++) {
-              stats.calls++;
-              if (attempt > 0) stats.retriedCalls++;
-              try {
-                result = await opts.client.ask(call.request);
-              } catch (e) {
-                if (attempt >= retries) throw e;
-              }
-            }
-            shared.writer.add(call.key, result); // buffered, flushed in batches as answers arrive
-            answeredVersions.add(result.modelVersion);
-            return { call, result };
-          } catch (e) {
-            stats.failedCalls++;
-            throw e;
-          }
+          if (shared.pending.has(call.key)) return { call, pending: true };
+          if (shared.failed.has(call.key)) throw new Error("Jev call failed");
+          throw new Error("Unscheduled Jev call");
         }),
       );
-      const ok = settled.every((s) => s.status === "fulfilled");
-      opts.onPersona?.(persona.id, ok);
-      if (!ok) return { personaId: persona.id, behavior: undefined };
+      const pending = settled.some((s) => s.status === "fulfilled" && "pending" in s.value);
+      const ok = !pending && settled.every((s) => s.status === "fulfilled");
+      if (!pending) opts.onPersona?.(persona.id, ok);
+      if (!ok) return { personaId: persona.id, behavior: undefined, pending };
       const answers = settled.map((s) => (s as PromiseFulfilledResult<{ call: KeyedCall; result: JevAskResult }>).value);
       const views = answers.flatMap((a) => (a.call.bundled ? expandBundled(a.result, orders) : [a.result]));
       return {
@@ -232,10 +227,14 @@ async function execSite(sp: SitePlan, shared: SharedRun): Promise<PanelRun> {
     siteId: opts.site.id,
     modelVersion: answered ?? modelVersion,
     personas: outcomes.flatMap((o) => (o.behavior ? [o.behavior] : [])),
-    failedPersonaIds: outcomes.filter((o) => !o.behavior).map((o) => o.personaId),
+    failedPersonaIds: outcomes.filter((o) => !o.behavior && !o.pending).map((o) => o.personaId),
   };
   stats.elapsedMs = performance.now() - started;
-  return { table: BehaviorTableSchema.parse(table), stats };
+  return { table: BehaviorTableSchema.parse(table), stats, progress: {
+    completedPersonas: outcomes.filter((o) => Boolean(o.behavior) || !o.pending).length,
+    totalPersonas: outcomes.length,
+    inProgress: outcomes.some((o) => o.pending),
+  } };
 }
 
 /** One batched cache read for every key of `plans`, then run them all against one shared writer. */
@@ -243,8 +242,41 @@ async function runPlans(plans: SitePlan[]): Promise<PanelRun[]> {
   const cache = plans[0]!.opts.cache;
   const known = await readCache(cache, plans.flatMap((sp) => sp.plan.flatMap((p) => p.calls.map((c) => c.key))));
   const writer = new CacheWriter(cache);
+  const failed = new Set<string>();
+  const pending = new Set<string>();
+  const stats = new Map(plans.map((sp) => [sp, { calls: 0, cacheHits: 0, failedCalls: 0, retriedCalls: 0, elapsedMs: 0 }]));
   try {
-    return await Promise.all(plans.map((sp) => execSite(sp, { known, writer })));
+    const missing = plans.flatMap((sp) => sp.plan.flatMap((p) => p.calls.map((call) => ({ sp, call }))))
+      .filter(({ call }) => !known.has(call.key));
+    // A bounded wave cannot grow beyond the client's configured limiter. Checking between
+    // waves leaves enough time to finish and flush answers before the function deadline.
+    const width = Math.max(1, Math.min(32, plans[0]!.opts.client.limiter?.().cap ?? 32));
+    for (let i = 0; i < missing.length; i += width) {
+      const opts = plans[0]!.opts;
+      if (opts.signal?.aborted || (opts.deadlineAt !== undefined &&
+          Date.now() + (opts.deadlineReserveMs ?? 20_000) >= opts.deadlineAt)) {
+        for (const item of missing.slice(i)) pending.add(item.call.key);
+        break;
+      }
+      await Promise.all(missing.slice(i, i + width).map(async ({ sp, call }) => {
+        const counters = stats.get(sp)!;
+        let result: JevAskResult | undefined;
+        for (let attempt = 0; !result; attempt++) {
+          counters.calls++;
+          if (attempt > 0) counters.retriedCalls++;
+          try { result = await sp.opts.client.ask(call.request); }
+          catch {
+            if (attempt >= sp.retries) { counters.failedCalls++; failed.add(call.key); break; }
+          }
+        }
+        if (result) {
+          known.set(call.key, result);
+          writer.add(call.key, result);
+        }
+      }));
+    }
+    await writer.flush();
+    return await Promise.all(plans.map((sp) => execSite(sp, { known, writer, failed, pending, stats })));
   } finally {
     await writer.flush(); // also on a thrown error, so answers already in hand are kept
   }
@@ -262,7 +294,7 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
  */
 export async function runPanelForSites(
   opts: Omit<RunPanelOptions, "site"> & { sites: CandidateSite[] },
-): Promise<{ tables: BehaviorTable[]; stats: PanelStats }> {
+): Promise<{ tables: BehaviorTable[]; stats: PanelStats; progress: { completedPersonas: number; totalPersonas: number; inProgress: boolean } }> {
   const started = performance.now();
   const { sites, ...rest } = opts;
   const runs =
@@ -274,7 +306,11 @@ export async function runPanelForSites(
     retriedCalls: sum(runs.map((r) => r.stats.retriedCalls)),
     elapsedMs: performance.now() - started,
   };
-  return { tables: runs.map((r) => r.table), stats };
+  return { tables: runs.map((r) => r.table), stats, progress: {
+    completedPersonas: sum(runs.map((r) => r.progress?.completedPersonas ?? 0)),
+    totalPersonas: sum(runs.map((r) => r.progress?.totalPersonas ?? 0)),
+    inProgress: runs.some((r) => r.progress?.inProgress),
+  } };
 }
 
 // ---------------------------------------------------------------------------

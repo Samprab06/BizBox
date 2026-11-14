@@ -96,6 +96,14 @@ export class AssemblyError extends Error {
     super(message);
   }
 }
+/** Cache checkpoints are durable; reassemble the same inputs on the next request. */
+export class PanelInProgressError extends Error {
+  constructor(public readonly completedPersonas: number, public readonly totalPersonas: number) {
+    super(`Jev panel in progress (${completedPersonas}/${totalPersonas} personas)`);
+    this.name = "PanelInProgressError";
+  }
+}
+export type PanelDeadline = { deadlineAt?: number; signal?: AbortSignal; deadlineReserveMs?: number };
 export type AssemblySearch = {
   result: SiteSearchResult;
   frontageFt?: Record<string, AssumedValue>;
@@ -146,6 +154,7 @@ const TICKETS = {
 export async function assembleEvaluation(
   raw: AssembleEvaluationInput,
   deps: AssemblyDependencies,
+  panelDeadline: PanelDeadline = {},
 ): Promise<AssembledEvaluation> {
   const input = AssemblyInputSchema.parse(raw);
   const { profile } = input;
@@ -684,7 +693,7 @@ export async function assembleEvaluation(
     "Competitor size/frontage/position/anchors, price and independent brand class are uncalibrated defaults; only location/category come from source records.",
   );
   if (input.demandSource === "jev" && deps.jev && price > 0) {
-    const { tables } = await runPanelForSites({
+    const { tables, progress } = await runPanelForSites({
       personaSet,
       sites: panelSites,
       competitors: panelCompetitors,
@@ -694,7 +703,10 @@ export async function assembleEvaluation(
         serviceMinPerCustomer: service,
       },
       ...deps.jev,
+      ...panelDeadline,
     });
+    if (progress.inProgress)
+      throw new PanelInProgressError(progress.completedPersonas, progress.totalPersonas);
     const canonical = new Map([
       ...sites.map((s) => [optionId(s.siteId), s.siteId] as const),
       ...competitors.map((c) => [optionId(c.id), c.id] as const),

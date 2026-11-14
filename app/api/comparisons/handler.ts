@@ -25,6 +25,7 @@ import {
 
 import {
   AssemblyError,
+  PanelInProgressError,
   AssemblyShortcutSchema,
   type AssembleEvaluationInput,
   type AssembledEvaluation,
@@ -48,7 +49,7 @@ type Dependencies = {
   store: ComparisonStore;
   newId: () => string;
   profiles?: Pick<ProfileStore, "load">;
-  assemble?: (input: AssembleEvaluationInput) => Promise<AssembledEvaluation>;
+  assemble?: (input: AssembleEvaluationInput, deadline?: { deadlineAt: number }) => Promise<AssembledEvaluation>;
 };
 
 /**
@@ -142,7 +143,7 @@ export function createComparisonsHandler({
           ...shortcut,
           profile,
           profileVersion: profile.version,
-        });
+        }, { deadlineAt: Date.now() + 45_000 });
         evaluationRequest = EvaluationRequestSchema.parse(assembled.request);
         assembly = {
           findings: assembled.findings,
@@ -183,6 +184,9 @@ export function createComparisonsHandler({
         201,
       );
     } catch (error) {
+      if (error instanceof PanelInProgressError)
+        return json({ status: "in_progress", message: error.message,
+          completedPersonas: error.completedPersonas, totalPersonas: error.totalPersonas }, 202);
       if (error instanceof AssemblyError)
         return json(
           {
