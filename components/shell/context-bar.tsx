@@ -82,21 +82,25 @@ function ContextFields({ model }: { model: WorkspaceContextModel }) {
 
 export function ContextBar({ model }: { model: WorkspaceContextModel }) {
   return (
-    <aside aria-label="Project context" className="mb-6 min-w-0">
+    <aside aria-label="Project context" className="mb-6 min-w-0 print:hidden">
       <Card>
         <div className="hidden md:block">
           <ContextFields model={model} />
         </div>
         <details className="group md:hidden">
-          <summary
-            aria-label={`Project context: ${model.concept.text} · ${model.location.text} · ${model.scenario.text}${model.example ? " Example" : ""}; ${model.status.text}`}
-            className="flex min-w-0 cursor-pointer list-none items-center gap-2 rounded text-sm [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-pine"
-          >
+          <summary className="flex min-w-0 cursor-pointer list-none items-center gap-2 rounded text-sm [&::-webkit-details-marker]:hidden focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-pine">
+            <span className="sr-only">Project context: </span>
             <span className="min-w-0 flex-1 truncate">
               {model.concept.text} · {model.location.text} ·{" "}
               {model.scenario.text}
             </span>
-            {model.example && <ExampleBadge />}
+            {model.example && (
+              <>
+                <span className="sr-only"> · </span>
+                <ExampleBadge />
+              </>
+            )}
+            <span className="sr-only"> · {model.status.text}</span>
             <span
               aria-hidden="true"
               className="shrink-0 text-pine group-open:hidden"

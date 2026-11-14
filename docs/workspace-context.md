@@ -25,6 +25,10 @@ Space. Desktop shows all four linked fields. There is no added motion.
 - Comparison responses already contain `comparison.synthetic`; the frontend
   preserves that existing field. Older responses without it say **Comparison
   provenance unavailable**. The public API schema and server behavior are unchanged.
+- The plan exporter publishes its already fetched comparison metadata and validated
+  loaded plan identity. Missing, outdated, failed, synthetic and unknown-provenance
+  plans are explicit. The entire context bar is hidden in print, keeping the
+  existing printable fact allowlist unchanged.
 - Replay also publishes its existing run-loading state. A failed or invalid run
   response shows **Example** even when its parent comparison is nonsynthetic.
   Route/run changes clear the previous run's identity while loading.
@@ -56,8 +60,8 @@ switching should extend the context model when that contract exists.
 `lib/client/workspace-context.test.ts` covers origin/fallback resolution,
 selection, missing metadata, stale routes and project isolation.
 `components/shell/context-bar.test.ts` covers semantic markup and destinations.
-`tests/e2e/context-bar.spec.ts` covers all five routes, intake updates, live versus
+`tests/e2e/context-bar.spec.ts` covers all six routes, intake updates, live versus
 synthetic responses, comparison adoption, replay failure/retry, late responses,
-mobile disclosure, keyboard operation, axe and horizontal overflow. Test API
+plan provenance and print exclusion, mobile disclosure, keyboard operation, axe and horizontal overflow. Test API
 responses are invented fixtures; nonsynthetic mock metadata exercises the live
 label independently of real services.

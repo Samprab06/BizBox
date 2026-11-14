@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { intakeSessionSchema } from "@/components/intake/profile";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { workspaceHref } from "./workspace-routes";
@@ -23,6 +24,13 @@ export type WorkspaceObservation =
       outdated?: boolean;
       siteIds: string[];
       candidates: ContextListing[];
+    }
+  | {
+      kind: "plan";
+      phase: "loading" | "ready" | "outdated" | "error";
+      comparisonId?: string;
+      synthetic?: boolean;
+      siteIds: string[];
     }
   | {
       kind: "replay";
@@ -52,6 +60,35 @@ export function conceptFromSession(raw: string | null): string | null {
   } catch {
     return null;
   }
+}
+
+const planSourceSchema = z.object({
+  comparisonId: z.string(),
+  result: z.object({
+    projectId: z.string(),
+    ranking: z.array(z.string()).optional(),
+  }),
+  comparison: z.object({ synthetic: z.boolean() }).optional(),
+});
+
+/** Metadata only; the export's existing validator still owns printable facts. */
+export function planContextSource(
+  raw: unknown,
+  projectId: string,
+  comparisonId: string,
+) {
+  const parsed = planSourceSchema.safeParse(raw);
+  if (
+    !parsed.success ||
+    parsed.data.comparisonId !== comparisonId ||
+    parsed.data.result.projectId !== projectId
+  )
+    return null;
+  return {
+    comparisonId,
+    synthetic: parsed.data.comparison?.synthetic,
+    siteIds: parsed.data.result.ranking ?? [],
+  };
 }
 
 export function reportsForRoute(
@@ -98,7 +135,8 @@ export function resolveWorkspaceContext({
   const view = detailMatch ? "site" : pathname.split("/").at(-1);
   const isComparison = view === "comparison";
   const isReplay = view === "replay";
-  const isModel = isComparison || isReplay;
+  const isPlan = view === "plan";
+  const isModel = isComparison || isReplay || isPlan;
   const searchState = observations.find((entry) => entry.kind === "search");
   const comparisonState = observations.find(
     (entry) => entry.kind === (isReplay ? "stored" : "comparison"),
@@ -127,7 +165,26 @@ export function resolveWorkspaceContext({
   let status = "Loading context…";
   let candidates: ContextListing[] = currentSearch?.candidates ?? [];
 
-  if (isModel) {
+  if (isPlan) {
+    const plan = observations.find((entry) => entry.kind === "plan");
+    if (!wantedComparison) status = "Choose a comparison";
+    else if (plan?.kind === "plan" && plan.comparisonId === wantedComparison) {
+      if (plan.phase === "error") status = "Plan unavailable";
+      else if (plan.phase === "outdated") {
+        status = "Outdated comparison";
+        example = plan.synthetic === true;
+      } else if (plan.phase === "ready") {
+        example = plan.synthetic === true;
+        status = example
+          ? "Example data"
+          : plan.synthetic === undefined
+            ? "Plan provenance unavailable"
+            : "Stored plan";
+        if (!plan.siteIds.includes(selectedId ?? ""))
+          selectedId = plan.siteIds.length === 1 ? plan.siteIds[0] : undefined;
+      }
+    }
+  } else if (isModel) {
     if (
       currentComparison &&
       comparisonMatches &&

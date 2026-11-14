@@ -1,3 +1,5 @@
+import { buildLocationPlan } from "../../lib/agent/plan";
+import { fixture as planFixture } from "../../lib/agent/__fixtures__/plan";
 import AxeBuilder from "@axe-core/playwright";
 import { test, expect } from "./fixtures";
 import { completeIntake, liveSearch, liveSiteId } from "./live-site-fixtures";
@@ -244,7 +246,7 @@ test("mobile context is one line with keyboard disclosure and no axe violations"
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto("/projects/houston-coffee/intake?site=montrose");
   const bar = contextBar(page);
-  const summary = bar.getByLabel(/^Project context:/);
+  const summary = bar.locator("summary");
   await expect(summary).toBeVisible();
   await expect(
     bar.getByRole("link", { name: /Change business concept:/ }),
@@ -307,8 +309,8 @@ test("late search results cannot overwrite a new fixture route or another projec
     .getByRole("navigation", { name: "Project views" })
     .getByRole("link", { name: "Site detail", exact: true })
     .click();
-  // A numeric selection is not a fixture. Use the persistent location control
-  // to switch to a known fixture while the original search is still pending.
+  await expect(page).toHaveURL(/\/sites\/201%3A301$/);
+  // Wait for the client navigation to commit before opening a fixture route.
   await page.goto("/projects/houston-coffee/sites/montrose");
   const bar = contextBar(page);
   await expect(
@@ -324,4 +326,86 @@ test("late search results cannot overwrite a new fixture route or another projec
   await expect(bar.getByRole("link", { name: /Live listings/ })).toHaveCount(0);
   await page.goto("/projects/another-project/intake");
   await expect(contextBar(page)).toHaveCount(0);
+});
+
+test("plan context labels its saved source and is excluded from print", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const source = planFixture();
+  const id = source.comparison.id;
+  const built = buildLocationPlan(source);
+  const plan = {
+    ...built,
+    plan: { ...built.plan, projectId: "houston-coffee" },
+  };
+  let synthetic: boolean | undefined = true;
+  let outdated = false;
+  let failed = false;
+  await page.route(`**/api/comparisons/${id}/plan?*`, (route) =>
+    route.fulfill({ json: plan }),
+  );
+  await page.route(`**/api/comparisons/${id}?*`, (route) =>
+    route.fulfill(
+      failed
+        ? { status: 503, json: {} }
+        : {
+            json: {
+              comparisonId: id,
+              outdated,
+              result: {
+                ...source.comparison.evaluation.result,
+                projectId: "houston-coffee",
+              },
+              comparison:
+                synthetic === undefined
+                  ? undefined
+                  : { ...source.comparison.comparison, synthetic },
+            },
+          },
+    ),
+  );
+  await page.goto(`/projects/houston-coffee/plan?comparison=${id}`);
+  const bar = contextBar(page);
+  await expect(
+    bar.getByRole("link", { name: "View data and evidence: Example data" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Print or save as PDF" }),
+  ).toBeVisible();
+  await page.emulateMedia({ media: "print" });
+  await expect(bar).toBeHidden();
+  await page.emulateMedia({ media: "screen" });
+  synthetic = false;
+  await page.reload();
+  await expect(
+    bar.getByRole("link", { name: "View data and evidence: Stored plan" }),
+  ).toBeVisible();
+  await expect(bar.getByText("Example", { exact: true })).toHaveCount(0);
+  synthetic = undefined;
+  await page.reload();
+  await expect(
+    bar.getByRole("link", {
+      name: "View data and evidence: Plan provenance unavailable",
+    }),
+  ).toBeVisible();
+  synthetic = false;
+  outdated = true;
+  await page.reload();
+  await expect(
+    bar.getByRole("link", {
+      name: "View data and evidence: Outdated comparison",
+    }),
+  ).toBeVisible();
+  failed = true;
+  await page.reload();
+  await expect(
+    bar.getByRole("link", { name: "View data and evidence: Plan unavailable" }),
+  ).toBeVisible();
+  await page.goto("/projects/houston-coffee/plan");
+  await expect(
+    bar.getByRole("link", {
+      name: "View data and evidence: Choose a comparison",
+    }),
+  ).toBeVisible();
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import {
   conceptFromSession,
+  planContextSource,
   resolveWorkspaceContext,
   reportsForRoute,
   type WorkspaceObservation,
@@ -192,6 +193,58 @@ describe("workspace context", () => {
       },
     ]);
     expect(result.status.text).toBe("Ready to compare");
+  });
+  it("resolves plan source, missing, failed and outdated states without guessing live data", () => {
+    const plan = {
+      kind: "plan",
+      phase: "ready",
+      comparisonId: "cmp1",
+      synthetic: true,
+      siteIds: [listing.id],
+    } as const;
+    expect(
+      context("plan", "comparison=cmp1", [
+        { ...plan, siteIds: [...plan.siteIds] },
+      ]).example,
+    ).toBe(true);
+    const live = context("plan", "comparison=cmp1", [
+      { ...plan, synthetic: false, siteIds: [...plan.siteIds] },
+    ]);
+    expect(live.status.text).toBe("Stored plan");
+    expect(live.qualifier).toBe("Modeled, not a forecast");
+    expect(
+      context("plan", "comparison=cmp1", [
+        { ...plan, phase: "outdated", synthetic: false, siteIds: [] },
+      ]).status.text,
+    ).toBe("Outdated comparison");
+    expect(
+      context("plan", "comparison=cmp1", [
+        { ...plan, phase: "error", siteIds: [] },
+      ]).status.text,
+    ).toBe("Plan unavailable");
+    expect(context("plan", "", []).status.text).toBe("Choose a comparison");
+    expect(
+      context("plan", "comparison=other", [{ ...plan, siteIds: [] }]).status
+        .text,
+    ).toBe("Loading context…");
+  });
+  it("accepts plan provenance only for the requested project and comparison", () => {
+    const raw = {
+      comparisonId: "cmp1",
+      result: { projectId: project.id, ranking: [listing.id] },
+      comparison: { synthetic: false },
+    };
+    expect(planContextSource(raw, project.id, "cmp1")).toEqual({
+      comparisonId: "cmp1",
+      synthetic: false,
+      siteIds: [listing.id],
+    });
+    expect(planContextSource(raw, "other-project", "cmp1")).toBeNull();
+    expect(planContextSource(raw, project.id, "other-comparison")).toBeNull();
+    expect(
+      planContextSource({ ...raw, comparison: undefined }, project.id, "cmp1")
+        ?.synthetic,
+    ).toBeUndefined();
   });
   it("filters async publications by both project and full route identity", () => {
     const routeKey = "/projects/houston-coffee/map?site=201%3A301";
