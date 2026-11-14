@@ -176,11 +176,14 @@ export default function Neighborhood({
       const lowClouds = new CloudCollection({ noiseDetail: 32 });
       city.scene.primitives.add(lowClouds);
       const cloudBanks = [
-        { east: -0.006, north: 0.004, height: 128, width: 255, drift: 0.013 },
-        { east: -0.001, north: 0.007, height: 151, width: 310, drift: 0.017 },
-        { east: 0.005, north: 0.0045, height: 142, width: 285, drift: 0.011 },
+        { east: -0.004, north: 0.005, height: 112, width: 285, drift: 0.013 },
+        { east: -0.001, north: 0.007, height: 132, width: 330, drift: 0.017 },
+        { east: 0.005, north: 0.0045, height: 123, width: 305, drift: 0.011 },
         { east: 0.009, north: 0.011, height: 190, width: 355, drift: 0.014 },
         { east: -0.011, north: 0.014, height: 176, width: 330, drift: 0.016 },
+        // Downtown Houston banks at tower height.
+        { east: 0.019, north: 0.014, height: 207, width: 420, drift: 0.013 },
+        { east: 0.024, north: 0.017, height: 246, width: 480, drift: 0.015 },
       ];
       const lobes = [
         { east: -0.0009, north: 0.0002, rise: 2, scale: 0.95, slice: 0.44 },
@@ -188,13 +191,17 @@ export default function Neighborhood({
         { east: 0.00085, north: 0.00035, rise: 8, scale: 0.82, slice: 0.4 },
         { east: -0.00026, north: 0.00045, rise: 47, scale: 0.68, slice: 0.52 },
       ];
+      lobes.push(
+        { east: 0.00045, north: -0.0002, rise: -2, scale: 0.8, slice: 0.48 },
+        { east: -0.00045, north: 0.0001, rise: 29, scale: 0.77, slice: 0.46 },
+      );
       const cloudPatches = cloudBanks.flatMap((bank) =>
         lobes.map((lobe) => {
           const east = bank.east + lobe.east;
           const north = bank.north + lobe.north;
           const height = bank.height + lobe.rise;
           const width = bank.width * lobe.scale;
-          const depth = width * 0.46;
+          const depth = width * 0.52;
           return {
             east,
             north,
@@ -227,11 +234,11 @@ export default function Neighborhood({
           const cloudLight = daylight(minute);
           for (const { cloud, east, north, height, drift } of cloudPatches) {
             cloud.position = Cartesian3.fromDegrees(
-              longitude + east + (progress - 0.4) * drift,
-              latitude + north + progress * 0.0025,
+              longitude + east + (progress - 0.4) * drift * 2.5,
+              latitude + north + progress * 0.00625,
               height,
             );
-            cloud.brightness = 0.58 + 0.37 * cloudLight;
+            cloud.brightness = 0.82 + 0.18 * cloudLight;
           }
         }
         const step = Math.floor(minute / 5) * 5;
