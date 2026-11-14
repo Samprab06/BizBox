@@ -80,10 +80,34 @@ Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example
 | `JEV_MODEL`      | `lib/panel/jev-client.ts`               | Optional. Defaults to `jev-latest`.                                                                                  |
 | `OPENAI_API_KEY` | `lib/agent/runner.ts`                   | Natural-language intake and model calls. Structured intake patches work without it.                                  |
 | `OPENAI_MODEL`   | `lib/agent/runner.ts`                   | Optional compatible model override; defaults to `gpt-6-luna` with reasoning disabled.                                |
+| `NESSIE_API_KEY` | `lib/nessie/client.ts`                  | Optional Nessie **v2** key for the simulated cash-buffer panel on comparisons. Server only. |
+| `NESSIE_BASE_URL` | `lib/nessie/client.ts`                 | Optional; defaults to `https://v2-prod-api.nessieisreal.com`. Only this HTTPS origin is accepted. |
 
 The fixture screens, offline tests and production build run without these credentials.
 The optional live Jev test needs its configured endpoint and API key. The OpenAI live
 intake test additionally requires explicit opt-in; Census variables are for data loading.
+
+### Nessie cash buffer
+
+Sign in with GitHub at [Nessie v2](https://v2.nessieisreal.com/account), place the
+v2 key in `NESSIE_API_KEY` in ignored `.env.local`, and restart the dev server.
+The comparison screen's **Cash buffer** panel lets you choose a checking or savings
+account from that sandbox. It shows available cash, completed cash movements over
+the last 30 days, and upcoming bills. With a current site comparison, select a site
+and enter upfront costs to see the modeled cash buffer after one month.
+
+This is **simulated banking data**, not an actual owner's bank connection. Deposits
+are not treated as sales, transfers are excluded from the flow summary, and credit
+card limits are not treated as cash. Recent cash flows and upcoming bills are
+context only; they are not matched to the site's modeled operating costs. The
+projection uses available cash, entered upfront costs, and modeled contribution.
+Nessie does not change the demand model, rankings, or CoStar evidence requirements.
+
+The app makes read-only requests and never seeds or resets the sandbox. An empty
+sandbox needs data created separately in Nessie before the panel can show an
+account. A 401 means the saved key is not accepted by the v2 API; get a valid v2
+key rather than using the older `?key=` authentication. Setup, public API contract,
+and acceptance criteria: [Nessie integration spec](docs/integrations/nessie.md).
 
 ### Database
 

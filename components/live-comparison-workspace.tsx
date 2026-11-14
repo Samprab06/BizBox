@@ -10,6 +10,7 @@ import {
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { LiveComparisonScreen } from "@/components/comparison/live-comparison-screen";
 import { LiveReplayScreen } from "@/components/replay/live-replay-screen";
+import { NessieCashFlowPanel } from "@/components/nessie/nessie-cash-flow-panel";
 
 export function ComparisonWorkspace({
   project,
@@ -22,11 +23,27 @@ export function ComparisonWorkspace({
 }) {
   const controller = useLiveComparison(project.id, comparisonId);
   return (
-    <LiveComparisonScreen
-      project={project}
-      controller={controller}
-      example={example}
-    />
+    <>
+      <LiveComparisonScreen
+        project={project}
+        controller={controller}
+        example={example}
+      />
+      <NessieCashFlowPanel
+        projections={(controller.payload?.result.sites ?? []).map((site) => ({
+          siteId: site.siteId,
+          label:
+            controller.candidates.find(
+              ({ candidate }) => candidate.id === site.siteId,
+            )?.candidate.address ?? site.siteId,
+          monthlyContributionUsd: site.monthlyContributionUsd,
+        }))}
+        outdated={Boolean(
+          controller.payload &&
+          (controller.payload.outdated || controller.phase !== "ready"),
+        )}
+      />
+    </>
   );
 }
 
