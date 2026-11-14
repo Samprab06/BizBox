@@ -382,7 +382,7 @@ export const scenarios = pgTable(
     ),
     check(
       "scenarios_agent_never_founder",
-      sql`${t.author} <> 'agent' or not jsonb_path_exists(${t.overrides}, '$.**.origin ? (@ == "founder")')`,
+      sql`${t.author} <> 'agent' or ${t.parentId} is not null or not jsonb_path_exists(${t.overrides}, '$.**.origin ? (@ == "founder")')`,
     ),
     check(
       "scenarios_site_ids_valid",
