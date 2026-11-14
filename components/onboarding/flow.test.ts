@@ -107,6 +107,15 @@ describe("resume and defaults", () => {
     expect(resumeStep(completeProfile())).toBe("review");
   });
 
+  it("starts hours at 9:00 AM – 5:00 PM unless a readable range is saved (HAC-154)", () => {
+    expect(initialValue("hours", initialSession.profile)).toBe("09:00–17:00");
+    expect(stepError("hours", initialValue("hours", initialSession.profile))).toBeUndefined();
+    expect(initialValue("hours", updateProfile(initialSession.profile, "hours", "11am – 11pm"))).toBe("11am – 11pm");
+    expect(initialValue("hours", updateProfile(initialSession.profile, "hours", "evenings"))).toBe("09:00–17:00");
+    // The default is not founder input until Continue saves it.
+    expect(initialSession.profile.hours).toBeUndefined();
+  });
+
   it("returns a legacy unsupported category to the category question without dropping answers", () => {
     const profile = { ...completeProfile(), category: { value: "Other", origin: "founder" as const } };
     expect(resumeStep(profile)).toBe("category");

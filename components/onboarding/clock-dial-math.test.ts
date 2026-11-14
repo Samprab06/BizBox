@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { profileFromIntake } from "@/lib/client/intake-business-profile";
+import { patchFromForm } from "@/components/intake/live";
 import type { Profile } from "@/components/intake/profile";
 import {
   DAY,
@@ -173,6 +174,8 @@ describe("intake value", () => {
     // Open 24h is the whole modeled day.
     const allDay = profileFromIntake({ profile: { ...profile, hours: founder("00:00–24:00") }, messages: [] }, "houston-coffee");
     expect(allDay.profile?.operatingHours).toEqual({ openMinute: 0, closeMinute: DAY });
+    // The live intake API gets the same minutes as a founder patch.
+    expect(patchFromForm(profile, ["hours"])).toEqual({ operatingHours: { openMinute: 420, closeMinute: 1290 } });
   });
 
   it("draws the open arc clockwise, with the large-arc flag past 12 hours", () => {
