@@ -20,8 +20,8 @@ export function BrandLogo({
       <Image
         src={onDark ? "/brand/logo-on-dark.png" : "/brand/logo-on-light.png"}
         alt=""
-        width={1791}
-        height={494}
+        width={116}
+        height={32}
         priority={priority}
         className={className ?? "h-8 w-auto"}
       />
