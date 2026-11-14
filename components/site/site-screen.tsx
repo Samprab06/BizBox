@@ -101,13 +101,15 @@ function LiveSiteDetail({
           Review intake
         </Link>
         <BackToMap projectId={project.id} siteId={siteId} />
-        <details className="mt-6 rounded-lg border border-line p-4">
-          <summary className="cursor-pointer font-semibold">
-            View example site details
-          </summary>
-          <p className="my-3 text-sm text-muted">Example data</p>
-          <SiteDetail project={project} site={project.sites[0]} />
-        </details>
+        {project.sites[0] && (
+          <details className="mt-6 rounded-lg border border-line p-4">
+            <summary className="cursor-pointer font-semibold">
+              View example site details
+            </summary>
+            <p className="my-3 text-sm text-muted">Example data</p>
+            <SiteDetail project={project} site={project.sites[0]} />
+          </details>
+        )}
       </>
     );
   const entry = state.result.candidates.find(

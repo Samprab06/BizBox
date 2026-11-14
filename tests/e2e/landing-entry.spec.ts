@@ -11,7 +11,9 @@ import {
 // the workspace. Every network boundary is a page.route mock: no model, voice, map tile,
 // Matterport or database service is called.
 
-const STORAGE_KEY = "sitework:intake:v1:houston-coffee";
+// HAC-136: /start creates a project for a first visit; POST /api/projects is mocked to this ID.
+const NEW_PROJECT = "p-0123456789abcdef0123";
+const STORAGE_KEY = `sitework:intake:v1:${NEW_PROJECT}`;
 const SIMULATOR_PATH = "/projects/houston-coffee/simulator";
 
 const founder = (value: string) => ({ value, origin: "founder" });
@@ -66,6 +68,14 @@ async function mockNetwork(page: Page) {
       ? route.fulfill({ json: { configured: false } })
       : route.fulfill({ status: 503, json: { message: "not used" } }),
   );
+  await page.route("**/api/projects", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 201,
+          json: { id: NEW_PROJECT, name: "New project" },
+        })
+      : route.fallback(),
+  );
   await page.route("**/api/sites", (route) =>
     route.fulfill({ status: 503, json: { message: "not used" } }),
   );
@@ -106,6 +116,10 @@ async function saveFinishedProfile(page: Page) {
   await page.evaluate(
     ([key, value]) => localStorage.setItem(key!, value!),
     [STORAGE_KEY, JSON.stringify(answeredProfile)],
+  );
+  await page.evaluate(
+    (id) => localStorage.setItem("bizbox:current-project:v1", id),
+    NEW_PROJECT,
   );
 }
 
@@ -188,7 +202,7 @@ test.describe("the landing at /", () => {
     );
     await expect.poll(() => page.frames().length).toBeGreaterThan(1);
     await page.locator(".nav-cta").click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
     expect(page.frames()).toHaveLength(1);
   });
 
@@ -208,7 +222,7 @@ test.describe("the landing at /", () => {
     await page.keyboard.press("Tab");
     await expect(page.locator(":focus")).toHaveClass(/nav-cta/);
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
   });
 
   test("reduced motion still loads the landing and its call-to-action", async ({
@@ -239,7 +253,9 @@ test.describe("the landing at /", () => {
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".nav-cta")).toBeInViewport();
       await page.goto("/start");
-      await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+      await expect(page).toHaveURL(
+        /\/projects\/p-0123456789abcdef0123\/intake$/,
+      );
     });
   }
 });
@@ -250,7 +266,7 @@ test.describe("landing to onboarding to workspace", () => {
   }) => {
     await openLanding(page);
     await page.locator(".nav-cta").click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
     await expect(page.locator("#onboarding-title")).toHaveText(
       "What are you opening?",
     );
@@ -279,9 +295,9 @@ test.describe("landing to onboarding to workspace", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Open your workspace" }),
-    ).toHaveAttribute("href", workspaceHref("houston-coffee", "workspace"));
+    ).toHaveAttribute("href", workspaceHref(NEW_PROJECT, "workspace"));
     await page.getByRole("link", { name: "Continue onboarding" }).click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
     await expect(page.locator("#onboarding-title")).toHaveText(
       "Describe your business.",
     );
@@ -301,16 +317,19 @@ test.describe("landing to onboarding to workspace", () => {
     ).toBeVisible();
     await expectNoA11yViolations(page);
     await page.getByRole("link", { name: "Open your workspace" }).click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/workspace$/);
+    await expect(page).toHaveURL(
+      /\/projects\/p-0123456789abcdef0123\/workspace$/,
+    );
     await expect(
       page.getByRole("heading", { level: 1, name: "Workspace" }),
     ).toBeVisible();
     await openConsultant(page);
   });
 
-  test("the landing's final stage links straight to the workspace", async ({
+  test("the landing's final stage leads a returning founder to their own workspace", async ({
     page,
   }) => {
+    await saveFinishedProfile(page);
     await openLanding(page);
     await page.locator('.progress-nav [data-step="5"]').click();
     const link = page.getByRole("link", {
@@ -318,7 +337,12 @@ test.describe("landing to onboarding to workspace", () => {
     });
     await expect(link).toBeVisible({ timeout: 15_000 });
     await link.click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/workspace$/);
+    // HAC-136: the link goes through /start, which knows this device's project.
+    await expect(page).toHaveURL(/\/start$/);
+    await page.getByRole("link", { name: "Open your workspace" }).click();
+    await expect(page).toHaveURL(
+      /\/projects\/p-0123456789abcdef0123\/workspace$/,
+    );
     await expect(
       page.getByRole("heading", { level: 1, name: "Workspace" }),
     ).toBeVisible();

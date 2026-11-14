@@ -28,16 +28,24 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
             typeof investigation === "string" ? investigation : undefined
           }
           example={
-            <>
-              <ComparisonScreen
-                project={project}
-                visits={comparisonScenario(visits)}
-                previousId={
-                  typeof comparison === "string" ? comparison : undefined
-                }
-              />
-              <p className="mt-6 text-xs text-muted">Example data</p>
-            </>
+            // HAC-136: a created project has no example sites to compare.
+            project.sites.length === 0 ? (
+              <p role="status">
+                No comparison yet. Complete your intake and choose spaces on the
+                map to compare them.
+              </p>
+            ) : (
+              <>
+                <ComparisonScreen
+                  project={project}
+                  visits={comparisonScenario(visits)}
+                  previousId={
+                    typeof comparison === "string" ? comparison : undefined
+                  }
+                />
+                <p className="mt-6 text-xs text-muted">Example data</p>
+              </>
+            )
           }
         />
       )}
