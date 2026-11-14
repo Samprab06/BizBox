@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createJevClient, createJevClientFromEnv, createLimiter, JevError, JEV_MODEL_VERSION } from "./jev-client";
+import {
+  createJevClient,
+  createJevClientFromEnv,
+  createLimiter,
+  DEFAULT_JEV_BASE_URL,
+  fromWireResponse,
+  JevError,
+  JEV_MODEL_VERSION,
+} from "./jev-client";
 import { buildPersonas } from "./personas";
 import { buildQuestions, buildState, type PanelContext } from "./state";
 import { catchment, coffeeNeed, recorded, recordedFetch } from "./__fixtures__";
@@ -22,32 +30,59 @@ function client(fetchStub: typeof fetch, delays: number[] = [], extra: { maxRetr
 }
 
 describe("Jev client against recorded responses (offline)", () => {
-  it("sends the assumed wire request and normalises the recorded answer", async () => {
+  it("sends a System One request and normalises the recorded answer", async () => {
     const rec = recordedFetch();
     const result = await client(rec.fetch).ask(request);
 
     expect(rec.requests).toHaveLength(1);
     const sent = rec.requests[0]!;
-    expect(sent.url).toBe("https://jev.test/v1/decide");
+    expect(sent.url).toBe("https://jev.test/v1/systemone");
     expect(sent.headers.authorization).toBe("Bearer test-key");
     expect(sent.body.model).toBe(JEV_MODEL_VERSION);
-    expect(sent.body.questions.map((q) => q.type)).toEqual([
-      "Choice",
-      "Score",
-      "Choice",
-      "Noul",
-      "Noul",
-      "Noul",
-      "Noul",
-      "Noul",
-      "Noul",
+    expect(Object.values(sent.body.questions).map((q) => q.type)).toEqual([
+      "choice",
+      "score",
+      "choice",
+      "noul",
+      "noul",
+      "noul",
+      "noul",
+      "noul",
+      "noul",
     ]);
+    // Choice criteria keep the panel's option order; score criteria are the level labels in order.
+    const where = request.questions.find((q) => q.name === "where");
+    if (where?.type === "choice") expect(Object.keys(sent.body.questions.where!.criteria!)).toEqual(where.options.map((o) => o.id));
+    expect(Array.isArray(sent.body.questions.how_often!.criteria)).toBe(true);
 
     expect(result.modelVersion).toBe("jev-1.14.0");
     expect(Object.keys(result.answers.where!.probabilities).sort()).toEqual(["comp_1", "comp_2", "none", "site_a"]);
     expect(result.answers.stay_at_queue_0!.probabilities.yes).toBeGreaterThan(0.9);
     expect(result.answers.stay_at_queue_0!.probabilities.no).toBeCloseTo(1 - result.answers.stay_at_queue_0!.probabilities.yes!);
     expect(result.answers.how_often!.confidence).toBeGreaterThan(0);
+  });
+
+  it("maps score levels by index and gives noul answers a |2p - 1| confidence", () => {
+    const variant = recorded.variants[0]!;
+    const result = fromWireResponse(variant, request);
+    expect(result.answers.how_often!.probabilities).toEqual({
+      never: 0.06,
+      monthly: 0.18,
+      weekly: 0.41,
+      several_a_week: 0.27,
+      daily: 0.08,
+    });
+    const p = variant.answers.stay_at_queue_4.noul;
+    expect(result.answers.stay_at_queue_4!.confidence).toBeCloseTo(Math.abs(2 * p - 1));
+  });
+
+  it("rejects answers that are missing or of the wrong type", () => {
+    const variant = structuredClone(recorded.variants[0]!) as { answers: Record<string, unknown> };
+    delete variant.answers.when;
+    expect(() => fromWireResponse(variant, request)).toThrow(/missing question "when"/);
+    const wrong = structuredClone(recorded.variants[0]!) as { answers: Record<string, unknown> };
+    wrong.answers.where = { type: "noul", noul: 0.5 };
+    expect(() => fromWireResponse(wrong, request)).toThrow(/expected choice/);
   });
 
   it("retries 503 and 429 with exponential backoff and Retry-After", async () => {
@@ -120,18 +155,23 @@ describe("Jev client against recorded responses (offline)", () => {
     expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
   });
 
-  it("needs JEV_API_KEY and JEV_BASE_URL from the environment", () => {
+  it("needs JEV_API_KEY; JEV_BASE_URL defaults to TypeSafe's API and JEV_MODEL is optional", async () => {
     expect(() => createJevClientFromEnv({})).toThrow(/JEV_API_KEY/);
-    expect(() => createJevClientFromEnv({ JEV_API_KEY: "k" })).toThrow(/JEV_BASE_URL/);
+    const rec = recordedFetch();
+    const c = createJevClientFromEnv({ JEV_API_KEY: "k", JEV_MODEL: "jev-preview" }, { fetch: rec.fetch });
+    expect(c.modelVersion).toBe("jev-preview");
+    await c.ask(request);
+    expect(rec.requests[0]!.url).toBe(`${DEFAULT_JEV_BASE_URL}/v1/systemone`);
+    expect(rec.requests[0]!.body.model).toBe("jev-preview");
   });
 });
 
-// Live test: only runs with a real key (and JEV_BASE_URL). Never runs in CI by default.
+// Live test: only runs with a real key. Never runs in CI by default.
 describe.skipIf(!process.env.JEV_API_KEY)("Jev live [live]", () => {
   it("answers one persona x site call", async () => {
     const live = createJevClientFromEnv(process.env, { maxRetries: 1 });
     const result = await live.ask(request);
-    expect(result.modelVersion).toBe(JEV_MODEL_VERSION);
+    expect(result.modelVersion).toMatch(/^jev-/);
     for (const q of request.questions) expect(result.answers[q.name]).toBeDefined();
   }, 60_000);
 });
