@@ -56,7 +56,7 @@ export function MixChart({
       }))}
       note="Ranges describe the marginal distribution of each group across seeds. They are not a served-customer distribution or confidence interval."
     >
-      <div className="h-64 min-w-0">
+      <div className="h-64 min-w-0 overflow-hidden">
         <ResponsiveContainer
           width="100%"
           height="100%"

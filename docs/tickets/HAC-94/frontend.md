@@ -130,3 +130,7 @@ Source candidate c0ec85db58b4f7b18fd0b8b01c96a283e10600a4 passes frozen-lock ins
 Akshar subsequently authorized PR publication; its current status is tracked in Linear/GitHub. HAC-102 recommendation selection remains separate and blocked on the lead decision. Live origin maps require retained explicit origins; legacy runs and the simulator single-seed example remain honestly unavailable. No new paid/provider calls, hosted writes or deployment were made. Logs: `/tmp/hac94-c0ec85d-*.log`; screenshots: `/tmp/hac94-evidence/`.
 
 Latest publication-aligned source b22de84 passes the four repository checks again (945 tests /40 environment gates) plus env/client guards and migration-chain checks. The PR is stacked on aligned HAC-71 base60c2b6e so already-merged API code is excluded from its35-file feature diff.
+
+## Initial chart geometry regression
+
+PR98 CI exposed a pre-hydration375px overflow: Recharts initial320px SVG geometry temporarily extended the document to390px before it measured the235px plot container. Both hourly and mix plot frames now contain their initial geometry locally; no page-level overflow masking, numeric change or test relaxation was added. A JavaScript-disabled SSR regression reproduced390px before the fix and375px after it in Chromium/WebKit. The original shell375px checks pass in both engines, and all30 chart/drawer/browser cases pass across Chromium/WebKit/mobile, including normal-measurement keyboard tooltips, contrast and data tables.
