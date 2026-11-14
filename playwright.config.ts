@@ -19,9 +19,23 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
-    { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
+    // HAC-33: API contract specs need no browser, so they run once.
+    { name: "api", testMatch: "api/**/*.spec.ts" },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: "api/**",
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
+      testIgnore: "api/**",
+    },
+    {
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 7"] },
+      testIgnore: "api/**",
+    },
   ],
   webServer: externalBaseURL
     ? undefined
