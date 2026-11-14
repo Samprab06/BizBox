@@ -9,7 +9,6 @@ import {
   demandLevel,
   trafficLevel,
 } from "./day-cycle";
-import { NeighborhoodSky } from "./neighborhood-sky";
 import roads from "./montrose-roads.json";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
@@ -50,6 +49,9 @@ export default function Neighborhood({
         Viewer,
         Cesium3DTileset,
         Cartesian3,
+        Cartesian2,
+        CloudCollection,
+        Sun,
         ClassificationType,
         Color,
         CallbackProperty,
@@ -65,7 +67,7 @@ export default function Neighborhood({
         skyBox: false,
         skyAtmosphere: false,
         useBrowserRecommendedResolution: false,
-        contextOptions: { webgl: { alpha: true } },
+
         baseLayerPicker: false,
         geocoder: false,
         animation: false,
@@ -77,7 +79,7 @@ export default function Neighborhood({
         selectionIndicator: false,
         infoBox: false,
       });
-      viewer.scene.backgroundColor = Color.TRANSPARENT;
+      viewer.scene.sun = new Sun();
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
         maximumScreenSpaceError: 1,
@@ -146,6 +148,33 @@ export default function Neighborhood({
       }
       const midnight = JulianDate.fromIso8601("2026-11-14T00:00:00-06:00");
       city.clock.shouldAnimate = false;
+      // Native cumulus primitives, configured like the Cesium Sandcastle clouds example.
+      const clouds = new CloudCollection({ noiseDetail: 32 });
+      city.scene.primitives.add(clouds);
+      const cloudPositions = [
+        [-0.019, 0.029, 660, 570],
+        [-0.008, 0.025, 580, 460],
+        [0.001, 0.034, 700, 680],
+        [0.012, 0.031, 620, 600],
+        [0.024, 0.037, 780, 720],
+        [0.004, -0.035, 690, 590],
+      ];
+      const cumulus = cloudPositions.map(([east, north, height, width]) =>
+        clouds.add({
+          position: Cartesian3.fromDegrees(
+            longitude + east,
+            latitude + north,
+            height,
+          ),
+          scale: new Cartesian2(width, width * 0.44),
+          maximumSize: new Cartesian3(width, width * 0.44, width * 0.47),
+          slice: 0.4,
+        }),
+      );
+      const nightSky = Color.fromCssColorString("#10182e");
+      const daySky = Color.fromCssColorString("#87bce6");
+      const twilightSky = Color.fromCssColorString("#ee9e83");
+      const sky = new Color();
       let previousMinute = -1;
       city.scene.preUpdate.addEventListener(() => {
         const step = Math.floor(timeRef.current / 5) * 5;
@@ -161,6 +190,22 @@ export default function Neighborhood({
           0,
           1 - Math.min(Math.abs(step - 410), Math.abs(step - 1040)) / 75,
         );
+        Color.lerp(nightSky, daySky, Math.sqrt(light), sky);
+        city.scene.backgroundColor = Color.lerp(
+          sky,
+          twilightSky,
+          warm * 0.7,
+          sky,
+        );
+        cumulus.forEach((cloud, index) => {
+          const [east, north, height] = cloudPositions[index];
+          cloud.position = Cartesian3.fromDegrees(
+            longitude + east + (step / 1440) * 0.005,
+            latitude + north,
+            height,
+          );
+          cloud.brightness = 0.22 + 0.68 * light + 0.1 * warm;
+        });
         const brightness = 0.37 + 0.63 * light + warm * 0.2;
         const red = Math.min(1, brightness + 0.15 * warm);
         const blue = Math.min(1, brightness + 0.1 * (1 - light) - 0.1 * warm);
@@ -198,7 +243,6 @@ export default function Neighborhood({
 
   return (
     <div id="neighborhood" className="relative h-dvh w-full bg-ink">
-      <NeighborhoodSky minute={minute} />
       <div
         className="absolute inset-0"
         ref={container}
