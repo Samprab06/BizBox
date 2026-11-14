@@ -61,6 +61,8 @@ test.describe("site detail", () => {
     await stubMapStyle(page);
     await gotoView("map");
     await page.getByRole("link", { name: "Open Montrose storefront" }).click();
+    await expect(page).toHaveURL(/\/projects\/houston-coffee\/map\?site=montrose$/);
+    await page.getByRole("link", { name: "View details for Montrose storefront" }).click();
 
     await expect(page).toHaveURL(/\/projects\/houston-coffee\/sites\/montrose$/);
     await expect(page.getByRole("heading", { level: 2, name: SITES.montrose.address })).toBeVisible();
@@ -76,7 +78,7 @@ test.describe("site detail", () => {
       .getByRole("list", { name: "Candidate sites" })
       .getByRole("link")
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href") ?? ""));
-    const siteIds = hrefs.map((href) => href.split("/").pop() ?? "");
+    const siteIds = hrefs.map((href) => new URL(href, "http://localhost").searchParams.get("site") ?? "");
     expect([...siteIds].sort()).toEqual([...SITE_IDS].sort());
 
     for (const siteId of siteIds) {
@@ -126,12 +128,12 @@ test.describe("site detail", () => {
     }
   });
 
-  test("an unknown site shows the unavailable state and a way back to the map", async ({ page }) => {
-    await page.goto("/projects/houston-coffee/sites/no-such-site");
+  // HAC-45: an unknown site is a real 404.
+  test("an unknown site returns 404", async ({ page }) => {
+    const response = await page.goto("/projects/houston-coffee/sites/no-such-site");
 
-    await expect(page.getByRole("heading", { level: 2, name: "Site unavailable" })).toBeVisible();
-    await page.getByRole("link", { name: "Browse spaces" }).click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/map$/);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { name: /could not be found/i })).toBeVisible();
   });
 
   for (const siteId of SITE_IDS) {

@@ -160,29 +160,7 @@ test("editing a field in the profile panel updates it and the prompt", async ({ 
   await expect(page.getByText("Default", { exact: true })).toHaveCount(1);
 });
 
-test("invalid values typed in the profile panel put the field back in the still-needed list", async ({ page }) => {
-  await openIntake(page);
-  await answerAll(page);
-  await expect(page.getByText("All required fields are filled.")).toBeVisible();
-
-  const invalid = [
-    { label: "Monthly rent ceiling ($)", value: "-5" },
-    { label: "Buildout budget ($)", value: "1e3" },
-    { label: "Staff on shift", value: "0" },
-  ];
-  for (const { label, value } of invalid) {
-    await profileField(page, label).fill(value);
-    await expect(stillNeeded(page)).toContainText(label);
-    // The screen goes back to asking for that field.
-    await expect(page.getByLabel(`Your answer · ${label}`)).toBeVisible();
-    // A valid value completes it again.
-    await profileField(page, label).fill("2");
-    await expect(page.getByText("All required fields are filled.")).toBeVisible();
-  }
-});
-
 test("invalid values typed in the profile panel show a validation message", async ({ page }) => {
-  test.fixme(true, "HAC-41: invalid profile-panel edits are saved with no visible message");
   await openIntake(page);
   await answerAll(page);
 

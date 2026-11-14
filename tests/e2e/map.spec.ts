@@ -26,10 +26,10 @@ async function stubMapStyle(page: Page) {
   );
 }
 
-/** The sorted site ids at the end of each link's href, e.g. /projects/x/sites/montrose -> montrose. */
+/** The sorted site ids each link selects, e.g. /projects/x/map?site=montrose -> montrose. */
 async function linkIds(links: Locator) {
   const hrefs = await links.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("href") ?? ""));
-  return hrefs.map((href) => new URL(href, "http://localhost").pathname.split("/").pop()).sort();
+  return hrefs.map((href) => new URL(href, "http://localhost").searchParams.get("site")).sort();
 }
 
 test.describe("map", () => {
@@ -51,18 +51,27 @@ test.describe("map", () => {
     expect(listIds).toEqual(markerIds);
   });
 
-  test("a marker opens its site detail", async ({ page, gotoView }) => {
+  // HAC-45: choosing a candidate selects it on the map (?site=<id>, highlighted marker and
+  // row); its detail opens from the "View details for ..." link.
+  test("a marker selects its site, and View details opens it", async ({ page, gotoView }) => {
     await gotoView("map");
     await page.getByRole("link", { name: "Open Heights storefront" }).click();
 
+    await expect(page).toHaveURL(/\/projects\/houston-coffee\/map\?site=heights$/);
+    await expect(page.getByRole("link", { name: "Open Heights storefront" })).toHaveAttribute("aria-current", "true");
+    await page.getByRole("link", { name: "View details for Heights storefront" }).click();
     await expect(page).toHaveURL(/\/projects\/houston-coffee\/sites\/heights$/);
     await expect(page.getByRole("heading", { level: 2, name: "Heights storefront" })).toBeVisible();
   });
 
-  test("a list row opens its site detail", async ({ page, gotoView }) => {
+  test("a list row selects its site, and View details opens it", async ({ page, gotoView }) => {
     await gotoView("map");
-    await page.getByRole("list", { name: "Candidate sites" }).getByRole("link", { name: /Montrose storefront/ }).click();
+    const list = page.getByRole("list", { name: "Candidate sites" });
+    await list.getByRole("link", { name: /Montrose storefront/ }).click();
 
+    await expect(page).toHaveURL(/\/projects\/houston-coffee\/map\?site=montrose$/);
+    await expect(list.getByRole("link", { name: /Montrose storefront/ })).toHaveAttribute("aria-current", "true");
+    await page.getByRole("link", { name: "View details for Montrose storefront" }).click();
     await expect(page).toHaveURL(/\/projects\/houston-coffee\/sites\/montrose$/);
     await expect(page.getByRole("heading", { level: 2, name: "Montrose storefront" })).toBeVisible();
   });
@@ -80,7 +89,7 @@ test.describe("map", () => {
     await expect(rows.nth(1)).toBeFocused();
 
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/sites\/heights$/);
+    await expect(page).toHaveURL(/\/projects\/houston-coffee\/map\?site=heights$/);
   });
 
   for (const [siteId, residents, workers] of [
@@ -120,17 +129,20 @@ test.describe("map", () => {
     await page.route(MAP_STYLE_URL, (route) => route.abort());
     await gotoView("map");
 
-    await expect(page.getByRole("status")).toHaveText("The map is unavailable. Choose a candidate below.");
+    await expect(page.getByRole("alert").filter({ hasText: "The map is unavailable" })).toHaveText(
+      "The map is unavailable. Choose a candidate below.",
+    );
+    await expect(page.getByRole("button", { name: "Retry map" })).toBeVisible();
     await page.getByRole("list", { name: "Candidate sites" }).getByRole("link", { name: /Montrose storefront/ }).click();
-    await expect(page).toHaveURL(/\/sites\/montrose$/);
+    await expect(page).toHaveURL(/\/map\?site=montrose$/);
   });
 
-  test("an unknown project shows the unavailable state with a way back", async ({ page }) => {
-    await page.goto("/projects/no-such-project/map");
+  // HAC-45: an unknown project is a real 404, not a 200 with an "unavailable" panel.
+  test("an unknown project returns 404", async ({ page }) => {
+    const response = await page.goto("/projects/no-such-project/map");
 
-    await expect(page.getByRole("heading", { level: 2, name: "Project unavailable" })).toBeVisible();
-    await page.getByRole("link", { name: "Open example project" }).click();
-    await expect(page).toHaveURL(/\/projects\/houston-coffee\/intake$/);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole("heading", { name: /could not be found/i })).toBeVisible();
   });
 
   test("has no serious or critical accessibility violations", async ({ page, gotoView }) => {
