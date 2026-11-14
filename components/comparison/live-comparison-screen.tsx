@@ -226,6 +226,18 @@ function ComparisonResults({
         {result.fallbackReason && (
           <p className="mt-2">Fallback reason: {result.fallbackReason}</p>
         )}
+        {payload.demandSourceCheck && (
+          <p className="mt-2">
+            Huff-only check:{" "}
+            {payload.demandSourceCheck.rankingMatches
+              ? "the ranking matches."
+              : payload.demandSourceCheck.topMatches
+                ? "the top site matches; lower ranks differ"
+                : "the top site differs"}
+            {!payload.demandSourceCheck.rankingMatches &&
+              ` (Huff order: ${payload.demandSourceCheck.huffRanking.map(address).join(", ")}).`}
+          </p>
+        )}
         <p className="mt-2">Seeds: {result.seeds.join(", ")}</p>
         <p className="mt-2">
           Model: {result.modelVersion}
