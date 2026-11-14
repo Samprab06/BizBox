@@ -2,6 +2,10 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { recordJevExample } from "../../scripts/record-jev-example";
 import { fakeJevClient } from "@/lib/panel/__fixtures__";
 import type { RecordedJevExample } from "@/lib/panel/recorded-example";
+import {
+  buildFixtureSchedule,
+  peakArrivalHour,
+} from "@/lib/sim/fixtures/arrival-schedule";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
 const state = vi.hoisted(() => ({
@@ -22,6 +26,36 @@ describe("example comparison", () => {
       expect(mod.exampleDemandLabel(sites)).toBeNull();
       const rows = mod.exampleComparison(sites);
       expect(rows).toHaveLength(2);
+    });
+
+    it("peaks between 08:00 and 11:00 in the replayed arrivals (HAC-110)", async () => {
+      state.recorded = undefined;
+      vi.resetModules();
+      const mod = await import("./example-comparison");
+      for (const visits of [1, 0.8]) {
+        for (const { run } of mod.exampleComparison(sites, visits)) {
+          const arrivals = run.events.filter((e) => e.type === "arrival");
+          const peak = peakArrivalHour({
+            customers: arrivals.map((e) => ({ arrivalMin: e.timeMin })) as never,
+          });
+          expect(peak).not.toBeNull();
+          expect(peak!).toBeGreaterThanOrEqual(8);
+          expect(peak!).toBeLessThan(11);
+        }
+      }
+    });
+
+    it("gives the same replay for the same seed", async () => {
+      state.recorded = undefined;
+      vi.resetModules();
+      const first = (await import("./example-comparison")).exampleComparison(sites);
+      vi.resetModules();
+      const second = (await import("./example-comparison")).exampleComparison(sites);
+      expect(second.map(({ runId, run }) => [runId, run.events])).toEqual(
+        first.map(({ runId, run }) => [runId, run.events]),
+      );
+      const options = { siteId: "s", seed: 5, dayType: "weekday" as const };
+      expect(buildFixtureSchedule(options)).toEqual(buildFixtureSchedule(options));
     });
   });
 
