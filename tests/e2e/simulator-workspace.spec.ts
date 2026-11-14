@@ -32,7 +32,7 @@ test("legacy simulator links retain replay state inside the workspace", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Project views" })
-      .getByRole("link", { name: "Test plan · Simulator" }),
+      .getByRole("link", { name: "Simulator", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   const context = page.getByRole("complementary", {
     name: "Project context",
@@ -93,7 +93,7 @@ test("simulator fits phone, tablet and desktop and expands with the keyboard", a
     await expect(expand).toBeFocused();
   }
   const axe = await new AxeBuilder({ page })
-    .include('section[aria-label="Test plan · Simulator"]')
+    .include('section[aria-label="Simulator"]')
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();
   expect(axe.violations).toEqual([]);

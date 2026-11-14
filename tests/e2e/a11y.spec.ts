@@ -10,7 +10,11 @@ const siteFor = (view: View) => (view === "site" ? "montrose" : undefined);
  * plain Tab (it needs Option+Tab), so use Alt+Tab there; every other browser and platform uses Tab.
  */
 async function pressTab(page: Page, browserName: string) {
-  await page.keyboard.press(browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab");
+  await page.keyboard.press(
+    browserName === "webkit" && process.platform === "darwin"
+      ? "Alt+Tab"
+      : "Tab",
+  );
   await expect(page.locator(":focus")).toHaveCount(1);
 }
 
@@ -40,30 +44,48 @@ test.describe("every view passes the axe scan", () => {
 
   test("project unavailable state", async ({ page }) => {
     await page.goto(workspaceHref("no-such-project", "map"));
-    await expect(page.getByRole("heading", { name: /could not be found/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /could not be found/i }),
+    ).toBeVisible();
     await expectNoA11yViolations(page);
   });
 
-  test("site selection prompt (/sites/unselected)", async ({ page, gotoView }) => {
+  test("site selection prompt (/sites/unselected)", async ({
+    page,
+    gotoView,
+  }) => {
     await gotoView("site");
-    await expect(page.getByRole("status")).toHaveText("Choose a site from the map to view details.");
+    await expect(page.getByRole("status")).toHaveText(
+      "Choose a site from the map to view details.",
+    );
     await expectNoA11yViolations(page);
   });
 });
 
 test.describe("page structure", () => {
   for (const view of VIEW_ORDER) {
-    test(`${view} view has one h1, one main landmark, a banner and a labelled nav`, async ({ page, gotoView }) => {
+    test(`${view} view has one h1, one main landmark, a banner and a labelled nav`, async ({
+      page,
+      gotoView,
+    }) => {
       await gotoView(view, siteFor(view));
 
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(viewHeading(view));
       await expect(page.getByRole("main")).toHaveCount(1);
       await expect(page.getByRole("banner")).toHaveCount(1);
-      await expect(page.getByRole("navigation", { name: "Project views" })).toHaveCount(1);
+      await expect(
+        page.getByRole("navigation", { name: "Project views" }),
+      ).toHaveCount(1);
       // The nav and the h1 live inside <main>.
-      await expect(page.getByRole("main").getByRole("navigation", { name: "Project views" })).toBeVisible();
-      await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(
+        page
+          .getByRole("main")
+          .getByRole("navigation", { name: "Project views" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("main").getByRole("heading", { level: 1 }),
+      ).toBeVisible();
       // The page has a document title and a language.
       await expect(page).toHaveTitle(/\S/);
       await expect(page.locator("html")).toHaveAttribute("lang", "en");
@@ -75,7 +97,9 @@ test.describe("page structure", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   });
 
-  test("the unavailable states have one h1 and a main landmark", async ({ page }) => {
+  test("the unavailable states have one h1 and a main landmark", async ({
+    page,
+  }) => {
     await page.goto(workspaceHref("no-such-project", "comparison"));
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("main")).toHaveCount(1);
@@ -83,7 +107,11 @@ test.describe("page structure", () => {
 });
 
 test.describe("keyboard and focus", () => {
-  test("the first Tab stop is a skip link or the Sitework home link", async ({ page, gotoView, browserName }) => {
+  test("the first Tab stop is a skip link or the Sitework home link", async ({
+    page,
+    gotoView,
+    browserName,
+  }) => {
     test.skip(
       browserName === "webkit" && process.platform === "win32",
       "Playwright WebKit on Windows does not emulate system full-keyboard link focus.",

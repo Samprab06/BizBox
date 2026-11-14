@@ -2,7 +2,7 @@
 
 `/projects/[projectId]/simulator` mounts the existing seeded operating replay and
 stored-run loader inside the warm shell and project context. The existing project
-navigation includes **Test plan · Simulator**; HAC-69 owns the three-task navigation
+navigation includes **Simulator**; HAC-69 owns the three-task navigation
 reorganization and must retain this destination. The legacy `/simulator-demo`
 redirect preserves comparison, site, project, run and repeated query parameters.
 Project identity for loading comes from the new route path.
