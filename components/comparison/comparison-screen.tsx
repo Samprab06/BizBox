@@ -181,12 +181,18 @@ export function ComparisonScreen({
                   >
                     Replay day
                   </Link>
-                  <Link
-                    className="ml-3 font-semibold text-pine underline"
-                    href={workspaceHref(project.id, "simulator", row.site.id)}
-                  >
-                    View on street
-                  </Link>
+                  {row.site.id === "montrose" ? (
+                    <Link
+                      className="ml-3 font-semibold text-pine underline"
+                      href={workspaceHref(project.id, "simulator", row.site.id)}
+                    >
+                      View on street
+                    </Link>
+                  ) : (
+                    <span className="ml-3 text-muted">
+                      Street view unavailable
+                    </span>
+                  )}
                   <span className="block text-xs text-muted">{row.runId}</span>
                 </td>
               </tr>
