@@ -14,6 +14,12 @@ type Context = { params: Promise<{ projectId: string }> };
 type Dependencies = {
   projectExists: (projectId: string) => Promise<boolean>;
   runAgent?: IntakeRunner;
+  onCompleted?: (
+    projectId: string,
+    input: z.infer<typeof IntakeRequestSchema>,
+    reply: string,
+    draft: unknown,
+  ) => Promise<void>;
 };
 const json = (body: unknown, status: number) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -170,6 +176,18 @@ export function createIntakeHandler(dependencies: Dependencies) {
       } finally {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
+      }
+    }
+    if (dependencies.onCompleted) {
+      try {
+        await dependencies.onCompleted(
+          projectId,
+          input,
+          assistantMessage,
+          session.snapshot(),
+        );
+      } catch {
+        return unavailable();
       }
     }
     return json({ ...session.snapshot(), assistantMessage }, 200);
