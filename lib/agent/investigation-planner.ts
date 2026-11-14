@@ -11,7 +11,7 @@ import type {
 } from "./jobs";
 import type { InvestigationToolName, InvestigationToolRegistry } from "./tools";
 import { milestoneOutput } from "./tools";
-import { DEFAULT_INTAKE_MODEL } from "./runner";
+import { DEFAULT_INTAKE_MODEL, modelConfiguration } from "./runner";
 
 const toolNames = [
   "save_profile",
@@ -327,7 +327,7 @@ export function createConfiguredInvestigationPlanner(
           maxTokens: 2_000,
           maxRetries: 0,
           timeout: 10_000,
-          configuration: { timeout: 10_000, maxRetries: 0 },
+          configuration: modelConfiguration(env),
         }),
       );
     }

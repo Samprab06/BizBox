@@ -4,12 +4,21 @@ import { tool } from "@langchain/core/tools";
 import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
 import { INTAKE_QUESTIONS } from "./intake";
-
-export const DEFAULT_INTAKE_MODEL = "gpt-6-luna";
-/** Graph step budget for one intake turn: up to 3 save_profile calls plus the reply. */
-export const INTAKE_RECURSION_LIMIT = 12;
 import type { IntakeRunner } from "./runtime-loader";
 export { INTAKE_TIMEOUT_MS, type IntakeRunner } from "./runtime-loader";
+
+export const DEFAULT_INTAKE_MODEL = "gpt-6-luna";
+/** OpenAI-compatible gateway URL; unset means the native OpenAI endpoint. */
+export function modelConfiguration(env: Record<string, string | undefined>) {
+  const baseURL = env.OPENAI_BASE_URL?.trim();
+  return {
+    timeout: 10_000,
+    maxRetries: 0,
+    ...(baseURL ? { baseURL } : {}),
+  };
+}
+/** Graph step budget for one intake turn: up to 3 save_profile calls plus the reply. */
+export const INTAKE_RECURSION_LIMIT = 12;
 
 const instructions = `You are the founder-facing intake (FDE) agent for a Houston / Los Angeles service-location investigation.
 Ask these seven groups, one at a time where information is missing: ${INTAKE_QUESTIONS.map((group) => group.question).join("\n")}
@@ -110,7 +119,7 @@ export const runConfiguredIntakeAgent: IntakeRunner = async (input) => {
     maxTokens: 1500,
     maxRetries: 0,
     timeout: 10_000,
-    configuration: { timeout: 10_000, maxRetries: 0 },
+    configuration: modelConfiguration(process.env),
   });
   return createDeepIntakeRunner(model)(input);
 };
