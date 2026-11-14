@@ -97,17 +97,23 @@ test.describe("deep links", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Map" })).toBeVisible();
   });
 
-  test("picking a site on the map selects it for the other views", async ({ page, gotoView, projectId }) => {
+  test("picking a site on the map selects it for the other views", async ({
+    page,
+    gotoView,
+    projectId,
+  }) => {
     await gotoView("map");
-    await page.getByRole("link", { name: /Heights storefront/ }).click();
+    const row = page
+      .getByRole("list", { name: "Candidate sites", exact: true })
+      .getByRole("link", { name: /Heights storefront/ });
+    await row.click();
     await expect(page).toHaveURL(workspaceHref(projectId, "map", "heights"));
-    await expect(page.getByRole("link", { name: /Heights storefront/ }).first()).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
+    await expect(row).toHaveAttribute("aria-current", "true");
 
     await navLink(page, "comparison").click();
-    await expect(page).toHaveURL(workspaceHref(projectId, "comparison", "heights"));
+    await expect(page).toHaveURL(
+      workspaceHref(projectId, "comparison", "heights"),
+    );
   });
 
   test("/sites/unselected shows a recoverable state, not an error", async ({ page, gotoView, projectId }) => {
