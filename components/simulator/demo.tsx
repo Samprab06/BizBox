@@ -658,6 +658,7 @@ export function SimulatorDemo({
                 employeeCount={data[activePlan].staffing?.headcount}
                 selected={selected}
                 select={select}
+                seek={setMinute}
               />
             </>
           )}
