@@ -100,6 +100,7 @@ export function createComparisonsHandler({
             representative: undefined,
             // Additive visualization data was not retained by legacy evaluations.
             insights: undefined,
+            stationObservations: undefined,
           }));
         return json(
           {

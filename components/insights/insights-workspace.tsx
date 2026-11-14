@@ -8,6 +8,7 @@ import type { WorkspaceObservation } from "@/lib/client/workspace-context";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { InsightsPanel } from "./insights-panel";
 import { insightsReference, parseStoredInsights } from "./stored-insights";
+import { StationCalloutController } from "./station-callout-controller";
 
 type State =
   | { kind: "loading" }
@@ -134,6 +135,19 @@ export function InsightsWorkspace({
         <InsightsPanel
           data={data}
           sourceLabel={`Saved comparison · profile ${state.value.payload.result.profileId} v${state.value.payload.result.profileVersion}`}
+          stationSlot={
+            <StationCalloutController
+              key={state.value.payload.comparisonId}
+              projectId={projectId}
+              comparisonId={state.value.payload.comparisonId}
+              siteId={siteId}
+              profileId={state.value.payload.result.profileId}
+              profileVersion={state.value.payload.result.profileVersion}
+              seeds={state.value.payload.result.seeds}
+              synthetic={data.synthetic}
+              modelVersion={state.value.payload.result.modelVersion}
+            />
+          }
         />
       ) : (
         <section
@@ -163,6 +177,21 @@ export function InsightsWorkspace({
             </button>
           )}
         </section>
+      )}
+      {!data && state.kind === "ready" && (
+        <div className="mt-4 rounded-card border border-line p-4">
+          <StationCalloutController
+            key={state.value.payload.comparisonId}
+            projectId={projectId}
+            comparisonId={state.value.payload.comparisonId}
+            siteId={siteId}
+            profileId={state.value.payload.result.profileId}
+            profileVersion={state.value.payload.result.profileVersion}
+            seeds={state.value.payload.result.seeds}
+            synthetic={state.value.payload.comparison?.synthetic}
+            modelVersion={state.value.payload.result.modelVersion}
+          />
+        </div>
       )}
       <Link
         className="mt-3 inline-block text-sm text-pine underline"

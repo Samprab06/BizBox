@@ -9,6 +9,7 @@ import {
 } from "@/lib/demand/contracts";
 import { SiteConfigSchema } from "@/lib/sim/contracts";
 import { SiteInsightsSchema } from "./insights";
+import { StationObservationsSchema } from "./station-experiment";
 
 /**
  * HAC-22: site evaluation and sensitivity. One evaluation runs every site through
@@ -182,6 +183,8 @@ export const SiteEvaluationSchema = z
     excludedPersonaIds: z.array(z.string()),
     /** HAC-94: all-seed hourly visualization data; absent on legacy comparisons. */
     insights: SiteInsightsSchema.optional(),
+    /** Actual helper points, retained without per-seed schedules/events; absent on legacy data. */
+    stationObservations: StationObservationsSchema.optional(),
     /** Jev panel coverage, when Jev was asked; optional for older results. */
     jevPanel: JevPanelCoverageSchema.optional(),
   })
@@ -191,6 +194,15 @@ export const SiteEvaluationSchema = z
         code: "custom",
         path: ["insights", "siteId"],
         message: "Insights must belong to the evaluation site",
+      });
+    if (
+      site.stationObservations &&
+      site.stationObservations.siteId !== site.siteId
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["stationObservations", "siteId"],
+        message: "Station observations must belong to the evaluation site",
       });
   });
 export type SiteEvaluation = z.infer<typeof SiteEvaluationSchema>;

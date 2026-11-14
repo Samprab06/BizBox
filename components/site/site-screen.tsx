@@ -15,15 +15,18 @@ import { workspaceHref } from "@/lib/client/workspace-routes";
 import { SiteDetail } from "./site-detail";
 import { LiveEvidence, Metric } from "./live-evidence";
 import { InsightsWorkspace } from "@/components/insights/insights-workspace";
+import type { StationCalloutDays } from "@/components/insights/station-callout";
 
 export function SiteScreen({
   project,
   siteId,
   fixtureInsights,
+  fixtureStationCallouts,
 }: {
   project: PreviewProject;
   siteId: string;
   fixtureInsights?: SiteInsights;
+  fixtureStationCallouts?: StationCalloutDays;
 }) {
   const example = project.sites.find((site) => site.id === siteId);
   if (example)
@@ -43,6 +46,7 @@ export function SiteScreen({
           project={project}
           site={example}
           insights={fixtureInsights}
+          stationCallouts={fixtureStationCallouts}
         />
         <p className="mt-6 text-xs text-muted">Example data</p>
       </>

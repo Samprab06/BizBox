@@ -3,7 +3,8 @@ import {
   type SiteInsights,
 } from "@/lib/contracts/insights";
 import type { Origin } from "@/lib/demand/contracts";
-import type { SiteConfigInput } from "@/lib/sim/contracts";
+import { SiteConfigSchema, type DayType } from "@/lib/sim/contracts";
+import type { ExperimentSettings } from "@/lib/sim/experiment";
 import { simulateDay } from "@/lib/sim/engine";
 import { buildFixtureSchedule } from "@/lib/sim/fixtures/arrival-schedule";
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
@@ -35,25 +36,7 @@ export function buildFixtureInsights(
   };
   const days = {} as SiteInsights["days"];
   for (const dayType of ["weekday", "weekend"] as const) {
-    const config: SiteConfigInput = {
-      hours: {
-        weekday: { openMin: 420, closeMin: 900 },
-        weekend: { openMin: 420, closeMin: 900 },
-      },
-      stations: { planned: 2, usableSf: 1200, sfPerStation: 100 },
-      service: { meanServiceMin: 4 },
-      prices: { avgTicketUsd: 6.5 },
-      staff: { headcount: 2, wageUsdPerHour: 20 },
-      costs: { cogsPctOfRevenue: 0.3 },
-      lease: {
-        sf: 1200,
-        askingRentUsdPerSfYear: 24,
-        tripleNet: false,
-        buildoutUsd: 0,
-        leaseTermMonths: 12,
-      },
-      calendar: { weekdayDaysPerMonth: 20, weekendDaysPerMonth: 8 },
-    };
+    const config = fixtureInsightsConfig();
     const schedules = Array.from({ length: seedCount }, (_, n) =>
       buildFixtureSchedule({ siteId, dayType, seed: n + 1 }),
     );
@@ -96,4 +79,52 @@ export function buildFixtureInsights(
     seedCount,
     days,
   });
+}
+
+/** Shared exact configuration used by the authored HAC-94 charts and HAC-102 fixture. */
+export function fixtureInsightsConfig() {
+  return SiteConfigSchema.parse({
+    hours: {
+      weekday: { openMin: 420, closeMin: 900 },
+      weekend: { openMin: 420, closeMin: 900 },
+    },
+    stations: { planned: 2, usableSf: 1200, sfPerStation: 100 },
+    service: { meanServiceMin: 4 },
+    prices: { avgTicketUsd: 6.5 },
+    staff: { headcount: 2, wageUsdPerHour: 20 },
+    costs: { cogsPctOfRevenue: 0.3 },
+    lease: {
+      sf: 1200,
+      askingRentUsdPerSfYear: 24,
+      tripleNet: false,
+      buildoutUsd: 0,
+      leaseTermMonths: 12,
+    },
+    calendar: { weekdayDaysPerMonth: 20, weekendDaysPerMonth: 8 },
+  });
+}
+/** Prepared fixture inputs only; no engine execution. Generation scripts/tests use these offline. */
+export function fixtureInsightsExperimentInput(
+  siteId: string,
+  seed: number,
+  dayType: DayType = "weekday",
+) {
+  const config = fixtureInsightsConfig();
+  const settings: ExperimentSettings = {
+    averageTicketUsd: config.prices.avgTicketUsd,
+    plannedStations: config.stations.planned,
+    staffHeadcount: config.staff.headcount,
+    hours: config.hours,
+    demandMultiplier: 1,
+    seed,
+    dayType,
+  };
+  return {
+    config,
+    settings,
+    schedules: {
+      weekday: buildFixtureSchedule({ siteId, seed, dayType: "weekday" }),
+      weekend: buildFixtureSchedule({ siteId, seed, dayType: "weekend" }),
+    },
+  };
 }

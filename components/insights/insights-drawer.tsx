@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useId, useRef, useState } from "react";
 import type { SiteInsights } from "@/lib/contracts/insights";
+import { StationCalloutController } from "./station-callout-controller";
 
 const LazyInsightsPanel = dynamic(
   () => import("./insights-panel").then((module) => module.InsightsPanel),
@@ -12,6 +13,7 @@ const LazyInsightsPanel = dynamic(
 /** Native modal semantics keep the city inert, trap focus and support Escape. */
 export function InsightsDrawer({
   siteId,
+  projectId,
   comparisonId,
   data,
   unavailableReason,
@@ -19,8 +21,10 @@ export function InsightsDrawer({
   outdated = false,
   profileVersionUnknown = false,
   profileVersion,
+  synthetic,
 }: {
   siteId: string;
+  projectId?: string;
   comparisonId?: string;
   data?: SiteInsights;
   unavailableReason?: string;
@@ -28,12 +32,24 @@ export function InsightsDrawer({
   outdated?: boolean;
   profileVersionUnknown?: boolean;
   profileVersion?: number;
+  synthetic?: boolean;
 }) {
   const id = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const matching = data?.siteId === siteId ? data : undefined;
+  const stationController =
+    open && projectId && comparisonId ? (
+      <StationCalloutController
+        key={comparisonId}
+        projectId={projectId}
+        comparisonId={comparisonId}
+        siteId={siteId}
+        profileVersion={profileVersion}
+        synthetic={matching?.synthetic ?? synthetic}
+      />
+    ) : undefined;
   return (
     <>
       <button
@@ -123,12 +139,20 @@ export function InsightsDrawer({
                 ? `Saved comparison ${comparisonId}`
                 : "Saved modeled scenario"
             }
+            stationSlot={stationController}
           />
         ) : (
-          <p role="status" className="mt-5 text-sm text-viewport-muted">
-            {unavailableReason ??
-              "This saved comparison has no retained cross-seed insights. Representative replay data cannot supply honest seed bands."}
-          </p>
+          <>
+            <p role="status" className="mt-5 text-sm text-viewport-muted">
+              {unavailableReason ??
+                "This saved comparison has no retained cross-seed insights. Representative replay data cannot supply honest seed bands."}
+            </p>
+            {stationController && (
+              <div className="mt-5 rounded-card border border-viewport-line p-4">
+                {stationController}
+              </div>
+            )}
+          </>
         )}
       </dialog>
     </>
