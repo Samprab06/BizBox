@@ -43,3 +43,27 @@ Scroll plays the first comparison in order. A small One counter / Two counters c
 ## Next
 
 Implement the accepted guided demo with the overhead comparison, keeping the older prototype and product routes intact. Verify the complete visible journey and smoothness in a browser.
+
+## Subsequent visual revision — implementation approved
+
+Akshar identified the specific existing client background: `public/onboarding/houston-real.jpg`, the blue-hour Houston skyline with the Ferris wheel. Inspected and confirmed against the client asset/manifest. Use it inside the MacBook/onboarding, replacing the repeated generated sunset there; retain the existing photograph/source credit. This supersedes the proposed plain dark screen background. Outer hero background is a separate surface.
+
+The MacBook must fill the viewport completely before “Understand your business” reveals and the onboarding clock starts. The current `progress >= 0.2` start is too early because camera entry ends at 0.22; correct this in the next motion revision. Keep the montage at 6–8 seconds (target 7), with clear business/category, concept, Houston, budget, staffing and completed-brief beats. Preserve one anchored glass panel and a stable content area; use short outgoing/incoming crossfades and small vertical motion rather than abrupt content swaps or panel jumps. Headings reveal words at a readable pace. Reduced motion exposes the completed brief.
+
+Other pending requested visual changes from the prior discussion: replace Blender-derived hardware with a photorealistic GPT 2D MacBook asset; replace the cramped headline type with a more open sans serif; reveal each heading word by word; improve the navbar's liquid-glass edge/refraction treatment and simplify its navigation. Preserve old assets. Exterior versus interior experiment scope is still being discussed; do not invent an accepted exterior experiment.
+
+## Consultant and sandbox narrative refinement — implementation approved
+
+Akshar rejected the current location/property beats as visually static and unclear, the side panels as inconsistently structured, the glass as too opaque, and the standalone “Explore the space” framing as making BizBox look like a property-viewing wrapper. The central product story must be consultant + sandbox.
+
+Requested direction:
+
+- Refine the two location/property beats with meaningful visible progression and a closer generated view of the selected location. A changed heading over the same map is insufficient.
+- Use concise action/result labels and remove explanatory marketing prose. Actual demo prompts and short consultant findings may remain where they explain the decision.
+- Animate rent from 1 to its prepared final value (currently $3,000) as the property comes into focus. Keep units visible and number width stable. Count-up is a supporting cue, not the story itself; reduced motion shows the final amount.
+- Replace disconnected floating cards with one consistent product layout: an anchored consultant rail and a concise aligned property/assumptions inspector. Use a shared type hierarchy, spacing and unit formatting.
+- Glass must be more translucent, with a clear center, localized lens-like edge refraction, thin bright rims and controlled reflections; the current gray opaque panes and generic noise displacement are not the accepted final visual treatment.
+
+Proposed story for discussion: first beat shows a brief becoming a shortlist through consultant investigation, then the camera selects and approaches one building; second beat establishes that building's facts and turns it into the starting scenario, flowing through a matching exterior/interior into the staffed-counter test. The interior is context for testing business decisions, not a separate property-tour feature. No new exterior experiment or ranked recommendation result is accepted or fabricated by this note; any numerical evidence must retain its prepared-data provenance.
+
+Akshar approved implementing the complete visual/narrative refinement with “ok do this”. Exterior establishes location/context; one interior staffed-counter experiment remains the main decision demo.

@@ -44,3 +44,45 @@ describe("prepared guided demo media", () => {
     ).toBeCloseTo(1.5451, 3);
   });
 });
+
+describe("consultant landing revision media", () => {
+  it("ships the new GPT views and frame at their recorded native dimensions", async () => {
+    const { default: revision } = await import("./assets-v2.json");
+    const prompts = JSON.parse(
+      readFileSync(resolve(import.meta.dirname, "prompts-v2.json"), "utf8"),
+    );
+    for (const asset of revision.assets) {
+      const png = readFileSync(resolve(root, asset.asset));
+      expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual(
+        asset.dimensions,
+      );
+      expect(prompts[asset.prompt.split("#")[1]]).toBeTruthy();
+    }
+    expect(revision.geography).toMatch(/Illustrative/);
+  });
+  it("provides a measured opaque-screen cutout and an actual local font", async () => {
+    const { default: mac } =
+      await import("../../../public/landing-assets/guided-demo/macbook-gpt-v3.json");
+    const png = readFileSync(resolve(root, "public" + mac.image));
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([
+      mac.width,
+      mac.height,
+    ]);
+    expect(png[25]).toBe(6);
+    expect(mac.screenOpaque).toBe(true);
+    for (const [index, point] of mac.screenQuad.entries()) {
+      expect(point.x * mac.width).toBeCloseTo(mac.screenPixels[index][0], 4);
+      expect(point.y * mac.height).toBeCloseTo(mac.screenPixels[index][1], 4);
+      expect(point.x).toBeGreaterThan(0);
+      expect(point.x).toBeLessThan(1);
+      expect(point.y).toBeGreaterThan(0);
+      expect(point.y).toBeLessThan(1);
+    }
+    const font = readFileSync(resolve(root, "public/fonts/geist-latin.woff2"));
+    expect(font.subarray(0, 4).toString()).toBe("wOF2");
+    expect(
+      readFileSync(resolve(root, "public/fonts/Geist-OFL.txt"), "utf8"),
+    ).toContain("SIL OPEN FONT LICENSE");
+  });
+});
