@@ -30,7 +30,7 @@ export async function readInteriorSite(
     throw new Error("Invalid interior site");
   const models = rows(
     await db.execute(sql`
-    SELECT model_id, costar_space_id, has_exterior, display_approved, dimensions, source
+    SELECT model_id, costar_space_id, has_exterior, display_approved, is_public, dimensions, source
     FROM matterport_models
     WHERE costar_property_id=${site.property_id} AND (costar_space_id=${siteId} OR costar_space_id IS NULL)
     ORDER BY model_id
@@ -50,6 +50,7 @@ export async function readInteriorSite(
       hasExterior:
         typeof model.has_exterior === "boolean" ? model.has_exterior : null,
       displayApproved: model.display_approved === true,
+      isPublic: typeof model.is_public === "boolean" ? model.is_public : null,
       dimensions:
         model.dimensions == null
           ? null

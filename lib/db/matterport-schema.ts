@@ -30,6 +30,10 @@ export const matterportModels = pgTable(
     dimensionsRecordedAt: timestamp("dimensions_recorded_at", {
       withTimezone: true,
     }),
+    // HAC-137: result of the public/unlisted embed check. NULL = never checked.
+    // A public scan is still hidden until displayApproved is set by review.
+    isPublic: boolean("is_public"),
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
   },
   (t) => [
     unique("matterport_models_mapping_unique")
@@ -52,6 +56,10 @@ export const matterportModels = pgTable(
     check(
       "matterport_models_dimensions_pair",
       sql`(${t.dimensions} IS NULL) = (${t.dimensionsRecordedAt} IS NULL)`,
+    ),
+    check(
+      "matterport_models_public_check_pair",
+      sql`(${t.isPublic} IS NULL) = (${t.checkedAt} IS NULL)`,
     ),
   ],
 );

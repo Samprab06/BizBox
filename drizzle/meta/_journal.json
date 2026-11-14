@@ -57,6 +57,13 @@
       "when": 1794692838474,
       "tag": "0007_scenario-provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794696444534,
+      "tag": "0008_matterport-public-scans",
+      "breakpoints": true
     }
   ]
 }
