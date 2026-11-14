@@ -176,7 +176,7 @@ export async function loadKit(
       // Concurrent imports serialize. A failure rolls the whole replacement back.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(481101)`);
       await tx.execute(
-        sql`TRUNCATE costar_attachments, costar_tenancies, costar_spaces, costar_properties`,
+        sql`TRUNCATE costar_property_search, costar_attachments, costar_tenancies, costar_spaces, costar_properties`,
       );
       const attachmentBatch: (typeof costarAttachments.$inferInsert)[] = [];
       const addAttachments = async (
@@ -250,6 +250,15 @@ export async function loadKit(
       }
       if (tenancyBatch.length)
         await tx.insert(costarTenancies).values(tenancyBatch);
+      // HAC-59: slim projection read by site search, built in the same transaction.
+      await tx.execute(
+        sql.raw(
+          await readFile(
+            new URL("./costar-property-search.sql", import.meta.url),
+            "utf8",
+          ),
+        ),
+      );
     });
     return { mode: "loaded", counts, report };
   } finally {

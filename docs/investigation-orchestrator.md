@@ -29,6 +29,13 @@ The final control milestone is `finish_investigation`, carrying the findings and
 HAC-24 handoff. Missing required inputs instead finish with explicit questions and
 source exclusion findings, rather than invented values or a paused conversation.
 
+HAC-24 adds deterministic finalization into `summary.output.locationPlan` when a
+scoped evaluated comparison is available. New checkpoints keep verified
+`summary.toolFindings` separate from model findings. The read-only comparison
+plan endpoint also works without model credit; see
+[grounded-location-plan.md](grounded-location-plan.md) for its contract, budget
+limitations and explicitly gated optional narrative.
+
 Profile and comparison IDs are deterministic hashes of the step idempotency key.
 If a database commit succeeds before a checkpoint is lost, executing that same
 step key loads/reuses the artifact, including concurrent snapshot conflicts.

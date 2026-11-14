@@ -1,7 +1,11 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { costarProperties, costarSpaces } from "@/lib/db/costar-schema";
+import {
+  costarProperties,
+  costarPropertySearch,
+  costarSpaces,
+} from "@/lib/db/costar-schema";
 import { SiteInventorySchema } from "@/lib/contracts/sites";
 
 /** Select only search inputs; raw broker/attachment payloads stay in Postgres. */
@@ -17,22 +21,16 @@ export async function loadSiteInventory() {
             longitude: costarProperties.longitude,
             retail: costarProperties.retail,
             source: costarProperties.source,
-            data: sql<Record<string, unknown>>`jsonb_build_object(
-          'buildingName', ${costarProperties.data}->'buildingName',
-          'primaryAddress', jsonb_build_object(
-            'streetNumber', ${costarProperties.data}->'primaryAddress'->'streetNumber',
-            'streetDirection', ${costarProperties.data}->'primaryAddress'->'streetDirection',
-            'streetName', ${costarProperties.data}->'primaryAddress'->'streetName',
-            'streetType', ${costarProperties.data}->'primaryAddress'->'streetType',
-            'streetSuffix', ${costarProperties.data}->'primaryAddress'->'streetSuffix'
-          ),
-          'propertyRetail', jsonb_build_object('frontage', ${costarProperties.data}->'propertyRetail'->'frontage'),
-          'parking', ${costarProperties.data}->'parking',
-          'parkingRatio', ${costarProperties.data}->'parkingRatio',
-          'provenance', ${costarProperties.data}->'provenance'
-        )`,
+            // HAC-59: slim projection; reading costarProperties.data detoasts ~0.5 MB per row.
+            data: sql<
+              Record<string, unknown>
+            >`coalesce(${costarPropertySearch.data}, '{}'::jsonb)`,
           })
-          .from(costarProperties),
+          .from(costarProperties)
+          .leftJoin(
+            costarPropertySearch,
+            eq(costarPropertySearch.propertyId, costarProperties.id),
+          ),
         tx
           .select({
             id: costarSpaces.id,

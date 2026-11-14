@@ -24,7 +24,11 @@ import {
   type SensitivityResult,
   type SiteEvaluation,
 } from "@/lib/contracts/evaluation";
-import type { BehaviorTable, DayType, DemandInput } from "@/lib/demand/contracts";
+import type {
+  BehaviorTable,
+  DayType,
+  DemandInput,
+} from "@/lib/demand/contracts";
 import { CATEGORY_DEFAULTS } from "@/lib/demand/defaults";
 import { buildArrivalSchedule, estimateDemand } from "@/lib/demand/model";
 import type { DayResult, SimEvent, SiteConfig } from "@/lib/sim/contracts";
@@ -70,7 +74,10 @@ export function intervalOverlap(a: MetricSummary, b: MetricSummary): number {
 // ---------------------------------------------------------------------------
 
 /** Price acceptance at a price, linearly interpolated between the persona's asked prices. */
-export function acceptanceAt(points: readonly { price: number; p: number }[], price: number): number | null {
+export function acceptanceAt(
+  points: readonly { price: number; p: number }[],
+  price: number,
+): number | null {
   if (points.length === 0) return null;
   const sorted = [...points].sort((a, b) => a.price - b.price);
   if (price <= sorted[0]!.price) return sorted[0]!.p;
@@ -80,7 +87,8 @@ export function acceptanceAt(points: readonly { price: number; p: number }[], pr
     const lo = sorted[i]!;
     const hi = sorted[i + 1]!;
     if (price >= lo.price && price <= hi.price) {
-      const t = hi.price === lo.price ? 0 : (price - lo.price) / (hi.price - lo.price);
+      const t =
+        hi.price === lo.price ? 0 : (price - lo.price) / (hi.price - lo.price);
       return lo.p + t * (hi.p - lo.p);
     }
   }
@@ -88,7 +96,11 @@ export function acceptanceAt(points: readonly { price: number; p: number }[], pr
 }
 
 /** Rescales each persona's visits by its cached acceptance at `price` relative to `basePrice`. */
-export function repriceBehaviorTable(table: BehaviorTable, basePrice: number, price: number): BehaviorTable {
+export function repriceBehaviorTable(
+  table: BehaviorTable,
+  basePrice: number,
+  price: number,
+): BehaviorTable {
   return {
     ...table,
     personas: table.personas.map((b) => {
@@ -101,40 +113,68 @@ export function repriceBehaviorTable(table: BehaviorTable, basePrice: number, pr
 }
 
 /** The site's engine config after ticket, price and rent overrides. */
-export function applyConfigOverrides(config: SiteConfig, o: EvaluationOverrides): SiteConfig {
-  const ticket = o.priceUsd ?? config.prices.avgTicketUsd * (o.ticketMultiplier ?? 1);
+export function applyConfigOverrides(
+  config: SiteConfig,
+  o: EvaluationOverrides,
+): SiteConfig {
+  const ticket =
+    o.priceUsd ?? config.prices.avgTicketUsd * (o.ticketMultiplier ?? 1);
   return {
     ...config,
     prices: { ...config.prices, avgTicketUsd: ticket },
     lease: {
       ...config.lease,
-      askingRentUsdPerSfYear: config.lease.askingRentUsdPerSfYear * (o.rentMultiplier ?? 1),
+      askingRentUsdPerSfYear:
+        config.lease.askingRentUsdPerSfYear * (o.rentMultiplier ?? 1),
     },
   };
 }
 
-function demandInputFor(request: EvaluationRequest, site: EvaluationSite, source: DemandSource): DemandInput {
+function demandInputFor(
+  request: EvaluationRequest,
+  site: EvaluationSite,
+  source: DemandSource,
+): DemandInput {
   const o = request.overrides;
   const cat = CATEGORY_DEFAULTS[request.category];
   // Visits per person and market share multiply into expected visits identically
   // (weight x visits x share x scale), so both fold into the scale.
-  const multiplier = (o.scaleMultiplier ?? 1) * (o.visitFrequencyMultiplier ?? 1);
+  const multiplier =
+    (o.scaleMultiplier ?? 1) * (o.visitFrequencyMultiplier ?? 1);
   const scale =
-    multiplier === 1 ? undefined : { value: cat.scale.value * multiplier, origin: "default" as const };
+    multiplier === 1
+      ? undefined
+      : { value: cat.scale.value * multiplier, origin: "default" as const };
   let demand: DemandInput["demand"];
   if (source === "jev") {
-    if (!site.behaviorTable) throw new Error(`site ${site.siteId} has no behavior table`);
+    if (!site.behaviorTable)
+      throw new Error(`site ${site.siteId} has no behavior table`);
     const table =
       o.priceUsd === undefined
         ? site.behaviorTable
-        : repriceBehaviorTable(site.behaviorTable, site.config.prices.avgTicketUsd, o.priceUsd);
+        : repriceBehaviorTable(
+            site.behaviorTable,
+            site.config.prices.avgTicketUsd,
+            o.priceUsd,
+          );
     demand = { source: "jev", behavior: table };
   } else {
     demand = { source: "huff", huff: { competitors: request.competitors } };
   }
+  // The site's configured mean service time drives generated service durations, so an
+  // owner's service assumption changes actual processing time (reviewer finding, HAC-60).
+  const meanService = site.config.service.meanServiceMin;
   return {
     site: site.storefront,
     personaSet: request.personaSet,
+    ...(meanService !== undefined
+      ? {
+          serviceMeanMin: {
+            value: meanService,
+            origin: site.serviceMeanOrigin ?? ("default" as const),
+          },
+        }
+      : {}),
     city: request.city,
     category: request.category,
     priceTier: request.priceTier,
@@ -144,9 +184,15 @@ function demandInputFor(request: EvaluationRequest, site: EvaluationSite, source
 }
 
 /** Jev when every site has a cached behavior table; otherwise Huff for all sites, with the reason. */
-export function resolveDemandSource(request: EvaluationRequest): { source: DemandSource; fallbackReason: string | null } {
-  if (request.demandSource === "huff") return { source: "huff", fallbackReason: null };
-  const missing = request.sites.filter((s) => !s.behaviorTable).map((s) => s.siteId);
+export function resolveDemandSource(request: EvaluationRequest): {
+  source: DemandSource;
+  fallbackReason: string | null;
+} {
+  if (request.demandSource === "huff")
+    return { source: "huff", fallbackReason: null };
+  const missing = request.sites
+    .filter((s) => !s.behaviorTable)
+    .map((s) => s.siteId);
   if (missing.length === 0) return { source: "jev", fallbackReason: null };
   return {
     source: "huff",
@@ -154,7 +200,9 @@ export function resolveDemandSource(request: EvaluationRequest): { source: Deman
   };
 }
 
-export function seedList(request: Pick<EvaluationRequest, "seeds" | "baseSeed">): number[] {
+export function seedList(
+  request: Pick<EvaluationRequest, "seeds" | "baseSeed">,
+): number[] {
   return Array.from({ length: request.seeds }, (_, i) => request.baseSeed + i);
 }
 
@@ -162,7 +210,11 @@ export function seedList(request: Pick<EvaluationRequest, "seeds" | "baseSeed">)
 // Runs
 // ---------------------------------------------------------------------------
 
-export function runIdFor(siteId: string, dayType: DayType, seed: number): string {
+export function runIdFor(
+  siteId: string,
+  dayType: DayType,
+  seed: number,
+): string {
   return `${siteId}:${dayType}:s${seed}`;
 }
 
@@ -171,9 +223,20 @@ export function hourlyStats(day: DayResult): HourlyStat[] {
   const { openMin, closeMin, stations } = day.metrics;
   const firstHour = Math.floor(openMin / 60);
   const lastHour = Math.ceil(closeMin / 60) - 1;
-  const rows = new Map<number, { arrivals: number; served: number; abandoned: number; waits: number[]; busy: number }>();
-  for (let h = firstHour; h <= lastHour; h++) rows.set(h, { arrivals: 0, served: 0, abandoned: 0, waits: [], busy: 0 });
-  const row = (t: number) => rows.get(Math.min(lastHour, Math.max(firstHour, Math.floor(t / 60))))!;
+  const rows = new Map<
+    number,
+    {
+      arrivals: number;
+      served: number;
+      abandoned: number;
+      waits: number[];
+      busy: number;
+    }
+  >();
+  for (let h = firstHour; h <= lastHour; h++)
+    rows.set(h, { arrivals: 0, served: 0, abandoned: 0, waits: [], busy: 0 });
+  const row = (t: number) =>
+    rows.get(Math.min(lastHour, Math.max(firstHour, Math.floor(t / 60))))!;
   const started = new Map<string, number>();
 
   for (const e of day.events) {
@@ -187,7 +250,11 @@ export function hourlyStats(day: DayResult): HourlyStat[] {
     } else if (e.type === "completion") row(e.timeMin).served++;
   }
   // Busy station-minutes: each service from its start to its completion (or to close).
-  const done = new Map(day.events.filter((e) => e.type === "completion").map((e) => [e.customerId, e.timeMin]));
+  const done = new Map(
+    day.events
+      .filter((e) => e.type === "completion")
+      .map((e) => [e.customerId, e.timeMin]),
+  );
   for (const [customerId, start] of started) {
     const end = Math.min(done.get(customerId) ?? closeMin, closeMin);
     for (let h = firstHour; h <= lastHour; h++) {
@@ -196,14 +263,19 @@ export function hourlyStats(day: DayResult): HourlyStat[] {
     }
   }
   return [...rows.entries()].map(([hour, r]) => {
-    const openInHour = Math.max(0, Math.min(closeMin, (hour + 1) * 60) - Math.max(openMin, hour * 60));
+    const openInHour = Math.max(
+      0,
+      Math.min(closeMin, (hour + 1) * 60) - Math.max(openMin, hour * 60),
+    );
     const available = stations * openInHour;
     return {
       hour,
       arrivals: r.arrivals,
       served: r.served,
       abandoned: r.abandoned,
-      meanWaitMin: r.waits.length ? r.waits.reduce((s, v) => s + v, 0) / r.waits.length : null,
+      meanWaitMin: r.waits.length
+        ? r.waits.reduce((s, v) => s + v, 0) / r.waits.length
+        : null,
       utilization: available > 0 ? Math.min(1, r.busy / available) : 0,
     };
   });
@@ -229,7 +301,11 @@ export interface SiteOutcome {
   representativeDays: Record<DayType, DayResult>;
 }
 
-export function evaluateSite(request: EvaluationRequest, site: EvaluationSite, source: DemandSource): SiteOutcome {
+export function evaluateSite(
+  request: EvaluationRequest,
+  site: EvaluationSite,
+  source: DemandSource,
+): SiteOutcome {
   const config = applyConfigOverrides(site.config, request.overrides);
   const demandInput = demandInputFor(request, site, source);
   const seeds = seedList(request);
@@ -238,7 +314,12 @@ export function evaluateSite(request: EvaluationRequest, site: EvaluationSite, s
     const days = {} as Record<DayType, DayResult>;
     for (const dayType of DAY_TYPES) {
       const { openMin, closeMin } = config.hours[dayType];
-      const schedule = buildArrivalSchedule(demandInput, { seed, dayType, openMin, closeMin });
+      const schedule = buildArrivalSchedule(demandInput, {
+        seed,
+        dayType,
+        openMin,
+        closeMin,
+      });
       days[dayType] = simulateDay(schedule, config);
     }
     const economics = computeParsedMonthlyEconomics(config, {
@@ -254,7 +335,9 @@ export function evaluateSite(request: EvaluationRequest, site: EvaluationSite, s
   let rep = perSeed[0]!;
   for (const r of perSeed) {
     const d = Math.abs(r.economics.operatingContributionUsd - summary.median);
-    const best = Math.abs(rep.economics.operatingContributionUsd - summary.median);
+    const best = Math.abs(
+      rep.economics.operatingContributionUsd - summary.median,
+    );
     if (d < best) rep = r;
   }
   const weekday = perSeed.map((r) => r.days.weekday.metrics);
@@ -264,16 +347,28 @@ export function evaluateSite(request: EvaluationRequest, site: EvaluationSite, s
       siteId: site.siteId,
       demandSource: source,
       monthlyContributionUsd: summary,
-      monthlyContributionAfterBuildoutUsd: summarize(perSeed.map((r) => r.economics.contributionUsd)),
+      monthlyContributionAfterBuildoutUsd: summarize(
+        perSeed.map((r) => r.economics.contributionUsd),
+      ),
       monthlyRevenueUsd: summarize(perSeed.map((r) => r.economics.revenueUsd)),
-      monthlyServedCustomers: summarize(perSeed.map((r) => r.economics.servedCustomers)),
+      monthlyServedCustomers: summarize(
+        perSeed.map((r) => r.economics.servedCustomers),
+      ),
       weekdayMeanWaitMin: summarize(weekday.map((m) => m.meanWaitMin ?? 0)),
-      weekdayAbandonmentRate: summarize(weekday.map((m) => (m.arrivals > 0 ? m.abandoned / m.arrivals : 0))),
+      weekdayAbandonmentRate: summarize(
+        weekday.map((m) => (m.arrivals > 0 ? m.abandoned / m.arrivals : 0)),
+      ),
       weekdayUtilization: summarize(weekday.map((m) => m.stationUtilization)),
       contributionBySeed: contribution,
       representative: {
-        weekday: representative(rep.days.weekday, runIdFor(site.siteId, "weekday", rep.seed)),
-        weekend: representative(rep.days.weekend, runIdFor(site.siteId, "weekend", rep.seed)),
+        weekday: representative(
+          rep.days.weekday,
+          runIdFor(site.siteId, "weekday", rep.seed),
+        ),
+        weekend: representative(
+          rep.days.weekend,
+          runIdFor(site.siteId, "weekend", rep.seed),
+        ),
       },
       excludedPersonaIds: estimateDemand(demandInput).excludedPersonaIds,
     },
@@ -282,15 +377,26 @@ export function evaluateSite(request: EvaluationRequest, site: EvaluationSite, s
 }
 
 /** Rank by mean contribution (site ID breaks exact ties) and mark heavily overlapping intervals. */
-export function rankSites(outcomes: readonly SiteOutcome["evaluation"][]): SiteEvaluation[] {
+export function rankSites(
+  outcomes: readonly SiteOutcome["evaluation"][],
+): SiteEvaluation[] {
   const ordered = [...outcomes].sort(
-    (a, b) => b.monthlyContributionUsd.mean - a.monthlyContributionUsd.mean || a.siteId.localeCompare(b.siteId),
+    (a, b) =>
+      b.monthlyContributionUsd.mean - a.monthlyContributionUsd.mean ||
+      a.siteId.localeCompare(b.siteId),
   );
   return ordered.map((site, i) => ({
     ...site,
     rank: i + 1,
     tiedWith: ordered
-      .filter((o) => o.siteId !== site.siteId && intervalOverlap(o.monthlyContributionUsd, site.monthlyContributionUsd) >= TIE_OVERLAP)
+      .filter(
+        (o) =>
+          o.siteId !== site.siteId &&
+          intervalOverlap(
+            o.monthlyContributionUsd,
+            site.monthlyContributionUsd,
+          ) >= TIE_OVERLAP,
+      )
       .map((o) => o.siteId),
   }));
 }
@@ -317,7 +423,11 @@ export interface EvaluateOptions {
 
 export type EvaluationProgress =
   | { status: "complete"; run: EvaluationRun }
-  | { status: "partial"; completed: Record<string, SiteOutcome>; pendingSiteIds: string[] };
+  | {
+      status: "partial";
+      completed: Record<string, SiteOutcome>;
+      pendingSiteIds: string[];
+    };
 
 /**
  * Evaluates sites one at a time. With a deadline it may return "partial"; call again with
@@ -330,14 +440,18 @@ export async function evaluateSitesResumable(
   const request = EvaluationRequestSchema.parse(input);
   const { source } = resolveDemandSource(request);
   const now = options.now ?? Date.now;
-  const completed: Record<string, SiteOutcome> = { ...(options.completed ?? {}) };
+  const completed: Record<string, SiteOutcome> = {
+    ...(options.completed ?? {}),
+  };
   for (const site of request.sites) {
     if (completed[site.siteId]) continue;
     if (options.deadlineAt !== undefined && now() >= options.deadlineAt) {
       return {
         status: "partial",
         completed,
-        pendingSiteIds: request.sites.map((s) => s.siteId).filter((id) => !completed[id]),
+        pendingSiteIds: request.sites
+          .map((s) => s.siteId)
+          .filter((id) => !completed[id]),
       };
     }
     const outcome = evaluateSite(request, site, source);
@@ -352,13 +466,19 @@ export function evaluateSites(input: EvaluationRequestInput): EvaluationRun {
   const request = EvaluationRequestSchema.parse(input);
   const { source } = resolveDemandSource(request);
   const completed: Record<string, SiteOutcome> = {};
-  for (const site of request.sites) completed[site.siteId] = evaluateSite(request, site, source);
+  for (const site of request.sites)
+    completed[site.siteId] = evaluateSite(request, site, source);
   return assemble(request, completed);
 }
 
-function assemble(request: EvaluationRequest, completed: Record<string, SiteOutcome>): EvaluationRun {
+function assemble(
+  request: EvaluationRequest,
+  completed: Record<string, SiteOutcome>,
+): EvaluationRun {
   const { source, fallbackReason } = resolveDemandSource(request);
-  const sites = rankSites(request.sites.map((s) => completed[s.siteId]!.evaluation));
+  const sites = rankSites(
+    request.sites.map((s) => completed[s.siteId]!.evaluation),
+  );
   const tables = request.sites.filter((s) => s.behaviorTable);
   const result: EvaluationResult = {
     modelVersion: EVALUATION_MODEL_VERSION,
@@ -368,10 +488,18 @@ function assemble(request: EvaluationRequest, completed: Record<string, SiteOutc
     requestedDemandSource: request.demandSource,
     demandSource: source,
     fallbackReason,
-    jevModelVersion: source === "jev" ? (tables[0]?.behaviorTable?.modelVersion ?? null) : null,
+    jevModelVersion:
+      source === "jev"
+        ? (tables[0]?.behaviorTable?.modelVersion ?? null)
+        : null,
     behaviorTableIds:
       source === "jev"
-        ? Object.fromEntries(tables.map((s) => [s.siteId, s.behaviorTableId ?? `${s.siteId}:behavior`]))
+        ? Object.fromEntries(
+            tables.map((s) => [
+              s.siteId,
+              s.behaviorTableId ?? `${s.siteId}:behavior`,
+            ]),
+          )
         : {},
     seeds: seedList(request),
     overrides: request.overrides,
@@ -380,12 +508,20 @@ function assemble(request: EvaluationRequest, completed: Record<string, SiteOutc
   };
   return {
     result,
-    representativeDays: Object.fromEntries(request.sites.map((s) => [s.siteId, completed[s.siteId]!.representativeDays])),
+    representativeDays: Object.fromEntries(
+      request.sites.map((s) => [
+        s.siteId,
+        completed[s.siteId]!.representativeDays,
+      ]),
+    ),
   };
 }
 
 /** Whether a stored comparison predates the project's current profile version. */
-export function isOutdated(comparison: Pick<EvaluationResult, "profileVersion">, currentProfileVersion: number): boolean {
+export function isOutdated(
+  comparison: Pick<EvaluationResult, "profileVersion">,
+  currentProfileVersion: number,
+): boolean {
   return comparison.profileVersion < currentProfileVersion;
 }
 
@@ -393,7 +529,11 @@ export function isOutdated(comparison: Pick<EvaluationResult, "profileVersion">,
 // Sensitivity and the demand-source check
 // ---------------------------------------------------------------------------
 
-function overridesFor(assumption: SensitivityAssumption, value: number, base: EvaluationOverrides): EvaluationOverrides {
+function overridesFor(
+  assumption: SensitivityAssumption,
+  value: number,
+  base: EvaluationOverrides,
+): EvaluationOverrides {
   switch (assumption) {
     case "market_share_scale":
       return { ...base, scaleMultiplier: value };
@@ -425,18 +565,25 @@ export function runSensitivity(
   options: { seeds?: number } = {},
 ): SensitivityResult {
   const parsed = EvaluationRequestSchema.parse(input);
-  const request: EvaluationRequest = options.seeds ? { ...parsed, seeds: options.seeds } : parsed;
+  const request: EvaluationRequest = options.seeds
+    ? { ...parsed, seeds: options.seeds }
+    : parsed;
   const sorted = [...new Set(values)].sort((a, b) => a - b);
   const baseline = evaluateSites(request).result;
   const baselineTop = baseline.ranking[0]!;
 
   const points: SensitivityPoint[] = sorted.map((value) => {
-    const r = evaluateSites({ ...request, overrides: overridesFor(assumption, value, request.overrides) }).result;
+    const r = evaluateSites({
+      ...request,
+      overrides: overridesFor(assumption, value, request.overrides),
+    }).result;
     return {
       value,
       topSiteId: r.ranking[0]!,
       ranking: r.ranking,
-      meanContributionUsd: Object.fromEntries(r.sites.map((s) => [s.siteId, s.monthlyContributionUsd.mean])),
+      meanContributionUsd: Object.fromEntries(
+        r.sites.map((s) => [s.siteId, s.monthlyContributionUsd.mean]),
+      ),
     };
   });
 
@@ -450,16 +597,29 @@ export function runSensitivity(
     const da = a.meanContributionUsd[from]! - a.meanContributionUsd[to]!;
     const db = b.meanContributionUsd[from]! - b.meanContributionUsd[to]!;
     const t = da === db ? 0.5 : da / (da - db);
-    breakEven = { value: a.value + Math.min(1, Math.max(0, t)) * (b.value - a.value), fromSiteId: from, toSiteId: to };
+    breakEven = {
+      value: a.value + Math.min(1, Math.max(0, t)) * (b.value - a.value),
+      fromSiteId: from,
+      toSiteId: to,
+    };
   }
 
   const unit = assumption === "price" ? "usd" : "multiplier";
   const topChanges = points.some((p) => p.topSiteId !== baselineTop);
-  const fmt = (v: number) => (unit === "usd" ? `$${v.toFixed(2)}` : `${v.toFixed(2)}x`);
+  const fmt = (v: number) =>
+    unit === "usd" ? `$${v.toFixed(2)}` : `${v.toFixed(2)}x`;
   const conclusion = breakEven
     ? `The top site changes from ${breakEven.fromSiteId} to ${breakEven.toSiteId} at ${assumption} ≈ ${fmt(breakEven.value)}.`
     : `${baselineTop} stays the top site for ${assumption} from ${fmt(sorted[0]!)} to ${fmt(sorted[sorted.length - 1]!)}.`;
-  return { assumption, unit, baselineTopSiteId: baselineTop, points, topChanges, breakEven, conclusion };
+  return {
+    assumption,
+    unit,
+    baselineTopSiteId: baselineTop,
+    points,
+    topChanges,
+    breakEven,
+    conclusion,
+  };
 }
 
 /** Reruns the request with Huff-only demand and reports whether the ranking matches. */
@@ -471,7 +631,10 @@ export function demandSourceCheck(input: EvaluationRequestInput): {
   topMatches: boolean;
 } {
   const primary = evaluateSites(input).result;
-  const huff = evaluateSites({ ...EvaluationRequestSchema.parse(input), demandSource: "huff" }).result;
+  const huff = evaluateSites({
+    ...EvaluationRequestSchema.parse(input),
+    demandSource: "huff",
+  }).result;
   return {
     primary: primary.demandSource,
     primaryRanking: primary.ranking,
@@ -486,9 +649,15 @@ export function demandSourceCheck(input: EvaluationRequestInput): {
 // ---------------------------------------------------------------------------
 
 /** get_site_run(run_id): utilization, waits and abandonment by hour, event IDs to cite. */
-export function siteRunSummary(result: EvaluationResult, runId: string): RepresentativeRun | null {
+export function siteRunSummary(
+  result: EvaluationResult,
+  runId: string,
+): RepresentativeRun | null {
   for (const site of result.sites) {
-    for (const run of [site.representative.weekday, site.representative.weekend]) {
+    for (const run of [
+      site.representative.weekday,
+      site.representative.weekend,
+    ]) {
       if (run.runId === runId) return run;
     }
   }
@@ -497,15 +666,40 @@ export function siteRunSummary(result: EvaluationResult, runId: string): Represe
 
 /** Engine events in the canonical SiteRun vocabulary (arrived/joined/served/departed/abandoned). */
 export function canonicalEvents(events: readonly SimEvent[]) {
-  const out: { customerId: string; minute: number; type: "arrived" | "joined" | "served" | "departed" | "abandoned" }[] = [];
+  const out: {
+    customerId: string;
+    minute: number;
+    type: "arrived" | "joined" | "served" | "departed" | "abandoned";
+  }[] = [];
   for (const e of events) {
     if (e.type === "arrival") {
-      out.push({ customerId: e.customerId, minute: e.timeMin, type: "arrived" });
-      if (e.decision === "leave") out.push({ customerId: e.customerId, minute: e.timeMin, type: "abandoned" });
-    } else if (e.type === "queue_entry") out.push({ customerId: e.customerId, minute: e.timeMin, type: "joined" });
-    else if (e.type === "service_start") out.push({ customerId: e.customerId, minute: e.timeMin, type: "served" });
-    else if (e.type === "completion") out.push({ customerId: e.customerId, minute: e.timeMin, type: "departed" });
-    else out.push({ customerId: e.customerId, minute: e.timeMin, type: "abandoned" });
+      out.push({
+        customerId: e.customerId,
+        minute: e.timeMin,
+        type: "arrived",
+      });
+      if (e.decision === "leave")
+        out.push({
+          customerId: e.customerId,
+          minute: e.timeMin,
+          type: "abandoned",
+        });
+    } else if (e.type === "queue_entry")
+      out.push({ customerId: e.customerId, minute: e.timeMin, type: "joined" });
+    else if (e.type === "service_start")
+      out.push({ customerId: e.customerId, minute: e.timeMin, type: "served" });
+    else if (e.type === "completion")
+      out.push({
+        customerId: e.customerId,
+        minute: e.timeMin,
+        type: "departed",
+      });
+    else
+      out.push({
+        customerId: e.customerId,
+        minute: e.timeMin,
+        type: "abandoned",
+      });
   }
   return out;
 }

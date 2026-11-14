@@ -371,6 +371,7 @@ export async function assembleEvaluation(
     sites.push({
       siteId: id,
       storefront,
+      serviceMeanOrigin: assumptions["profile.serviceMinutes"]?.origin,
       config: {
         hours: { weekday: hours, weekend: hours },
         stations: {

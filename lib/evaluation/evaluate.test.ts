@@ -6,7 +6,14 @@ import {
   type EvaluationRequestInput,
   type EvaluationSite,
 } from "@/lib/contracts/evaluation";
-import { COMPETITORS, FIXTURE_PERSONA_SET, SITE_A, SITE_B, makeBehaviorTable, makeStore } from "@/lib/demand/fixtures";
+import {
+  COMPETITORS,
+  FIXTURE_PERSONA_SET,
+  SITE_A,
+  SITE_B,
+  makeBehaviorTable,
+  makeStore,
+} from "@/lib/demand/fixtures";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import {
   acceptanceAt,
@@ -26,14 +33,24 @@ import {
 
 const hours = { openMin: 6 * 60, closeMin: 18 * 60 };
 
-function config(rent: number, sf: number, overrides: Partial<SiteConfigInput> = {}): SiteConfigInput {
+function config(
+  rent: number,
+  sf: number,
+  overrides: Partial<SiteConfigInput> = {},
+): SiteConfigInput {
   return {
     hours: { weekday: hours, weekend: hours },
     stations: { planned: 2, usableSf: sf, sfPerStation: 250 },
     prices: { avgTicketUsd: 6.5 },
     staff: { headcount: 2, wageUsdPerHour: 16 },
     costs: { cogsPctOfRevenue: 0.28 },
-    lease: { sf, askingRentUsdPerSfYear: rent, tripleNet: false, buildoutUsd: 30_000, leaseTermMonths: 60 },
+    lease: {
+      sf,
+      askingRentUsdPerSfYear: rent,
+      tripleNet: false,
+      buildoutUsd: 30_000,
+      leaseTermMonths: 60,
+    },
     calendar: { weekdayDaysPerMonth: 21.7, weekendDaysPerMonth: 8.7 },
     ...overrides,
   };
@@ -46,18 +63,30 @@ function sites(withTables = true): EvaluationSite[] {
       siteId: SITE_A.id,
       storefront: SITE_A,
       config: config(48, SITE_A.sizeSqft) as EvaluationSite["config"],
-      ...(withTables ? { behaviorTable: makeBehaviorTable(SITE_A.id), behaviorTableId: "bt-a" } : {}),
+      ...(withTables
+        ? {
+            behaviorTable: makeBehaviorTable(SITE_A.id),
+            behaviorTableId: "bt-a",
+          }
+        : {}),
     },
     {
       siteId: SITE_B.id,
       storefront: SITE_B,
       config: config(22, SITE_B.sizeSqft) as EvaluationSite["config"],
-      ...(withTables ? { behaviorTable: makeBehaviorTable(SITE_B.id), behaviorTableId: "bt-b" } : {}),
+      ...(withTables
+        ? {
+            behaviorTable: makeBehaviorTable(SITE_B.id),
+            behaviorTableId: "bt-b",
+          }
+        : {}),
     },
   ];
 }
 
-function request(overrides: Partial<EvaluationRequestInput> = {}): EvaluationRequestInput {
+function request(
+  overrides: Partial<EvaluationRequestInput> = {},
+): EvaluationRequestInput {
   return {
     projectId: "p1",
     profileId: "profile-v1",
@@ -86,17 +115,38 @@ describe("statistics", () => {
   });
 
   it("measures interval overlap against the narrower interval", () => {
-    expect(intervalOverlap({ mean: 5, low: 0, median: 5, high: 10 }, { mean: 7, low: 5, median: 7, high: 9 })).toBe(1);
-    expect(intervalOverlap({ mean: 1, low: 0, median: 1, high: 2 }, { mean: 9, low: 8, median: 9, high: 10 })).toBe(0);
-    expect(intervalOverlap({ mean: 3, low: 3, median: 3, high: 3 }, { mean: 2, low: 0, median: 2, high: 5 })).toBe(1);
+    expect(
+      intervalOverlap(
+        { mean: 5, low: 0, median: 5, high: 10 },
+        { mean: 7, low: 5, median: 7, high: 9 },
+      ),
+    ).toBe(1);
+    expect(
+      intervalOverlap(
+        { mean: 1, low: 0, median: 1, high: 2 },
+        { mean: 9, low: 8, median: 9, high: 10 },
+      ),
+    ).toBe(0);
+    expect(
+      intervalOverlap(
+        { mean: 3, low: 3, median: 3, high: 3 },
+        { mean: 2, low: 0, median: 2, high: 5 },
+      ),
+    ).toBe(1);
   });
 
   it("ranks by mean contribution and marks heavily overlapping sites as tied", () => {
     const base = evaluateSites(request()).result.sites;
     const [a, b] = base;
     const tied = rankSites([
-      { ...a!, monthlyContributionUsd: { mean: 100, low: 0, median: 100, high: 200 } },
-      { ...b!, monthlyContributionUsd: { mean: 90, low: 10, median: 90, high: 190 } },
+      {
+        ...a!,
+        monthlyContributionUsd: { mean: 100, low: 0, median: 100, high: 200 },
+      },
+      {
+        ...b!,
+        monthlyContributionUsd: { mean: 90, low: 10, median: 90, high: 190 },
+      },
     ]);
     expect(tied.map((s) => s.rank)).toEqual([1, 2]);
     expect(tied[0]!.tiedWith).toEqual([b!.siteId]);
@@ -109,7 +159,10 @@ describe("evaluateSites", () => {
     expect(EvaluationResultSchema.parse(result)).toEqual(result);
     expect(result.demandSource).toBe("jev");
     expect(result.jevModelVersion).toBe("jev-1.14.0");
-    expect(result.behaviorTableIds).toEqual({ "site-a": "bt-a", "site-b": "bt-b" });
+    expect(result.behaviorTableIds).toEqual({
+      "site-a": "bt-a",
+      "site-b": "bt-b",
+    });
     expect(result.seeds).toHaveLength(12);
     expect(result.ranking).toHaveLength(2);
     for (const site of result.sites) {
@@ -117,8 +170,12 @@ describe("evaluateSites", () => {
       expect(c.low).toBeLessThanOrEqual(c.median);
       expect(c.median).toBeLessThanOrEqual(c.high);
       expect(site.contributionBySeed).toHaveLength(12);
-      expect(representativeDays[site.siteId]!.weekday.events.length).toBeGreaterThan(0);
-      expect(site.representative.weekday.eventIds).toHaveLength(representativeDays[site.siteId]!.weekday.events.length);
+      expect(
+        representativeDays[site.siteId]!.weekday.events.length,
+      ).toBeGreaterThan(0);
+      expect(site.representative.weekday.eventIds).toHaveLength(
+        representativeDays[site.siteId]!.weekday.events.length,
+      );
     }
     const means = result.sites.map((s) => s.monthlyContributionUsd.mean);
     expect(means).toEqual([...means].sort((x, y) => y - x));
@@ -142,7 +199,9 @@ describe("evaluateSites", () => {
     expect(result.fallbackReason).toMatch(/site-b/);
     expect(result.jevModelVersion).toBeNull();
     expect(result.sites.every((s) => s.demandSource === "huff")).toBe(true);
-    expect(result.sites.every((s) => s.monthlyServedCustomers.mean > 0)).toBe(true);
+    expect(result.sites.every((s) => s.monthlyServedCustomers.mean > 0)).toBe(
+      true,
+    );
   });
 
   it("marks comparisons from an older profile version as outdated", () => {
@@ -173,12 +232,18 @@ describe("evaluateSites", () => {
     });
     expect(finished).toEqual(["site-a", "site-b"]);
     expect(resumed.status).toBe("complete");
-    if (resumed.status === "complete") expect(resumed.run.result).toEqual(evaluateSites(request()).result);
+    if (resumed.status === "complete")
+      expect(resumed.run.result).toEqual(evaluateSites(request()).result);
   });
 
   it("evaluates 8 sites x 30 seeds x 2 day types quickly with cached behavior tables", () => {
     const eight: EvaluationSite[] = Array.from({ length: 8 }, (_, i) => {
-      const store = makeStore(`site-${i}`, (i % 4) * 0.6 - 0.9, Math.floor(i / 4) * 0.7 - 0.3, { sizeSqft: 1200 + i * 100 });
+      const store = makeStore(
+        `site-${i}`,
+        (i % 4) * 0.6 - 0.9,
+        Math.floor(i / 4) * 0.7 - 0.3,
+        { sizeSqft: 1200 + i * 100 },
+      );
       return {
         siteId: store.id,
         storefront: store,
@@ -198,7 +263,9 @@ describe("evaluateSites", () => {
 describe("sensitivity", () => {
   it("a market-share sweep changes the ranking at a reported break-even value", () => {
     const values = [0.25, 0.5, 1, 1.5, 2, 3];
-    const s = runSensitivity(request(), "market_share_scale", values, { seeds: 8 });
+    const s = runSensitivity(request(), "market_share_scale", values, {
+      seeds: 8,
+    });
     expect(SensitivityResultSchema.parse(s)).toEqual(s);
     expect(s.topChanges).toBe(true);
     expect(s.breakEven).not.toBeNull();
@@ -221,9 +288,13 @@ describe("sensitivity", () => {
 
   it("price re-reads cached price acceptance from the behavior table", () => {
     const table = makeBehaviorTable("site-a");
-    expect(acceptanceAt(table.personas[0]!.priceAcceptance, 5)).toBeCloseTo(0.75);
+    expect(acceptanceAt(table.personas[0]!.priceAcceptance, 5)).toBeCloseTo(
+      0.75,
+    );
     const repriced = repriceBehaviorTable(table, 4, 6);
-    expect(repriced.personas[0]!.visitsPerMonth).toBeCloseTo((table.personas[0]!.visitsPerMonth * 0.6) / 0.9);
+    expect(repriced.personas[0]!.visitsPerMonth).toBeCloseTo(
+      (table.personas[0]!.visitsPerMonth * 0.6) / 0.9,
+    );
     const s = runSensitivity(request(), "price", [5, 6.5, 8], { seeds: 4 });
     expect(s.unit).toBe("usd");
     const served = s.points.map((p) => p.meanContributionUsd["site-a"]!);
@@ -237,7 +308,9 @@ describe("demand source check and run summaries", () => {
     expect(check.primary).toBe("jev");
     expect(check.huffRanking).toHaveLength(2);
     expect(typeof check.rankingMatches).toBe("boolean");
-    expect(check.topMatches).toBe(check.primaryRanking[0] === check.huffRanking[0]);
+    expect(check.topMatches).toBe(
+      check.primaryRanking[0] === check.huffRanking[0],
+    );
   });
 
   it("summarizes a run by hour and maps engine events to the canonical vocabulary", () => {
@@ -245,13 +318,59 @@ describe("demand source check and run summaries", () => {
     const site = result.sites[0]!;
     const day = representativeDays[site.siteId]!.weekday;
     const hourly = hourlyStats(day);
-    expect(hourly.reduce((s, h) => s + h.arrivals, 0)).toBe(day.metrics.arrivals);
+    expect(hourly.reduce((s, h) => s + h.arrivals, 0)).toBe(
+      day.metrics.arrivals,
+    );
     expect(hourly.reduce((s, h) => s + h.served, 0)).toBe(day.metrics.served);
-    expect(hourly.every((h) => h.utilization >= 0 && h.utilization <= 1)).toBe(true);
-    expect(siteRunSummary(result, site.representative.weekday.runId)).toEqual(site.representative.weekday);
+    expect(hourly.every((h) => h.utilization >= 0 && h.utilization <= 1)).toBe(
+      true,
+    );
+    expect(siteRunSummary(result, site.representative.weekday.runId)).toEqual(
+      site.representative.weekday,
+    );
     expect(siteRunSummary(result, "missing")).toBeNull();
     const events = canonicalEvents(day.events);
-    expect(events.filter((e) => e.type === "arrived")).toHaveLength(day.metrics.arrivals);
-    expect(events.filter((e) => e.type === "abandoned")).toHaveLength(day.metrics.abandoned);
+    expect(events.filter((e) => e.type === "arrived")).toHaveLength(
+      day.metrics.arrivals,
+    );
+    expect(events.filter((e) => e.type === "abandoned")).toHaveLength(
+      day.metrics.abandoned,
+    );
+  });
+});
+
+describe("service-time wiring (HAC-64)", () => {
+  it("the configured mean service time drives actual service durations, with comparable draws", () => {
+    const withMean = (meanServiceMin: number) =>
+      request({
+        seeds: 1,
+        sites: sites().map((s) => ({
+          ...s,
+          config: { ...s.config, service: { meanServiceMin } },
+        })),
+      });
+    /** Service duration per customer ID for the representative weekday of site-a. */
+    const durations = (meanServiceMin: number) => {
+      const { representativeDays } = evaluateSites(withMean(meanServiceMin));
+      const started = new Map<string, number>();
+      const out = new Map<string, number>();
+      for (const e of representativeDays["site-a"]!.weekday.events) {
+        if (e.type === "service_start") started.set(e.customerId, e.timeMin);
+        if (e.type === "completion" && started.has(e.customerId))
+          out.set(e.customerId, e.timeMin - started.get(e.customerId)!);
+      }
+      return out;
+    };
+    const short = durations(2);
+    const long = durations(10);
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    expect(short.size).toBeGreaterThan(0);
+    expect(mean([...short.values()])).toBeGreaterThan(1);
+    expect(mean([...short.values()])).toBeLessThan(3.5);
+    // Same seed, same underlying draws: each customer served in both runs takes 5x as long.
+    const common = [...short.keys()].filter((id) => long.has(id));
+    expect(common.length).toBeGreaterThan(0);
+    for (const id of common)
+      expect(long.get(id)! / short.get(id)!).toBeCloseTo(5, 5);
   });
 });
