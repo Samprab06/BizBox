@@ -2,14 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Viewer } from "cesium";
+import type { Entity, Viewer } from "cesium";
 import {
   daylight,
   demandAnchors,
   demandLevel,
   trafficLevel,
 } from "./day-cycle";
-import roads from "./montrose-roads.json";
+import {
+  getRoadTemplate,
+  loadRoadTile,
+  nearbyRoadTiles,
+  type Road,
+} from "./road-tiles";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 
 export default function Neighborhood({
@@ -32,6 +37,9 @@ export default function Neighborhood({
   }, [minute]);
   const trafficEntities = useRef<(show: boolean) => void>(() => {});
   const [trafficVisible, setTrafficVisible] = useState(true);
+  const [roadStatus, setRoadStatus] = useState<"loading" | "ready" | "failed">(
+    "loading",
+  );
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState<"loading" | "ready" | "failed">(
     "loading",
@@ -40,6 +48,7 @@ export default function Neighborhood({
   useEffect(() => {
     let closed = false;
     let viewer: Viewer | undefined;
+    const roadRequests = new AbortController();
     const element = container.current;
     if (!element) return;
 
@@ -49,6 +58,7 @@ export default function Neighborhood({
         Viewer,
         Cesium3DTileset,
         Cartesian3,
+        Cartographic,
         Cartesian2,
         CloudCollection,
         Sun,
@@ -91,7 +101,7 @@ export default function Neighborhood({
       }
       viewer.scene.primitives.add(tileset);
       const city = viewer;
-      const entities = roads.map(({ roadClass, points }, index) =>
+      const createRoad = ({ roadClass, points, seed }: Road) =>
         city.entities.add({
           polyline: {
             positions: Cartesian3.fromDegreesArray(points),
@@ -100,23 +110,22 @@ export default function Neighborhood({
               new CallbackProperty(() => {
                 const congestion = trafficLevel(
                   timeRef.current,
-                  index,
+                  seed,
                   roadClass,
                 );
-                const color =
+                return Color.fromCssColorString(
                   congestion >= 0.7
                     ? "#ff3e47"
                     : congestion >= 0.38
                       ? "#ffb522"
-                      : "#2fdf92";
-                return Color.fromCssColorString(color).withAlpha(0.82);
+                      : "#2fdf92",
+                ).withAlpha(0.82);
               }, false),
             ),
             clampToGround: true,
             classificationType: ClassificationType.CESIUM_3D_TILE,
           },
-        }),
-      );
+        });
       for (const anchor of demandAnchors) {
         const position = Cartesian3.fromDegrees(
           longitude + anchor.east,
@@ -218,9 +227,75 @@ export default function Neighborhood({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-17), roll: 0 },
       });
+      const roadTiles = new Map<string, Entity[]>();
+      let visible = true;
+      let revision = 0;
+      let template: string | undefined;
+      async function updateRoads() {
+        const current = ++revision;
+        setRoadStatus("loading");
+        try {
+          const urlTemplate = (template ??= await getRoadTemplate(
+            roadRequests.signal,
+          ));
+          if (closed || current !== revision) return;
+          const canvas = city.scene.canvas;
+          const picked = city.camera.pickEllipsoid(
+            new Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
+          );
+          const center = picked
+            ? Cartographic.fromCartesian(picked)
+            : undefined;
+          const tiles = nearbyRoadTiles(city.camera, center);
+          const wanted = new Set(tiles.map(({ x, y }) => `${x}/${y}`));
+          for (const [id, entities] of roadTiles) {
+            if (wanted.has(id)) continue;
+            entities.forEach((entity) => city.entities.remove(entity));
+            roadTiles.delete(id);
+          }
+          const results = await Promise.allSettled(
+            tiles.map(async ({ x, y }) => {
+              const id = `${x}/${y}`;
+              if (roadTiles.has(id)) return;
+              const roads = await loadRoadTile(
+                urlTemplate,
+                x,
+                y,
+                roadRequests.signal,
+              );
+              if (closed || current !== revision) return;
+              roadTiles.set(
+                id,
+                roads.map((road) => {
+                  const entity = createRoad(road);
+                  entity.show = visible;
+                  return entity;
+                }),
+              );
+            }),
+          );
+          if (!closed && current === revision) {
+            setRoadStatus(
+              results.some((result) => result.status === "rejected")
+                ? "failed"
+                : "ready",
+            );
+          }
+        } catch {
+          if (!closed && current === revision) setRoadStatus("failed");
+        }
+      }
+      city.camera.moveEnd.addEventListener(() => {
+        void updateRoads();
+      });
       trafficEntities.current = (show) => {
-        for (const entity of entities) entity.show = show;
+        visible = show;
+        for (const entities of roadTiles.values()) {
+          for (const entity of entities) entity.show = show;
+        }
+        if (show) void updateRoads();
       };
+      void updateRoads();
       const stopWatching = tileset.tileVisible.addEventListener(() => {
         stopWatching();
         setStatus("ready");
@@ -236,6 +311,7 @@ export default function Neighborhood({
     });
     return () => {
       closed = true;
+      roadRequests.abort();
       trafficEntities.current = () => {};
       viewer?.destroy();
     };
@@ -288,8 +364,15 @@ export default function Neighborhood({
         {trafficVisible && (
           <>
             <p className="mt-1 text-xs">
-              Sample congestion · OpenStreetMap road geometry
+              Sample congestion · OpenStreetMap via OpenFreeMap
             </p>
+            {roadStatus !== "ready" && (
+              <p role="status" className="mt-1 text-xs">
+                {roadStatus === "loading"
+                  ? "Loading nearby roads…"
+                  : "Some roads could not load. Move the map or toggle traffic to retry."}
+              </p>
+            )}
             <p className="mt-2 flex flex-wrap gap-3 text-xs">
               <span className="text-[#2fdf92]">● Free flow</span>
               <span className="text-[#ffb522]">● Slow</span>

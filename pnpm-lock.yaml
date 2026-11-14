@@ -14,6 +14,9 @@ importers:
       '@langchain/core':
         specifier: 1.4.0
         version: 1.4.0
+      '@mapbox/vector-tile':
+        specifier: 2.0.5
+        version: 2.0.5
       '@react-three/fiber':
         specifier: 9.8.2
         version: 9.8.2(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(three@0.187.0)
@@ -32,6 +35,9 @@ importers:
       next:
         specifier: 16.4.6
         version: 16.4.6(@babel/core@7.29.13(supports-color@7.2.0))(@types/node@22.20.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      pbf:
+        specifier: 4.0.2
+        version: 4.0.2
       postgres:
         specifier: 4.1.1
         version: 4.1.1
