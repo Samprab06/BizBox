@@ -9,6 +9,10 @@ import {
 import { ConsultantCashCard } from "@/components/nessie/consultant-cash-card";
 import { withoutNessieFindings } from "@/lib/nessie/findings";
 
+const POLL_MS = 3000;
+const MAX_POLL_BACKOFF_MS = 60_000;
+const MAX_POLL_FAILURES = 6;
+
 const TOOL_LABELS: Record<string, string> = {
   save_profile: "Saved the founder profile",
   search_sites: "Searched for-lease spaces",
@@ -66,6 +70,7 @@ function ConsultantActivity({
   const headingId = useId();
   const [state, setState] = useState<Investigation>();
   const [error, setError] = useState(false);
+  const [pollStopped, setPollStopped] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [retrying, setRetrying] = useState(false);
   const lifetime = useRef<AbortController | null>(null);
@@ -80,6 +85,9 @@ function ConsultantActivity({
     const controller = new AbortController();
     const url = `/api/investigations/${encodeURIComponent(investigationId)}`;
     let timer: ReturnType<typeof setTimeout>;
+    // Consecutive failures back off (3 s, 6 s, ... 60 s) and stop after MAX_POLL_FAILURES, so a
+    // broken job or API can't keep an open tab calling /advance (and the paid model) forever.
+    let failures = 0;
     const poll = async () => {
       try {
         const response = await fetch(url, {
@@ -95,6 +103,8 @@ function ConsultantActivity({
         if (controller.signal.aborted) return;
         setState(next);
         setError(false);
+        setPollStopped(false);
+        failures = 0;
         // Queued jobs start on their first advance; running jobs continue from checkpoints.
         if (next.job.status === "queued" || next.job.status === "running") {
           const advance = await fetch(`${url}/advance`, {
@@ -115,8 +125,17 @@ function ConsultantActivity({
       } catch {
         if (controller.signal.aborted) return;
         setError(true);
+        failures += 1;
+        if (failures >= MAX_POLL_FAILURES) {
+          setPollStopped(true);
+          return;
+        }
       }
-      if (!controller.signal.aborted) timer = setTimeout(poll, 3000);
+      if (!controller.signal.aborted)
+        timer = setTimeout(
+          poll,
+          Math.min(POLL_MS * 2 ** failures, MAX_POLL_BACKOFF_MS),
+        );
     };
     void poll();
     return () => {
@@ -182,7 +201,9 @@ function ConsultantActivity({
       </h3>
       <p role="status" className="mt-2 text-sm text-muted">
         {error
-          ? "Investigation update unavailable. Retrying."
+          ? pollStopped
+            ? "Investigation update unavailable. Reload the page to try again."
+            : "Investigation update unavailable. Retrying."
           : status
             ? STATUS_TEXT[status]
             : investigationId

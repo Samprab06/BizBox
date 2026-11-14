@@ -20,7 +20,7 @@ it("groups the founder's work under three tasks", () => {
   ]);
   expect(workspaceTasks.map((task) => task.entries.map((entry) => entry.route))).toEqual([
     ["intake", "map", "site"],
-    ["comparison", "replay"],
+    ["comparison", "replay", "simulator"],
     ["plan"],
   ]);
 });
@@ -44,7 +44,7 @@ it("keeps every URL unchanged", () => {
 
 it("keeps planned screens out of the linked entries", () => {
   const planned = workspaceTasks.flatMap((task) => task.planned.map((entry) => entry.id));
-  expect(planned).toEqual(["sensitivity", "simulator", "findings"]);
+  expect(planned).toEqual(["sensitivity", "findings"]);
   const linked: string[] = workspaceSteps.map((step) => step.route);
   for (const id of planned) expect(linked).not.toContain(id);
 });
@@ -58,6 +58,7 @@ it("finds the task for a route", () => {
 it("names the next step, crossing from one task to the next", () => {
   expect(nextStep("intake")?.route).toBe("map");
   expect(nextStep("site")).toMatchObject({ route: "comparison", step: "compare your shortlist" });
-  expect(nextStep("replay")?.route).toBe("plan");
+  expect(nextStep("replay")?.route).toBe("simulator");
+  expect(nextStep("simulator")?.route).toBe("plan");
   expect(nextStep("plan")).toBeUndefined();
 });

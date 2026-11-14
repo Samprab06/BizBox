@@ -11,6 +11,13 @@ export type ContextListing = {
 };
 export type WorkspaceObservation =
   | {
+      kind: "simulator";
+      phase: "ready" | "example";
+      comparisonId?: string;
+      siteId?: string;
+      synthetic?: boolean;
+    }
+  | {
       kind: "search";
       phase: "loading" | "example" | "live";
       candidates: ContextListing[];
@@ -136,7 +143,8 @@ export function resolveWorkspaceContext({
   const isComparison = view === "comparison";
   const isReplay = view === "replay";
   const isPlan = view === "plan";
-  const isModel = isComparison || isReplay || isPlan;
+  const isSimulator = view === "simulator";
+  const isModel = isComparison || isReplay || isPlan || isSimulator;
   const searchState = observations.find((entry) => entry.kind === "search");
   const comparisonState = observations.find(
     (entry) => entry.kind === (isReplay ? "stored" : "comparison"),
@@ -165,7 +173,24 @@ export function resolveWorkspaceContext({
   let status = "Loading context…";
   let candidates: ContextListing[] = currentSearch?.candidates ?? [];
 
-  if (isPlan) {
+  if (isSimulator) {
+    const simulator = observations.find((entry) => entry.kind === "simulator");
+    selectedId = undefined;
+    if (
+      simulator?.kind === "simulator" &&
+      (simulator.phase === "example" ||
+        !wantedComparison ||
+        simulator.comparisonId === wantedComparison)
+    ) {
+      example = simulator.phase === "example" || simulator.synthetic === true;
+      selectedId = simulator.siteId;
+      status = example
+        ? "Example data"
+        : simulator.synthetic === undefined
+          ? "Simulation provenance unavailable"
+          : "Stored simulation";
+    }
+  } else if (isPlan) {
     const plan = observations.find((entry) => entry.kind === "plan");
     if (!wantedComparison) status = "Choose a comparison";
     else if (plan?.kind === "plan" && plan.comparisonId === wantedComparison) {
