@@ -190,6 +190,14 @@ export function LiveComparisonScreen({
             disabled={busy}
           />
           <ComparisonEvidence payload={payload} />
+          {!payload.outdated && (
+            <Link
+              className="inline-block font-semibold text-pine underline"
+              href={`/projects/${encodeURIComponent(project.id)}/plan?comparison=${encodeURIComponent(payload.comparisonId)}`}
+            >
+              Export the location plan
+            </Link>
+          )}
         </>
       )}
     </div>
