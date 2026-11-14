@@ -1,0 +1,181 @@
+import { describe, expect, it } from "vitest";
+import { fields, initialSession, intakeSessionSchema, updateProfile, type Profile } from "@/components/intake/profile";
+import { patchFromForm } from "@/components/intake/live";
+import { profileFromIntake } from "@/lib/client/intake-business-profile";
+import {
+  categoryChoices,
+  formatAreas,
+  initialValue,
+  nudge,
+  parseAreas,
+  priceChoices,
+  questionSteps,
+  resumeStep,
+  reviewValue,
+  rulerBounds,
+  skipValues,
+  stepError,
+} from "./flow";
+
+const intakeOptions = (key: string) => {
+  const field = fields.find((entry) => entry.key === key);
+  return field && "options" in field ? [...field.options] : [];
+};
+
+describe("field mapping", () => {
+  it("maps the prototype's labels to the existing intake values", () => {
+    expect(Object.fromEntries(categoryChoices.map((choice) => [choice.label, choice.value]))).toEqual({
+      "Coffee shop": "Coffee shop",
+      "Quick food": "Quick-service food",
+      Salon: "Salon or barber",
+      Fitness: "Fitness studio",
+    });
+    expect(Object.fromEntries(priceChoices.map((choice) => [choice.label, choice.value]))).toEqual({
+      Value: "Budget",
+      "Mid-range": "Midrange",
+      Premium: "Premium",
+    });
+    expect(categoryChoices.map((choice) => choice.value)).toEqual(intakeOptions("category"));
+    expect(priceChoices.map((choice) => choice.value)).toEqual(intakeOptions("price"));
+  });
+
+  it("asks one question per intake field", () => {
+    expect([...questionSteps].sort()).toEqual(fields.map((field) => field.key).sort());
+  });
+
+  it("rejects Other and legacy categories", () => {
+    expect(stepError("category", "Other")).toBe("Choose an available business type.");
+    expect(stepError("category", "Quick food")).toBe("Choose an available business type.");
+    expect(stepError("category", "Quick-service food")).toBeUndefined();
+  });
+});
+
+describe("validation", () => {
+  it("keeps exact typed amounts and rejects what production rejects", () => {
+    expect(stepError("rent", "4550")).toBeUndefined();
+    expect(stepError("buildout", "0")).toBeUndefined();
+    expect(stepError("rent", "-5")).toBe("Enter a nonnegative whole number.");
+    expect(stepError("buildout", "1e3")).toBe("Enter a nonnegative whole number.");
+    expect(stepError("staff", "0")).toBe("Enter a positive whole number.");
+    expect(stepError("staff", "2.5")).toBe("Enter a positive whole number.");
+  });
+
+  it("requires hours the map can read", () => {
+    expect(stepError("hours", "7am – 6pm")).toBeUndefined();
+    expect(stepError("hours", "mornings")).toMatch(/same-day range/);
+    expect(stepError("hours", "")).toBe("Add your answer to continue.");
+  });
+
+  it("requires concept and customers", () => {
+    expect(stepError("concept", "  ")).toBe("Add your answer to continue.");
+    expect(stepError("customers", "Neighbors")).toBeUndefined();
+  });
+});
+
+describe("areas", () => {
+  it("round-trips favor/avoid picks and notes", () => {
+    const text = formatAreas({ favor: ["Montrose", "The Heights"], avoid: ["Rice Village"], notes: "near offices" });
+    expect(text).toBe("Favor Montrose, The Heights; Avoid Rice Village; near offices");
+    expect(parseAreas(text, "Houston")).toEqual({
+      favor: ["Montrose", "The Heights"],
+      avoid: ["Rice Village"],
+      notes: "near offices",
+    });
+  });
+
+  it("keeps text typed in the detailed form, and other cities' picks, as notes", () => {
+    expect(parseAreas("Avoid downtown; Favor Montrose", "Houston")).toEqual({
+      favor: ["Montrose"],
+      avoid: [],
+      notes: "Avoid downtown",
+    });
+    expect(parseAreas("Favor Silver Lake", "Houston").notes).toBe("Favor Silver Lake");
+    expect(parseAreas(skipValues.areas!, "Houston")).toEqual({ favor: [], avoid: [], notes: "" });
+  });
+});
+
+describe("resume and defaults", () => {
+  it("starts a new founder at the first question even though category and city have defaults", () => {
+    expect(resumeStep(initialSession.profile)).toBe("category");
+    expect(initialValue("category", initialSession.profile)).toBe("Coffee shop");
+  });
+
+  it("resumes at the first unconfirmed answer and goes to review when complete", () => {
+    let profile: Profile = updateProfile(initialSession.profile, "category", "Salon or barber");
+    profile = updateProfile(profile, "concept", "Barbershop");
+    expect(resumeStep(profile)).toBe("customers");
+    expect(resumeStep(completeProfile())).toBe("review");
+  });
+
+  it("returns a legacy unsupported category to the category question without dropping answers", () => {
+    const profile = { ...completeProfile(), category: { value: "Other", origin: "founder" as const } };
+    expect(resumeStep(profile)).toBe("category");
+    expect(initialValue("category", profile)).toBe("");
+    expect(profile.concept?.value).toBe("Neighborhood coffee bar");
+  });
+});
+
+describe("ruler helpers", () => {
+  it("moves an exact value to the neighbouring detent", () => {
+    expect(nudge(4550, 100, 500, 1)).toBe(4600);
+    expect(nudge(4550, 100, 500, -1)).toBe(4500);
+    expect(nudge(4500, 100, 500, 1)).toBe(4600);
+    expect(nudge(4500, 100, 500, -1, 10)).toBe(3500);
+  });
+
+  it("widens the ruler to include a typed value outside it", () => {
+    expect(rulerBounds("rent", 50000)).toEqual({ min: 500, max: 50000 });
+    expect(rulerBounds("rent", 100)).toEqual({ min: 100, max: 20000 });
+    expect(rulerBounds("staff", Number.NaN)).toEqual({ min: 1, max: 30 });
+  });
+
+  it("formats review values", () => {
+    expect(reviewValue("rent", "4550")).toBe("$4,550");
+    expect(reviewValue("category", "Salon or barber")).toBe("Salon");
+    expect(reviewValue("price", "Midrange")).toBe("Mid-range");
+    expect(reviewValue("staff", "3")).toBe("3 on shift");
+  });
+});
+
+/** The answers a founder gives in the guided flow, stored through updateProfile. */
+function completeProfile(): Profile {
+  const answers: Record<(typeof questionSteps)[number], string> = {
+    category: "Coffee shop",
+    concept: "Neighborhood coffee bar",
+    customers: "Remote workers",
+    city: "Houston",
+    areas: formatAreas({ favor: ["Montrose"], avoid: [], notes: "" }),
+    rent: "4550",
+    buildout: "80000",
+    price: "Midrange",
+    hours: "7am – 6pm",
+    staff: "2",
+    requirements: skipValues.requirements!,
+  };
+  return questionSteps.reduce((profile, key) => updateProfile(profile, key, answers[key]), initialSession.profile);
+}
+
+describe("completed onboarding", () => {
+  it("produces a saved intake session the map and comparison accept", () => {
+    const session = intakeSessionSchema.parse(JSON.parse(JSON.stringify({ ...initialSession, profile: completeProfile() })));
+    for (const key of questionSteps) expect(session.profile[key]?.origin).toBe("founder");
+    const result = profileFromIntake(session, "houston-coffee");
+    expect(result.reason).toBeNull();
+    expect(result.profile?.economics.monthlyRentCeilingCents.value).toBe(455000);
+    expect(result.profile?.category).toBe("coffee");
+    expect(result.profile?.objective).toContain("Favor Montrose");
+    expect(result.profile?.mustHaves.parking.value).toBe(false);
+  });
+
+  it("sends every guided answer as a founder patch to the live intake", () => {
+    const patch = patchFromForm(completeProfile(), [...questionSteps]);
+    expect(patch).toMatchObject({
+      concept: "Neighborhood coffee bar",
+      category: "coffee",
+      city: "Houston",
+      targetCustomers: ["Remote workers"],
+      operatingHours: { openMinute: 420, closeMinute: 1080 },
+      economics: { monthlyRentCeilingCents: { value: 455000 }, priceTier: { value: "mid" } },
+    });
+  });
+});

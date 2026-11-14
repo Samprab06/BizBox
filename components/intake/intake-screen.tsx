@@ -1,7 +1,10 @@
 "use client";
 
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { VoicePanel } from "@/components/voice/voice-panel";
+import { workspaceHref } from "@/lib/client/workspace-routes";
+import Link from "next/link";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { assumptionRows, formFromDraft, IntakeResponseSchema, patchFromForm } from "./live";
@@ -12,11 +15,19 @@ type Failure = { message: string; retry?: string };
 
 const subscribe = () => () => {};
 
-export function IntakeScreen({ projectId }: { projectId: string }) {
+/** HAC-127: the guided BizBox onboarding is the default; `?mode=form` opens every field at once. */
+export type IntakeMode = "guided" | "form";
+
+export function intakeHref(projectId: string, mode: IntakeMode, siteId?: string) {
+  const base = workspaceHref(projectId, "intake", siteId);
+  return mode === "form" ? `${base}${base.includes("?") ? "&" : "?"}mode=form` : base;
+}
+
+export function IntakeScreen({ projectId, mode = "guided", siteId }: { projectId: string; mode?: IntakeMode; siteId?: string }) {
   const key = `sitework:intake:v1:${projectId}`;
   const ready = useSyncExternalStore(subscribe, () => true, () => false);
   if (!ready) return <p role="status">Loading intake…</p>;
-  return <IntakeForm key={key} storageKey={key} projectId={projectId} />;
+  return <IntakeForm key={key} storageKey={key} projectId={projectId} mode={mode} siteId={siteId} />;
 }
 
 function readSession(key: string): IntakeSession {
@@ -46,7 +57,7 @@ function useLiveIntake(projectId: string) {
   return live;
 }
 
-function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: string }) {
+function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: string; projectId: string; mode: IntakeMode; siteId?: string }) {
   const [session, setSession] = useState(() => readSession(storageKey));
   const [message, setMessage] = useState("");
   const [drafts, setDrafts] = useState<Partial<Record<Key, string>>>({});
@@ -184,10 +195,44 @@ function IntakeForm({ storageKey, projectId }: { storageKey: string; projectId: 
   };
 
   const assumptions = session.live ? assumptionRows(session.live.state.assumptions) : [];
+  const storageAlert = storageError && <p role="alert" className="mb-4 text-sm">This browser could not save your changes.</p>;
+
+  if (mode === "guided") {
+    /** HAC-127: a confirmed guided answer takes the same save path as a profile-field edit. */
+    const commit = (key: Key, value: string) => {
+      const current = latest.current;
+      const pending = live ? [...new Set([...(current.pending ?? []), key])] : current.pending;
+      save({ ...current, profile: updateProfile(current.profile, key, value), pending });
+      sync();
+    };
+    return (
+      <>
+        {storageAlert}
+        <OnboardingFlow
+          profile={session.profile}
+          onCommit={commit}
+          formHref={intakeHref(projectId, "form", siteId)}
+          mapHref={workspaceHref(projectId, "map", siteId)}
+          notice={failure && (
+            <div role="alert" className="mt-4 rounded-xl border border-white/25 bg-black/30 p-3 text-sm">
+              <p>{failure.message}</p>
+              {failure.retry !== undefined && (
+                <button type="button" className="mt-2 rounded-full border border-white/40 px-3 py-1" disabled={busy}
+                  onClick={() => void send(failure.retry || undefined, false)}>Retry</button>
+              )}
+            </div>
+          )}
+        />
+      </>
+    );
+  }
 
   return (
     <>
-      {storageError && <p role="alert" className="mb-4 text-sm">This browser could not save your changes.</p>}
+      {storageAlert}
+      <p className="mb-6 text-sm">
+        <Link className="font-semibold text-pine underline" href={intakeHref(projectId, "guided", siteId)}>Back to guided setup</Link>
+      </p>
       <div className="grid items-start gap-8 md:grid-cols-2">
         <section aria-labelledby="chat-heading">
           <h2 id="chat-heading" className="text-lg font-semibold">Intake conversation</h2>
