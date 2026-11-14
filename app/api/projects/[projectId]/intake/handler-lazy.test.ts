@@ -45,3 +45,29 @@ describe("intake without a loadable agent SDK", () => {
     expect(body.detail).toMatch(/Cannot find module/);
   });
 });
+
+describe("intake provider failure diagnostics", () => {
+  it("reports only the error class, HTTP status and provider code", async () => {
+    const failure = Object.assign(
+      new Error("Incorrect API key provided: sk-PRIVATE123456"),
+      {
+        name: "AuthenticationError",
+        status: 401,
+        code: "invalid_api_key",
+      },
+    );
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      runAgent: async () => {
+        throw failure;
+      },
+    });
+    const response = await handler(post({ message: "Coffee" }), context);
+    expect(response.status).toBe(503);
+    const text = await response.text();
+    expect(JSON.parse(text).detail).toBe(
+      "AuthenticationError HTTP 401 invalid_api_key",
+    );
+    expect(text).not.toContain("PRIVATE");
+  });
+});
