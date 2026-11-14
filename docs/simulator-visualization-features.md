@@ -1,5 +1,8 @@
 # Simulator visualization features
 
+The demo defaults to Balanced graphics; Detailed keeps the original rendering
+settings. See [performance controls and measured results](simulator-performance.md).
+
 | Feature | What it looks like | What it shows | Data source |
 | --- | --- | --- | --- |
 | Walkable catchment | Translucent 5- and 10-minute walking areas draped onto the neighborhood, with the café entrance pinned. | Which homes, workplaces, and transit stops can reach the door. Use a pedestrian network so the boundaries follow actual routes and crossings. | [Overture transportation data](https://docs.overturemaps.org/guides/transportation/) |

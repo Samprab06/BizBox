@@ -7,6 +7,7 @@ import { replayAt } from "../replay/replay-state";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
 import { glass } from "./glass";
+import type { RenderQuality } from "./render-policy";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
 const Scene = dynamic(() => import("./scene"), { ssr: false });
@@ -16,6 +17,7 @@ const usd = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 const speeds = [0.5, 1, 2, 4];
+const playbackFrameInterval = 1000 / 60;
 
 function clock(minute: number) {
   const total = Math.floor(minute) % 1440;
@@ -54,22 +56,47 @@ export function SimulatorDemo({
   const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
+  const [quality, setQuality] = useState<RenderQuality>("balanced");
   const running = playing && minute < end;
 
   useEffect(() => {
     if (!running) return;
     let previous = performance.now();
+    let committed = previous;
+    let accumulated = 0;
     let request = 0;
     function tick(now: number) {
+      if (document.hidden) return;
       const elapsed = Math.min(now - previous, 100);
       previous = now;
-      setMinute((value) =>
-        Math.min(end, value + (elapsed * speed) / (coordinates ? 55 : 125)),
-      );
+      accumulated += elapsed;
+      // Keep camera input independent of React/overlay updates on high-Hz displays.
+      if (now - committed >= playbackFrameInterval) {
+        const elapsedForFrame = accumulated;
+        accumulated = 0;
+        committed = now - ((now - committed) % playbackFrameInterval);
+        setMinute((value) =>
+          Math.min(
+            end,
+            value + (elapsedForFrame * speed) / (coordinates ? 55 : 125),
+          ),
+        );
+      }
       request = requestAnimationFrame(tick);
     }
-    request = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(request);
+    function resumeWhenVisible() {
+      cancelAnimationFrame(request);
+      previous = performance.now();
+      committed = previous;
+      accumulated = 0;
+      if (!document.hidden) request = requestAnimationFrame(tick);
+    }
+    resumeWhenVisible();
+    document.addEventListener("visibilitychange", resumeWhenVisible);
+    return () => {
+      cancelAnimationFrame(request);
+      document.removeEventListener("visibilitychange", resumeWhenVisible);
+    };
   }, [running, end, speed, coordinates]);
 
   const arrivals = replayAt(data[0].run.events, minute).arrivals;
@@ -85,7 +112,23 @@ export function SimulatorDemo({
   return (
     <div className="relative min-h-dvh bg-[#06080d] text-white antialiased">
       {coordinates ? (
-        <Neighborhood {...coordinates} minute={minute}>
+        <Neighborhood {...coordinates} minute={minute} quality={quality}>
+          <label
+            className={`${glass} absolute top-20 right-4 z-10 flex items-center gap-2 px-3 py-2 text-xs text-white/80`}
+          >
+            Graphics
+            <select
+              aria-label="Graphics quality"
+              value={quality}
+              onChange={(event) =>
+                setQuality(event.target.value as RenderQuality)
+              }
+              className="rounded-md bg-[#11141b] px-2 py-1 text-white outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <option value="balanced">Balanced</option>
+              <option value="detailed">Detailed</option>
+            </select>
+          </label>
           <Timeline
             label="Neighborhood timeline"
             className="absolute inset-x-4 bottom-8 z-10 sm:inset-x-auto sm:left-1/2 sm:w-[min(40rem,calc(100vw-3rem))] sm:-translate-x-1/2"
@@ -236,6 +279,7 @@ export function SimulatorDemo({
                   aria-label="Modeled block and café"
                 >
                   <Scene
+                    quality={quality}
                     run={run}
                     minute={minute}
                     cutaway={cutaway}
