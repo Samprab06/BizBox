@@ -57,10 +57,10 @@ describe.skipIf(!enabled)("durable Postgres consultant thread [local]", () => {
     const url = new URL(process.env.HAC83_TEST_DATABASE_URL!);
     if (
       !["localhost", "127.0.0.1"].includes(url.hostname) ||
-      !url.pathname.startsWith("/hac83_test_")
+      !/^\/hac(?:83|96)_test/.test(url.pathname)
     ) {
       throw new Error(
-        "Thread DB tests require a dedicated loopback hac83_test_ database",
+        "Thread DB tests require a dedicated loopback hac83_test/hac96_test database",
       );
     }
     admin = postgres(url.toString(), { max: 1, connect_timeout: 5 });
