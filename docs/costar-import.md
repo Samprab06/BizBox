@@ -56,3 +56,28 @@ An off-market lease observation is not proof of current availability.
 
 Hosted imports and Vercel previews require configured project credentials;
 offline checks do not demonstrate a successful hosted load or deployment.
+
+## Offline inventory, 2026-11-14
+
+The complete kit passed `--report-only`: 3,339 properties, 3,955 lease-space
+observations, 11,179 current tenancies and 242,934 attachment references.
+236 space observations reference group-listing buildings outside the full
+property dataset. Attachment references preserve their source locations rather
+than claiming every reference is a distinct image/model.
+
+Active Retail/OfficeRetail-use observations (advertised space SF):
+
+| City        | <1,000 | 1,000–2,499 | 2,500–4,999 | 5,000–9,999 | ≥10,000 | Total |
+| ----------- | -----: | ----------: | ----------: | ----------: | ------: | ----: |
+| Houston     |     14 |          68 |          41 |          19 |      14 |   156 |
+| Los Angeles |     33 |         177 |          77 |          54 |      12 |   353 |
+
+There are two additional off-market retail-use observations per city. Active
+spaces in retail/mixed-use-classified buildings number 68 in Houston and 17 in
+Los Angeles. These are supply observations, not confirmed business suitability
+or unique independently available suites (a space may appear in multiple listings).
+The counts and the recommendation to permit verified retail use in other
+building types were posted on HAC-6.
+
+No approved database connection was available during this implementation.
+Actual PostGIS load/reload/rollback and hosted preview acceptance remain pending.

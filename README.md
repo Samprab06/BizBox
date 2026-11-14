@@ -20,8 +20,8 @@ The output is a **ranking with ranges, never a sales forecast**. Every number re
 came from: `costar`, `public`, `founder` or `default`.
 
 **Demo flow:** Intake → Map of candidate spaces → Site detail → Comparison → Replay of a
-simulated day. Today the screens run on a fixture project, `houston-coffee`. The full design is
-in the mega doc, `final/MEGADOC.md`.
+simulated day. Today the screens run on a fixture project, `houston-coffee`. Current scope and
+acceptance criteria live in the team's Linear tickets.
 
 ## Stack
 
@@ -36,11 +36,11 @@ in the mega doc, `final/MEGADOC.md`.
 
 ### Prerequisites
 
-- **Node.js 20.9 or newer** (Next.js 16 needs it).
-- **pnpm 9**. The lockfile is pnpm 9 format. If you don't have it:
+- **Node.js 22 or 24**.
+- **pnpm 11.25.0**, matching `packageManager` in `package.json`. If you don't have it:
 
   ```bash
-  npm install -g pnpm@9
+  npm install -g pnpm@11.25.0
   ```
 
 ### Install and run
@@ -74,16 +74,23 @@ Put values in `.env.local`. It's gitignored; never commit secrets. `.env.example
 
 | Variable | Used by | Needed for |
 |---|---|---|
+| `DATABASE_URL` | Server-only database client and Drizzle | A Postgres database with PostGIS. Required for database health and migrations. |
 | `JEV_API_KEY` | `lib/panel/jev-client.ts` | Live calls to the Jev customer panel. Without it, the panel runs on recorded responses and the live test is skipped. |
 | `JEV_BASE_URL` | `lib/panel/jev-client.ts` | The Jev endpoint (to be confirmed in HAC-14). |
 
-The app and the full test suite run with neither set.
+The fixture screens, offline tests and production build run without these credentials.
+The optional live Jev test needs its configured endpoint and API key. Model-provider and
+Census variables in `.env.example` are reserved for later integrations.
 
 ### Database
 
-**There's no database step yet.** The current app runs entirely on fixtures. The Postgres
-schema, Drizzle migrations and the `DATABASE_URL` variable arrive with HAC-9 (app foundation);
-this section will then gain the setup command.
+The fixture screens run without a database. The Drizzle schema and initial PostGIS migration
+are included. Set `DATABASE_URL` to an approved development database, then run
+`pnpm db:migrate` to apply migrations. `pnpm db:generate` generates a migration after schema
+changes. Migrations change the target database; confirm the target before running them.
+
+`GET /api/health` checks database and PostGIS readiness and returns 503 when they are unavailable.
+Hosted Neon setup and Vercel deployment still require configuration and verification.
 
 ## Scripts
 
@@ -92,7 +99,7 @@ this section will then gain the setup command.
 | `pnpm dev` | Starts the Next.js dev server with hot reload, on port 3000 by default. |
 | `pnpm lint` | Runs ESLint over the repo with the Next.js config (`eslint.config.mjs`). |
 | `pnpm typecheck` | Generates Next.js route types (`next typegen`), then type-checks everything with `tsc --noEmit`. |
-| `pnpm test` | Runs every Vitest test (`*.test.ts`) once. All of them run offline. |
+| `pnpm test` | Runs Vitest once. Tests run offline by default; the optional live Jev test is skipped without its configuration. |
 | `pnpm build` | Builds the production app, the same build Vercel runs. |
 | `pnpm start` | Serves the production build from `pnpm build`. |
 
@@ -104,15 +111,17 @@ Every PR must pass `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
 app/                  Next.js routes (App Router)
   (pages)/projects/[projectId]/
                       intake, map, sites/[siteId], comparison, replay screens
-  api/                route handlers (not yet created; the API lands with later tickets)
+  api/health/         database and PostGIS readiness route
 components/           React components (intake screen, workspace view)
 lib/
   contracts/          shared Zod schemas for requests and responses
+  db/                 server-only database client and Drizzle schema
   sim/                queue engine, monthly economics, the shared seeded RNG (random.ts)
   demand/             demand model: Jev behaviour table or Huff fallback, then seeded arrivals
   panel/              persona builder and the Jev customer panel client
   client/             browser-side API client and workspace routes
-final/                the project mega doc (MEGADOC.md)
+fixtures/             synthetic contract fixtures
+drizzle/              generated database migrations
 AGENTS.md             rules for every contributor, human or agent
 ```
 

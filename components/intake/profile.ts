@@ -20,7 +20,7 @@ const fieldKey = z.enum([fields[0].key, ...fields.slice(1).map((field) => field.
 const answerSchema = z.object({ value: z.string(), origin: z.enum(["default", "founder"]) });
 
 export const intakeSessionSchema = z.object({
-  profile: z.record(fieldKey, answerSchema),
+  profile: z.partialRecord(fieldKey, answerSchema),
   messages: z.array(z.object({ role: z.enum(["founder", "agent"]), text: z.string() })),
 });
 
