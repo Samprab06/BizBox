@@ -145,7 +145,7 @@ it("projects actual customer/employee dots and proposed counters through the ifr
     root.children.filter((child) => child.userData.role === "proposed-counter"),
   ).toHaveLength(2);
   const employee = employees[1] as Three.Group;
-  expect(employee.position.x).toBe(replay.frame.employees[1].x);
+  expect(employee.position.x * placement.scale).toBe(1.1);
   const dot = employee.children[0] as Three.Mesh<
     Three.SphereGeometry,
     Three.MeshMatcapMaterial
@@ -274,4 +274,54 @@ it("cancels a component that never initializes without leaving its SDK object", 
   controller.abort();
   await expect(result).rejects.toThrow("cancelled");
   expect(fake.object.stop).toHaveBeenCalledOnce();
+});
+
+it("renders 0.8m spheres resting on the floor independently of placement scale", async () => {
+  for (const scale of [0.5, 1]) {
+    const fake = fakeSdk();
+    const { run } = makeDemo()[1];
+    const currentPlacement = { ...placement, scale };
+    const session = await attachReplayScene(
+      fake.sdk,
+      currentPlacement,
+      { frame: interiorFrame(run, 504, 2), selected: "", stationCount: 2 },
+      () => {},
+    );
+    const root = fake.component.outputs.objectRoot!;
+    root.updateMatrixWorld(true);
+    for (const person of root.children.filter(
+      (child) =>
+        child.userData.role === "customer" ||
+        child.userData.role === "employee",
+    )) {
+      const sphere = person.children[0] as Three.Mesh<Three.SphereGeometry>;
+      sphere.geometry.computeBoundingSphere();
+      const radius =
+        sphere.geometry.boundingSphere!.radius *
+        sphere.getWorldScale(new Three.Vector3()).x;
+      expect(radius * 2).toBeCloseTo(0.8, 6);
+      expect(
+        sphere.getWorldPosition(new Three.Vector3()).y - radius,
+      ).toBeCloseTo(currentPlacement.origin.y, 6);
+    }
+    const standing = root.children.filter(
+      (child) =>
+        child.userData.role === "employee" ||
+        child.userData.state === "waiting" ||
+        child.userData.state === "serving",
+    );
+    standing.forEach((person, index) => {
+      const position = person.getWorldPosition(new Three.Vector3());
+      for (const other of standing.slice(index + 1))
+        expect(
+          position.distanceTo(other.getWorldPosition(new Three.Vector3())),
+        ).toBeGreaterThanOrEqual(2 - 1e-6);
+    });
+    expect(root.scale.x).toBe(scale);
+    const counter = root.children.find(
+      (child) => child.userData.role === "proposed-counter",
+    )!;
+    expect(counter.getWorldScale(new Three.Vector3()).x).toBe(scale);
+    session.dispose();
+  }
 });

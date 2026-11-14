@@ -1,6 +1,6 @@
 import type * as Three from "three";
 import type { interiorFrame } from "../simulator/interior-state";
-import { stationPosition } from "../simulator/interior-state";
+import { scanLayout } from "./scan-layout";
 
 export type ScanPlacement = {
   origin: { x: number; y: number; z: number };
@@ -90,10 +90,10 @@ export class ReplayComponent {
     const THREE = this.context.three;
     this.textures = markerTextures(THREE);
     this.geometries = [
-      new THREE.SphereGeometry(0.3, 24, 16),
-      new THREE.TorusGeometry(0.37, 0.025, 5, 24),
+      new THREE.SphereGeometry(0.4, 24, 16),
+      new THREE.TorusGeometry(0.52, 0.025, 5, 24),
       new THREE.BoxGeometry(2.1, 0.06, 0.8),
-      new THREE.PlaneGeometry(0.88, 0.88),
+      new THREE.PlaneGeometry(1.12, 1.12),
     ];
     this.materials = [
       new THREE.MeshMatcapMaterial({
@@ -138,14 +138,8 @@ export class ReplayComponent {
     );
     root.rotation.y = placement.rotationY;
     root.scale.setScalar(placement.scale);
-    const desired = [
-      ...replay.frame.customers.map((dot) => ({ ...dot, role: "customer" })),
-      ...replay.frame.employees.map((dot) => ({
-        ...dot,
-        state: "staffing",
-        role: "employee",
-      })),
-    ];
+    const layout = scanLayout(replay.frame, replay.stationCount);
+    const desired = layout.people;
     const ids = new Set(desired.map((dot) => dot.id));
     for (const [id, group] of this.dots)
       if (!ids.has(id)) {
@@ -164,18 +158,24 @@ export class ReplayComponent {
         );
         const outline = new THREE.Mesh(this.geometries[1], this.materials[2]);
         outline.rotation.x = -Math.PI / 2;
-        outline.position.y = -0.28;
+        outline.position.y = -0.38;
         group.add(outline);
         const shadow = new THREE.Mesh(this.geometries[3], this.materials[4]);
         shadow.userData.role = "contact-shadow";
         shadow.rotation.x = -Math.PI / 2;
-        shadow.position.y = -0.325;
+        shadow.position.y = -0.385;
         group.add(shadow);
         this.dots.set(dot.id, group);
         root.add(group);
       }
       group.userData = { id: dot.id, role: dot.role, state: dot.state };
-      group.position.set(dot.x, 0.34, dot.z);
+      // People use metre-sized glyphs even when the proposed counter root is scaled.
+      group.scale.setScalar(1 / placement.scale);
+      group.position.set(
+        dot.x / placement.scale,
+        0.4 / placement.scale,
+        dot.z / placement.scale,
+      );
       group.children[1].visible =
         dot.role === "employee" || dot.id === replay.selected;
       group.children[1].scale.setScalar(dot.id === replay.selected ? 1.35 : 1);
@@ -190,9 +190,9 @@ export class ReplayComponent {
     }
     this.counters.forEach((counter, index) =>
       counter.position.set(
-        stationPosition(index, replay.stationCount),
+        layout.stations[index].x / placement.scale,
         0.04,
-        -1.55,
+        layout.stations[index].z / placement.scale,
       ),
     );
   }
