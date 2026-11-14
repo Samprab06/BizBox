@@ -94,6 +94,7 @@ export default function Neighborhood({
       )?.id ?? "",
   );
   const [agentsVisible, setAgentsVisible] = useState(true);
+  const [layersOpen, setLayersOpen] = useState(false);
   const agentsVisibleRef = useRef(agentsVisible);
   useEffect(() => {
     agentsRef.current = agents;
@@ -774,11 +775,32 @@ export default function Neighborhood({
         </div>
       )}
 
+      {/* HAC-77: on phones the layer panel is a bottom sheet behind a Layers button. */}
+      <button
+        type="button"
+        aria-expanded={layersOpen}
+        aria-controls="city-layers"
+        onClick={() => setLayersOpen(true)}
+        className={`absolute top-16 left-3 z-10 rounded-lg border border-white/15 bg-viewport-surface px-3 py-1.5 text-xs font-medium text-viewport-ink sm:hidden ${layersOpen ? "hidden" : ""}`}
+      >
+        Layers
+      </button>
       <GlassControl
+        id="city-layers"
         over="viewport"
         aria-label="Illustrative neighborhood overlays"
-        className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
+        className={`absolute inset-x-0 bottom-0 z-20 max-h-[70%] overflow-y-auto !rounded-b-none !p-3 sm:inset-x-auto sm:top-20 sm:bottom-auto sm:left-3 sm:z-10 sm:block sm:max-h-[calc(100%-6rem)] sm:w-[11.5rem] sm:!rounded-b-[var(--radius-card)] ${layersOpen ? "block" : "hidden"}`}
       >
+        <div className="mb-3 flex items-center justify-between sm:hidden">
+          <span className="text-sm font-semibold">Layers</span>
+          <button
+            type="button"
+            onClick={() => setLayersOpen(false)}
+            className="rounded-lg border border-white/15 px-3 py-1 text-xs font-medium"
+          >
+            Close
+          </button>
+        </div>
         {agents && (
           <div className="mb-4">
             <div className="flex items-center justify-between">

@@ -139,3 +139,59 @@ test("unavailable WebGL keeps the neighborhood fallback and Retry inside the wor
   ).toBeAttached();
   expect(errors).toEqual([]);
 });
+
+// HAC-77: on a phone the city's layer panel collapses into a bottom sheet.
+test("city layers collapse into a bottom sheet at 375 px and stay a side panel on desktop", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.E2E_SIMULATOR_CITY !== "1",
+    "Run against a local server with a dummy VEXCEL_API_KEY to exercise the city branch; imagery is intercepted offline.",
+  );
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/projects/houston-coffee/simulator");
+  const city = page.locator("#neighborhood");
+  await city.scrollIntoViewIfNeeded();
+  const layers = page.getByRole("button", { name: "Layers", exact: true });
+  const panel = page.getByRole("group", {
+    name: "Illustrative neighborhood overlays",
+  });
+  await expect(layers).toBeVisible();
+  await expect(panel).toBeHidden();
+
+  await layers.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeVisible();
+  await expect(layers).toBeHidden();
+  await expect(
+    panel.getByText("Modeled arrivals", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByText(
+      /Assumed walking approach along the street; not observed traffic/,
+    ),
+  ).toBeVisible();
+  const sheet = (await panel.boundingBox())!;
+  const frame = (await city.boundingBox())!;
+  expect(Math.round(sheet.width)).toBe(Math.round(frame.width));
+  expect(Math.round(sheet.y + sheet.height)).toBe(
+    Math.round(frame.y + frame.height),
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    375,
+  );
+
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toBeHidden();
+  await expect(layers).toBeVisible();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(panel).toBeVisible();
+  await expect(layers).toBeHidden();
+  await expect(panel.getByRole("button", { name: "Close" })).toBeHidden();
+  const places = page.getByRole("combobox", { name: "Places" });
+  await expect(places.locator("option")).toHaveText([
+    "Montrose storefront",
+    "Heights storefront",
+  ]);
+});
