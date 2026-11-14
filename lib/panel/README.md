@@ -4,17 +4,21 @@ Catchment → `buildPersonas` → `PersonaSet` → `runPanel` / `runPanelForSite
 option orders per persona × site, cached) → one `BehaviorTable` per site, consumed by the demand
 model (HAC-18).
 
-| File | What it does |
-|---|---|
-| `contracts.ts` | Interim Zod schemas (`Persona`, `PersonaSet`, `PersonaBehavior`, `BehaviorTable`, catchment input). Move to `lib/contracts/` when HAC-9 lands. |
-| `personas.ts` | 30–100 personas by code from block groups, LODES jobs and pass-by counts. Seeded by catchment id. Integer weights that sum exactly to population, jobs and pass-by per kind. |
-| `state.ts` | Code-built Jev state and questions. Only structured fields are read; ids must be snake_case. |
-| `jev-client.ts` | REST client: concurrency limit, timeout, retry with backoff. The **assumed wire format is isolated in one section** of this file. |
-| `cache.ts` | `JevCache` interface, `MemoryJevCache`, SHA-256 cache key over model + state + questions. |
-| `panel.ts` | Runs the panel, writes each answer to the cache as it arrives, averages orders, reports spread and failed personas. |
+| File            | What it does                                                                                                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contracts.ts`  | Interim Zod schemas (`Persona`, `PersonaSet`, `PersonaBehavior`, `BehaviorTable`, catchment input). Move to `lib/contracts/` when HAC-9 lands.                               |
+| `personas.ts`   | 30–100 personas by code from block groups, LODES jobs and pass-by counts. Seeded by catchment id. Integer weights that sum exactly to population, jobs and pass-by per kind. |
+| `state.ts`      | Code-built Jev state and questions. Only structured fields are read; ids must be snake_case.                                                                                 |
+| `jev-client.ts` | REST client: concurrency limit, timeout, retry with backoff. The **assumed wire format is isolated in one section** of this file.                                            |
+| `cache.ts`      | `JevCache` interface, `MemoryJevCache`, SHA-256 cache key over model + state + questions.                                                                                    |
+| `panel.ts`      | Runs the panel, writes each answer to the cache as it arrives, averages orders, reports spread and failed personas.                                                          |
 
-Env: `JEV_API_KEY`, `JEV_BASE_URL` (endpoint to be confirmed in HAC-14). The live test in
-`jev-client.test.ts` runs only when `JEV_API_KEY` is set.
+Env: `JEV_API_KEY` (required for live calls), `JEV_BASE_URL` (default `https://api.typesafe.ai`),
+`JEV_MODEL` (default `jev-latest`). Requests go to `POST /v1/systemone` in TypeSafe's documented
+format ([API reference](https://docs.typesafe.ai/api/system-one.md),
+[OpenAPI](https://api.typesafe.ai/openapi.json)). Behavior tables record the version Jev answered
+with (for example `jev-1.14.0`). Noul answers carry no confidence, so `|2p - 1|` stands in for it.
+The live test in `jev-client.test.ts` runs only when `JEV_API_KEY` is set.
 
 ## Proposed `jev_cache` table (for `lib/db/schema.ts`, HAC-9)
 

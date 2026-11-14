@@ -115,14 +115,34 @@ describe("catchment route boundary", () => {
     expect(response.status).toBe(400);
     expect(getter).not.toHaveBeenCalled();
   });
-  it("rejects malformed site IDs before touching data", async () => {
-    const getter = vi.fn();
-    expect(
-      (await createCatchmentHandler(getter)(request(), context("123;DROP")))
-        .status,
-    ).toBe(400);
-    expect(getter).not.toHaveBeenCalled();
-  });
+  it.each(["123;DROP", "12%253A34", "%ZZ", "12%2F34"])(
+    "rejects malformed site IDs before touching data: %s",
+    async (id) => {
+      const getter = vi.fn();
+      expect(
+        (await createCatchmentHandler(getter)(request(), context(id))).status,
+      ).toBe(400);
+      expect(getter).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["12%3A34", "12%3a34"])(
+    "decodes URL-encoded canonical space IDs exactly once: %s",
+    async (id) => {
+      const getter = vi.fn(async () => {
+        throw new CatchmentNotFoundError();
+      }) as unknown as typeof getCatchment;
+      const response = await createCatchmentHandler(getter)(
+        request(),
+        context(id),
+      );
+      expect(response.status).toBe(404);
+      expect(getter).toHaveBeenCalledWith(
+        "12:34",
+        expect.objectContaining({ projectId: "demo" }),
+        "default",
+      );
+    },
+  );
   it.each([
     [new CatchmentNotFoundError("private identifier"), 404],
     [new CatchmentDataUnavailableError("private source details"), 503],

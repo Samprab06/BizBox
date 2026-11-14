@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
@@ -21,6 +21,7 @@ import {
   type PublicSource,
   type RawRow,
 } from "../lib/data/public";
+import { prepareAcsSummary } from "./acs-summary";
 import { publicBlockGroups, publicJobs } from "../lib/db/public-schema";
 import {
   downloadCached,
@@ -205,7 +206,8 @@ async function overtureForMetro(metro: string, bounds: Bounds, cache: string) {
     };
   await mkdir(cache, { recursive: true });
   const partial = `${path}.${process.pid}.part`;
-  const query = `INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';
+  const query = `SET memory_limit='1GB'; SET threads=2;
+    INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';
     COPY (SELECT id,names,taxonomy,basic_category,confidence,operating_status,sources,
       ST_AsGeoJSON(geometry)::JSON AS geometry
       FROM read_parquet(${literal(PLACES)},hive_partitioning=true)
@@ -240,10 +242,38 @@ async function overtureForMetro(metro: string, bounds: Bounds, cache: string) {
 /** Local preparation only. Deployed route handlers must query Postgres instead. */
 export async function fetchPublicData(options: {
   cache?: string;
-  censusKey: string;
+  censusKey?: string;
+  acsSource?: "api" | "summary";
+  censusOnly?: boolean;
   databaseUrl?: string;
+  /** Rows per INSERT. Defaults suit local Postgres; small hosted computes need fewer. */
+  batchSizes?: { blockGroups?: number; jobs?: number; places?: number };
 }) {
+  const bgBatch = options.batchSizes?.blockGroups ?? 100;
+  const jobsBatch = options.batchSizes?.jobs ?? 500;
+  const placesBatch = options.batchSizes?.places ?? 500;
+  if (options.censusOnly && options.databaseUrl)
+    throw new Error(
+      "Census-only preparation cannot replace database source tables",
+    );
+  const acsSource = options.acsSource ?? "api";
+  if (acsSource === "api" && !options.censusKey)
+    throw new Error(
+      "CENSUS_API_KEY is required for API mode; use --acs-summary for keyless downloads",
+    );
   const cache = resolve(options.cache ?? "data/public");
+  const summaryRows =
+    acsSource === "summary"
+      ? await prepareAcsSummary(
+          cache,
+          VINTAGE.acs,
+          METROS.flatMap((m) => [...m.counties]),
+        )
+      : undefined;
+  const countyCounts: Record<
+    string,
+    { blockGroups: number; geometryBlockGroups: number }
+  > = {};
   const acsRows: {
     row: ReturnType<typeof normalizeAcs>[number];
     geometry: GeometryObservation;
@@ -260,17 +290,24 @@ export async function fetchPublicData(options: {
   for (const metro of METROS) {
     const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
     for (const county of metro.counties) {
-      const url = censusUrl(county);
-      const sourceUrl = url.href;
-      url.searchParams.set("key", options.censusKey);
-      const path = resolve(cache, `acs-${VINTAGE.acs}-${county}.json`);
-      const manifest = await downloadCached(path, url.href, sourceUrl);
-      const rows = normalizeAcs(
-        JSON.parse(await readFile(path, "utf8")),
-        observation("ACS 5-year detailed tables", VINTAGE.acs, manifest),
-      );
+      let rows = summaryRows?.get(county);
+      if (!rows) {
+        const url = censusUrl(county);
+        const sourceUrl = url.href;
+        url.searchParams.set("key", options.censusKey!);
+        const path = resolve(cache, `acs-${VINTAGE.acs}-${county}.json`);
+        const manifest = await downloadCached(path, url.href, sourceUrl);
+        rows = normalizeAcs(
+          JSON.parse(await readFile(path, "utf8")),
+          observation("ACS 5-year detailed tables", VINTAGE.acs, manifest),
+        );
+      }
       if (!rows.length) throw new Error("ACS returned no block groups");
       const geometry = await geometryForCounty(county, cache);
+      countyCounts[county] = {
+        blockGroups: rows.length,
+        geometryBlockGroups: geometry.geometries.size,
+      };
       bounds[0] = Math.min(bounds[0], geometry.bounds[0]);
       bounds[1] = Math.min(bounds[1], geometry.bounds[1]);
       bounds[2] = Math.max(bounds[2], geometry.bounds[2]);
@@ -282,6 +319,7 @@ export async function fetchPublicData(options: {
         acsRows.push({ row, geometry: shape });
       }
     }
+    if (options.censusOnly) continue;
     const xwalkUrl = `${LODES}/${metro.abbr}/${metro.abbr}_xwalk.csv.gz`;
     const wacUrl = `${LODES}/${metro.abbr}/wac/${metro.abbr}_wac_S000_JT00_${VINTAGE.lodes}.csv.gz`;
     const xwalk = resolve(cache, `${metro.abbr}_xwalk.csv.gz`);
@@ -308,6 +346,22 @@ export async function fetchPublicData(options: {
       ),
     });
     placeFiles.push(await overtureForMetro(metro.id, bounds, cache));
+  }
+  if (options.censusOnly) {
+    const report = {
+      mode: "census-download-only",
+      acsSource,
+      vintage: VINTAGE.acs,
+      blockGroups: acsRows.length,
+      counties: countyCounts,
+      geometryMatched: acsRows.length,
+      databaseVerified: false,
+    };
+    await writeFile(
+      resolve(cache, "census-preparation.json"),
+      JSON.stringify(report, null, 2),
+    );
+    return report;
   }
   // Keep notices and license texts beside converted provider data. Filtering and
   // GeoJSON conversion are our modifications, not upstream endorsements.
@@ -350,9 +404,9 @@ export async function fetchPublicData(options: {
       await tx.execute(
         sql`TRUNCATE public_places, public_jobs, public_block_groups`,
       );
-      for (let offset = 0; offset < acsRows.length; offset += 100) {
+      for (let offset = 0; offset < acsRows.length; offset += bgBatch) {
         const batch = acsRows
-          .slice(offset, offset + 100)
+          .slice(offset, offset + bgBatch)
           .map(({ row, geometry }) => ({
             ...row,
             geom: sql`ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry.geometry)}),4326))`,
@@ -399,7 +453,7 @@ export async function fetchPublicData(options: {
             },
           });
           counts.jobBlocks++;
-          if (batch.length >= 500) {
+          if (batch.length >= jobsBatch) {
             await tx.insert(publicJobs).values(batch);
             batch.length = 0;
           }
@@ -442,7 +496,7 @@ export async function fetchPublicData(options: {
             const place = normalizePlace(JSON.parse(line) as Json, file.source);
             if (!place) continue;
             batch.push(place);
-            if (batch.length >= 500) await flushPlaces();
+            if (batch.length >= placesBatch) await flushPlaces();
           }
           await flushPlaces();
           requireSourceCoverage(previousPlaces, counts.places, file.path);
@@ -464,17 +518,22 @@ if (
 ) {
   config({ path: [".env.local", ".env"], quiet: true });
   const downloadOnly = process.argv.includes("--download-only");
+  const acsSource = process.argv.includes("--acs-summary") ? "summary" : "api";
+  const censusOnly = process.argv.includes("--census-only");
   if (
-    !process.env.CENSUS_API_KEY ||
+    (acsSource === "api" && !process.env.CENSUS_API_KEY) ||
+    (censusOnly && !downloadOnly) ||
     (!downloadOnly && !process.env.DATABASE_URL)
   ) {
     console.error(
-      "CENSUS_API_KEY and an approved DATABASE_URL are required (--download-only omits the database requirement).",
+      "API mode requires CENSUS_API_KEY; --acs-summary uses keyless files. An approved DATABASE_URL is required unless --download-only is set. --census-only requires --download-only.",
     );
     process.exitCode = 1;
   } else
     fetchPublicData({
       censusKey: process.env.CENSUS_API_KEY,
+      acsSource,
+      censusOnly,
       databaseUrl: downloadOnly ? undefined : process.env.DATABASE_URL,
     })
       .then((result) => console.log(JSON.stringify(result, null, 2)))

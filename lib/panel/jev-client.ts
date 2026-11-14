@@ -1,14 +1,17 @@
 /**
- * Jev REST client.
+ * Jev REST client for TypeSafe's System One API.
  *
- * The REST endpoint is not confirmed yet (HAC-14). Everything that depends on the wire
- * format lives in the "Wire format" section below (`toWireRequest`, `WireResponseSchema`,
- * `fromWireResponse`, `JEV_PATH`). The rest of the panel only sees `JevAskRequest` and
- * `JevAskResult`, so a change to the real API touches this section alone.
+ * API: POST https://api.typesafe.ai/v1/systemone with `Authorization: Bearer <key>`.
+ * Sources: https://docs.typesafe.ai/api/system-one.md and https://api.typesafe.ai/openapi.json
+ * (HAC-54). Everything that depends on the wire format lives in the "Wire format" section
+ * (`toWireRequest`, `WireResponseSchema`, `fromWireResponse`, `JEV_PATH`). The rest of the
+ * panel only sees `JevAskRequest` and `JevAskResult`.
  */
 import { z } from "zod";
 
-export const JEV_MODEL_VERSION = "jev-1.14.0";
+/** Model requested from System One. `GET /v1/models` lists `jev-latest` and `jev-preview`. */
+export const JEV_MODEL_VERSION = "jev-latest";
+export const DEFAULT_JEV_BASE_URL = "https://api.typesafe.ai";
 
 // ---------------------------------------------------------------------------
 // Panel-facing types (stable)
@@ -50,84 +53,94 @@ export interface JevClient {
 }
 
 // ---------------------------------------------------------------------------
-// Wire format (assumed; replace when HAC-14 confirms the API)
+// Wire format: TypeSafe System One
 // ---------------------------------------------------------------------------
 //
-// POST {baseUrl}/v1/decide
+// POST {baseUrl}/v1/systemone
 // Authorization: Bearer <JEV_API_KEY>
 // {
-//   "model": "jev-1.14.0",
-//   "state": { ... },
-//   "questions": [
-//     { "name": "where", "type": "Choice", "prompt": "...", "options": [{ "id": "site_a", "label": "site_a" }, ...] },
-//     { "name": "how_often", "type": "Score", "prompt": "...", "rubric": [{ "id": "never", "label": "never" }, ...] },
-//     { "name": "stay_at_queue_4", "type": "Noul", "prompt": "..." }
-//   ]
+//   "model": "jev-latest",
+//   "state": { ...JevState },
+//   "questions": {
+//     "where":     { "type": "choice", "instructions": "...", "criteria": { "site_a": "site_a", "none": "None of these" } },
+//     "how_often": { "type": "score",  "instructions": "...", "criteria": ["Never", "About once a month", ...] },
+//     "stay_at_queue_4": { "type": "noul", "instructions": "..." }
+//   }
 // }
 // 200 ->
 // {
 //   "model": "jev-1.14.0",
-//   "answers": [
-//     { "name": "where", "type": "Choice", "choice": "site_a", "probabilities": { "site_a": 0.6, ... }, "confidence": 0.82 },
-//     { "name": "how_often", "type": "Score", "level": "weekly", "probabilities": { "never": 0.05, ... }, "confidence": 0.7 },
-//     { "name": "stay_at_queue_4", "type": "Noul", "p_yes": 0.64, "confidence": 0.6 }
-//   ]
+//   "answers": {
+//     "where":     { "type": "choice", "choice": "site_a", "confidence": 0.82, "probabilities": { "site_a": 0.6, ... } },
+//     "how_often": { "type": "score", "score": 2.1, "confidence": 0.7, "legend": { "0": "...", ... }, "probabilities": { "0": 0.05, ... } },
+//     "stay_at_queue_4": { "type": "noul", "noul": 0.64 }
+//   },
+//   "usage": { "input_tokens": 640, "output_tokens": 0 }
 // }
+//
+// Choice criteria keep the panel's (shuffled) option order: JSON object key order is preserved.
+// Score levels are the criteria array; answers key them by index ("0", "1", ...), mapped back to
+// level ids here. Noul answers carry no confidence; |2p - 1| stands in for it (0 at p = 0.5).
 
-export const JEV_PATH = "/v1/decide";
+export const JEV_PATH = "/v1/systemone";
 
 export function toWireRequest(modelVersion: string, req: JevAskRequest): unknown {
-  return {
-    model: modelVersion,
-    state: req.state,
-    questions: req.questions.map((q) => {
-      if (q.type === "choice") return { name: q.name, type: "Choice", prompt: q.prompt, options: q.options };
-      if (q.type === "score") return { name: q.name, type: "Score", prompt: q.prompt, rubric: q.levels };
-      return { name: q.name, type: "Noul", prompt: q.prompt };
-    }),
-  };
+  const questions: Record<string, unknown> = {};
+  for (const q of req.questions) {
+    if (q.type === "choice")
+      questions[q.name] = {
+        type: "choice",
+        instructions: q.prompt,
+        criteria: Object.fromEntries(q.options.map((o) => [o.id, o.label])),
+      };
+    else if (q.type === "score")
+      questions[q.name] = { type: "score", instructions: q.prompt, criteria: q.levels.map((l) => l.label) };
+    else questions[q.name] = { type: "noul", instructions: q.prompt };
+  }
+  return { model: modelVersion, state: req.state, questions };
 }
 
 const ProbabilityMap = z.record(z.string(), z.number().min(0).max(1));
 const WireAnswerSchema = z.discriminatedUnion("type", [
   z.object({
-    name: z.string(),
-    type: z.literal("Choice"),
+    type: z.literal("choice"),
     choice: z.string(),
-    probabilities: ProbabilityMap,
     confidence: z.number().min(0).max(1),
+    probabilities: ProbabilityMap,
   }),
   z.object({
-    name: z.string(),
-    type: z.literal("Score"),
-    level: z.string(),
+    type: z.literal("score"),
+    score: z.number(),
+    confidence: z.number().min(0).max(1),
+    legend: z.record(z.string(), z.unknown()).optional(),
     probabilities: ProbabilityMap,
-    confidence: z.number().min(0).max(1),
   }),
-  z.object({
-    name: z.string(),
-    type: z.literal("Noul"),
-    p_yes: z.number().min(0).max(1),
-    confidence: z.number().min(0).max(1),
-  }),
+  z.object({ type: z.literal("noul"), noul: z.number().min(0).max(1) }),
 ]);
 export const WireResponseSchema = z.object({
   model: z.string(),
-  answers: z.array(WireAnswerSchema),
+  answers: z.record(z.string(), WireAnswerSchema),
+  usage: z.object({ input_tokens: z.number(), output_tokens: z.number() }).partial().optional(),
 });
 export type WireResponse = z.infer<typeof WireResponseSchema>;
 
 export function fromWireResponse(raw: unknown, req: JevAskRequest): JevAskResult {
   const parsed = WireResponseSchema.parse(raw);
   const answers: Record<string, JevAnswer> = {};
-  for (const a of parsed.answers) {
-    answers[a.name] =
-      a.type === "Noul"
-        ? { probabilities: { yes: a.p_yes, no: 1 - a.p_yes }, confidence: a.confidence }
-        : { probabilities: a.probabilities, confidence: a.confidence };
-  }
   for (const q of req.questions) {
-    if (!answers[q.name]) throw new JevError(`Jev response is missing question "${q.name}"`, false);
+    const a = parsed.answers[q.name];
+    if (!a) throw new JevError(`Jev response is missing question "${q.name}"`, false);
+    if (a.type !== q.type) throw new JevError(`Jev answered "${q.name}" as ${a.type}, expected ${q.type}`, false);
+    if (a.type === "noul") {
+      answers[q.name] = { probabilities: { yes: a.noul, no: 1 - a.noul }, confidence: Math.abs(2 * a.noul - 1) };
+    } else if (a.type === "score" && q.type === "score") {
+      answers[q.name] = {
+        probabilities: Object.fromEntries(q.levels.map((l, i) => [l.id, a.probabilities[String(i)] ?? 0])),
+        confidence: a.confidence,
+      };
+    } else if (a.type === "choice") {
+      answers[q.name] = { probabilities: a.probabilities, confidence: a.confidence };
+    }
   }
   return { modelVersion: parsed.model, answers };
 }
@@ -225,16 +238,16 @@ export function createJevClient(opts: JevHttpClientOptions): JevClient {
   };
 }
 
-/** Client from environment: JEV_API_KEY and JEV_BASE_URL. */
+/** Client from environment: JEV_API_KEY (required), JEV_BASE_URL and JEV_MODEL (optional). */
 export function createJevClientFromEnv(
   env: Record<string, string | undefined> = process.env,
   overrides: Partial<JevHttpClientOptions> = {},
 ): JevClient {
-  const apiKey = env.JEV_API_KEY;
-  const baseUrl = env.JEV_BASE_URL;
+  const apiKey = env.JEV_API_KEY?.trim();
   if (!apiKey) throw new Error("JEV_API_KEY is not set");
-  if (!baseUrl) throw new Error("JEV_BASE_URL is not set (endpoint to be confirmed in HAC-14)");
-  return createJevClient({ baseUrl, apiKey, ...overrides });
+  const baseUrl = env.JEV_BASE_URL?.trim() || DEFAULT_JEV_BASE_URL;
+  const modelVersion = env.JEV_MODEL?.trim() || undefined;
+  return createJevClient({ baseUrl, apiKey, ...(modelVersion ? { modelVersion } : {}), ...overrides });
 }
 
 /** Simple FIFO concurrency limiter. */

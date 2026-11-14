@@ -1,7 +1,8 @@
 # Simulator rendering performance (HAC-65)
 
-The `/simulator-demo` route still uses the same seeded toy café scenario. Graphics
-quality affects presentation, not arrivals, service decisions, costs or results.
+The labelled Example mode still uses the same seeded toy café scenario. Stored
+runs supplied through HAC-63 use the same rendering code. Graphics quality affects
+presentation, not arrivals, service decisions, costs or results.
 
 ## Controls and rendering
 
@@ -24,7 +25,7 @@ of continuously redrawing a paused scene. Balanced samples traffic/demand every
 five simulated minutes, with opacity pulses over a fixed 65 m demand footprint;
 Detailed samples every minute and retains the expanding footprint. Cloud-bank
 positions sample each simulated minute. Playback batches React updates to at
-most 30 Hz while accumulating elapsed time; camera input remains independent.
+most 60 Hz while accumulating elapsed time and preserving the frame phase; camera input remains independent.
 Offscreen scenes suspend their graphics loops, then synchronize to the latest
 time on return. Café canvases use demand rendering and initialize after first
 visibility. Hidden-document playback pauses without advancing on resume.
@@ -36,7 +37,7 @@ reused until their rounded color changes. Cesium's camera/update loop is capped
 at 60 Hz rather than scanning the entities at the display's highest refresh rate.
 Tile cache budgets bound tile caching/refinement, not total browser memory.
 
-## Measured results
+## Initial PR measurements (superseded by the follow-up below)
 
 Measured locally on Akshar's Mac on November 14, 2026, in a foreground Chromium
 browser with a 1500 × 804 CSS-pixel viewport and display pixel ratio 2. Both
@@ -69,13 +70,44 @@ Temporary diagnostics and the simulated document-visibility override used for
 the suspension check were removed. Native tab-visibility behavior also depends
 on the browser; unit tests cover visibility transitions and observer cleanup.
 
+## Follow-up: eliminate color-driven geometry rebuilds
+
+The initial patch still changed `ConstantProperty` material colors. Cesium forwards
+those definition changes into static geometry invalidation, recreating ground
+primitives even when the footprint is fixed. Callback-backed reusable colors now
+update per-instance attributes instead. Real-Cesium regression tests verify zero
+entity definition changes for road colors and demand opacity, correct backward
+seeks, and safe result-object reuse.
+
+Playback now targets 60 Hz and preserves its frame phase instead of repeatedly
+discarding fractional frame time. The target branch was synchronized with
+`74c95e0` (HAC-63); its optional story/stored-run support is retained.
+
+Active-playback checks explicitly recorded the simulation clock before and after
+each eight-second sample. The stalled control at `7330d54` advanced only about
+22 simulated minutes and recorded 19 long tasks. The final candidate advanced
+144 simulated minutes (the intended 1× speed), with 32.1 actual city-rendered FPS,
+45.2 browser frame callbacks per second, p95 callback interval 41.7 ms, and eight
+shorter long tasks totalling 646 ms. A preceding candidate sample rendered 43.1
+city FPS with no long tasks. These varying short samples do not establish a
+fixed 60 FPS; cold tiles, browser scheduling and machine load still matter.
+
+Actual rendered frames count refresh intervals containing a WebGL draw call;
+they are distinct from requestAnimationFrame cadence. Earlier callback-only
+checks of 30 and 114 FPS should not be read as city-rendering rates. The final
+paused sample again recorded zero draw calls. Temporary probes were removed.
+
 ## Reproduce and verify
 
 1. Install from the lockfile with `pnpm install --frozen-lockfile`.
 2. Use the existing private `VEXCEL_API_KEY` in `.env.local` for the neighborhood;
    never put it in source or a performance recording. The café fallback works
    without it.
-3. Run `pnpm build`, then `pnpm start --hostname 127.0.0.1 --port 3014`.
+3. Run `pnpm build` and use the project's production runtime (see
+   [`Dockerfile`](../Dockerfile) for standalone asset packaging). The local
+   samples used `pnpm start --hostname 127.0.0.1 --port 3014`; after the target
+   branch enabled standalone output, that command emits a warning and does not
+   establish standalone deployment acceptance.
 4. Open `/simulator-demo` in a WebGL-capable browser. Keep viewport, camera,
    display density and cache conditions the same between candidates. Bring the
    browser to the foreground; occlusion throttling invalidates an FPS comparison.

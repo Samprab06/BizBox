@@ -18,3 +18,5 @@ next-env.d.ts
 !.env.example
 
 /public/cesium/
+playwright-report/
+test-results/

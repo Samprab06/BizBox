@@ -97,6 +97,7 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
   const modelVersion = opts.client.modelVersion;
   const stats: PanelStats = { calls: 0, cacheHits: 0, failedCalls: 0, elapsedMs: 0 };
   const plan = planCalls(opts.personaSet, ctx, opts.seed ?? 0, orders);
+  const answeredVersions = new Set<string>();
 
   const outcomes = await Promise.all(
     plan.map(async ({ persona, calls }) => {
@@ -106,12 +107,14 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
           const hit = await opts.cache.get(key);
           if (hit) {
             stats.cacheHits++;
+            answeredVersions.add(hit.modelVersion);
             return { key, result: hit };
           }
           stats.calls++;
           try {
             const result = await opts.client.ask(call.request);
             await opts.cache.set(key, result); // write as it arrives
+            answeredVersions.add(result.modelVersion);
             return { key, result };
           } catch (e) {
             stats.failedCalls++;
@@ -135,9 +138,11 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
     }),
   );
 
+  // Record the version Jev actually answered with (e.g. jev-1.14.0), not the requested alias.
+  const answered: string | undefined = answeredVersions.values().next().value;
   const table: BehaviorTable = {
     siteId: opts.site.id,
-    modelVersion,
+    modelVersion: answered ?? modelVersion,
     personas: outcomes.flatMap((o) => (o.behavior ? [o.behavior] : [])),
     failedPersonaIds: outcomes.filter((o) => !o.behavior).map((o) => o.personaId),
   };

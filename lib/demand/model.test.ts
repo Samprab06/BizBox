@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ArrivalSchedule, Origin, type DemandInput, type ScheduleRequest } from "./contracts";
+import {
+  ArrivalSchedule,
+  Origin,
+  type DemandInput,
+  type ScheduleRequest,
+} from "./contracts";
 import {
   COMPETITORS,
   FIXTURE_PERSONAS,
@@ -13,13 +18,29 @@ import {
   makeStore,
 } from "./fixtures";
 import { travelKm } from "./huff";
-import { buildArrivalSchedule, calibrateScale, estimateDemand, expectedDailyCustomers } from "./model";
+import {
+  buildArrivalSchedule,
+  calibrateScale,
+  estimateDemand,
+  expectedDailyCustomers,
+} from "./model";
 
-const REQ: ScheduleRequest = { seed: 42, dayType: "weekday", openMin: 6 * 60, closeMin: 19 * 60 };
+const REQ: ScheduleRequest = {
+  seed: 42,
+  dayType: "weekday",
+  openMin: 6 * 60,
+  closeMin: 19 * 60,
+};
 
 function withBeta(beta: number): DemandInput {
   return huffInput(SITE_A, {
-    demand: { source: "huff", huff: { competitors: COMPETITORS, beta: { value: beta, origin: "founder" } } },
+    demand: {
+      source: "huff",
+      huff: {
+        competitors: COMPETITORS,
+        beta: { value: beta, origin: "founder" },
+      },
+    },
   });
 }
 
@@ -58,7 +79,10 @@ describe("schedule shape", () => {
     for (let i = 1; i < s.customers.length; i++) {
       const prev = s.customers[i - 1]!;
       const cur = s.customers[i]!;
-      expect(prev.arrivalMin < cur.arrivalMin || (prev.arrivalMin === cur.arrivalMin && prev.id < cur.id)).toBe(true);
+      expect(
+        prev.arrivalMin < cur.arrivalMin ||
+          (prev.arrivalMin === cur.arrivalMin && prev.id < cur.id),
+      ).toBe(true);
     }
     for (const c of s.customers) {
       expect(c.arrivalMin).toBeGreaterThanOrEqual(REQ.openMin);
@@ -84,41 +108,66 @@ describe("schedule shape", () => {
 describe("jev behavior table", () => {
   it("expected visits per persona = weight x visits per month x where share", () => {
     const input = jevInput();
-    const table = input.demand.source === "jev" ? input.demand.behavior : undefined;
+    const table =
+      input.demand.source === "jev" ? input.demand.behavior : undefined;
     const est = estimateDemand(input);
     expect(est.personas).toHaveLength(FIXTURE_PERSONAS.length);
     for (const pd of est.personas) {
       const persona = FIXTURE_PERSONAS.find((p) => p.id === pd.personaId)!;
       const row = table!.personas.find((r) => r.personaId === pd.personaId)!;
-      const expected = persona.weight * row.visitsPerMonth * row.where[SITE_A.id]!;
+      const expected =
+        persona.weight * row.visitsPerMonth * row.where[SITE_A.id]!;
       expect(pd.expectedVisitsPerMonth).toBeCloseTo(expected, 9);
     }
   });
 
   it("applies the market-share scale on top", () => {
     const base = estimateDemand(jevInput());
-    const scaled = estimateDemand(jevInput(SITE_A, { scale: { value: 1.3, origin: "founder" } }));
+    const scaled = estimateDemand(
+      jevInput(SITE_A, { scale: { value: 1.3, origin: "founder" } }),
+    );
     scaled.personas.forEach((p, i) => {
-      expect(p.expectedVisitsPerMonth).toBeCloseTo(base.personas[i]!.expectedVisitsPerMonth * 1.3, 9);
+      expect(p.expectedVisitsPerMonth).toBeCloseTo(
+        base.personas[i]!.expectedVisitsPerMonth * 1.3,
+        9,
+      );
     });
   });
 
   it("leaves out failed personas and rejects a table for another site", () => {
     const failed = ["c1-res-02", "c1-wrk-01"];
     const est = estimateDemand(
-      jevInput(SITE_A, { demand: { source: "jev", behavior: makeBehaviorTable(SITE_A.id, FIXTURE_PERSONAS, failed) } }),
+      jevInput(SITE_A, {
+        demand: {
+          source: "jev",
+          behavior: makeBehaviorTable(SITE_A.id, FIXTURE_PERSONAS, failed),
+        },
+      }),
     );
     expect(est.excludedPersonaIds).toEqual(failed);
     expect(est.personas.map((p) => p.personaId)).not.toContain("c1-res-02");
-    expect(est.params["jev.excludedPersonas"]).toEqual({ value: 2, origin: "public" });
+    expect(est.params["jev.excludedPersonas"]).toEqual({
+      value: 2,
+      origin: "default",
+    });
     expect(() =>
-      estimateDemand(jevInput(SITE_A, { demand: { source: "jev", behavior: makeBehaviorTable(SITE_B.id) } })),
+      estimateDemand(
+        jevInput(SITE_A, {
+          demand: { source: "jev", behavior: makeBehaviorTable(SITE_B.id) },
+        }),
+      ),
     ).toThrow(/behavior table/);
   });
 });
 
 describe("huff fallback", () => {
-  const daily = (input: DemandInput) => expectedDailyCustomers(estimateDemand(input), "weekday", REQ.openMin, REQ.closeMin);
+  const daily = (input: DemandInput) =>
+    expectedDailyCustomers(
+      estimateDemand(input),
+      "weekday",
+      REQ.openMin,
+      REQ.closeMin,
+    );
 
   it("more nearby residents raises visits", () => {
     const base = daily(huffInput());
@@ -126,7 +175,10 @@ describe("huff fallback", () => {
       huffInput(SITE_A, {
         personaSet: {
           ...FIXTURE_PERSONA_SET,
-          personas: [...FIXTURE_PERSONAS, makePersona("c1-res-new", "resident", 0.2, -0.3, { weight: 800 })],
+          personas: [
+            ...FIXTURE_PERSONAS,
+            makePersona("c1-res-new", "resident", 0.2, -0.3, { weight: 800 }),
+          ],
         },
       }),
     );
@@ -135,8 +187,16 @@ describe("huff fallback", () => {
 
   it("a closer competitor lowers visits", () => {
     const base = daily(huffInput());
-    const moved = COMPETITORS.map((c) => (c.id === "comp-x" ? { ...c, location: makeStore("tmp", 0.2, 0.3).location } : c));
-    const closer = daily(huffInput(SITE_A, { demand: { source: "huff", huff: { competitors: moved } } }));
+    const moved = COMPETITORS.map((c) =>
+      c.id === "comp-x"
+        ? { ...c, location: makeStore("tmp", 0.2, 0.3).location }
+        : c,
+    );
+    const closer = daily(
+      huffInput(SITE_A, {
+        demand: { source: "huff", huff: { competitors: moved } },
+      }),
+    );
     expect(closer).toBeLessThan(base);
   });
 
@@ -148,7 +208,9 @@ describe("huff fallback", () => {
       let den = 0;
       for (const pd of est.personas) {
         const p = FIXTURE_PERSONAS.find((x) => x.id === pd.personaId)!;
-        num += pd.expectedVisitsPerMonth * travelKm(p.location, SITE_A.location, "houston");
+        num +=
+          pd.expectedVisitsPerMonth *
+          travelKm(p.location, SITE_A.location, "houston");
         den += pd.expectedVisitsPerMonth;
       }
       return num / den;
@@ -161,8 +223,12 @@ describe("huff fallback", () => {
   });
 
   it("ignores stores out of range and gives zero share when the site is out of range", () => {
-    const far = makePersona("c1-far", "resident", 0, 30, { commuteMode: "walk" });
-    const est = estimateDemand(huffInput(SITE_A, { personaSet: { catchmentId: "c1", personas: [far] } }));
+    const far = makePersona("c1-far", "resident", 0, 30, {
+      commuteMode: "walk",
+    });
+    const est = estimateDemand(
+      huffInput(SITE_A, { personaSet: { catchmentId: "c1", personas: [far] } }),
+    );
     expect(est.personas[0]!.share).toBe(0);
   });
 });
@@ -179,7 +245,10 @@ describe("cross-candidate customer stability", () => {
 
   it("a site with a lower rate everywhere gets a subset of the customers", () => {
     const full = buildArrivalSchedule(huffInput(), REQ);
-    const half = buildArrivalSchedule(huffInput(SITE_A, { scale: { value: 0.5, origin: "founder" } }), REQ);
+    const half = buildArrivalSchedule(
+      huffInput(SITE_A, { scale: { value: 0.5, origin: "founder" } }),
+      REQ,
+    );
     const fullById = new Map(full.customers.map((c) => [c.id, c]));
     expect(half.customers.length).toBeLessThan(full.customers.length);
     for (const c of half.customers) expect(fullById.get(c.id)).toEqual(c);
@@ -205,19 +274,28 @@ describe("calibration", () => {
   it("reproduces a supplied daily customer count within 5% for the calibration site", () => {
     const site = huffInput();
     const observed = 180;
-    const fit = calibrateScale(site, { kind: "daily_customers", dailyCustomers: observed, ...REQ });
+    const fit = calibrateScale(site, {
+      kind: "daily_customers",
+      dailyCustomers: observed,
+      ...REQ,
+    });
     expect(fit.scale.origin).toBe("founder");
 
     const calibrated = { ...site, scale: fit.scale };
     const s = buildArrivalSchedule(calibrated, REQ);
-    expect(Math.abs(s.params["expected.dailyCustomers"]!.value - observed) / observed).toBeLessThan(0.05);
-    expect(s.params["expected.dailyCustomers"]!.origin).toBe("founder");
+    expect(
+      Math.abs(s.params["expected.dailyCustomers"]!.value - observed) /
+        observed,
+    ).toBeLessThan(0.05);
+    // Calibrated to founder data, but still a modelled output (HAC-61).
+    expect(s.params["expected.dailyCustomers"]!.origin).toBe("default");
 
     // Realized arrivals, averaged over seeds, also land within 5%.
     let total = 0;
     const seeds = 40;
     for (let seed = 0; seed < seeds; seed++) {
-      total += buildArrivalSchedule(calibrated, { ...REQ, seed }).customers.length;
+      total += buildArrivalSchedule(calibrated, { ...REQ, seed }).customers
+        .length;
     }
     expect(Math.abs(total / seeds - observed) / observed).toBeLessThan(0.05);
   });

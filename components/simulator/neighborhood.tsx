@@ -24,6 +24,7 @@ import {
   type RenderQuality,
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
+import { createAnimatedColor } from "./animated-color";
 
 export default function Neighborhood({
   longitude,
@@ -100,6 +101,7 @@ export default function Neighborhood({
         ClassificationType,
         Color,
         ConstantProperty,
+        CallbackProperty,
         ColorMaterialProperty,
         JulianDate,
         Cesium3DTileStyle,
@@ -174,16 +176,19 @@ export default function Neighborhood({
         {
           seed: number;
           roadClass: string;
-          color: InstanceType<typeof ConstantProperty>;
+          color: ReturnType<typeof createAnimatedColor>;
         }
       >();
       const createRoad = ({ roadClass, points, seed }: Road) => {
-        const color = new ConstantProperty(Color.GREEN.withAlpha(0.82));
+        const color = createAnimatedColor(
+          Color.GREEN.withAlpha(0.82),
+          CallbackProperty,
+        );
         const entity = city.entities.add({
           polyline: {
             positions: Cartesian3.fromDegreesArray(points),
             width: roadClass === "tertiary" ? 5 : 8,
-            material: new ColorMaterialProperty(color),
+            material: new ColorMaterialProperty(color.property),
             clampToGround: true,
             classificationType: ClassificationType.CESIUM_3D_TILE,
           },
@@ -194,7 +199,7 @@ export default function Neighborhood({
       const anchors: {
         anchor: (typeof demandAnchors)[number];
         radius: InstanceType<typeof ConstantProperty>;
-        color: InstanceType<typeof ConstantProperty>;
+        color: ReturnType<typeof createAnimatedColor>;
       }[] = [];
       for (const anchor of demandAnchors) {
         const position = Cartesian3.fromDegrees(
@@ -204,14 +209,14 @@ export default function Neighborhood({
         const radius = new ConstantProperty(
           qualityRef.current === "balanced" ? 65 : 18,
         );
-        const color = new ConstantProperty(Color.TRANSPARENT);
+        const color = createAnimatedColor(Color.TRANSPARENT, CallbackProperty);
         city.entities.add({
           position,
           ellipse: {
             semiMajorAxis: radius,
             semiMinorAxis: radius,
             classificationType: ClassificationType.CESIUM_3D_TILE,
-            material: new ColorMaterialProperty(color),
+            material: new ColorMaterialProperty(color.property),
           },
         });
         anchors.push({ anchor, radius, color });

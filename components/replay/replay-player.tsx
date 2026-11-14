@@ -55,6 +55,7 @@ export function ReplayPlayer({
     <div className="space-y-4">
       <div
         className="h-72 overflow-hidden rounded-xl border border-line bg-paper"
+        role="group"
         aria-label="Interactive modeled floor plan"
       >
         <FloorPlan

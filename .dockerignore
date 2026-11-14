@@ -1,0 +1,25 @@
+# Never send credentials, host dependencies, local datasets or build output.
+**/.env*
+**/.npmrc
+**/.netrc
+**/.ssh
+**/node_modules
+**/.next
+**/.git
+**/coverage
+**/*.tsbuildinfo
+**/.DS_Store
+**/*.log
+costarkit
+**/costarkit
+costar-hackathon-kit
+data
+local-docs
+**/local-docs
+.banyan
+.banyancode
+.agentorch.json
+.github
+.vercel
+test-results
+playwright-report
