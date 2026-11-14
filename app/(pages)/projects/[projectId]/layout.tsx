@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
@@ -16,9 +17,9 @@ export default async function ProjectLayout({
         <div className="mx-auto max-w-5xl px-5 py-5 sm:px-8">
           <Link
             href="/projects/houston-coffee/intake"
-            className="text-xl font-bold tracking-tight text-pine"
+            className="inline-flex items-center"
           >
-            BizBox
+            <BrandLogo priority className="h-8 w-auto" />
           </Link>
         </div>
       </header>
