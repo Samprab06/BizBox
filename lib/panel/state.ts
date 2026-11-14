@@ -224,7 +224,7 @@ export function buildQuestions(rawCtx: PanelContext, rng?: Rng): { questions: Je
         prompt:
           n === 0
             ? `At ${ctx.site.id}, there is no line. Would this person stay and order?`
-            : `At ${ctx.site.id}, ${n} people are in line, about a ${estimatedWaitMin(n, ctx.need)}-minute wait. Would this person stay?`,
+            : `At ${ctx.site.id}, ${n} people are in line, an estimated ${estimatedWaitMin(n, ctx.need)}-minute wait. Would this person stay?`,
       }),
     ),
     ...pricePoints(ctx).map(
