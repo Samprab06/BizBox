@@ -140,7 +140,33 @@ export function createIntakeHandler(dependencies: Dependencies) {
             },
             503,
           );
-        return unavailable();
+        // Operator diagnostic from enumerated fields only (class, HTTP status, provider
+        // error code); never the provider's message text.
+        const e = (error ?? {}) as {
+          name?: unknown;
+          status?: unknown;
+          code?: unknown;
+        };
+        const detail = [
+          typeof e.name === "string" && /^[A-Za-z]{1,40}$/.test(e.name)
+            ? e.name
+            : "Error",
+          typeof e.status === "number" ? `HTTP ${e.status}` : null,
+          typeof e.code === "string" && /^[a-z_]{3,40}$/.test(e.code)
+            ? e.code
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return json(
+          {
+            code: "INTAKE_UNAVAILABLE",
+            message: "Intake is temporarily unavailable. Please try again.",
+            field_errors: {},
+            detail,
+          },
+          503,
+        );
       } finally {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
