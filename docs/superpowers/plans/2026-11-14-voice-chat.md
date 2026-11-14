@@ -39,9 +39,9 @@ Consumes: `VoiceSessionRequestSchema`, `VOICE_LIMITS` from `lib/voice/contracts.
 Produces: GET configuration status and POST SDP answer/sessionSeconds contract.
 
 - [x] Write failing tests for valid setup/config, missing key, malformed/oversized
-  SDP/context, cross-origin rejection, bounded upstream request and safe errors.
+      SDP/context, cross-origin rejection, bounded upstream request and safe errors.
 - [x] Implement fixed-host OpenAI multipart calls, controlled-response session
-  settings and best-effort local request bound; preserve text-agent settings.
+      settings and best-effort local request bound; preserve text-agent settings.
 - [x] Run focused tests, then report server contract/config decisions to manager.
 
 ### Task 2: Reusable controller, orb and client mounts
@@ -54,21 +54,20 @@ Consumes: shared context/session contracts and backend endpoint; adapter callbac
 `readContext()` and `submitTranscript(text):Promise<string|null>`.
 Produces: reusable voice controls/controller with explicit lifecycle and audio refs.
 
-- [ ] Write failing controller tests for deduplicated serialized transcripts,
-  unchanged action state, permission failure, stale generation, stop and cleanup.
-- [ ] Port Goldie orb/helpers with normal React imports and lifecycle safeguards.
-- [ ] Implement native transport, real audio analysis and controlled speech events.
-- [ ] Route voice through the same production intake submission as typed input;
-  verify live and offline form behavior without changing validation/persistence.
-- [ ] Demonstrate the agreed client UI adapter using the owner's actual contract.
-- [ ] Run mocked browser controls/state/permission/cleanup tests and viewport/axe
-  checks; retain no paid call requirement for ordinary tests.
+- [x] Write failing controller tests for deduplicated serialized transcripts,
+      unchanged action state, permission failure, stale generation, stop and cleanup.
+- [x] Port Goldie orb/helpers with normal React imports and lifecycle safeguards.
+- [x] Implement native transport, real audio analysis and controlled speech events.
+- [x] Route voice through the same production intake submission as typed input;
+      verify live and offline form behavior without changing validation/persistence.
+- [x] Demonstrate the agreed client UI adapter using the owner's actual contract.
+- [x] Run mocked browser controls/state/permission/cleanup tests and viewport/axe
+      checks; retain no paid call requirement for ordinary tests.
 
 ### Task 3: Manager integration and delivery
 
-- [ ] Review shared boundaries and an independent security/lifecycle review.
-- [ ] Verify no key/client-bundle leakage or new dependency; inspect final diff.
-- [ ] Run repository checks sequentially plus affected intake/voice browser suite.
+- [x] Review shared boundaries and an independent security/lifecycle review.
+- [x] Verify no key/client-bundle leakage or new dependency; inspect final diff.
+- [x] Run repository checks sequentially plus affected intake/voice browser suite.
 - [ ] Record actual live verification limits, update docs/ticket and publish a
-  focused PR under existing push/PR authorization. No merge or deployment.
-
+      focused PR under existing push/PR authorization. No merge or deployment.

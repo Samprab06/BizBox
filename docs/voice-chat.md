@@ -1,5 +1,8 @@
 # BizBox voice chat (HAC-111)
 
+Product requirements and the current delivery record live in the
+[voice chat PRD](prd/voice-chat.md). Update both documents when behavior changes.
+
 Akshar requested Goldie's reactive voice orb now, integrated with the active client
 UI work and delivered through a dedicated ticket, branch and PR. The existing
 glass onboarding prototype is owned by the client UI chat (HAC-112); its source
@@ -43,6 +46,37 @@ the actual assistant reply or `null`. The controller does not persist business
 state. Completed transcript IDs are deduplicated; turns are serialized. Stop
 prevents late voice output, closes tracks/peer/audio/animation resources, and does
 not undo a message already submitted to the existing business action.
+
+Audio commits define turn order because transcript completions can arrive out of
+order. Each turn captures its question/context; a changed prompt or selected
+context suppresses the stale answer instead of applying it to the next field.
+The owning intake queue rechecks that prompt before applying the answer. Muted
+commits remain suppressed even if transcription completes after unmuting.
+
+## Client UI mount
+
+`components/voice/voice-panel.tsx` exports `VoicePanel`; its adapter type lives in
+`lib/voice/contracts.ts`. The production mount is `components/intake/intake-screen.tsx`.
+The HAC-112 final-screen layout can reuse the same component:
+
+```tsx
+<VoicePanel
+  adapter={voiceAdapter}
+  title="Talk about this space"
+  label="Voice conversation"
+  className="my-0"
+/>
+```
+
+Build `voiceAdapter` around the screen's real state and existing typed submission
+action. `readContext()` reads the visible project/site/scenario/prompt;
+`submitTranscript(text)` awaits that same action and returns its actual reply or
+`null`. Keep the conversation, text draft and pending Keep/Revert state above a
+Text / Voice conditional mount. Unmounting `VoicePanel` stops its resources; it
+must not clear the parent conversation or undo an applied action. The scripted
+HAC-112 prototype is a design reference and does not enable paid voice.
+
+## Configuration and limits
 
 The session is opt-in. No paid request or microphone acquisition occurs on page
 load. Microphone permission denial, missing keys, upstream errors and unsupported
@@ -89,3 +123,20 @@ database schema, deployments or the known Vercel preview issue.
 - https://developers.openai.com/api/docs/guides/realtime-conversations
 - https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini
 
+## Verified candidate (2026-11-14)
+
+After integrating main `4eafc9a`, `pnpm lint`, `pnpm typecheck`,
+`pnpm test --maxWorkers=2` (929 passed, 40 gated skips) and `pnpm build` passed.
+The build retains the existing recorded-example tracing warning. Client static
+bundles contain no server credential/config identifiers; dependencies are unchanged.
+
+Against an isolated production server on port 3111, the voice, offline/live intake
+and context-bar Playwright suites passed all 108 cases across Chromium, WebKit
+and mobile Chromium. Controls passed axe/overflow checks at 375/768/1280px, reduced
+motion, WebGL fallback and navigation cleanup. Provider/browser media boundaries
+were mocked: these checks do not prove live provider acceptance or audible output.
+
+Independent server review and targeted client re-review cleared the confirmed
+ordering, out-of-band cancellation, muted-buffer and stale-prompt races. The
+reviewer independently reran 50 route/controller cases. Goldie MIT notices are
+retained in `components/voice/LICENSE`.
