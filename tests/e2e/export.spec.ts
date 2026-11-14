@@ -80,6 +80,42 @@ async function mockExport(page: Page, outdated = false) {
   );
 }
 
+// Main renders "Print or save as PDF"; HAC-26 renames it "Print plan". Match
+// either so this spec survives whichever merges second.
+const PRINT_CONTROL = /print/i;
+// Text that only a guard/refusal page (outdated, stale, error) would contain.
+const GUARD_TEXT = [
+  "This comparison is outdated",
+  "outdated",
+  "no longer current",
+  "Could not load",
+];
+
+// Install after hydration: addInitScript runs before documentElement exists.
+// This observes the real button callback without opening a native dialog.
+async function stubPrint(page: Page) {
+  await page.evaluate(() => {
+    document.documentElement.dataset.printCalls = "0";
+    window.print = () => {
+      document.documentElement.dataset.printCalls = String(
+        Number(document.documentElement.dataset.printCalls) + 1,
+      );
+    };
+  });
+}
+
+// Clicks the print control once it is enabled (HAC-26 gates it on freshness)
+// and returns once the stub has seen the call.
+async function printOnce(page: Page, expectedCalls: number) {
+  const print = page.getByRole("button", { name: PRINT_CONTROL });
+  await expect(print).toBeEnabled();
+  await print.click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-print-calls",
+    String(expectedCalls),
+  );
+}
+
 function factRow(section: Locator, label: string) {
   return section.getByRole("row").filter({
     has: section.page().getByRole("rowheader", { name: label, exact: true }),
@@ -327,7 +363,7 @@ test("outdated comparisons expose neither an export entry point nor a printable 
     page.getByRole("article", { name: "Location plan" }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Print or save as PDF" }),
+    page.getByRole("button", { name: PRINT_CONTROL }),
   ).toHaveCount(0);
 });
 
@@ -339,25 +375,27 @@ test("printing twice preserves deterministic HTML and readable print tables", as
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(planURL);
   const article = page.getByRole("article", { name: "Location plan" });
-  const print = page.getByRole("button", { name: "Print or save as PDF" });
+  const print = page.getByRole("button", { name: PRINT_CONTROL });
   await expect(print).toBeVisible();
-  // Install after hydration: addInitScript runs before documentElement exists.
-  // This observes the real button callback without opening a native dialog.
-  await page.evaluate(() => {
-    document.documentElement.dataset.printCalls = "0";
-    window.print = () => {
-      document.documentElement.dataset.printCalls = String(
-        Number(document.documentElement.dataset.printCalls) + 1,
-      );
-    };
-  });
+  await stubPrint(page);
   const before = await article.evaluate((element) => element.outerHTML);
-  await print.click();
-  await print.click();
-  await expect(page.locator("html")).toHaveAttribute("data-print-calls", "2");
+  await printOnce(page, 1);
+  await printOnce(page, 2);
   expect(await article.evaluate((element) => element.outerHTML)).toBe(before);
   await page.reload();
   await expect(print).toBeVisible();
+  expect(await article.evaluate((element) => element.outerHTML)).toBe(before);
+  // Second export: re-open it from the comparison screen, not just a reload.
+  await page.goto(
+    `/projects/${PROJECT}/comparison?comparison=${liveComparisonId}`,
+  );
+  await page
+    .getByRole("link", { name: "Export the location plan", exact: true })
+    .click();
+  await expect(page).toHaveURL(planURL);
+  await expect(article).toBeVisible();
+  await stubPrint(page);
+  await printOnce(page, 1);
   expect(await article.evaluate((element) => element.outerHTML)).toBe(before);
   await page.emulateMedia({ media: "print" });
   await expect(print).toBeHidden();
@@ -388,6 +426,14 @@ test("printing twice preserves deterministic HTML and readable print tables", as
   });
   // PDF generation is Chromium-only; native pagination/viewer checks remain manual.
   if (testInfo.project.name === "chromium") {
+    // page.pdf() prints this exact print-media DOM, so assert it holds the real
+    // plan and no guard text (no PDF parser is available without a new dependency).
+    const printed = await page.evaluate(() => document.body.innerText);
+    expect(printed).toContain(`Comparison ${liveComparisonId}`);
+    for (const id of liveComparisonPayload.result.ranking)
+      expect(printed, `printed plan names site ${id}`).toContain(id);
+    for (const guard of GUARD_TEXT)
+      expect(printed.toLowerCase()).not.toContain(guard.toLowerCase());
     const pdf = await page.pdf({ format: "A4", printBackground: true });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(pdf.byteLength).toBeGreaterThan(1000);

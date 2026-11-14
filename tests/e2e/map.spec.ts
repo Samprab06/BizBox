@@ -92,6 +92,7 @@ test.describe("map", () => {
     gotoView,
   }) => {
     await gotoView("map");
+    // Works around HAC-109 (map loading layout shift); remove once HAC-109 merges.
     await expect(
       page.getByRole("combobox", { name: "Catchment layer", exact: true }),
     ).toBeVisible();
