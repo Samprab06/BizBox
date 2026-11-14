@@ -206,7 +206,8 @@ async function overtureForMetro(metro: string, bounds: Bounds, cache: string) {
     };
   await mkdir(cache, { recursive: true });
   const partial = `${path}.${process.pid}.part`;
-  const query = `INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';
+  const query = `SET memory_limit='1GB'; SET threads=2;
+    INSTALL spatial; LOAD spatial; INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';
     COPY (SELECT id,names,taxonomy,basic_category,confidence,operating_status,sources,
       ST_AsGeoJSON(geometry)::JSON AS geometry
       FROM read_parquet(${literal(PLACES)},hive_partitioning=true)

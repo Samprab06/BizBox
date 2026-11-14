@@ -22,3 +22,12 @@ Keep application secrets in the relevant Vercel environment or in local .env.loc
 - **Secret scan**
 
 Select these job names from a successful CI run when configuring branch protection.
+
+## Local containers
+
+`compose.yaml` provides an arm64/amd64 PostGIS development database and optional
+non-root app container. See [local-postgis.md](local-postgis.md) for setup,
+`db:load`, real-data verification and safe reset. Ordinary CI remains
+credential-free and does not fetch licensed data or start this stack. A future
+authorized integration job may reuse the database with synthetic fixtures; do
+not expose sponsor kits or private env files to untrusted PR jobs.
