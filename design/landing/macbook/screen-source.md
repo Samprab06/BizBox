@@ -1,10 +1,12 @@
 # MacBook screen source — HAC-115
 
-## Current screen: approved provisional GPT Image
+## Hardware reviewer screen: approved provisional GPT Image
+
+The newer [guided landing demo](../guided-demo/README.md) starts with an animated onboarding UI and uses prepared generated scenes. The image below remains the hardware reviewer and earlier prototype’s provisional screen.
 
 Akshar approved `public/landing-assets/macbook/bizbox-simulation-screen-gpt-v2.png` for now; final screen parity is deferred until the product UI is finished. It follows the actual dark `/simulator-demo` controls and the existing Assistant/Text/Voice design. It is a generated illustrative neighborhood, not actual geographic data or a simulated result. Native output is **1558 × 1009**, not 4K. See the [exact prompt](imagegen-screen-v2-prompt.md) and [provenance](imagegen-screen-v2.json).
 
-The default hardware review uses this image. `/story` crosses from the image into one live simulator iframe, then keeps that iframe during the camera return. `?live` directly selects the live screen for inspection. Full-resolution source surfaces replace the prior 1/16-size intermediate raster wrapper; fullscreen uses native viewport dimensions with no CSS projection.
+The default hardware review uses this image. The historical `/story/v1` crosses from the image into one live simulator iframe, then keeps that iframe during the camera return. `?live` directly selects the live screen for inspection. Full-resolution source surfaces replace the prior 1/16-size intermediate raster wrapper; fullscreen uses native viewport dimensions with no CSS projection.
 
 The simulator reference image included only our controls: provider imagery was hidden before capture. No Vexcel or Matterport imagery was exported into the generated asset. The generated background in the landing is the existing immersive-v3 Houston sunset asset.
 

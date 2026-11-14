@@ -2,7 +2,7 @@
 
 The hardware, provisional GPT Image display, and local hero/entry/return choreography are prepared. Akshar approved this screen for now on November 14, 2026; matching the final product UI is deferred until that UI is finished. See [screen-source.md](screen-source.md) and the [story handoff](../story/README.md). No existing checkpoint, application page, navigation or asset was removed.
 
-The default asset review shows the generated simulation-style display. `/story` uses it in the hero, crosses into the actual live 3D simulator on entry, and retains that same iframe on the return. The image is illustrative geography, not a captured renderer or forecast. The existing `/landing-workspace` shared-component adapter remains available.
+The default asset review shows the generated simulation-style display. The historical `/story/v1` uses it in the hero, crosses into the actual live 3D simulator on entry, and retains that same iframe on the return. The image is illustrative geography, not a captured renderer or forecast. The existing `/landing-workspace` shared-component adapter remains available.
 
 **Final UI follow-up:** HAC-128's canonical Text/Voice workspace is now on main at `/projects/[id]/workspace`. Its reference city photograph is not the requested 3D map. Integrate the final supported map/assistant composition after the product UI settles; do not block this provisional landing iteration on exact parity.
 
@@ -55,7 +55,7 @@ pnpm exec tsx design/landing/macbook/review-server.ts
 
 Run the product app separately on port 4194 with its normal environment (`pnpm dev --hostname 127.0.0.1 --port 4194`). Its server-side Vexcel configuration controls 3D availability; no credential belongs in the asset or client. `/landing-workspace` is the actual shared-component composition, also usable on its own.
 
-Open `http://127.0.0.1:4193` for the asset review or `/story` for the scroll prototype. This localhost-only authoring tool serves the asset and installed Three.js modules; it is not a production server. `BIZBOX_REVIEW_PRODUCT_ORIGIN` defaults to local port 4194. `BIZBOX_REVIEW_SIMULATOR_URL` optionally selects the supported live simulator source, otherwise `/projects/houston-coffee/simulator` is used. The closing CTA goes to the product intake route. These variables belong to local authoring, not deployed configuration.
+Open `http://127.0.0.1:4193` for the asset review or `/story/v1` for the previous live scroll prototype. `/story` opens the newer [curated guided demo](../guided-demo/README.md), which starts with onboarding and uses prepared scenes. This localhost-only authoring tool serves the asset and installed Three.js modules; it is not a production server. `BIZBOX_REVIEW_PRODUCT_ORIGIN` defaults to local port 4194. `BIZBOX_REVIEW_SIMULATOR_URL` optionally selects the supported live simulator source, otherwise `/projects/houston-coffee/simulator` is used. The closing CTA goes to the product intake route. These variables belong to local authoring, not deployed configuration.
 
 `?live` enables the actual simulator in the asset reviewer; `?mobile` forces mobile hardware geometry; `?texture` retains legacy texture inspection. Orbit outside the screen or test the lid slider. The hardware renderer draws on load/input/resize with no idle loop. The live product scene retains its own existing render/visibility policy. In the story, the parent owns scrolling and the iframe is decorative; open the product to interact.
 

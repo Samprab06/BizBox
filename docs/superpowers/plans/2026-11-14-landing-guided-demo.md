@@ -31,23 +31,27 @@
 **Files:** `public/landing-assets/guided-demo/*`, `design/landing/guided-demo/*`, `components/landing-demo/demo-data.ts`, `demo-data.test.ts`.
 **Produces:** typed `DEMO` export: business {name,category,concept,city,area,rentLimit,buildout,staff,hours}, property {name,area,rent,size,note}, experiment {current,proposed}, source. Each experiment setup: {label,stations,staff,served,walkaways,p90WaitMin,revenueUsd,laborUsd,contributionUsd}. All values from a shared seeded same-demand existing engine path; precise metric definitions documented.
 
-- [ ] Generate map/interior/overhead GPT scenes and prerender sourced MacBook with transparent screen; save prompts/provenance.
-- [ ] Write comparison invariants tests, observe failure, then implement prepared fixture using existing engine; verify deterministic provenance and cost.
+- [x] Generate map/interior/overhead GPT scenes and prerender sourced MacBook with transparent screen; save prompts/provenance.
+- [x] Write comparison invariants tests, observe failure, then implement prepared fixture using existing engine; verify deterministic provenance and cost.
 
 ### Task 2: Complete landing — frontend specialist
 
 **Files:** `components/landing-demo/landing-demo.tsx`, `landing-demo.module.css`, `timeline.ts`, `timeline.test.ts`, `app/landing-demo/page.tsx`.
 **Consumes:** DEMO contract and asset names from Task 1. MacBook manifest gives normalized screen quad for source image; use its quadrilateral mapping or equivalent flattened screen alignment.
 
-- [ ] Implement/test pure reversible chapter selection, onboarding timing 7000ms, reduced-motion endpoints and seek/replay.
-- [ ] Build glass navbar, calmer hero/headline and MacBook with initial onboarding UI.
-- [ ] Implement complete guided onboarding, location, property, interior, comparison and return, with real DOM controls/text over generated scenes.
-- [ ] Provide pause/replay/skip for bounded onboarding animation; same comparison state survives closing return. CTA uses existing supported product entry route.
-- [ ] Verify phone/desktop layouts, keyboard controls, asset fallback, no live provider requests and no idle animation loop after demo settles.
+- [x] Implement/test pure reversible chapter selection, onboarding timing 7000ms, reduced-motion endpoints and seek/replay.
+- [x] Build glass navbar, calmer hero/headline and MacBook with initial onboarding UI.
+- [x] Implement complete guided onboarding, location, property, interior, comparison and return, with real DOM controls/text over generated scenes.
+- [x] Provide pause/replay/skip for bounded onboarding animation; same comparison state survives closing return. CTA uses existing supported product entry route.
+- [x] Verify phone/desktop layouts, keyboard controls, asset fallback, no live provider requests and no idle animation loop after demo settles.
 
 ### Task 3: Integration and delivery — manager
 
-- [ ] Serve the new Next route through the existing local preview entry while preserving `/story/v1` for the earlier prototype; do not replace homepage.
-- [ ] Browser review every chapter, rapid/reverse seeks, 390px phone, reduced motion, actual refraction treatment and comparison metrics.
-- [ ] Run pnpm lint/typecheck/test/build plus environment/client bundle checks, review diff and resolve material issues.
-- [ ] Update ticket/handoff with exact commits, assets, limitations and run instructions. Local commits only.
+- [x] Serve the new Next route through the existing local preview entry while preserving `/story/v1` for the earlier prototype; do not replace homepage.
+- [x] Browser review every chapter, rapid/reverse seeks, 390px phone, reduced motion, actual refraction treatment and comparison metrics.
+- [x] Run pnpm lint/typecheck/test/build plus environment/client bundle checks, review diff and resolve material issues.
+- [x] Update ticket/handoff with exact commits, assets, limitations and run instructions. Local commits only.
+
+## Completion evidence
+
+Implemented and verified locally; see `design/landing/guided-demo/README.md` for media provenance, runtime boundaries, independent review fix, browser coverage and exact check results. Full suite1288pass/40skip, lint/typecheck/build/env/clientbundle pass. No push/merge/deploy.

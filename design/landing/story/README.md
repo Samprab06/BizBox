@@ -1,4 +1,6 @@
-# BizBox landing scroll prototype — HAC-117
+# BizBox landing scroll prototype v1 — HAC-117
+
+**Historical prototype:** this version is now served at authoring path `/story/v1`. `/story` redirects to the newer [curated guided demo](../guided-demo/README.md), replacing the live Vexcel playback path for the current landing review while preserving these files.
 
 Akshar approved the generated simulation-style MacBook screen as a provisional display on November 14, 2026. Match the final product UI after that UI is finished. Do not regenerate the screen or block the landing on exact UI parity now. [Asset provenance](../macbook/imagegen-screen-v2.json) and [exact prompt](../macbook/imagegen-screen-v2-prompt.md) record the selected image.
 
@@ -18,7 +20,7 @@ Run the product with its normal environment on port 4194. Start the local author
 pnpm exec tsx design/landing/macbook/review-server.ts
 ```
 
-Open <http://127.0.0.1:4193/story>. `BIZBOX_REVIEW_PRODUCT_ORIGIN` optionally changes the product origin. `BIZBOX_REVIEW_SIMULATOR_URL` optionally changes the simulator source. The authoring server defaults to `/projects/houston-coffee/simulator`; the current local review uses the existing dark `/simulator-demo` reference at port 3016 read-only. That other checkout/server is not part of this change. Final integration must use the supported product route. “Open BizBox” resolves to `/projects/houston-coffee/intake` on the configured product origin.
+Open <http://127.0.0.1:4193/story/v1>. `BIZBOX_REVIEW_PRODUCT_ORIGIN` optionally changes the product origin. `BIZBOX_REVIEW_SIMULATOR_URL` optionally changes the simulator source. The authoring server defaults to `/projects/houston-coffee/simulator`; the current local review uses the existing dark `/simulator-demo` reference at port 3016 read-only. That other checkout/server is not part of this change. Final integration must use the supported product route. “Open BizBox” resolves to `/projects/houston-coffee/intake` on the configured product origin.
 
 `/` remains the separate hardware reviewer, with `?live`, `?mobile` and legacy `?texture` inspection options. Previous checkpoints and assets remain intact.
 

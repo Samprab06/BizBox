@@ -3,7 +3,7 @@ import bpy, json
 from pathlib import Path
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
-ROOT=Path('/Users/aksharkakkad/.codex/worktrees/hac-115-macbook-assets/HackPrinceton')
+ROOT=Path(__file__).resolve().parents[3]
 source=bpy.data.scenes.get('BizBox_HAC115_Prepared')
 if source is None: raise RuntimeError('Prepared HAC115 scene must be open')
 name='BizBox_HAC117_Guided_Frame_v2_final'

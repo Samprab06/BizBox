@@ -26,6 +26,15 @@ const server = createServer(async (request, response) => {
     const pathname = decodeURIComponent(
       new URL(request.url ?? "/", "http://local").pathname,
     );
+    if (pathname === "/story" || pathname === "/story/") {
+      const origin =
+        process.env.BIZBOX_REVIEW_LANDING_ORIGIN ?? "http://127.0.0.1:4195";
+      const destination = new URL("/landing-demo", origin);
+      if (!["http:", "https:"].includes(destination.protocol))
+        throw new Error("Invalid landing origin");
+      response.writeHead(307, { Location: destination.href }).end();
+      return;
+    }
     if (pathname === "/workspace-config.json") {
       const origin =
         process.env.BIZBOX_REVIEW_PRODUCT_ORIGIN ?? "http://127.0.0.1:4194";
@@ -57,7 +66,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     let file =
-      pathname === "/story" || pathname === "/story/"
+      pathname === "/story/v1" || pathname === "/story/v1/"
         ? resolve(root, "design/landing/story/index.html")
         : pathname === "/"
           ? resolve(here, "review.html")
@@ -65,6 +74,7 @@ const server = createServer(async (request, response) => {
             ? resolve(here, pathname.slice(1))
             : undefined;
     for (const [prefix, directory] of Object.entries(roots)) {
+      if (file) break;
       if (!pathname.startsWith(prefix)) continue;
       const candidate = resolve(directory, pathname.slice(prefix.length));
       if (candidate.startsWith(directory + sep)) file = candidate;
