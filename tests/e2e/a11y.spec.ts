@@ -34,7 +34,7 @@ test.describe("every view passes the axe scan", () => {
     test(`${view} view`, async ({ page, gotoView }) => {
       test.fixme(
         view === "intake",
-        'axe rule "listitem" (serious): <ol role="log" aria-label="Conversation"> in components/intake/intake-screen.tsx overrides the list role, so its <li> children are not in a list',
+        'HAC-40: axe rule "listitem" (serious): <ol role="log" aria-label="Conversation"> in components/intake/intake-screen.tsx overrides the list role, so its <li> children are not in a list',
       );
       await gotoView(view, siteFor(view));
       await expect(page.getByRole("heading", { level: 1, name: views[view] })).toBeVisible();

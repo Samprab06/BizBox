@@ -119,7 +119,7 @@ test.describe("deep links", () => {
   test("/sites/unselected asks the user to pick a site", async ({ page, gotoView }) => {
     test.fixme(
       true,
-      'Site detail with no selection renders "Site unavailable" (reads as an error) instead of a "pick a site" prompt',
+      'HAC-43: Site detail with no selection renders "Site unavailable" (reads as an error) instead of a "pick a site" prompt',
     );
     await gotoView("site");
     await expect(page.getByText(/pick a site|select a site|choose a site/i)).toBeVisible();
@@ -204,7 +204,7 @@ test.describe("bad input", () => {
   test("a malformed percent-escape in the URL does not produce a bare server error", async ({ page, projectId }) => {
     test.fixme(
       true,
-      "GET /projects/houston-coffee/sites/%ZZ answers 500 with a plain-text Internal Server Error (no page, no way back)",
+      "QUESTION: GET /projects/houston-coffee/sites/%ZZ answers 500 with a plain-text Internal Server Error (no page, no way back)",
     );
     const response = await page.goto(`/projects/${projectId}/sites/%ZZ`);
     expect(response?.status()).toBeLessThan(500);
