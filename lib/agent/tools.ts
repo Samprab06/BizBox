@@ -851,6 +851,10 @@ export function createInvestigationTools(
 
 // HAC-82: injectable scenario tools, separate from the budgeted HAC-23 job runtime.
 export { createCopilotMutationTools } from "./copilot-tools";
+export { createCopilotTools } from "./copilot-registry";
+export { createCopilotReadTools } from "./copilot-read-tools";
+export { createCopilotRunTools } from "./copilot-run-tools";
+export { resolveCopilotReference } from "./copilot-references";
 export type {
   CopilotMutationContext,
   CopilotMutationDependencies,

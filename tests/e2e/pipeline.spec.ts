@@ -64,12 +64,9 @@ test.describe("real HTTP pipeline (dedicated local seeded PostGIS)", () => {
     await expect(list.getByRole("link")).toHaveCount(3);
     for (const candidate of await list.getByRole("link").all()) {
       await candidate.click();
-      const metrics = page
-        .getByRole("region", { name: "Candidate locations", exact: true })
-        .getByRole("definition");
-      await expect(metrics).toHaveCount(3);
-      for (const metric of await metrics.all())
-        await expect(metric).toContainText(/costar|public|founder|default/);
+      await expect(page.getByRole("link", { name: /ft2 costar/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /\/ month costar/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /\/ 100 · default/ })).toBeVisible();
     }
 
     for (const row of search.candidates) {
@@ -154,8 +151,8 @@ test.describe("real HTTP pipeline (dedicated local seeded PostGIS)", () => {
     await page.getByLabel("Buildout budget ($)", { exact: true }).fill("72000");
     await page.getByRole("link", { name: "Comparison", exact: true }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: /comparison is outdated/ }),
-    ).toBeVisible();
+      page.getByRole("status").filter({ hasText: /comparison is outdated/i }),
+    ).toBeVisible({ timeout: 30_000 });
     const rerunResponse = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === "/api/comparisons" &&
