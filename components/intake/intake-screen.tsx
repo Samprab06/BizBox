@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, updateProfile, type IntakeSession } from "./profile";
+import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, profileValidationMessage, updateProfile, type IntakeSession } from "./profile";
 
 const subscribe = () => () => {};
 
@@ -24,6 +24,7 @@ function readSession(key: string): IntakeSession {
 function IntakeForm({ storageKey }: { storageKey: string }) {
   const [session, setSession] = useState(() => readSession(storageKey));
   const [message, setMessage] = useState("");
+  const [drafts, setDrafts] = useState<Partial<Record<(typeof fields)[number]["key"], string>>>({});
   const [storageError, setStorageError] = useState(false);
   const missing = missingFields(session.profile);
   const next = missing[0];
@@ -53,7 +54,7 @@ function IntakeForm({ storageKey }: { storageKey: string }) {
         <section aria-labelledby="chat-heading">
           <h2 id="chat-heading" className="text-lg font-semibold">Intake conversation</h2>
           <p className="mt-1 text-sm text-muted">This conversation uses a fixture.</p>
-          <ol role="log" aria-label="Conversation" className="my-4 max-h-96 space-y-3 overflow-y-auto">
+          <ol role="list" aria-live="polite" aria-label="Conversation" tabIndex={0} className="my-4 max-h-96 space-y-3 overflow-y-auto">
             {session.messages.map((entry, index) => (
               <li key={index} className={entry.role === "founder" ? "ml-5 rounded-xl bg-mint p-3" : "mr-5 rounded-xl bg-paper p-3"}>
                 <span className="block text-xs font-semibold">{entry.role === "founder" ? "You" : "Intake"}</span>
@@ -64,7 +65,11 @@ function IntakeForm({ storageKey }: { storageKey: string }) {
           <form onSubmit={(event) => {
             event.preventDefault();
             if (!message.trim()) return;
-            save(answerPrompt(session, message));
+            const updated = answerPrompt(session, message);
+            if (next && updated.profile !== session.profile) {
+              setDrafts((current) => ({ ...current, [next.key]: undefined }));
+            }
+            save(updated);
             setMessage("");
           }}>
             <label className="block text-sm font-medium" htmlFor={next ? "intake-message" : undefined}>
@@ -87,14 +92,22 @@ function IntakeForm({ storageKey }: { storageKey: string }) {
           <div className="mt-5 grid gap-4">
             {fields.map((field) => {
               const answer = session.profile[field.key];
-              const changed = (value: string) => save({ ...session, profile: updateProfile(session.profile, field.key, value) });
+              const draft = drafts[field.key];
+              const error = draft === undefined ? undefined : profileValidationMessage(field, draft);
+              const errorId = `profile-${field.key}-error`;
+              const value = draft ?? answer?.value ?? "";
+              const changed = (input: string) => {
+                const invalid = profileValidationMessage(field, input);
+                setDrafts((current) => ({ ...current, [field.key]: invalid ? input : undefined }));
+                if (!invalid) save({ ...session, profile: updateProfile(session.profile, field.key, input) });
+              };
               const inputClass = "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm";
               return (
-                <label key={field.key} className="block text-sm font-medium">
-                  {field.label}
+                <div key={field.key}>
+                  <label htmlFor={`profile-${field.key}`} className="text-sm font-medium">{field.label}</label>
                   {answer?.origin === "default" && <span className="ml-2 rounded bg-mint px-2 py-0.5 text-xs">Default</span>}
                   {"options" in field ? (
-                    <select className={inputClass} value={answer?.value ?? ""} onChange={(event) => changed(event.target.value)}>
+                    <select className={inputClass} id={`profile-${field.key}`} value={value} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} onChange={(event) => changed(event.target.value)}>
                       <option value="">Select an option</option>
                       {field.options.map((option) => <option key={option}>{option}</option>)}
                     </select>
@@ -102,9 +115,10 @@ function IntakeForm({ storageKey }: { storageKey: string }) {
                     <input className={inputClass} type={"numeric" in field ? "number" : "text"}
                       min={"numeric" in field ? (field.key === "staff" ? 1 : 0) : undefined}
                       step={"numeric" in field ? 1 : undefined}
-                      value={answer?.value ?? ""} onChange={(event) => changed(event.target.value)} />
+                      id={`profile-${field.key}`} value={value} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} onChange={(event) => changed(event.target.value)} />
                   )}
-                </label>
+                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-red-800">{error}</p>}
+                </div>
               );
             })}
           </div>

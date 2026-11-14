@@ -27,15 +27,18 @@ export const intakeSessionSchema = z.object({
 export type IntakeSession = z.infer<typeof intakeSessionSchema>;
 export type Profile = IntakeSession["profile"];
 
-function isValidAnswer(field: Field, value: string) {
+export function profileValidationMessage(field: Field, value: string): string | undefined {
   const text = value.trim();
-  if (!text) return false;
-  if ("options" in field) return field.options.some((option) => option === text);
+  if ("options" in field && !field.options.some((option) => option === text)) {
+    return `Choose ${field.options.join(", ")}.`;
+  }
   if ("numeric" in field) {
     const number = Number(text);
-    return /^\d+$/.test(text) && Number.isSafeInteger(number) && number >= (field.key === "staff" ? 1 : 0);
+    if (!/^\d+$/.test(text) || !Number.isSafeInteger(number) || number < (field.key === "staff" ? 1 : 0)) {
+      return field.key === "staff" ? "Enter a positive whole number." : "Enter a nonnegative whole number.";
+    }
   }
-  return true;
+  if (!text) return "Enter an answer.";
 }
 
 export const initialSession: IntakeSession = {
@@ -44,7 +47,7 @@ export const initialSession: IntakeSession = {
 };
 
 export function missingFields(profile: Profile) {
-  return fields.filter((field) => !isValidAnswer(field, profile[field.key]?.value ?? ""));
+  return fields.filter((field) => profileValidationMessage(field, profile[field.key]?.value ?? "") !== undefined);
 }
 
 export function updateProfile(profile: Profile, key: Key, value: string): Profile {
@@ -63,16 +66,15 @@ export function answerPrompt(session: IntakeSession, text: string): IntakeSessio
     const value = "options" in field
       ? field.options.find((option) => option.toLowerCase() === answer.toLowerCase())
       : answer;
-    if (value && isValidAnswer(field, value)) {
-      profile = updateProfile(profile, field.key, value);
+    const error = profileValidationMessage(field, value ?? answer);
+    if (!error) {
+      profile = updateProfile(profile, field.key, value ?? answer);
       const next = missingFields(profile)[0];
       reply = next
         ? `I saved ${field.label.toLowerCase()}. Next, enter ${next.label.toLowerCase()}.`
         : "Your profile has all the required fields. Review your answers in the form.";
-    } else if ("options" in field) {
-      reply = `Choose ${field.options.join(", ")}.`;
     } else {
-      reply = field.key === "staff" ? "Enter a positive whole number." : "Enter a nonnegative whole number.";
+      reply = error;
     }
   }
 
