@@ -18,6 +18,18 @@ export AGENTORCH_AGENT=priya-codex         # your agent name: tickets labelled a
 export AGENTORCH_SIGNATURE="Priya's Codex" # added to every board post
 ```
 
+## Stack (read before writing code)
+
+- **One Next.js app in TypeScript** (App Router, `strict` mode) with **Tailwind CSS**, hosted on **Vercel**. No separate backend service and no Python in the deployed app.
+- API: Next.js route handlers under `app/api/`. Shared request and response types: Zod schemas in `lib/contracts/`.
+- Database: Postgres with PostGIS (Neon through Vercel), accessed with Drizzle. No SQLite or local files at runtime, because Vercel functions have no persistent disk.
+- Simulation, demand model and customer panel: pure TypeScript in `lib/`, with seeded random numbers (never `Math.random`).
+- Agent: the JavaScript `deepagents` package. Customer decisions: TypeSafe Jev over its REST API.
+- Package manager pnpm. Tests with Vitest. Every PR passes `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
+- Secrets live in Vercel environment variables and `.env.local`, never in git.
+
+Each Linear ticket description carries the design details it needs. If something is missing, ask on the board.
+
 ## 1. Tickets
 
 The project's mega doc is split into Linear tickets. Each ticket is labelled with the
