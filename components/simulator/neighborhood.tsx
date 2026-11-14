@@ -152,11 +152,11 @@ export default function Neighborhood({
       const clouds = new CloudCollection({ noiseDetail: 32 });
       city.scene.primitives.add(clouds);
       const cloudPositions = [
-        [-0.019, 0.029, 660, 570],
-        [-0.008, 0.025, 580, 460],
-        [0.001, 0.034, 700, 680],
-        [0.012, 0.031, 620, 600],
-        [0.024, 0.037, 780, 720],
+        [-0.019, 0.029, 320, 570],
+        [-0.008, 0.025, 290, 460],
+        [0.001, 0.034, 340, 680],
+        [0.012, 0.031, 310, 600],
+        [0.024, 0.037, 350, 720],
         [0.004, -0.035, 690, 590],
       ];
       const cumulus = cloudPositions.map(([east, north, height, width]) =>
