@@ -581,7 +581,14 @@ export function runSensitivity(
 ): SensitivityResult {
   const parsed = EvaluationRequestSchema.parse(input);
   const request: EvaluationRequest = options.seeds
-    ? { ...parsed, seeds: options.seeds }
+    ? {
+        ...parsed,
+        seeds: options.seeds,
+        // Preserve selected seed identities while honoring the caller's work limit.
+        ...(parsed.seedSet
+          ? { seedSet: parsed.seedSet.slice(0, options.seeds) }
+          : {}),
+      }
     : parsed;
   const sorted = [...new Set(values)].sort((a, b) => a - b);
   const baseline = evaluateSites(request).result;
