@@ -180,7 +180,7 @@ describe("POST project intake", () => {
   });
 
   it("returns 503 when no conversation model is configured", async () => {
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     try {
       const handler = createIntakeHandler({ projectExists: async () => true });
       expect(

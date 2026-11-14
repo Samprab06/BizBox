@@ -1,11 +1,11 @@
 import "server-only";
-import { ChatAnthropic } from "@langchain/anthropic";
+import { ChatOpenAI } from "@langchain/openai";
 import { tool } from "@langchain/core/tools";
 import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
 import { type IntakeSession, INTAKE_QUESTIONS } from "./intake";
 
-export const INTAKE_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_INTAKE_MODEL = "gpt-5.4-mini";
 export const INTAKE_TIMEOUT_MS = 20_000;
 export type IntakeRunner = (input: {
   session: IntakeSession;
@@ -83,17 +83,19 @@ export function createDeepIntakeRunner(
   };
 }
 
-/** Uses only the already selected Anthropic provider; never chooses a paid fallback. */
+/** Uses only the configured OpenAI model; never chooses a paid fallback. */
 export const runConfiguredIntakeAgent: IntakeRunner = async (input) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) throw new Error("Intake model is not configured");
-  const model = new ChatAnthropic({
-    model: INTAKE_MODEL,
+  const model = new ChatOpenAI({
+    model: process.env.OPENAI_MODEL?.trim() || DEFAULT_INTAKE_MODEL,
     apiKey,
     temperature: 0,
+    reasoning: { effort: "none" },
     maxTokens: 1500,
     maxRetries: 0,
-    clientOptions: { timeout: 10_000, maxRetries: 0 },
+    timeout: 10_000,
+    configuration: { timeout: 10_000, maxRetries: 0 },
   });
   return createDeepIntakeRunner(model)(input);
 };
