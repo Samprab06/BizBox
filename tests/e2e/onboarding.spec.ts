@@ -96,10 +96,14 @@ for (const viewport of [
       await expectNoOverflow(page);
       await proceed(page).click();
 
-      // Areas keep favor/avoid meaning.
+      // Area preferences are typed freely, without preset neighborhood suggestions.
       await expect(title(page)).toHaveText("Which areas should we favor or avoid?");
-      await page.getByRole("button", { name: "Favor Silver Lake" }).click();
-      await page.getByRole("button", { name: "Avoid Culver City" }).click();
+      await expect(page.getByRole("button", { name: /^(Favor|Avoid) / })).toHaveCount(0);
+      const areas = page.getByRole("textbox", { name: "Which areas should we favor or avoid?" });
+      await areas.fill("Favor Atwater Village; avoid noisy intersections");
+      await page.getByRole("button", { name: "Back", exact: true }).click();
+      await proceed(page).click();
+      await expect(areas).toHaveValue("Favor Atwater Village; avoid noisy intersections");
       await proceed(page).click();
 
       // Rent: keyboard on the ruler, then an exact typed amount that is not on a detent.
@@ -166,7 +170,7 @@ for (const viewport of [
         concept: { value: "Late-night dumpling counter", origin: "founder" },
         customers: { value: "Students and night-shift workers", origin: "founder" },
         city: { value: "Los Angeles", origin: "founder" },
-        areas: { value: "Favor Silver Lake; Avoid Culver City", origin: "founder" },
+        areas: { value: "Favor Atwater Village; avoid noisy intersections", origin: "founder" },
         rent: { value: "4550", origin: "founder" },
         buildout: { value: "130000", origin: "founder" },
         price: { value: "Midrange", origin: "founder" },

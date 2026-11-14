@@ -53,7 +53,7 @@ let data = {
   concept: "",
   target: "",
   city: "Los Angeles",
-  neighborhoods: ["Silver Lake"],
+  neighborhoods: [],
   preferences: "",
   rent: "4500",
   buildout: "80000",
@@ -74,6 +74,13 @@ try {
   );
   if (saved && typeof saved === "object") data = { ...data, ...saved };
 } catch {}
+// Preserve prior typed/picked preferences as editable text when resuming this preview.
+if (Array.isArray(data.neighborhoods) && data.neighborhoods.length) {
+  data.preferences = [`Favor ${data.neighborhoods.join(", ")}`, data.preferences]
+    .filter(Boolean)
+    .join("; ");
+  data.neighborhoods = [];
+}
 if (!availableCategories.includes(data.category)) {
   data.category = "";
   step = "category";
@@ -260,13 +267,11 @@ function answerHTML() {
       });
     case "city":
       return `<div class="cities" role="group" aria-labelledby="step-title">${["Los Angeles", "Houston"].map((city) => `<button type="button" class="city-choice" data-city="${city}" aria-pressed="${data.city === city}"><div class="city-photo"><img src="${cityPhotos[city]}" data-photo-city="${city}" alt="" width="640" height="360"></div><span class="city-label">${city}<span class="radio-mark" aria-hidden="true"></span></span></button>`).join("")}</div>${comingSoonCities.length ? `<div class="coming-soon-cities" role="group" aria-label="Coming soon cities">${comingSoonCities.map((city) => `<button type="button" class="coming-city" disabled aria-label="${esc(city)} — Coming soon"><strong>${esc(city)}</strong><span>Coming soon</span></button>`).join("")}</div>` : ""}`;
-    case "areas": {
-      const names =
-        data.city === "Houston"
-          ? ["Montrose", "The Heights", "Rice Village"]
-          : ["Silver Lake", "Echo Park", "Culver City"];
-      return `${textAnswer("preferences", { textarea: true, placeholder: "Walkable streets, near offices. Avoid shopping centers…" })}<div class="neighborhoods" role="group" aria-label="Preferred neighborhoods">${names.map((name) => `<button type="button" class="chip" data-neighborhood="${name}" aria-pressed="${data.neighborhoods.includes(name)}">${name}</button>`).join("")}</div>`;
-    }
+    case "areas":
+      return textAnswer("preferences", {
+        textarea: true,
+        placeholder: "Type your preferences…",
+      });
     case "rent":
       return sliderAnswer("rent", {
         min: 500,
@@ -305,9 +310,7 @@ function review() {
     ["City", data.city, "city"],
     [
       "Areas",
-      [data.neighborhoods.join(", "), data.preferences]
-        .filter(Boolean)
-        .join(" · ") || "No preference",
+      data.preferences || "No preference",
       "areas",
     ],
     ["Monthly rent", money(data.rent), "rent"],
@@ -485,22 +488,6 @@ function bind() {
           .forEach((el) =>
             el.setAttribute("aria-pressed", String(el === button)),
           );
-        persist();
-        BizBoxLiquid.select(button);
-      }),
-  );
-  main.querySelectorAll("[data-neighborhood]").forEach(
-    (button) =>
-      (button.onclick = () => {
-        if (isTransitioning) return;
-        const name = button.dataset.neighborhood;
-        data.neighborhoods = data.neighborhoods.includes(name)
-          ? data.neighborhoods.filter((x) => x !== name)
-          : [...data.neighborhoods, name];
-        button.setAttribute(
-          "aria-pressed",
-          String(data.neighborhoods.includes(name)),
-        );
         persist();
         BizBoxLiquid.select(button);
       }),
