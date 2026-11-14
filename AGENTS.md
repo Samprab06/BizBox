@@ -7,23 +7,28 @@ this project.
   the agent that owns it.
 - **GitHub** (`Samprab06/HackPrinceton`) holds the code. All changes arrive as PRs.
 - **The Agent Board** is Linear ticket **HAC-6**. Its comments are the team chat.
-- **`oracle-lead`** is the orchestrator. It runs the project. If you don't know what to
-  do, ask it on the board.
+- **`oracle-lead`** (the orchestrator) runs the project. If you don't know what to do, ask it on the
+  board.
 - The **`agentorch`** command does all Linear and board work. `.agentorch.json` already
   names the team and the board.
 
 ## 0. Who's who
 
-| Agent | Runs where | Role |
-|---|---|---|
-| `oracle-lead` | Codex, tmux session `lead` on the Oracle server | Orchestrator: plans, assigns, unblocks, reviews and merges |
-| `oracle-banyan-1`, `oracle-banyan-2` | BanyanCode, tmux sessions `banyan-1` and `banyan-2` on the Oracle server | Implementers |
-| `oracle-backend`, `oracle-frontend` | Headless agentorch worker on the Oracle server | Implementers that pick up their tickets automatically and open draft PRs |
-| `frank-claude`, `yasser-claude`, `akshar-codex` | Teammates' machines | Implementers |
+| Agent | Mention | Runs where | Role |
+|---|---|---|---|
+| Orchestrator | `@oracle-lead` | Codex, tmux `orchestrator`, folder `~/hackprinceton-orchestrator` on the Oracle server | Plans, assigns, unblocks, reviews and merges. Takes instructions from Sam through Hermes (Telegram). |
+| Oracle 1 | `@oracle-1` | BanyanCode, tmux `agent-1`, folder `~/hackprinceton-agent-1` | Implements tickets labelled `agent:samridh-claude` |
+| Oracle 2 | `@oracle-2` | BanyanCode, tmux `agent-2`, folder `~/hackprinceton-agent-2` | Implements tickets labelled `agent:samridh-claude` (same queue as Oracle 1) |
+| Teammates' agents | `@frank-claude`, `@yasser-claude`, `@akshar-codex` | Teammates' machines | Implement tickets with their own label |
 
-Your own name is in `AGENTORCH_AGENT`. Run `agentorch board whoami` if you're unsure.
-Humans can step in at any time, but the project must never **wait** on a human. Every
-decision below has an agent that owns it.
+Oracle 1 and Oracle 2 share Sam's queue. `agentorch ticket next` moves a ticket to In
+Development the moment it is claimed, so the other one skips it. Before you start
+building, run `git ls-remote origin '<printed branch>'`: if the branch already exists,
+the other Oracle has the ticket, so take the next one.
+
+Your name and label are in `AGENTORCH_AGENT`, and your signature is in
+`AGENTORCH_SIGNATURE`. Humans can step in at any time, but the project must never
+**wait** on a human: every decision below has an agent that owns it.
 
 ## 1. Stack (read before writing code)
 
@@ -95,16 +100,24 @@ otherwise hold. Every 10–15 minutes, or whenever it's mentioned, it runs this 
    related tickets consistent with each other: the tickets are the only spec.
 5. **Review and merge.** For each open PR:
    - check it against its ticket's acceptance criteria and the stack rules
-   - check that CI and the four `pnpm` checks pass
+   - check that the four `pnpm` checks pass. Until the repo has CI, run them yourself:
+     `gh pr checkout <n> && pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build`,
+     then `git checkout main`. Once the app is bootstrapped, ticket a GitHub Actions
+     workflow that runs these four checks on every PR.
    - if it's good, merge it: `gh pr ready <n>` (for drafts), then `gh pr merge <n> --squash --delete-branch`.
      The ticket moves to Done when the PR merges, through Linear's GitHub integration.
    - if it isn't good, comment on the PR with exactly what to change, and post
      `[REVIEW]` on the board mentioning the author
-6. **Recover failures.** A ticket in Backlog with a "failed" comment from the server
-   worker: either fix the ticket's description and run
+6. **Recover failures.** For a ticket an implementer gave up on (`[BLOCKED]`, or stuck in
+   In Development with no activity for 30 minutes): either fix the ticket's description and run
    `agentorch ticket assign HAC-n <agent> --ready`, or give it to a different agent.
 7. **Report.** After a cycle that changed something, post one `[STATUS]` message: what
-   merged, what's in flight, what's blocked, and the critical path.
+   merged, what's in flight, what's blocked, and the critical path. For anything Sam
+   should see right away (a merge to `main`, a failure it can't resolve, a decision that
+   changes scope), also send it to his phone: `agentorch notify test "<one line>"`.
+8. **Instructions from Sam.** Hermes relays Sam's Telegram messages as board posts
+   mentioning `@oracle-lead`, signed `[Sam's phone]`. Treat them as the highest priority
+   (section 6), act on them, and reply on the board. Hermes reads your reply back to him.
 
 `oracle-lead` never writes feature code itself. If it has to, it creates a ticket for
 itself and follows the implementer loop.
@@ -117,15 +130,15 @@ then **one tag**:
 | Tag | When | Example |
 |---|---|---|
 | `[DONE]` | You opened a PR | `[DONE] HAC-11 CoStar loader, PR #7. Exposes loadKit() in lib/data/costar.ts` |
-| `[CONTRACT]` | You're changing a shared type, schema, route or env var | `[CONTRACT] @oracle-banyan-2 @yasser-claude SiteSummary gains walkScore:number (lib/contracts/site.ts), PR #9` |
+| `[CONTRACT]` | You're changing a shared type, schema, route or env var | `[CONTRACT] @oracle-2 @yasser-claude SiteSummary gains walkScore:number (lib/contracts/site.ts), PR #9` |
 | `[BLOCKED]` | You can't continue | `[BLOCKED] @oracle-lead HAC-16 needs the CoStar parcel IDs from HAC-11` |
 | `[QUESTION]` | You need a decision | `[QUESTION] @oracle-lead Huff fallback: distance decay 1.5 or 2?` |
 | `[SPLIT]` | A ticket is too big | `[SPLIT] @oracle-lead HAC-22: did sensitivity, evaluation still needs a ticket` |
-| `[IDLE]` | You have no ready tickets | `[IDLE] @oracle-lead oracle-banyan-1 free` |
+| `[IDLE]` | You have no ready tickets | `[IDLE] @oracle-lead oracle-1 free` |
 | `[REVIEW]` | `oracle-lead` asks for PR changes | `[REVIEW] @akshar-codex PR #5: add the PostGIS index from the ticket` |
 | `[STATUS]` | `oracle-lead`'s summary | `[STATUS] merged #5 #7 · in flight HAC-13 HAC-16 · critical path HAC-9 then HAC-22` |
 
-- **Mentions** use agent names: `@oracle-lead`, `@oracle-banyan-1`, `@frank-claude`, `@all`.
+- **Mentions** use agent names: `@oracle-lead`, `@oracle-1`, `@oracle-2`, `@frank-claude`, `@all`.
 - **If a post mentions you or `@all`,** act on it, then reply on the board.
 - **If it doesn't,** read it. Change your own work only if the post affects it. Don't
   acknowledge it, and don't chat.
@@ -140,6 +153,13 @@ then **one tag**:
 Check the board at the start of each ticket, before each PR, and after each merge. Agents
 with background shells keep one `agentorch board wait --mentions` running and act when it
 returns.
+
+## 4b. Commits
+
+Never add AI attribution to commits or PRs: no `Co-Authored-By: Claude` (or any other
+assistant), no "Generated with ..." lines, no session links. The server clones strip
+these with a `commit-msg` hook, but don't rely on it. Teammates using Claude Code: turn
+off its commit attribution in your Claude Code settings.
 
 ## 5. Ticket commands
 
