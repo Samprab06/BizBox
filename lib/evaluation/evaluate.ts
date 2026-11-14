@@ -38,6 +38,7 @@ import {
 import type { DayResult, SimEvent, SiteConfig } from "@/lib/sim/contracts";
 import { computeParsedMonthlyEconomics } from "@/lib/sim/economics";
 import { percentile, simulateDay } from "@/lib/sim/engine";
+import { buildInsightsDay } from "@/lib/insights/model";
 
 const DAY_TYPES = ["weekday", "weekend"] as const satisfies readonly DayType[];
 /** Two sites are tied when their 90% intervals overlap by at least this share of the narrower one. */
@@ -346,6 +347,18 @@ export function evaluateSite(
     if (d < best) rep = r;
   }
   const weekday = perSeed.map((r) => r.days.weekday.metrics);
+  const insightDay = (dayType: DayType) =>
+    buildInsightsDay({
+      runs: perSeed.map((r) => r.days[dayType]),
+      personas: request.personaSet.personas,
+      siteLocation: site.storefront.location,
+      capacityInputs: {
+        stations: perSeed[0]!.days[dayType].metrics.stations,
+        meanServiceMin: config.service.meanServiceMin ?? null,
+        stationOrigin: null,
+        serviceMeanOrigin: site.serviceMeanOrigin ?? null,
+      },
+    });
 
   return {
     evaluation: {
@@ -376,6 +389,16 @@ export function evaluateSite(
         ),
       },
       excludedPersonaIds: estimateDemand(demandInput).excludedPersonaIds,
+      insights: {
+        version: "hac94-v1",
+        siteId: site.siteId,
+        synthetic: request.synthetic,
+        seedCount: seeds.length,
+        days: {
+          weekday: insightDay("weekday"),
+          weekend: insightDay("weekend"),
+        },
+      },
       ...(site.jevPanel ? { jevPanel: site.jevPanel } : {}),
     },
     representativeDays: rep.days,

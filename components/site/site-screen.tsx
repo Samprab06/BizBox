@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { AssumedValue } from "@/lib/contracts";
+import type { SiteInsights } from "@/lib/contracts/insights";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import {
@@ -13,13 +14,16 @@ import { useSiteSearch } from "@/lib/client/use-site-search";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { SiteDetail } from "./site-detail";
 import { LiveEvidence, Metric } from "./live-evidence";
+import { InsightsWorkspace } from "@/components/insights/insights-workspace";
 
 export function SiteScreen({
   project,
   siteId,
+  fixtureInsights,
 }: {
   project: PreviewProject;
   siteId: string;
+  fixtureInsights?: SiteInsights;
 }) {
   const example = project.sites.find((site) => site.id === siteId);
   if (example)
@@ -35,7 +39,11 @@ export function SiteScreen({
           </Link>{" "}
           for current listings.
         </p>
-        <SiteDetail project={project} site={example} />
+        <SiteDetail
+          project={project}
+          site={example}
+          insights={fixtureInsights}
+        />
         <p className="mt-6 text-xs text-muted">Example data</p>
       </>
     );
@@ -46,7 +54,12 @@ export function SiteScreen({
         <BackToMap projectId={project.id} />
       </>
     );
-  return <LiveSiteDetail project={project} siteId={siteId} />;
+  return (
+    <>
+      <LiveSiteDetail project={project} siteId={siteId} />
+      <InsightsWorkspace key={siteId} projectId={project.id} siteId={siteId} />
+    </>
+  );
 }
 
 type CatchmentState =
