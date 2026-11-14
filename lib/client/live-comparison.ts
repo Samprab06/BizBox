@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+import { useWorkspaceReport } from "./use-workspace-context";
+import type { WorkspaceObservation } from "./workspace-context";
 import { BusinessProfileSchema, type BusinessProfile } from "@/lib/contracts";
 import {
   EvaluationResultSchema,
@@ -26,6 +28,8 @@ export type LiveComparisonPayload = {
   result: EvaluationResult;
   robustness?: RobustnessSummary | null;
   assembly?: AssemblyMetadata;
+  /** Existing server record provenance, retained for the workspace context. */
+  comparison?: { synthetic: boolean };
   /** Huff-only ranking check, returned only for fresh Jev comparisons. */
   demandSourceCheck?: {
     primary: "jev" | "huff";
@@ -68,6 +72,7 @@ const PayloadSchema = z.object({
   comparisonId: z.string().min(1),
   outdated: z.boolean(),
   result: EvaluationResultSchema,
+  comparison: z.object({ synthetic: z.boolean() }).optional(),
   /** HAC-62 headline; null/absent for comparisons stored before it existed. */
   robustness: RobustnessSummarySchema.nullable().optional(),
   /** Huff-only rerun of the same request (returned for fresh Jev comparisons only). */
@@ -375,6 +380,19 @@ export function useStoredComparison(
     },
     [projectId],
   );
+  const context = useMemo<WorkspaceObservation>(
+    () => ({
+      kind: "stored",
+      phase: state.phase,
+      comparisonId: state.payload?.comparisonId,
+      synthetic: state.payload?.comparison?.synthetic,
+      outdated: state.payload?.outdated,
+      siteIds: state.payload?.result.ranking ?? [],
+      candidates: [],
+    }),
+    [state],
+  );
+  useWorkspaceReport(projectId, context);
   return { ...state, retry, adopt, activeId };
 }
 
@@ -475,8 +493,10 @@ export function useLiveComparison(
       controller.abort();
     };
   }, [projectId, attempt]);
-  const candidates =
-    search.state.mode === "live" ? search.state.result.candidates : [];
+  const candidates = useMemo(
+    () => (search.state.mode === "live" ? search.state.result.candidates : []),
+    [search.state],
+  );
   const candidateKey = candidates
     .map(({ candidate }) => candidate.id)
     .join(",");
@@ -602,6 +622,19 @@ export function useLiveComparison(
           capability === null
         ? "loading"
         : "ready";
+  const context = useMemo<WorkspaceObservation>(
+    () => ({
+      kind: "comparison",
+      phase,
+      comparisonId: stored.payload?.comparisonId,
+      synthetic: stored.payload?.comparison?.synthetic,
+      outdated: stored.payload?.outdated,
+      siteIds: stored.payload?.result.ranking ?? [],
+      candidates: candidates.map((entry) => entry.candidate),
+    }),
+    [phase, stored.payload, candidates],
+  );
+  useWorkspaceReport(projectId, context);
   return {
     phase,
     candidates,

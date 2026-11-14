@@ -127,7 +127,10 @@ test.describe("site detail", () => {
 
     for (const siteId of siteIds) {
       await gotoView("site", siteId);
-      const values = page.getByRole("definition").filter({ hasText: /\d/ });
+      const values = page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByRole("definition")
+        .filter({ hasText: /\d/ });
       const count = await values.count();
       expect(count, `${siteId}: number elements found`).toBeGreaterThan(0);
 
@@ -222,7 +225,10 @@ test.describe("site detail", () => {
       gotoView,
     }) => {
       await gotoView("site", siteId);
-      const values = page.getByRole("definition").filter({ hasText: /\d/ });
+      const values = page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByRole("definition")
+        .filter({ hasText: /\d/ });
       const count = await values.count();
       expect(count).toBeGreaterThan(0);
       for (let i = 0; i < count; i++) {
@@ -265,11 +271,17 @@ test.describe("live site detail", () => {
       page.getByRole("heading", { name: "101 Invented St" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("definition").filter({ hasText: "4,321" }),
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByRole("definition")
+        .filter({ hasText: "4,321" }),
     ).toContainText("costar");
     await expect(page.getByText("Residents", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("definition").filter({ hasText: /Unknown/ }),
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByRole("definition")
+        .filter({ hasText: /Unknown/ }),
     ).not.toHaveCount(0);
     await expect(
       page.getByText("Synthetic competing café", { exact: false }).first(),
@@ -281,10 +293,15 @@ test.describe("live site detail", () => {
       page.getByRole("link", { name: "Source URL" }).first(),
     ).toHaveAttribute("href", "https://example.test/venues");
     await expect(page.getByText("12,400")).toHaveCount(0);
-    await expect(page.getByText("Example data", { exact: true })).toHaveCount(
-      0,
-    );
-    const evidenceLinks = page.getByRole("definition").getByRole("link");
+    await expect(
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toHaveCount(0);
+    const evidenceLinks = page
+      .getByRole("region", { name: "Site detail", exact: true })
+      .getByRole("definition")
+      .getByRole("link");
     for (const link of await evidenceLinks.all()) {
       const href = await link.getAttribute("href");
       expect(href).toMatch(/^#/);
@@ -293,6 +310,7 @@ test.describe("live site detail", () => {
       ).toHaveCount(1);
     }
     const sizeLink = page
+      .getByRole("region", { name: "Site detail", exact: true })
       .getByRole("definition")
       .filter({ hasText: "1,250" })
       .getByRole("link");
@@ -324,17 +342,26 @@ test.describe("live site detail", () => {
       page.getByRole("alert").filter({ hasText: /Catchment unavailable/ }),
     ).toBeVisible();
     await expect(
-      page.getByText("Example data", { exact: true }),
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByText("Example data", { exact: true }),
     ).not.toBeVisible();
     await page.getByText("View example site details", { exact: true }).click();
-    await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Montrose storefront" }),
     ).toBeVisible();
     failed = false;
     await page.getByRole("button", { name: "Retry catchment" }).click();
     await expect(
-      page.getByRole("definition").filter({ hasText: "4,321" }),
+      page
+        .getByRole("region", { name: "Site detail", exact: true })
+        .getByRole("definition")
+        .filter({ hasText: "4,321" }),
     ).toBeVisible();
   });
 
@@ -387,7 +414,11 @@ test("live detail without intake explains example fallback and malformed IDs rem
     page.getByText(/requested listing cannot be verified/),
   ).toBeVisible();
   await page.getByText("View example site details", { exact: true }).click();
-  await expect(page.getByText("Example data", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Site detail", exact: true })
+      .getByText("Example data", { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Montrose storefront" }),
   ).toBeVisible();
@@ -421,6 +452,9 @@ test("monthly costs render dollars with provenance rather than raw cents", async
     page.getByRole("link", { name: "$3,600 / month costar", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("definition").filter({ hasText: "USD cents" }),
+    page
+      .getByRole("region", { name: "Site detail", exact: true })
+      .getByRole("definition")
+      .filter({ hasText: "USD cents" }),
   ).toHaveCount(0);
 });
