@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "modelId": "Synthetic01",
+      "costarPropertyId": "990096",
+      "costarSpaceId": "990096:1",
+      "hasExterior": null,
+      "source": {
+        "origin": "default",
+        "provider": "modeled",
+        "mode": "synthetic",
+        "scope": "demo",
+        "description": "Authored synthetic registry example",
+        "limitations": ["Invented identifiers; not a recorded Matterport scan"]
+      }
+    }
+  ]
+}

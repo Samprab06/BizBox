@@ -140,6 +140,8 @@ export const SiteConfigSchema = z
       usableSf: z.number().finite().positive(),
       sfPerStation: z.number().finite().positive(),
     }),
+    /** Waiting people only, excluding service. Absent means no physical queue limit. */
+    queueCapacity: z.number().int().nonnegative().optional(),
     service: z
       .object({
         /**
@@ -226,7 +228,7 @@ export type DailyMetrics = {
   arrivalsOutsideHours: number;
   joined: number;
   served: number;
-  /** Looked at the line and left (stayDraw >= stay probability). */
+  /** Left on arrival (stayDraw >= stay probability, or the physical queue was full). */
   balked: number;
   /** Joined, then left when their wait passed their patience. */
   reneged: number;

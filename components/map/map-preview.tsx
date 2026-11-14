@@ -1,7 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
+import CandidateMap from "./candidate-map";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { useSiteSearch } from "@/lib/client/use-site-search";
 import { getSiteFixture } from "@/components/site/site-fixtures";
@@ -11,18 +11,6 @@ import {
   evidenceHref,
 } from "@/components/site/live-evidence";
 import { workspaceHref } from "@/lib/client/workspace-routes";
-
-const CandidateMap = dynamic(() => import("./candidate-map"), {
-  ssr: false,
-  loading: () => (
-    <p
-      role="status"
-      className="grid h-96 place-items-center rounded-lg bg-paper"
-    >
-      Loading map…
-    </p>
-  ),
-});
 
 export function MapPreview({
   project,

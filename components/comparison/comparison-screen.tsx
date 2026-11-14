@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { exampleComparison, exampleComparisonId } from "./example-comparison";
-import { ConsultantPanel } from "../ConsultantPanel";
+import {
+  exampleComparison,
+  exampleComparisonId,
+  exampleDemandLabel,
+} from "./example-comparison";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,14 +32,13 @@ export function ComparisonScreen({
   project,
   visits,
   previousId,
-  investigationId,
 }: {
   project: PreviewProject;
   visits: number;
   previousId?: string;
-  investigationId?: string;
 }) {
   const rows = exampleComparison(project.sites, visits);
+  const demandLabel = exampleDemandLabel(project.sites);
   const id = exampleComparisonId(visits);
   const leader = rows[0];
   const overlaps = rows.slice(1).filter((row) => row.high >= leader.low);
@@ -52,6 +54,7 @@ export function ComparisonScreen({
       <div>
         <p className="text-sm text-muted">
           Synthetic Houston scenario · default assumptions
+          {demandLabel && ` · Example · ${demandLabel}`}
         </p>
         <h2 className="mt-2 text-2xl font-semibold">
           Monthly operating scenarios
@@ -152,8 +155,9 @@ export function ComparisonScreen({
             ))}
           </ul>
           <p className="mt-3 text-sm text-muted">
-            The displayed order uses synthetic Huff-style demand assumptions. A
-            separate Jev comparison is pending.
+            {demandLabel
+              ? `The displayed order uses a stored panel of Jev answers, not a live run. ${demandLabel}.`
+              : "The displayed order uses synthetic Huff-style demand assumptions. A separate Jev comparison is pending."}
           </p>
         </section>
         <section className="rounded-xl border border-line p-4">
@@ -176,7 +180,6 @@ export function ComparisonScreen({
           </p>
         </section>
       </div>
-      <ConsultantPanel key={investigationId} investigationId={investigationId} />
     </div>
   );
 }

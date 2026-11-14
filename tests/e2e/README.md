@@ -87,3 +87,35 @@ Don't fix the bug inside a test PR unless it's a one-line test-hook or `aria-lab
   Against the hosted DB use `E2E_BASE_URL=<deployment> E2E_PROJECT_ID=houston-coffee`; it writes test
   profiles and comparisons, so prefer local.
 - `E2E_MODEL=1` also advances an investigation through the configured model.
+
+## Pipeline integration (HAC-34)
+
+Seed an empty **dedicated local** PostGIS database named `hac34_test_*` with `HAC34_TEST_DATABASE_URL=<loopback-url> pnpm exec tsx tests/e2e/pipeline-seed.ts`, start the app with that same `DATABASE_URL` and empty `JEV_API_KEY`/`OPENAI_API_KEY`, then run `E2E_BASE_URL=http://localhost:<port> E2E_PIPELINE_DB=1 pnpm exec playwright test pipeline.spec.ts --workers=1`.
+
+The opt-in suite makes real HTTP/search/catchment/evaluation/storage requests;
+only external map tiles are stubbed. Its three inventory rows and public observations
+are invented fixtures. The separate recorded-panel case aggregates the existing
+recorded Jev wire responses offline and submits the resulting
+behavior rows directly to the real evaluation route (it does not test live Jev polling).
+It compares all ranked metrics, intervals, representative hourly arrivals and persisted
+events on a repeated evaluation, changes seeds, checks founder buildout invalidation,
+and displays an actual missing-table Huff fallback. Intake collects a price tier and
+staff, not a dollar ticket or station count; the latter retain their explicit defaults.
+The exposed interval is monthly **served customers**, not arrival counts, so the seed
+check compares served means to that interval and independently checks changed arrivals.
+Timings are attached to the Playwright report against the comparison route's 60s budget;
+local timings do not establish Vercel limits or hosted seeded Neon acceptance. The suite
+requires a loopback app URL; configure that app with the dedicated local database.
+Without `E2E_PIPELINE_DB=1` these database-writing tests skip explicitly.
+
+### Jev capabilities smoke check (HAC-101)
+
+`api/capabilities.spec.ts` checks `GET /api/comparisons/capabilities` returns a well-formed,
+secret-free body. It passes with or without a Jev key. To also assert `jevConfigured: true` on a
+deployment (Vercel Preview or Production), set `E2E_EXPECT_JEV=1`. The route only reports key
+presence and never calls Jev, so it costs nothing.
+
+```sh
+E2E_BASE_URL=https://<your-preview>.vercel.app E2E_EXPECT_JEV=1 \
+  pnpm exec playwright test api/capabilities --project=api
+```

@@ -1,4 +1,5 @@
 import type { AssumedValue } from "@/lib/contracts";
+import type { Layout } from "@/lib/contracts/layout";
 import type {
   EvaluationResult,
   EvaluationSite,
@@ -15,7 +16,7 @@ export type EvidenceOrigin =
   | SimOrigin
   | NonNullable<EvaluationSite["serviceMeanOrigin"]>
   | Derivation[keyof Derivation]
-  | "matterport";
+  | Layout["room"]["origin"];
 
 const evidenceByOrigin = {
   costar: "Source-backed",
@@ -23,6 +24,7 @@ const evidenceByOrigin = {
   matterport: "Source-backed",
   founder: "Your input",
   default: "Assumption",
+  "agent-proposed": "Assumption",
   none: "Assumption",
   synthetic_personas: "Simulation",
   jev: "Simulation",

@@ -452,3 +452,206 @@ describe("real compiled deepagents decision graph", () => {
     expect(f.execute).not.toHaveBeenCalled();
   });
 });
+
+describe("Nessie planner workflow", () => {
+  it("accepts a cash tool decision, checkpoints it once and preserves its finding on finish", async () => {
+    const f = setup();
+    f.tools.definitions.push({
+      name: "read_nessie_cash_buffer",
+      description: "Read simulated demo cash",
+      schema: z.object({}).strict(),
+    });
+    f.execute.mockImplementation(async () => {
+      f.elapse(100);
+      return {
+        summary: {
+          kind: "nessie_cash_buffer",
+          source: "nessie",
+          synthetic: true,
+          status: "empty",
+        },
+        findings: [
+          "Nessie shared simulated sandbox has no cash accounts; affordability is unverified.",
+        ],
+      };
+    });
+    const job = await f.service.create({
+      projectId: "project-1",
+      profileId: "profile-1",
+      question: "Can we afford opening the shop with our cash buffer?",
+    });
+    const prompts: string[] = [];
+    let call = 0;
+    const planner = createInvestigationPlanner({
+      tools: f.tools,
+      now: f.now,
+      choose: async ({ prompt }) => {
+        prompts.push(prompt);
+        return ++call <= 2
+          ? {
+              tool: "read_nessie_cash_buffer",
+              argsJson: "{}",
+              findings: [],
+              done: false,
+            }
+          : {
+              tool: "finish",
+              argsJson: "{}",
+              findings: [
+                "Cash affordability remains unverified because Nessie has no accounts.",
+              ],
+              done: true,
+            };
+      },
+    });
+    const first = await f.service.advance(job.id, planner, {
+      maxDurationMs: 100,
+    });
+    expect(["queued", "running"]).toContain(first.status);
+    expect(first.counters.toolCalls).toBe(1);
+    const saved = await f.repository.listMilestones(job.id, 1);
+    expect(saved[0]?.tool).toBe("read_nessie_cash_buffer");
+    expect(saved[0]?.summary).toMatchObject({
+      output: { kind: "nessie_cash_buffer", status: "empty" },
+      toolFindings: [
+        "Nessie shared simulated sandbox has no cash accounts; affordability is unverified.",
+      ],
+    });
+    const resumed = await f.service.advance(job.id, planner, {});
+    expect(resumed.status).toBe("succeeded");
+    expect(f.execute).toHaveBeenCalledTimes(1);
+    expect(resumed.findings.join(" ")).toContain("affordability is unverified");
+    expect(prompts.at(-1)).toContain("already completed");
+  });
+});
+
+it("withholds superseded cash and derived model prose from a ready-to-provider-error planning context", async () => {
+  const f = setup();
+  const job = await create(f);
+  const identity = {
+    kind: "nessie_cash_buffer",
+    source: "nessie",
+    synthetic: true,
+    investigationId: job.id,
+    attempt: job.attempt,
+    projectId: job.projectId,
+    profileId: job.profileId,
+    profileVersion: 1,
+  };
+  const ready = {
+    ...identity,
+    status: "ready",
+    message: "OLD_CASH_MESSAGE",
+    accounts: [
+      {
+        id: "acct_a",
+        nickname: "Demo",
+        type: "Checking",
+        balanceCents: 123456789,
+        availableCents: 123456789,
+      },
+    ],
+    selectedAccount: {
+      id: "acct_a",
+      nickname: "Demo",
+      type: "Checking",
+      balanceCents: 123456789,
+      availableCents: 123456789,
+    },
+    snapshot: {
+      accountId: "acct_a",
+      asOf: "2026-11-14T17:00:00.000Z",
+      windowStart: "2026-10-15T17:00:00.000Z",
+      windowEnd: "2026-11-14T17:00:00.000Z",
+      windowDays: 30,
+      inflowCents: 0,
+      outflowCents: 0,
+      netCashFlowCents: 0,
+      completedTransactionCount: 0,
+      excludedTransfersCount: 0,
+      upcomingBillsCents: 0,
+    },
+    scenario: null,
+  };
+  const failed = {
+    ...identity,
+    status: "provider_error",
+    message: "LATEST_BANK_UNAVAILABLE",
+    accounts: [],
+    selectedAccount: null,
+    snapshot: null,
+    scenario: null,
+  };
+  const milestone = (
+    seq: number,
+    tool: string,
+    summary: unknown,
+  ): InvestigationMilestone => ({
+    investigationId: job.id,
+    attempt: job.attempt,
+    seq,
+    tool,
+    inputHash: `hash-${seq}`,
+    createdAt: f.now().toISOString(),
+    summary: summary as InvestigationMilestone["summary"],
+  });
+  const milestones = [
+    milestone(0, "search_sites", {
+      toolFindings: ["Useful location evidence"],
+    }),
+    milestone(1, "read_nessie_cash_buffer", {
+      input: {},
+      output: ready,
+      toolFindings: ["OLD_CASH_ARITHMETIC"],
+      modelFindings: ["OLD_MODEL_REASSURANCE"],
+    }),
+    milestone(2, "get_site_run", {
+      output: {},
+      toolFindings: ["Useful queue evidence"],
+      modelFindings: ["MODEL_USED_OLD_CASH"],
+    }),
+    milestone(3, "read_nessie_cash_buffer", {
+      input: {},
+      output: failed,
+      toolFindings: [failed.message],
+      modelFindings: ["LATEST_MODEL_BANK_NOTE"],
+    }),
+  ];
+  job.findings = [
+    "Useful location evidence",
+    "Useful queue evidence",
+    "OLD_CASH_MESSAGE",
+    "OLD_CASH_ARITHMETIC",
+    "OLD_MODEL_REASSURANCE",
+    "MODEL_USED_OLD_CASH",
+    "LATEST_MODEL_BANK_NOTE",
+    failed.message,
+  ];
+  let prompt = "";
+  const planner = createInvestigationPlanner({
+    tools: f.tools,
+    now: f.now,
+    choose: async (input) => {
+      prompt = input.prompt;
+      return decision("finish");
+    },
+  });
+  await planner(plannerInput(job, milestones));
+  for (const old of [
+    "OLD_CASH",
+    "OLD_MODEL",
+    "MODEL_USED_OLD_CASH",
+    "LATEST_MODEL_BANK_NOTE",
+    "123456789",
+  ])
+    expect(prompt).not.toContain(old);
+  expect(prompt).toContain("Useful location evidence");
+  expect(prompt).toContain("Useful queue evidence");
+  expect(prompt).toContain(failed.message);
+  const history = JSON.parse(prompt).completedMilestones;
+  expect(history.find((m: { seq: number }) => m.seq === 1)).toMatchObject({
+    seq: 1,
+    tool: "read_nessie_cash_buffer",
+    inputHash: "hash-1",
+  });
+});

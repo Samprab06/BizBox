@@ -14,6 +14,8 @@ import {
   makeBehaviorTable,
   makeStore,
 } from "@/lib/demand/fixtures";
+import { SiteRunSchema } from "@/lib/contracts";
+import { buildStoredComparison } from "./store";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import {
   acceptanceAt,
@@ -261,6 +263,18 @@ describe("evaluateSites", () => {
 });
 
 describe("sensitivity", () => {
+  it("limits an explicit seed set to its original prefix for a bounded sensitivity sweep", () => {
+    const explicit = request({ seedSet: [7, 31, 99, 123], seeds: 4 });
+    const expected = runSensitivity(
+      { ...explicit, seedSet: [7, 31], seeds: 2 },
+      "rent",
+      [0.9, 1.1],
+    );
+    expect(runSensitivity(explicit, "rent", [0.9, 1.1], { seeds: 2 })).toEqual(
+      expected,
+    );
+  });
+
   it("a market-share sweep changes the ranking at a reported break-even value", () => {
     const values = [0.25, 0.5, 1, 1.5, 2, 3];
     const s = runSensitivity(request(), "market_share_scale", values, {
@@ -330,6 +344,12 @@ describe("demand source check and run summaries", () => {
     );
     expect(siteRunSummary(result, "missing")).toBeNull();
     const events = canonicalEvents(day.events);
+    const arrival = day.events.find((event) => event.type === "arrival")!;
+    expect(events.find((event) => event.type === "arrived")?.arrival).toEqual({
+      personaId: arrival.personaId,
+      lineLength: arrival.lineLength,
+      stayProbability: arrival.stayProbability,
+    });
     expect(events.filter((e) => e.type === "arrived")).toHaveLength(
       day.metrics.arrivals,
     );
@@ -337,6 +357,39 @@ describe("demand source check and run summaries", () => {
       day.metrics.abandoned,
     );
   });
+});
+
+it("stores Jev answers from the representative run and accepts legacy replay events", () => {
+  const input = EvaluationRequestSchema.parse(request({ seeds: 1 }));
+  const result = evaluateSites(input);
+  const { runs } = buildStoredComparison("comparison", input, result);
+  const run = runs[0]!;
+  const arrival = run.events.find((event) => event.arrival)?.arrival;
+  expect(arrival).toBeDefined();
+  const persona = run.replayPersonas?.find(
+    ({ id }) => id === arrival?.personaId,
+  );
+  const source = input.sites
+    .find(({ siteId }) => siteId === run.siteId)
+    ?.behaviorTable?.personas.find(
+      ({ personaId }) => personaId === arrival?.personaId,
+    );
+  expect(source).toBeDefined();
+  expect(persona?.jev).toEqual({
+    where: source!.where,
+    visitsPerMonth: source!.visitsPerMonth,
+  });
+  expect(
+    SiteRunSchema.safeParse({
+      ...run,
+      replayPersonas: undefined,
+      events: run.events.map(({ customerId, type, minute }) => ({
+        customerId,
+        type,
+        minute,
+      })),
+    }).success,
+  ).toBe(true);
 });
 
 describe("service-time wiring (HAC-64)", () => {
