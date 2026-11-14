@@ -94,6 +94,26 @@ changes. Migrations change the target database; confirm the target before runnin
 `GET /api/health` checks database and PostGIS readiness and returns 503 when they are unavailable.
 Hosted Neon setup and Vercel deployment still require configuration and verification.
 
+### Run locally with Docker
+
+The checked-in `compose.yaml` supports native ARM64 and amd64 PostGIS 16/3.x.
+Configure ignored `.env.local` with the local database settings, install DuckDB
+for the one-off public-data conversion, and place the licensed kit at
+`costar-hackathon-kit/`. Then:
+
+```sh
+pnpm db:up
+pnpm db:load
+docker compose --profile app up -d --build --wait
+pnpm db:verify
+```
+
+The loader includes migrations and prints actual SQL counts. A second run reuses
+download caches and replaces rows. Ports bind to localhost, and no env files or
+datasets enter app images. `pnpm db:down` preserves the named volume; destructive
+`pnpm db:reset --confirm` requires explicit confirmation. Full setup, Podman
+support and native alternatives: [Local PostGIS](docs/local-postgis.md).
+
 ## Scripts
 
 | Command          | What it does                                                                                                     |

@@ -19,6 +19,11 @@
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:up": "tsx scripts/local-compose.ts up -d --build --wait db",
+    "db:down": "tsx scripts/local-compose.ts --profile app down",
+    "db:reset": "tsx scripts/reset-local-db.ts",
+    "db:load": "tsx scripts/load-local-data.ts",
+    "db:verify": "tsx scripts/verify-local-dev.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
