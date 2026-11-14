@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     "postgres",
     "deepagents",
     "@langchain/core",
-    "@langchain/anthropic",
+    "@langchain/openai",
   ],
 };
 

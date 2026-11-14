@@ -26,8 +26,8 @@
     "db:verify": "tsx scripts/verify-local-dev.ts"
   },
   "dependencies": {
-    "@langchain/anthropic": "1.5.13",
     "@langchain/core": "1.4.0",
+    "@langchain/openai": "1.8.4",
     "@react-three/fiber": "9.8.2",
     "deepagents": "1.16.5",
     "drizzle-orm": "0.45.4",
