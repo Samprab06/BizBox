@@ -175,39 +175,66 @@ export default function Neighborhood({
       addVolumetricClouds(city.scene, () => timeRef.current);
       const lowClouds = new CloudCollection({ noiseDetail: 32 });
       city.scene.primitives.add(lowClouds);
-      const cloudPatches = [
-        [-0.006, 0.007, 230, 200, 80, 0.35],
-        [-0.004, 0.009, 280, 145, 105, 0.5],
-        [-0.002, 0.009, 260, 260, 110, 0.44],
-        [0.001, 0.011, 320, 190, 115, 0.4],
-        [0.004, 0.008, 240, 275, 95, 0.5],
-        [0.007, 0.012, 290, 220, 130, 0.32],
-        [-0.01, 0.015, 360, 340, 128, 0.47],
-        [0.009, 0.017, 380, 315, 150, 0.4],
-        [0.014, 0.011, 315, 170, 95, 0.42],
-      ].map(([east, north, height, width, depth, slice], index) => ({
-        east,
-        north,
-        height,
-        drift: 0.0025 + (index % 3) * 0.0009,
-        cloud: lowClouds.add({
-          position: Cartesian3.fromDegrees(
-            longitude + east,
-            latitude + north,
+      const cloudBanks = [
+        { east: -0.006, north: 0.004, height: 128, width: 255, drift: 0.013 },
+        { east: -0.001, north: 0.007, height: 151, width: 310, drift: 0.017 },
+        { east: 0.005, north: 0.0045, height: 142, width: 285, drift: 0.011 },
+        { east: 0.009, north: 0.011, height: 190, width: 355, drift: 0.014 },
+        { east: -0.011, north: 0.014, height: 176, width: 330, drift: 0.016 },
+      ];
+      const lobes = [
+        { east: -0.0009, north: 0.0002, rise: 2, scale: 0.95, slice: 0.44 },
+        { east: 0, north: 0, rise: 20, scale: 1, slice: 0.48 },
+        { east: 0.00085, north: 0.00035, rise: 8, scale: 0.82, slice: 0.4 },
+        { east: -0.00026, north: 0.00045, rise: 47, scale: 0.68, slice: 0.52 },
+      ];
+      const cloudPatches = cloudBanks.flatMap((bank) =>
+        lobes.map((lobe) => {
+          const east = bank.east + lobe.east;
+          const north = bank.north + lobe.north;
+          const height = bank.height + lobe.rise;
+          const width = bank.width * lobe.scale;
+          const depth = width * 0.46;
+          return {
+            east,
+            north,
             height,
-          ),
-          scale: new Cartesian2(width, depth),
-          maximumSize: new Cartesian3(width, depth, depth * 0.9),
-          slice,
+            drift: bank.drift,
+            cloud: lowClouds.add({
+              position: Cartesian3.fromDegrees(
+                longitude + east,
+                latitude + north,
+                height,
+              ),
+              scale: new Cartesian2(width, depth),
+              maximumSize: new Cartesian3(width, depth, width * 0.58),
+              slice: lobe.slice,
+            }),
+          };
         }),
-      }));
+      );
       const nightSky = Color.fromCssColorString("#10182e");
       const daySky = Color.fromCssColorString("#87bce6");
       const twilightSky = Color.fromCssColorString("#ee9e83");
       const sky = new Color();
       let previousMinute = -1;
+      let previousCloudMinute = -1;
       city.scene.preUpdate.addEventListener(() => {
-        const step = Math.floor(timeRef.current / 5) * 5;
+        const minute = timeRef.current;
+        if (minute !== previousCloudMinute) {
+          previousCloudMinute = minute;
+          const progress = minute / 1440;
+          const cloudLight = daylight(minute);
+          for (const { cloud, east, north, height, drift } of cloudPatches) {
+            cloud.position = Cartesian3.fromDegrees(
+              longitude + east + (progress - 0.4) * drift,
+              latitude + north + progress * 0.0025,
+              height,
+            );
+            cloud.brightness = 0.58 + 0.37 * cloudLight;
+          }
+        }
+        const step = Math.floor(minute / 5) * 5;
         if (step === previousMinute) return;
         previousMinute = step;
         city.clock.currentTime = JulianDate.addSeconds(
@@ -227,14 +254,6 @@ export default function Neighborhood({
           warm * 0.7,
           sky,
         );
-        for (const { cloud, east, north, height, drift } of cloudPatches) {
-          cloud.position = Cartesian3.fromDegrees(
-            longitude + east + (step / 1440) * drift,
-            latitude + north + (step / 1440) * 0.0007,
-            height,
-          );
-          cloud.brightness = 0.48 + 0.4 * light + 0.12 * warm;
-        }
         const brightness = 0.86 + 0.14 * Math.sqrt(light);
         const red = Math.min(1, brightness - 0.035 * (1 - light) + 0.08 * warm);
         const green = Math.min(1, brightness + 0.025 * warm);
@@ -249,7 +268,7 @@ export default function Neighborhood({
 
       viewer.camera.setView({
         destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(-17), roll: 0 },
+        orientation: { heading: 0, pitch: CesiumMath.toRadians(-10), roll: 0 },
       });
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
