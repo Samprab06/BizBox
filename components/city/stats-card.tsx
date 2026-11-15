@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
 
 import { useId, useMemo } from "react";
 import type { DayResult } from "@/lib/sim/contracts";
@@ -71,15 +73,17 @@ export function StatsCard(props: StatsCardProps) {
         aria-label="Statistics scope"
         className="my-3 flex flex-wrap gap-2"
       >
-        <button
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-pressed={effectiveScope === "site"}
           onClick={() => props.onScopeChange("site")}
         >
           This site
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-pressed={effectiveScope === "area"}
@@ -87,7 +91,7 @@ export function StatsCard(props: StatsCardProps) {
           onClick={() => props.onScopeChange("area")}
         >
           Area overview
-        </button>
+        </Button>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <Stat
@@ -142,20 +146,21 @@ export function StatsCard(props: StatsCardProps) {
         {clock(stats.minute)} / {clock(stats.closeMin)} close
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-label={playing ? "Pause playback" : "Play playback"}
           onClick={() => props.onPlayingChange(!playing)}
         >
           {playing ? "Pause" : "Play"}
-        </button>
+        </Button>
         <label htmlFor={`${id}-speed`} className="text-sm">
           Playback speed
         </label>
-        <select
+        <Select
           id={`${id}-speed`}
-          className="rounded border border-line bg-surface px-2 py-2"
+          className="rounded border border-line bg-panel-raised px-2 py-2"
           value={speed}
           onChange={(e) =>
             props.onSpeedChange(Number(e.target.value) as PlaybackSpeed)
@@ -166,7 +171,7 @@ export function StatsCard(props: StatsCardProps) {
               {value}×
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <label htmlFor={`${id}-seek`} className="mt-3 block text-sm">
         Seek local time
@@ -174,7 +179,7 @@ export function StatsCard(props: StatsCardProps) {
       <input
         id={`${id}-seek`}
         type="range"
-        className="w-full accent-pine"
+        className="w-full accent-accent"
         min={stats.openMin}
         max={stats.closeMin}
         step={0.1}

@@ -24,7 +24,7 @@ export function Metric({ metric }: { metric: AssumedValue }) {
     <span>
       <a
         href={evidenceHref(metric.evidenceIds[0])}
-        className="text-pine underline decoration-dotted underline-offset-4"
+        className="text-accent underline decoration-dotted underline-offset-4"
       >
         {value} {unit}{" "}
         <span className="text-xs text-muted">{metric.origin}</span>
@@ -77,7 +77,7 @@ export function LiveEvidence({
           {entry.sourceUrl && (
             <a
               href={safeSourceUrl(entry.sourceUrl)}
-              className="text-pine underline"
+              className="text-accent underline"
             >
               Source URL
             </a>

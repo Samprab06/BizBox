@@ -1,3 +1,4 @@
+import { fixtureRenderPalette } from "../simulator/render-palette.fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Three from "three";
 import { makeDemo } from "../simulator/fixture";
@@ -440,3 +441,8 @@ describe("labelled viewer failures", () => {
     expect(publicEmbedUrl("qfmMbTLt4Bo")).not.toMatch(/applicationKey/);
   });
 });
+
+vi.mock("../simulator/render-palette", async (original) => ({
+  ...(await original<typeof import("../simulator/render-palette")>()),
+  readRenderPalette: () => fixtureRenderPalette(),
+}));

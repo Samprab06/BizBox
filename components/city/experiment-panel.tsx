@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/input";
 
 import { useId, useRef, useState } from "react";
 import type { Origin } from "@/lib/sim/contracts";
@@ -331,7 +333,7 @@ export function ExperimentPanel({
                 <label htmlFor={inputId} className="block text-sm font-medium">
                   {field.label}
                 </label>
-                <input
+                <Input
                   id={inputId}
                   type={field.kind === "time" ? "text" : "number"}
                   inputMode={
@@ -359,7 +361,7 @@ export function ExperimentPanel({
                   required
                   aria-invalid={invalid}
                   aria-describedby={`${id}-hours-help${invalid ? ` ${inputId}-error` : ""}`}
-                  className="min-h-11 w-full min-w-0 rounded-lg border border-muted bg-surface px-3 py-2 text-sm text-ink tabular-nums outline-pine focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+                  className="min-h-11 w-full min-w-0 rounded-lg border border-muted bg-panel-raised px-3 py-2 text-sm text-ink tabular-nums outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
                   onChange={(event) => {
                     const raw = event.target.value;
                     const parsed = parse(raw, field);
@@ -386,7 +388,7 @@ export function ExperimentPanel({
             <label htmlFor={`${id}-day`} className="block text-sm font-medium">
               Displayed day
             </label>
-            <select
+            <Select
               id={`${id}-day`}
               value={settings.dayType}
               onChange={(event) =>
@@ -395,11 +397,11 @@ export function ExperimentPanel({
                   event.target.value as ExperimentSettings["dayType"],
                 )
               }
-              className="min-h-11 w-full rounded-lg border border-muted bg-surface px-3 py-2 text-sm text-ink outline-pine focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="min-h-11 w-full rounded-lg border border-muted bg-panel-raised px-3 py-2 text-sm text-ink outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <option value="weekday">Weekday</option>
               <option value="weekend">Weekend</option>
-            </select>
+            </Select>
             <OriginBadge label="Displayed day" origin={origins.dayType} />
           </div>
         </div>
@@ -415,23 +417,25 @@ export function ExperimentPanel({
         )}
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
+          variant="primary"
           type="button"
           disabled={disabled}
           onClick={() => void act("restart")}
-          className="min-h-11 rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-on-pine disabled:opacity-60"
+          className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-60"
         >
           Restart with settings
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="glass"
           type="button"
           disabled={disabled || !onSaveBaselineAndRerun || !current}
           aria-describedby={`${id}-save-help`}
           onClick={() => void act("baseline")}
-          className="min-h-11 rounded-lg border border-muted bg-surface px-4 py-2 text-sm font-semibold text-ink disabled:opacity-60"
+          className="min-h-11 rounded-lg border border-muted bg-panel-raised px-4 py-2 text-sm font-semibold text-ink disabled:opacity-60"
         >
           Save baseline &amp; rerun
-        </button>
+        </Button>
       </div>
       <p id={`${id}-save-help`} className="text-xs text-muted">
         {!onSaveBaselineAndRerun
@@ -487,7 +491,7 @@ export function ExperimentPanel({
             Scroll to compare Baseline, Alternative and Change.
           </p>
           <div
-            className="overflow-x-auto outline-pine focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="overflow-x-auto outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2"
             role="region"
             aria-label="Experiment metrics table"
             tabIndex={0}

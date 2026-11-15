@@ -89,3 +89,22 @@ describe("browser intake to canonical profile", () => {
     expect(profile?.mustHaves.frontage.value).toBe(false);
   });
 });
+
+it("keeps the numbered founder requirement verbatim alongside derived search flags", () => {
+  const session = complete();
+  const text =
+    "Street frontage and a dedicated drive-up or street parking for 6 cars";
+  session.profile.requirements!.value = text;
+  const profile = profileFromIntake(session, "houston-coffee").profile;
+  expect(profile?.objective).toContain(
+    `Other requirements (verbatim): ${text}.`,
+  );
+  expect(profile?.mustHaves.frontage).toMatchObject({
+    value: true,
+    origin: "founder",
+  });
+  expect(profile?.mustHaves.parking).toMatchObject({
+    value: true,
+    origin: "founder",
+  });
+});

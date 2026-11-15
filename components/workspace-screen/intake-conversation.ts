@@ -9,7 +9,10 @@
  * body shape, error handling and the in-flight-edit merge cannot drift apart. The surfaces
  * only differ in their wording (`IntakeCopy`) and in whether a reply carries chat text.
  */
-import { profileFromIntake } from "@/lib/client/intake-business-profile";
+import {
+  mustHaves,
+  profileFromIntake,
+} from "@/lib/client/intake-business-profile";
 import { IntakeDraftSchema, type IntakeState } from "@/lib/contracts/intake";
 import type { AgentViewContext } from "@/lib/contracts/agent";
 import {
@@ -189,7 +192,27 @@ export function applyIntakeReply(
     keyof IntakeSession["profile"],
     { value: string; origin: "default" | "founder" },
   ][]) {
-    if (!stillPending.includes(key)) profile[key] = answer;
+    if (stillPending.includes(key)) continue;
+    if (key === "requirements" && profile.requirements?.origin === "founder") {
+      // Flags are a search projection, not a replacement for the founder's sentence.
+      // A form-only acknowledgement cannot add free text. Chat can change the flags,
+      // but unchanged values (including provenance-only updates) keep the original wording.
+      // A chat request may also carry a pending form edit. Compare against the
+      // flags actually sent in that patch, rather than the older live snapshot.
+      const previous =
+        sentKeys.has("requirements") && sent.profile.requirements
+          ? mustHaves(sent.profile.requirements)
+          : (sent.live?.state.draft.mustHaves ??
+            mustHaves(profile.requirements));
+      const returned = result.draft.mustHaves;
+      const unchanged = (
+        ["frontage", "corner", "parking", "groundFloor"] as const
+      ).every(
+        (feature) => previous[feature]?.value === returned?.[feature]?.value,
+      );
+      if (!appendReply || unchanged) continue;
+    }
+    profile[key] = answer;
   }
   return {
     ...now,

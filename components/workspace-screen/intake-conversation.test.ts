@@ -4,7 +4,7 @@ import {
   initialSession,
   type IntakeSession,
 } from "@/components/intake/profile";
-import type { IntakeResponse } from "@/components/intake/live";
+import { patchFromForm, type IntakeResponse } from "@/components/intake/live";
 import {
   applyIntakeReply,
   intakeRequestBody,
@@ -328,4 +328,118 @@ it("keeps the valid original draft if filling a partial constraint would conflic
   expect((await response.json()).assistantMessage).toBe(
     "Continue the conversation",
   );
+});
+
+describe("HAC-168 founder requirements survive flags-only replies", () => {
+  const text =
+    "Street frontage and a dedicated drive-up or street parking for 6 cars";
+  const requirements = { value: text, origin: "founder" as const };
+  const flags = patchFromForm({ requirements }, ["requirements"])!
+    .mustHaves as NonNullable<IntakeResponse["draft"]["mustHaves"]>;
+  const result = { ...reply, draft: { ...reply.draft, mustHaves: flags } };
+  const saved: IntakeSession = {
+    ...session,
+    profile: { requirements },
+    pending: ["requirements"],
+  };
+
+  it("keeps the original numbered sentence and origin after a guided/form sync and reload", () => {
+    const next = applyIntakeReply(saved, saved, result, false);
+    expect(next.profile.requirements).toEqual(requirements);
+    expect(next.pending).toEqual([]);
+    expect(
+      parseIntakeSession(JSON.stringify(next))?.profile.requirements,
+    ).toEqual(requirements);
+    expect(next.live?.state.draft.mustHaves).toMatchObject({
+      frontage: { value: true },
+      parking: { value: true },
+    });
+  });
+
+  it("keeps wording through an unrelated chat reply with unchanged feature values", () => {
+    const settled = {
+      ...saved,
+      pending: [],
+      live: {
+        state: { draft: result.draft, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const next = applyIntakeReply(
+      withFounderMessage(settled, "What about rent?"),
+      settled,
+      result,
+    );
+    expect(next.profile.requirements).toEqual(requirements);
+  });
+
+  it("keeps a pending numbered edit sent alongside an unrelated chat turn", () => {
+    const edited = { value: "Parking for 6 cars", origin: "founder" as const };
+    const oldFlags = patchFromForm(
+      { requirements: { value: "Street frontage", origin: "founder" } },
+      ["requirements"],
+    )!.mustHaves as NonNullable<IntakeResponse["draft"]["mustHaves"]>;
+    const sent: IntakeSession = {
+      ...saved,
+      profile: { requirements: edited },
+      live: {
+        state: { draft: { mustHaves: oldFlags }, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const outgoing = intakeRequestBody(sent, "What about rent?");
+    const returned = outgoing.patch!.mustHaves as NonNullable<
+      IntakeResponse["draft"]["mustHaves"]
+    >;
+    const next = applyIntakeReply(
+      withFounderMessage(sent, "What about rent?"),
+      sent,
+      { ...reply, draft: { ...reply.draft, mustHaves: returned } },
+    );
+    expect(next.profile.requirements).toEqual(edited);
+    expect(next.pending).toEqual([]);
+    expect(next.live?.state.draft.mustHaves).toEqual(returned);
+    expect(returned.parking?.value).toBe(true);
+    expect(returned.frontage?.value).toBeNull();
+  });
+
+  it("still applies later chat-driven requirement changes", () => {
+    const settled = {
+      ...saved,
+      pending: [],
+      live: {
+        state: { draft: result.draft, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const changed = {
+      ...result,
+      draft: {
+        ...result.draft,
+        mustHaves: { ...flags, parking: { ...flags.parking!, value: false } },
+      },
+    };
+    const next = applyIntakeReply(
+      withFounderMessage(settled, "Parking is no longer needed"),
+      settled,
+      changed,
+    );
+    expect(next.profile.requirements?.value).toBe("frontage");
+    expect(next.live?.state.draft.mustHaves?.parking?.value).toBe(false);
+  });
+
+  it("keeps newer requirements edited while the previous sync was in flight", () => {
+    const newer = { value: "Parking for 12 cars", origin: "founder" as const };
+    const next = applyIntakeReply(
+      { ...saved, profile: { requirements: newer } },
+      saved,
+      result,
+      false,
+    );
+    expect(next.profile.requirements).toEqual(newer);
+    expect(next.pending).toContain("requirements");
+  });
 });

@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import Link from "next/link";
 import CandidateMap from "./candidate-map";
@@ -47,11 +48,11 @@ export function MapPreview({
         ))}
         <section
           aria-label="Search diagnostics"
-          className="mb-5 rounded-lg bg-paper p-4 text-sm"
+          className="mb-5 rounded-lg bg-canvas p-4 text-sm"
         >
           <h2 className="font-semibold">
             Search diagnostics ·{" "}
-            <a href="#diagnostic-source" className="text-pine underline">
+            <a href="#diagnostic-source" className="text-accent underline">
               default
             </a>
           </h2>
@@ -96,7 +97,7 @@ export function MapPreview({
               {result.candidates.map((entry) => (
                 <li key={entry.candidate.id}>
                   <Link
-                    className="block rounded-lg border border-line p-4 hover:bg-mint aria-[current=true]:border-pine aria-[current=true]:bg-mint"
+                    className="block rounded-lg border border-line p-4 hover:bg-field aria-[current=true]:border-accent aria-[current=true]:bg-field"
                     href={workspaceHref(project.id, "map", entry.candidate.id)}
                     aria-current={
                       selected?.candidate.id === entry.candidate.id || undefined
@@ -124,7 +125,7 @@ export function MapPreview({
             {selected && (
               <>
                 <Link
-                  className="mt-4 inline-block font-semibold text-pine underline"
+                  className="mt-4 inline-block font-semibold text-accent underline"
                   href={workspaceHref(
                     project.id,
                     "site",
@@ -150,7 +151,7 @@ export function MapPreview({
                     <dt>Prescore</dt>
                     <dd>
                       <a
-                        className="text-pine underline"
+                        className="text-accent underline"
                         href={evidenceHref(selected.scoreEvidenceId)}
                       >
                         {selected.score} / 100 · default
@@ -162,13 +163,14 @@ export function MapPreview({
             )}
           </>
         )}
-        <button
+        <Button
+          variant="primary"
           type="button"
-          className="mt-4 rounded bg-pine px-3 py-2 text-white"
+          className="mt-4 rounded bg-accent px-3 py-2 text-on-accent"
           onClick={retry}
         >
           Retry search
-        </button>
+        </Button>
         <LiveEvidence search={result.evidence} />
       </>
     );
@@ -178,21 +180,22 @@ export function MapPreview({
       {readiness.status === "needs_brief" ? (
         <FinishBriefNotice projectId={project.id} message={readiness.message} />
       ) : (
-        <div className="mb-5 rounded-lg bg-paper p-4">
+        <div className="mb-5 rounded-lg bg-canvas p-4">
           <p role={state.failed ? "alert" : "status"}>{state.message}</p>
           <Link
             href={workspaceHref(project.id, "intake")}
-            className="mt-2 inline-block text-pine underline"
+            className="mt-2 inline-block text-accent underline"
           >
             Review intake
           </Link>
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="ml-4 rounded bg-pine px-3 py-2 text-white"
+            className="ml-4 rounded bg-accent px-3 py-2 text-on-accent"
             onClick={retry}
           >
             Retry search
-          </button>
+          </Button>
         </div>
       )}
       {project.sites.length > 0 && (
@@ -236,7 +239,7 @@ function ExampleMap({
         {sites.map((site) => (
           <li key={site.id}>
             <Link
-              className="block rounded-lg border border-line p-4 hover:bg-mint aria-[current=true]:border-pine aria-[current=true]:bg-mint"
+              className="block rounded-lg border border-line p-4 hover:bg-field aria-[current=true]:border-accent aria-[current=true]:bg-field"
               aria-current={selected?.id === site.id || undefined}
               href={site.href}
             >
@@ -250,7 +253,7 @@ function ExampleMap({
       </ul>
       {selected && (
         <Link
-          className="mt-4 inline-block font-semibold text-pine underline"
+          className="mt-4 inline-block font-semibold text-accent underline"
           href={workspaceHref(project.id, "site", selected.id)}
         >
           View details for {selected.address}
