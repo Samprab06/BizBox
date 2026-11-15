@@ -4,7 +4,7 @@ Spec: [client-flow-design](superpowers/specs/2026-11-14-client-flow-design.md). 
 
 ## Current entry point
 
-Akshar rejected the exposed review controls and ambiguous comparison UX. `/review/client-flow` now redirects to `/projects/houston-coffee/workspace`; Preview state, Reset review and sample stage navigation are no longer a client entry. The current work is real property → labeled unit → explicitly add two choices → compare listing facts → optionally request modeled results. The hosted database health and actual listing search have recovered; the local simulation API still needs its own database configuration. No production credentials were copied or simulation service proxied.
+Akshar rejected the exposed review controls and ambiguous comparison UX. `/review/client-flow` now redirects to `/projects/houston-coffee/workspace`; Preview state, Reset review and sample stage navigation are no longer a client entry. The current work is real property → labeled unit → explicitly add two choices → compare listing facts → optionally request modeled results. The hosted database health and actual listing search have recovered; the local simulation API has subsequently been connected to the approved development database and verified through an actual two-unit run. No production credentials were copied or simulation service proxied.
 
 The earlier sample review described below remains implementation history, not the current client route.
 
@@ -39,3 +39,9 @@ Exact-source lint, typecheck and production build passed in the isolated verific
 The actual IAB on port 4201 was visually checked at 1300 px and its natural 499 px desktop pane. All stages render, property context persists, cash input 70000 survives Cash → Compare → Cash, Text/Voice keep history, and the compact document width equals its viewport. Screenshots: `/tmp/bizbox-client-flow-comparison-final.png` and `/tmp/bizbox-client-flow-cash-final.png`. The viewport override was reset.
 
 Never describe the sample review as proof of live Jev, voice, Matterport, Nessie or database connectivity. Experiments use two fixed illustrative output states; controls do not calculate real simulation results. The real workspace receives the shared brand, comparison charts and existing-controller Compare action. The additional stages are an explicit interaction review pending assigned service integration.
+
+## Development comparison connection verified
+
+Akshar supplied the approved development connection. It is configured only in ignored `.env.local` files for the working checkout and owned port4201 preview, with permissions0600; no value is documented or committed. Health confirms connected/PostGIS. Read-only checks found the current project and required tables,3339properties/3955spaces and populated public inputs. No migrations, imports, data replacement or new proxy were needed.
+
+The actual user UI saved its profile201, created comparison201 and read stored results200 for the chosen Westheimer/Bellaire Unit1 pair. The stored result is nonsynthetic/current, uses the existing Huff model over30seeds and returns the exact chosen IDs. Jev/OpenAI remain unconfigured; these are modeled estimates, not measured traffic or a validated business forecast. Native screenshot `/tmp/bizbox-connected-comparison-results.png`; viewport override reset. No product code changed for this configuration fix.
