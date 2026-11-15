@@ -327,7 +327,14 @@ test.describe("history", () => {
   }) => {
     await gotoView("intake");
     await expandProjectNavigation(page);
-    const visited: WorkspaceRoute[] = ["map", "site", "comparison", "replay", "simulator", "plan"];
+    const visited: WorkspaceRoute[] = [
+      "map",
+      "site",
+      "comparison",
+      "replay",
+      "simulator",
+      "plan",
+    ];
     for (const view of visited) {
       await expandProjectNavigation(page);
       await navLink(page, view).click();
@@ -424,7 +431,11 @@ test.describe("bad input", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Comparison" }),
     ).toBeVisible();
-    await expect(page.getByRole("table")).toBeVisible();
+    // The page has two tables: the comparison table and the screen-reader
+    // table behind the hourly wait chart. Target the comparison one by name.
+    await expect(
+      page.getByRole("table", { name: /^Comparison / }),
+    ).toBeVisible();
     expect(problems).toEqual([]);
   });
 

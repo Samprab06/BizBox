@@ -211,38 +211,42 @@ export function WaitOverlayChart({
           })}
         </ul>
       </figcaption>
-      <table className="sr-only">
-        <caption>Hourly p90 wait in minutes</caption>
-        <thead>
-          <tr>
-            <th scope="col">Hour</th>
-            {sites.map(({ label, data }) => (
-              <th key={data.siteId} scope="col">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {hours.map((hour) => (
-            <tr key={hour}>
-              <th scope="row">{hourLabel(hour)}</th>
-              {sites.map(({ data }) => {
-                const value = data.hours.find(
-                  (h) => h.hour === hour,
-                )?.p90WaitMin;
-                return (
-                  <td key={data.siteId}>
-                    {value === null || value === undefined
-                      ? "No served customers"
-                      : value.toFixed(1)}
-                  </td>
-                );
-              })}
+      {/* The wrapper clips the text-alternative table. sr-only on the table itself
+          does not clip its rows in browsers, which widened the page at phone width. */}
+      <div className="sr-only">
+        <table>
+          <caption>Hourly p90 wait in minutes</caption>
+          <thead>
+            <tr>
+              <th scope="col">Hour</th>
+              {sites.map(({ label, data }) => (
+                <th key={data.siteId} scope="col">
+                  {label}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {hours.map((hour) => (
+              <tr key={hour}>
+                <th scope="row">{hourLabel(hour)}</th>
+                {sites.map(({ data }) => {
+                  const value = data.hours.find(
+                    (h) => h.hour === hour,
+                  )?.p90WaitMin;
+                  return (
+                    <td key={data.siteId}>
+                      {value === null || value === undefined
+                        ? "No served customers"
+                        : value.toFixed(1)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }
