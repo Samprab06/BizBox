@@ -27,6 +27,8 @@ import {
   AssemblyError,
   PanelInProgressError,
   AssemblyShortcutSchema,
+  SiteTweakError,
+  siteTweakFieldErrors,
   type AssembleEvaluationInput,
   type AssembledEvaluation,
   type AssemblyMetadata,
@@ -63,10 +65,19 @@ type Dependencies = {
 /** Leaves about 25 s of the 60 s function for evaluation, sweeps and the save. */
 export const COMPARISON_PANEL_BUDGET_MS = 35_000;
 
+/** A body meant as the assembly shortcut (validated by that schema alone, for clear errors). */
+const isShortcut = (body: unknown) =>
+  typeof body === "object" &&
+  body !== null &&
+  !Array.isArray(body) &&
+  "candidateIds" in body;
+
 /**
  * POST /api/comparisons
- * - { projectId, profileId, candidateIds, demandSource?, seeds? }: assembles a saved profile
- *   with current source data, retaining origins/findings alongside the stored evaluation;
+ * - { projectId, profileId, candidateIds, demandSource?, seeds?, siteTweaks? }: assembles a
+ *   saved profile with current source data, retaining origins/findings alongside the stored
+ *   evaluation; `siteTweaks` (Scene 1) changes hours/price/staff/rent of named candidates
+ *   only, and is kept as `assembly.siteTweaks` (the tweaked values are in the stored request);
  * - an EvaluationRequest: evaluates, stores and returns the comparison (plus the Huff-only
  *   ranking check when Jev demand was used);
  *   a Jev assembly that reaches the panel deadline returns 202
@@ -87,13 +98,32 @@ export function createComparisonsHandler({
     const deadlineAt = now() + panelBudgetMs;
     let body: z.infer<typeof CreateSchema>;
     try {
-      body = CreateSchema.parse(await readJsonBody(request));
+      const raw = await readJsonBody(request);
+      // The union would report a shortcut's field errors as one "invalid input"; parse it alone.
+      body = isShortcut(raw)
+        ? AssemblyShortcutSchema.parse(raw)
+        : CreateSchema.parse(raw);
     } catch (error) {
       return invalid(
         "INVALID_COMPARISON",
         "Provide a valid evaluation request.",
         error,
       );
+    }
+    if ("candidateIds" in body) {
+      const field_errors = siteTweakFieldErrors(
+        body.candidateIds,
+        body.siteTweaks,
+      );
+      if (Object.keys(field_errors).length)
+        return json(
+          {
+            code: "INVALID_SITE_TWEAKS",
+            message: "Tweaks must name candidates in this comparison.",
+            field_errors,
+          },
+          422,
+        );
     }
 
     try {
@@ -174,6 +204,7 @@ export function createComparisonsHandler({
           ...(assembled.jevPersonaSet
             ? { jevPersonaSet: assembled.jevPersonaSet }
             : {}),
+          ...(assembled.siteTweaks ? { siteTweaks: assembled.siteTweaks } : {}),
         };
       } else evaluationRequest = EvaluationRequestSchema.parse(body);
       const run = evaluateSites(evaluationRequest);
@@ -219,6 +250,15 @@ export function createComparisonsHandler({
             totalPersonas: error.totalPersonas,
           } satisfies PanelInProgressBody,
           202,
+        );
+      if (error instanceof SiteTweakError)
+        return json(
+          {
+            code: "INVALID_SITE_TWEAKS",
+            message: error.message,
+            field_errors: error.fieldErrors,
+          },
+          422,
         );
       if (error instanceof AssemblyError)
         return json(

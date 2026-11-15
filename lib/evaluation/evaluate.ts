@@ -151,14 +151,14 @@ function demandInputFor(
   if (source === "jev") {
     if (!site.behaviorTable)
       throw new Error(`site ${site.siteId} has no behavior table`);
+    // Cached answers were collected at the site's base price: its own ticket, unless a per-site
+    // price tweak moved the ticket (Scene 1), in which case `jevBasePriceUsd` keeps the original.
+    const basePrice = site.jevBasePriceUsd ?? site.config.prices.avgTicketUsd;
+    const price = o.priceUsd ?? site.config.prices.avgTicketUsd;
     const table =
-      o.priceUsd === undefined
+      o.priceUsd === undefined && site.jevBasePriceUsd === undefined
         ? site.behaviorTable
-        : repriceBehaviorTable(
-            site.behaviorTable,
-            site.config.prices.avgTicketUsd,
-            o.priceUsd,
-          );
+        : repriceBehaviorTable(site.behaviorTable, basePrice, price);
     demand = { source: "jev", behavior: table };
   } else {
     demand = { source: "huff", huff: { competitors: request.competitors } };
