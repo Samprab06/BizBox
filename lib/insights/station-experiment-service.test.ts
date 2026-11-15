@@ -96,6 +96,7 @@ async function setup(budgetUnits = 1200) {
     service,
     comparisons,
     source,
+    request,
     rows,
     scenarios,
     executions,
@@ -127,6 +128,44 @@ describe("budgeted immutable station experiments", () => {
     expect(
       await s.executions.get("p", plan.configurations[0].runId),
     ).toBeNull();
+  });
+  it("plans +1 and +2 counters, each with its staff, for a staff-sized coffee unit", async () => {
+    const s = await setup();
+    const request = EvaluationRequestSchema.parse({
+      ...s.request,
+      sites: s.request.sites.map((site) => ({
+        ...site,
+        config: {
+          ...site.config,
+          stations: { planned: 2, usableSf: 1500, sfPerStation: 100 },
+          staff: { ...site.config.staff, headcount: 2 },
+          lease: { ...site.config.lease, sf: 1500 },
+        },
+      })),
+    });
+    const sized = buildStoredComparison(
+      "sized",
+      request,
+      evaluateSites(request),
+    );
+    await s.comparisons.save(sized);
+    const plan = await s.service.get("p", {
+      ...s.input,
+      comparisonId: sized.id,
+    });
+    expect(plan.status).toBe("planned");
+    expect(
+      plan.configurations.map((c) => [
+        c.id,
+        c.plannedStations,
+        c.effectiveStations,
+        c.staffHeadcount,
+      ]),
+    ).toEqual([
+      ["baseline", 2, 2, 2],
+      ["plus-one", 3, 3, 3],
+      ["plus-two", 4, 4, 4],
+    ]);
   });
   it("executes one named configuration, preserves immutable inputs and uses the exact producer", async () => {
     const s = await setup();
