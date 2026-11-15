@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { Markdown } from "@/components/ui/markdown";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
@@ -66,10 +67,11 @@ function Conversation({
 }) {
   const log = useRef<HTMLDivElement>(null);
   const count = conversation.messages.length;
+  const pending = conversation.busy;
   useEffect(() => {
     const element = log.current;
     if (element) element.scrollTop = element.scrollHeight;
-  }, [count]);
+  }, [count, pending]);
   return (
     <div
       ref={log}
@@ -98,11 +100,27 @@ function Conversation({
               <span className="sr-only">
                 {entry.role === "founder" ? "You: " : "BizBox: "}
               </span>
-              <span className="break-words">{entry.text}</span>
+              {entry.role === "founder" ? (
+                <span className="whitespace-pre-wrap break-words">{entry.text}</span>
+              ) : (
+                <Markdown text={entry.text} className="break-words" />
+              )}
             </li>
           ))}
         </ol>
       )}
+      <p
+        aria-live="polite"
+        data-testid="assistant-thinking"
+        className="mr-6 mt-3 text-viewport-muted"
+      >
+        {pending && (
+          <>
+            <span className="thinking-dots" aria-hidden="true" />
+            Thinking…
+          </>
+        )}
+      </p>
     </div>
   );
 }
@@ -136,6 +154,14 @@ export function AssistantPanel({
 }) {
   const [draft, setDraft] = useAssistantDraft(projectId);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+  // Grow with the text up to the max-h-40 cap, and shrink back after a send.
+  useEffect(() => {
+    const element = field.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [draft, mode]);
   const tabs = useRef<Record<AssistantMode, HTMLButtonElement | null>>({
     text: null,
     voice: null,
@@ -271,14 +297,27 @@ export function AssistantPanel({
                 void conversation.submit(text);
               }}
             >
-              <div className="flex items-center gap-2 rounded-2xl border border-viewport-line bg-viewport-surface p-1.5 pl-4 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-viewport-ink">
-                <input
+              <div className="flex items-end gap-2 rounded-2xl border border-viewport-line bg-viewport-surface p-1.5 pl-4 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-viewport-ink">
+                <textarea
+                  ref={field}
+                  rows={1}
                   aria-label="Message the BizBox assistant"
                   placeholder="Ask about this space…"
                   maxLength={VOICE_LIMITS.transcriptChars}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  className="min-w-0 flex-1 bg-transparent py-2 text-sm text-viewport-ink placeholder:text-viewport-muted focus-visible:outline-none"
+                  onKeyDown={(event) => {
+                    // Enter sends; Shift+Enter adds a line; never mid-IME-composition.
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  className="max-h-40 min-w-0 flex-1 resize-none bg-transparent py-2 text-sm text-viewport-ink placeholder:text-viewport-muted focus-visible:outline-none"
                 />
                 <button
                   type="submit"
