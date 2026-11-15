@@ -3,7 +3,6 @@ import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
-  scenario: vi.fn(),
   inventory: vi.fn(),
   search: vi.fn(),
   db: vi.fn(),
@@ -11,9 +10,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/evaluation/store-postgres", () => ({
   createPostgresComparisonStore: () => ({ load: mocks.load }),
-}));
-vi.mock("@/lib/scenario/repository", () => ({
-  createPostgresScenarioRepository: () => ({ get: mocks.scenario }),
 }));
 vi.mock("@/app/api/sites/inventory", () => ({
   loadSiteInventory: mocks.inventory,
@@ -65,4 +61,10 @@ it("rechecks persisted comparison project identities even after a scoped store l
     ),
   ).toBeNull();
   expect(mocks.load).toHaveBeenCalledWith("project", "comparison");
+});
+it("no longer resolves scenario IDs, so a scenarioId fails closed", async () => {
+  expect(
+    await createPostgresViewContextLookups().scenario("project", "scenario"),
+  ).toBeNull();
+  expect(mocks.db).not.toHaveBeenCalled();
 });
