@@ -11,7 +11,8 @@ import type { LocationStoryData } from "./location-data";
 import type { LandingDemoData } from "../landing-demo/demo-data";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { Glass, WordHeading, Icon, dollars } from "../landing-demo/demo-ui";
-import { CustomerFlow } from "../landing-demo/customer-flow";
+import { PreparedVideo } from "./prepared-video";
+import { PREPARED_MEDIA } from "./prepared-media-data";
 import { smooth } from "../landing-demo/timeline";
 import { chatAt } from "./timeline";
 import styles from "./landing-story.module.css";
@@ -465,6 +466,9 @@ export function CounterComparison({
   onChoice,
   mini = false,
   replayRevision = 0,
+  visible = true,
+  reduced = false,
+  onPlayRequest,
 }: {
   demo: LandingDemoData;
   running: boolean;
@@ -472,6 +476,9 @@ export function CounterComparison({
   onChoice: (choice: "current" | "proposed") => void;
   mini?: boolean;
   replayRevision?: number;
+  visible?: boolean;
+  reduced?: boolean;
+  onPlayRequest?: () => void;
 }) {
   return (
     <section
@@ -500,24 +507,21 @@ export function CounterComparison({
                 {choice === id && <Icon name="check" />}
               </button>
               <div className={styles.floorplan}>
-                <Image
-                  src={
+                <PreparedVideo
+                  media={PREPARED_MEDIA.counters[id]}
+                  label={
                     proposed
-                      ? STORY_ASSETS.twoCounters.src
-                      : STORY_ASSETS.oneCounter.src
+                      ? "Recorded two-counter flow"
+                      : "Recorded one-counter flow"
                   }
-                  alt={
-                    proposed
-                      ? "Two-counter café including freestanding green-tile island"
-                      : "One wall-side service counter"
-                  }
-                  fill
-                  sizes="(max-width:700px) 85vw,45vw"
-                />
-                <CustomerFlow
-                  key={`${id}-${replayRevision}`}
-                  proposed={proposed}
+                  active={!mini}
                   running={running}
+                  visible={visible}
+                  reduced={reduced}
+                  loop
+                  fit="contain"
+                  replayRevision={replayRevision}
+                  onPlayRequest={onPlayRequest}
                 />
               </div>
               <p className={styles.servedResult}>
@@ -572,7 +576,7 @@ export function CounterComparison({
                 ),
               )}
               <p>
-                Customer paths are illustrative motion, not a replay of the
+                Recorded customer paths illustrate flow, not a replay of the
                 seeded events.
               </p>
             </div>

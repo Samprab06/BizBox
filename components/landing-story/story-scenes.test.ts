@@ -144,7 +144,10 @@ describe("prepared location-story presentation", () => {
     expect(primary).not.toContain("P90");
     expect(html).toContain("20.2");
     expect(html).toContain("6.8");
-    expect(html.match(/data-counter="/g)).toHaveLength(3);
+    expect(html).toContain('data-counter-count="1"');
+    expect(html).toContain('data-counter-count="2"');
+    expect(html).not.toContain("<animateMotion");
+    expect(html).not.toContain("<video");
   });
   it.each(["current", "proposed"] as const)(
     "retains only selected %s artwork/results in the closing Mac",
@@ -162,9 +165,11 @@ describe("prepared location-story presentation", () => {
       expect(html).toContain(
         `<strong>${DEMO.experiment[choice].served}</strong>`,
       );
-      expect(html.match(/data-counter="/g)).toHaveLength(
-        choice === "current" ? 1 : 2,
+      expect(html.match(/data-counter-count="/g)).toHaveLength(1);
+      expect(html).toContain(
+        `data-counter-count="${choice === "current" ? 1 : 2}"`,
       );
+      expect(html).not.toContain("<video");
       expect(html).not.toContain("more in morning labor");
     },
   );

@@ -40,6 +40,8 @@ import {
   type StoryChapter,
 } from "./timeline";
 import { StoryMap } from "./story-map";
+import { PREPARED_MEDIA } from "./prepared-media-data";
+import type { PreparedPlaybackState } from "./prepared-video";
 import {
   MorningScene,
   LocationAnalytics,
@@ -124,9 +126,7 @@ export function LandingStory({
     setHeldQuestionMs(chapterMs);
   const outdoorMinute =
     frame.chapter === "morning"
-      ? reduced
-        ? 720
-        : 480 + Math.min(240, Math.floor(chapterMs / 125) * 5)
+      ? 480 + Math.min(240, Math.floor(chapterMs / 125) * 5)
       : 480;
   const outdoorNow = {
     kind:
@@ -152,9 +152,7 @@ export function LandingStory({
         : Number(desiredSpace === "analytics")
       : spaceFrame.mix;
   const showMap =
-    visible &&
-    desiredSpace !== null &&
-    (desiredSpace === "map" || spaceFrame.retainMap);
+    desiredSpace !== null && (desiredSpace === "map" || spaceFrame.retainMap);
   const showQuestion =
     desiredSpace === "question" ||
     (desiredSpace !== null && spaceFrame.retainQuestion);
@@ -170,7 +168,8 @@ export function LandingStory({
         : (timedLimits[frame.chapter] ?? 0);
   const needsOnboarding =
     frame.onboardingReady && settled && elapsed < ONBOARDING_MS;
-  const needsChapterTime = chapterMs < timedLimit;
+  const needsChapterTime =
+    frame.chapter !== "morning" && chapterMs < timedLimit;
   useEffect(() => {
     const timer = setTimeout(
       () => setSettled(frame.onboardingReady),
@@ -365,13 +364,39 @@ export function LandingStory({
   } as CSSProperties;
   const replay = () => {
     setPaused(false);
-    if (frame.chapter === "counters") setCounterRevision((value) => value + 1);
+    if (frame.chapter === "counters" || frame.chapter === "morning")
+      setCounterRevision((value) => value + 1);
     if (frame.chapter === "onboarding") {
       setElapsed(0);
     } else {
       setClock({ chapter: frame.chapter, ms: 0 });
     }
   };
+  const morningProgress = useCallback(
+    (seconds: number) =>
+      setClock((old) =>
+        old.chapter === "morning"
+          ? {
+              ...old,
+              ms: Math.min(
+                6000,
+                Math.max(0, (seconds / PREPARED_MEDIA.map.duration) * 6000),
+              ),
+            }
+          : old,
+      ),
+    [setClock],
+  );
+  const morningPlayback = useCallback(
+    (state: PreparedPlaybackState) => {
+      if (state === "static")
+        setClock((old) =>
+          old.chapter === "morning" ? { ...old, ms: 6000 } : old,
+        );
+    },
+    [setClock],
+  );
+  const requestMediaPlay = useCallback(() => setPaused(false), []);
   const selectSite = useCallback((id: string) => setSelected(id), []);
   const onInterior =
     frame.chapter === "interior" || frame.chapter === "counter-question";
@@ -527,13 +552,23 @@ export function LandingStory({
               expanded={outdoor.expanded}
               selected={selected}
               onSelect={selectSite}
+              running={frame.chapter === "morning" && visible && !paused}
+              visible={visible}
+              reduced={reduced}
+              replayRevision={counterRevision}
+              onProgress={morningProgress}
+              onPlaybackState={morningPlayback}
+              onPlayRequest={requestMediaPlay}
             />
             {outdoor.kind === "locations" && (
               <>
                 <div className={styles.sceneTitle}>
                   <WordHeading text="Two spaces for your café." />
                 </div>
-                <p className={styles.mapNote}>
+                <p
+                  className={styles.mapNote}
+                  style={{ bottom: viewport.width <= 700 ? 116 : 64 }}
+                >
                   Example neighborhoods · rent and size are assumed, not
                   verified listings
                 </p>
@@ -543,7 +578,7 @@ export function LandingStory({
               <MorningScene
                 data={data}
                 elapsed={(outdoor.minute - 480) * 25}
-                reduced={reduced}
+                reduced={false}
               />
             )}
           </div>
@@ -603,10 +638,11 @@ export function LandingStory({
             choice={choice}
             replayRevision={counterRevision}
             onChoice={setChoice}
-            running={
-              frame.chapter === "counters" && visible && !paused && !reduced
-            }
+            running={frame.chapter === "counters" && visible && !paused}
             mini={frame.chapter === "return"}
+            visible={visible}
+            reduced={reduced}
+            onPlayRequest={requestMediaPlay}
           />
         )}
         {frame.chapter !== "hero" &&
