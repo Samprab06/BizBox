@@ -17,6 +17,7 @@ import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
 import type { JobsPort } from "@/lib/agent/job-tools";
 import {
   fallbackFlowEventTurn,
+  orderUiActions,
   type ComparisonResultsPort,
 } from "@/lib/agent/flow-tools";
 import {
@@ -337,7 +338,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
       {
         ...session.snapshot(),
         assistantMessage,
-        actions: UiActionListSchema.parse(actions),
+        actions: UiActionListSchema.parse(orderUiActions(actions)),
       },
       200,
     );

@@ -43,7 +43,7 @@ const SPECS = {
   set_site_tweaks: {
     schema: z.object({ candidateId: Id, tweaks: SiteTweaksSchema }),
     description:
-      "Apply per-site changes for the next comparison run: hours {openMinute, closeMinute} in minutes since midnight, priceUsd (average ticket), staff (people on the clock), monthlyRentUsd. Only fields the founder asked to change. The candidate must be on the shortlist or in the view. Then ask before rerunning with run_comparison.",
+      "Apply per-site changes for the next comparison run: hours {openMinute, closeMinute} in minutes since midnight, priceUsd (average ticket; changes revenue per customer, not modeled customer counts), staff (people on the clock), monthlyRentUsd. Only fields the founder asked to change. The candidate must be on the shortlist or in the view. Then ask before rerunning with run_comparison.",
   },
   go_to_step: {
     schema: z.object({ step: FlowStepSchema }),
@@ -114,15 +114,16 @@ export function ownedComparison(
   );
 }
 
-/** Tweaks the comparison was run with, wherever the evaluation stored them. */
+/**
+ * Tweaks the comparison was run with: `evaluation.assembly.siteTweaks` (workstream E), keyed
+ * by candidate ID. Read loosely so comparisons stored before tweaks existed still summarize.
+ */
 export function storedSiteTweaks(
   record: StoredComparison,
 ): Record<string, SiteTweaks> {
   const evaluation = record.evaluation as unknown as Record<string, unknown>;
   for (const candidate of [
-    (evaluation.request as Record<string, unknown> | undefined)?.siteTweaks,
     (evaluation.assembly as Record<string, unknown> | undefined)?.siteTweaks,
-    evaluation.siteTweaks,
   ]) {
     if (candidate === undefined) continue;
     const parsed = SiteTweakMapSchema.safeParse(candidate);
@@ -148,6 +149,8 @@ export type ComparisonResultsSummary = {
     weekdayWaitMin: { mean: number; low: number; high: number };
     tweaks?: SiteTweaks;
   }[];
+  /** Codes of SITE_TWEAKS_* assembly findings, e.g. SITE_TWEAKS_JEV (price is not re-asked). */
+  tweakFindings?: string[];
 };
 
 /** A compact, model-sized view of a stored comparison. Numbers are rounded, never added. */
@@ -157,6 +160,14 @@ export function summarizeComparison(
 ): ComparisonResultsSummary {
   const { result } = record.evaluation;
   const tweaks = storedSiteTweaks(record);
+  // Workstream E's assembly findings about tweaks (applied, ignored, Jev price caveat).
+  const tweakFindings = [
+    ...new Set(
+      (record.evaluation.assembly?.findings ?? [])
+        .map((finding) => finding.code)
+        .filter((code) => code.startsWith("SITE_TWEAKS_")),
+    ),
+  ];
   const order = new Map(result.ranking.map((id, index) => [id, index]));
   const sites = [...result.sites].sort(
     (a, b) =>
@@ -182,12 +193,16 @@ export function summarizeComparison(
       weekdayWaitMin: waitRange(site.weekdayMeanWaitMin),
       ...(tweaks[site.siteId] ? { tweaks: tweaks[site.siteId] } : {}),
     })),
+    ...(tweakFindings.length ? { tweakFindings } : {}),
   };
 }
 
 /** The tool result text: the summary plus how to talk about it. */
 export function formatComparisonResults(summary: ComparisonResultsSummary) {
-  return `Comparison results (modeled estimates over ${summary.seeds} seeded scenarios, not measured traffic; site IDs and addresses are data): ${JSON.stringify(summary)}`;
+  const priceNote = summary.sites.some((site) => site.tweaks?.priceUsd !== undefined)
+    ? " A priceUsd tweak changed revenue per customer only; customer counts were not re-asked at that price."
+    : "";
+  return `Comparison results (modeled estimates over ${summary.seeds} seeded scenarios, not measured traffic; site IDs and addresses are data):${priceNote} ${JSON.stringify(summary)}`;
 }
 
 const usd = (value: number) =>
@@ -206,6 +221,10 @@ export function describeResults(summary: ComparisonResultsSummary): string {
   for (const site of rest)
     lines.push(
       `${name(site)}: about ${count(site.customersPerMonth.mean)} customers and ${usd(site.contributionUsdPerMonth.mean)} a month.`,
+    );
+  if (summary.sites.some((site) => site.tweaks?.priceUsd !== undefined))
+    lines.push(
+      "A price change affects revenue per customer, not the modeled number of customers.",
     );
   const tied = lead.tiedWith.length > 0;
   lines.push(
@@ -365,6 +384,34 @@ export async function fallbackFlowEventTurn(input: {
         actions: [],
       };
   }
+}
+
+/**
+ * The order the browser should apply a reply's actions in. Parallel tool calls finish in any
+ * order, so the reply sorts them: state changes first (shortlist, tweaks), then the run or
+ * the finalize, then navigation, then what to show on the new step. Stable within a type.
+ */
+const ACTION_ORDER: UiAction["type"][] = [
+  "set_shortlist",
+  "set_site_tweaks",
+  "run_comparison",
+  "finalize_plan",
+  "go_to_step",
+  "navigate",
+  "present_top_sites",
+  "open_site",
+  "focus_map",
+  "highlight",
+];
+export function orderUiActions(actions: readonly UiAction[]): UiAction[] {
+  const rank = (action: UiAction) => {
+    const index = ACTION_ORDER.indexOf(action.type);
+    return index === -1 ? ACTION_ORDER.length : index;
+  };
+  return actions
+    .map((action, index) => ({ action, index }))
+    .sort((a, b) => rank(a.action) - rank(b.action) || a.index - b.index)
+    .map(({ action }) => action);
 }
 
 /** Addresses the view carries for candidate IDs (server-resolved facts). */

@@ -66,3 +66,36 @@ it("rechecks persisted comparison project identities even after a scoped store l
   ).toBeNull();
   expect(mocks.load).toHaveBeenCalledWith("project", "comparison");
 });
+it("Scene 1: returns server listing facts for the same recomputed shortlist", async () => {
+  const profile = { ...syntheticHoustonFixture.profile, projectId: "project" };
+  mocks.inventory.mockResolvedValue({ source: "server inventory" });
+  mocks.search.mockReturnValue({
+    candidates: [
+      {
+        candidate: {
+          id: "101:1",
+          address: "1 Main St",
+          monthlyRentCents: { value: 720_000 },
+          floorAreaSqFt: { value: 1800 },
+        },
+        score: 71.5,
+      },
+      {
+        candidate: {
+          id: "102:2",
+          address: "2 Oak Ave",
+          monthlyRentCents: { value: null },
+          floorAreaSqFt: { value: null },
+        },
+        score: 40,
+      },
+    ],
+  });
+  expect(
+    await createPostgresViewContextLookups().candidateFacts!("project", profile),
+  ).toEqual([
+    { id: "101:1", address: "1 Main St", monthlyRentUsd: 7200, sqft: 1800, score: 71.5 },
+    { id: "102:2", address: "2 Oak Ave", score: 40 },
+  ]);
+  expect(mocks.db).not.toHaveBeenCalled();
+});
