@@ -123,6 +123,30 @@ export function describeTweaks(tweaks: SiteTweaks | undefined): TweakLine[] {
 export const demandSourceLabel = (source: DemandSource) =>
   source === "jev" ? "Jev customer panel" : "Huff gravity fallback";
 
+export type RunnerUpGap = {
+  /** Chosen minus runner-up mean monthly contribution, USD. */
+  difference: number;
+  /** True when the two contribution ranges overlap (the lead is not clear-cut). */
+  overlapping: boolean;
+};
+
+/** How the chosen site's contribution compares with the runner-up's; null without one. */
+export function runnerUpGap(
+  summary: Pick<FinalPlanSummary, "metrics" | "runnerUp">,
+): RunnerUpGap | null {
+  if (!summary.runnerUp) return null;
+  const chosen = summary.metrics.monthlyContributionUsd;
+  const other = summary.runnerUp.monthlyContributionUsd;
+  return {
+    difference: chosen.mean - other.mean,
+    overlapping: chosen.low <= other.high && other.low <= chosen.high,
+  };
+}
+
+/** Signed USD per month, e.g. `+$1,200` or `-$300`. */
+export const formatUsdDelta = (n: number) =>
+  `${n > 0 ? "+" : ""}${formatUsd(n)}`;
+
 // ---------------------------------------------------------------------------
 // Builder helpers
 // ---------------------------------------------------------------------------
