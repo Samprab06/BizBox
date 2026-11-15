@@ -11,6 +11,8 @@ export type IntakeRunner = (input: {
   session: IntakeSession;
   message: string;
   signal: AbortSignal;
+  /** Bounded line assembled only after server scope validation. */
+  viewContextLine?: string;
   /** HAC-144: binds the UI tool group; the runner pushes queued actions to `ui.actions`. */
   ui?: IntakeUiContext;
 }) => Promise<string>;

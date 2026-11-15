@@ -4,7 +4,10 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeSession } from "@/components/intake/profile";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
-import { useContextIntake } from "@/lib/client/use-workspace-context";
+import {
+  useAgentViewContext,
+  useContextIntake,
+} from "@/lib/client/use-workspace-context";
 import {
   applyIntakeReply,
   assistantCopy,
@@ -76,6 +79,7 @@ function useAgentAvailability(projectId: string): AgentAvailability {
  * all go through `enqueue`, so there is one queue per project.
  */
 export function useIntakeConversation(projectId: string) {
+  const view = useAgentViewContext();
   const key = intakeStorageKey(projectId);
   const raw = useContextIntake(projectId);
   const availability = useAgentAvailability(projectId);
@@ -150,7 +154,7 @@ export function useIntakeConversation(projectId: string) {
     ): Promise<string | null> => {
       const source = options.source ?? "assistant";
       const current = read();
-      const body = intakeRequestBody(current, text);
+      const body = intakeRequestBody(current, text, view, projectId);
       if (!text && !body.patch) return null;
       if (appendFounder && text) save(withFounderMessage(current, text));
       setBusy(true);
@@ -179,7 +183,7 @@ export function useIntakeConversation(projectId: string) {
         if (mounted.current) setBusy(false);
       }
     },
-    [projectId, read, save],
+    [projectId, read, save, view],
   );
 
   const enqueue = useCallback(
@@ -259,6 +263,7 @@ export function useIntakeConversation(projectId: string) {
 
   return {
     session,
+    view,
     messages: session?.messages ?? [],
     availability,
     busy,

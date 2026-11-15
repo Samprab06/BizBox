@@ -121,7 +121,7 @@ function logTurn(fields: Record<string, unknown>) {
 export function createDeepIntakeRunner(
   model: NonNullable<CreateDeepAgentParams["model"]>,
 ): IntakeRunner {
-  return async ({ session, message, signal, ui }) => {
+  return async ({ session, message, signal, ui, viewContextLine }) => {
     let saves = 0;
     let saved = 0;
     let rejectedUnknowns = 0;
@@ -185,13 +185,10 @@ export function createDeepIntakeRunner(
       : undefined;
     const uiTools = runUiTool
       ? UI_TOOL_SPECS.map((spec) =>
-          tool(
-            (args) => {
-              signal.throwIfAborted();
-              return runUiTool(spec.name, args);
-            },
-            spec,
-          ),
+          tool((args) => {
+            signal.throwIfAborted();
+            return runUiTool(spec.name, args);
+          }, spec),
         )
       : [];
     const runJobTool =
@@ -237,6 +234,8 @@ export function createDeepIntakeRunner(
         saves,
         saved,
         rejectedUnknowns,
+        viewContextBytes: new TextEncoder().encode(viewContextLine ?? "")
+          .length,
         ...(ui ? { uiActions: ui.actions.length } : {}),
         ...tally.usage,
       });
@@ -247,7 +246,7 @@ export function createDeepIntakeRunner(
           messages: [
             {
               role: "user",
-              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}\n\n${ui?.view ? `Founder's screen:\n${JSON.stringify(ui.view)}\n\n` : ""}Founder says:\n${message}`,
+              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}${viewContextLine ? `\n${viewContextLine}` : ""}\n\nFounder says:\n${message}`,
             },
           ],
         },

@@ -162,6 +162,10 @@ export function ConsultantShell({
   }, []);
   const focus = layout === "focus";
 
+  const viewRef = useRef(conversation.view);
+  useEffect(() => {
+    viewRef.current = conversation.view;
+  }, [conversation.view]);
   const sessionRef = useRef(conversation.session);
   useEffect(() => {
     sessionRef.current = conversation.session;
@@ -176,13 +180,16 @@ export function ConsultantShell({
   const voiceAdapter = useMemo<VoiceAdapter>(
     () => ({
       readContext: () => {
-        if (pageVoice.current) return pageVoice.current.readContext();
+        if (pageVoice.current)
+          return { ...pageVoice.current.readContext(), view: viewRef.current };
         const selectedSiteId = selectedSiteFromLocation(
           window.location.pathname,
           window.location.search,
         );
         const header = workspaceHeader(sessionRef.current, project);
-        const site = project?.sites.find((entry) => entry.id === selectedSiteId);
+        const site = project?.sites.find(
+          (entry) => entry.id === selectedSiteId,
+        );
         const summary = [
           `City: ${header.city}`,
           `Business: ${header.business}`,
@@ -192,6 +199,7 @@ export function ConsultantShell({
         return {
           projectId,
           mode: "chat",
+          view: viewRef.current,
           ...(selectedSiteId ? { selectedSiteId } : {}),
           summary: summary.slice(0, VOICE_LIMITS.summaryChars),
         };
@@ -234,23 +242,23 @@ export function ConsultantShell({
         data-consultant-layout={layout}
         className={
           focus
-            ? "min-w-0"
-            : "min-w-0 md:grid md:grid-cols-[minmax(0,68fr)_minmax(300px,32fr)]"
+            ? "min-w-0 print:block"
+            : "min-w-0 md:grid md:grid-cols-[minmax(0,68fr)_minmax(300px,32fr)] print:block"
         }
       >
         {/* The view stays mounted in focus, so its state is kept for when it returns. */}
         <main
-          hidden={focus}
           // While the phone sheet is open, room below the view lets all of it scroll clear.
-          className={`min-w-0 px-5 pt-7 sm:px-8 md:pb-10 ${sheetOpen ? "pb-[80dvh]" : "pb-24"}`}
+          // CSS hiding lets print restore the plan even when the assistant is expanded.
+          className={`min-w-0 px-5 pt-7 sm:px-8 md:pb-10 ${focus ? "hidden" : ""} print:block ${sheetOpen ? "pb-[80dvh]" : "pb-24"}`}
         >
           {children}
         </main>
         <div
           className={
             focus
-              ? "mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl min-w-0 flex-col p-3 sm:p-5"
-              : "fixed inset-x-0 bottom-0 z-40 flex max-h-[80dvh] min-w-0 flex-col border-t border-viewport-line bg-viewport-canvas md:sticky md:top-16 md:z-auto md:h-[calc(100dvh-4rem)] md:max-h-none md:border-t-0 md:bg-transparent md:p-4 md:pl-0"
+              ? "mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl min-w-0 flex-col p-3 sm:p-5 print:hidden"
+              : "fixed inset-x-0 bottom-0 z-40 flex max-h-[80dvh] min-w-0 flex-col border-t border-viewport-line bg-viewport-canvas md:sticky md:top-16 md:z-auto md:h-[calc(100dvh-4rem)] md:max-h-none md:border-t-0 md:bg-transparent md:p-4 md:pl-0 print:hidden"
           }
         >
           {!focus && (

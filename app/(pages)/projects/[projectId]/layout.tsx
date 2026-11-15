@@ -3,7 +3,10 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { CopilotDock } from "@/components/copilot/copilot-dock";
 import { CopilotProvider } from "@/components/copilot/copilot-provider";
 import { ConsultantShell } from "@/components/shell/consultant-shell";
-import { ProjectContextProvider } from "@/components/shell/context-bar";
+import {
+  ProjectContextBar,
+  ProjectContextProvider,
+} from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
 /**
@@ -29,24 +32,25 @@ export default async function ProjectLayout({
             href="/projects/houston-coffee/intake"
             className="inline-flex items-center"
           >
-            <BrandLogo priority className="h-8 w-auto" />
+            <BrandLogo onDark priority className="h-8 w-auto print:invert" />
           </Link>
         </div>
       </header>
       {project ? (
         // HAC-84's copilot (scenario, plan, proposed changes) sits in the consultant's dock
         // under the assistant, so every consultant panel persists with the shell.
-        <CopilotProvider projectId={project.id}>
-          <ConsultantShell
-            projectId={projectId}
-            project={project}
-            companion={<CopilotDock />}
-          >
-            <ProjectContextProvider project={project}>
+        <ProjectContextProvider project={project} showContextBar={false}>
+          <CopilotProvider projectId={project.id}>
+            <ConsultantShell
+              projectId={projectId}
+              project={project}
+              companion={<CopilotDock />}
+            >
+              <ProjectContextBar />
               {children}
-            </ProjectContextProvider>
-          </ConsultantShell>
-        </CopilotProvider>
+            </ConsultantShell>
+          </CopilotProvider>
+        </ProjectContextProvider>
       ) : (
         <main className="min-w-0 px-5 py-7 sm:px-8">{children}</main>
       )}

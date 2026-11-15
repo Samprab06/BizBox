@@ -60,7 +60,7 @@ export function DecisionReplay(
         viewBox="0 0 320 160"
         className="mt-1 h-40 w-full rounded-lg border border-line bg-mint"
       >
-        <text x="12" y="17" fill="#1c3028" fontSize="11">
+        <text x="12" y="17" fill="var(--color-ink)" fontSize="11">
           Service lanes · schematic
         </text>
         {Array.from({ length: shownStations }, (_, index) => (
@@ -71,12 +71,12 @@ export function DecisionReplay(
               width={280 / shownStations}
               height="22"
               rx="3"
-              fill="#1b4937"
+              fill="var(--color-accent)"
             />
             <text
               x={20 + index * (296 / shownStations)}
               y="45"
-              fill="#ffffff"
+              fill="var(--color-on-accent)"
               fontSize="10"
             >
               {index + 1}
@@ -89,18 +89,24 @@ export function DecisionReplay(
             cx={28 + Math.min(lane, shownStations - 1) * (296 / shownStations)}
             cy="65"
             r="7"
-            fill="#315b83"
+            fill="var(--color-alternative)"
           >
             <title>In service {index + 1}</title>
           </circle>
         ))}
-        <text x="12" y="90" fill="#1c3028" fontSize="11">
+        <text x="12" y="90" fill="var(--color-ink)" fontSize="11">
           Queue: {frame.waiting.length} · In service: {frame.serving.length}
         </text>
         {frame.waiting.slice(0, 16).map((id, index) => (
-          <circle key={id} cx={18 + index * 18} cy="107" r="5" fill="#315b83" />
+          <circle
+            key={id}
+            cx={18 + index * 18}
+            cy="107"
+            r="5"
+            fill="var(--color-alternative)"
+          />
         ))}
-        <text x="12" y="144" fill="#1c3028" fontSize="11">
+        <text x="12" y="144" fill="var(--color-ink)" fontSize="11">
           Completed: {frame.served} · Left: {frame.left} · {clock(minute)}
         </text>
       </svg>

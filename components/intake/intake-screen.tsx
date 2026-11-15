@@ -90,7 +90,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
 
   // HAC-143: the dock's one voice session answers the form's current prompt while it is open.
   useConsultantVoice({
-    readContext: () => ({ projectId, mode: "intake", prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
+    readContext: () => ({ projectId, mode: "intake", view: conversation.view, prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
     submitTranscript: text => submitMessage(text, currentPrompt()),
   });
 
@@ -217,7 +217,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
                       step={"numeric" in field ? 1 : undefined}
                       id={`profile-${field.key}`} value={value} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} onChange={(event) => changed(event.target.value)} onBlur={sync} />
                   )}
-                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-red-800">{error}</p>}
+                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-danger">{error}</p>}
                 </div>
               );
             })}
