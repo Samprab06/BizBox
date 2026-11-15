@@ -1,24 +1,31 @@
 "use client";
 import Image from "next/image";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { LocationStoryData } from "./location-data";
 import type { LandingDemoData } from "../landing-demo/demo-data";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import {
-  Glass,
-  WordHeading,
-  Icon,
-  dollars,
-  number,
-} from "../landing-demo/demo-ui";
+import { Glass, WordHeading, Icon, dollars } from "../landing-demo/demo-ui";
 import { CustomerFlow } from "../landing-demo/customer-flow";
 import { smooth } from "../landing-demo/timeline";
-import { typingAt } from "./timeline";
+import { chatAt } from "./timeline";
 import styles from "./landing-story.module.css";
 export function LocationDetails({ data }: { data: LocationStoryData }) {
   return (
     <details className={styles.details}>
       <summary>Assumptions & costs</summary>
       <div>
+        {data.sites.map((site) => (
+          <p key={site.id}>
+            {site.name}: {site.arrivals} assumed arrivals · {dollars(site.rent)}{" "}
+            / month rent
+          </p>
+        ))}
         {data.assumptions.map((text) => (
           <p key={text}>{text}</p>
         ))}
@@ -29,6 +36,10 @@ export function LocationDetails({ data }: { data: LocationStoryData }) {
 export function LocationAnalytics({ data }: { data: LocationStoryData }) {
   const winner = data.sites.find((site) => site.id === data.selectedId)!;
   const other = data.sites.find((site) => site.id !== data.selectedId)!;
+  const maxContribution = Math.max(
+    ...data.sites.map((site) => site.contributionUsd),
+    1,
+  );
   return (
     <section className={styles.analytics} aria-label="Modeled location results">
       <div className={styles.sceneTitle}>
@@ -41,23 +52,30 @@ export function LocationAnalytics({ data }: { data: LocationStoryData }) {
             <div key={site.id} data-winner={site.id === data.selectedId}>
               <h3>{site.name}</h3>
               <dl className={styles.locationMetrics}>
-                <div>
+                <div data-primary-value="contribution">
+                  <dt>after included costs</dt>
+                  <dd>
+                    <strong>{dollars(site.contributionUsd)}</strong>
+                    <div
+                      className={styles.contributionMeter}
+                      data-result-chart="contribution"
+                      aria-hidden="true"
+                    >
+                      <i
+                        style={{
+                          width: `${(site.contributionUsd / maxContribution) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </dd>
+                </div>
+                <div data-primary-value="served">
                   <dt>customers served</dt>
                   <dd>
                     <strong>{site.served}</strong>
                   </dd>
                 </div>
-                <div>
-                  <dt>after included costs</dt>
-                  <dd>
-                    <strong>{dollars(site.contributionUsd)}</strong>
-                  </dd>
-                </div>
               </dl>
-              <p className={styles.siteAssumptions}>
-                <span>{site.arrivals} assumed arrivals</span>
-                <span>{dollars(site.rent)} / month rent</span>
-              </p>
             </div>
           ))}
         </div>
@@ -76,36 +94,338 @@ export function LocationAnalytics({ data }: { data: LocationStoryData }) {
     </section>
   );
 }
+export const LOCATION_PROMPT = "Where should I open my café?";
+export const LOCATION_REPLY = [
+  "I’ll compare two example spaces using the same café and morning.",
+];
+export const COUNTER_PROMPT = "What if I add a second staffed counter?";
+export function counterReply(demo: LandingDemoData) {
+  return [
+    `I’ll run the same ${demo.experiment.arrivals}-customer morning with a second staffed counter. It adds ${dollars(demo.experiment.proposed.laborUsd - demo.experiment.current.laborUsd)} in labor and ${dollars(demo.experiment.additionalBuildoutUsd)} in setup.`,
+  ];
+}
+
+type ChatProps = {
+  prompt: string;
+  replies: readonly string[];
+  elapsed: number;
+  reduced: boolean;
+  label: string;
+  onSend?: () => void;
+  children?: ReactNode;
+};
+function ScriptedConversation({
+  prompt,
+  replies,
+  elapsed,
+  reduced,
+  label,
+  onSend,
+  children,
+}: ChatProps) {
+  const chat = chatAt(prompt, replies, elapsed, reduced);
+  return (
+    <div
+      className={styles.conversation}
+      data-chat-state={
+        chat.sent
+          ? chat.complete
+            ? "complete"
+            : "replying"
+          : chat.sendPressed
+            ? "sending"
+            : "composing"
+      }
+    >
+      {!chat.sent && (
+        <Glass className={styles.composer}>
+          <label className={styles.composerLabel}>
+            <span className={styles.srOnly}>{label}</span>
+            <textarea
+              aria-label={label}
+              rows={2}
+              readOnly
+              value={chat.promptText}
+              spellCheck={false}
+            />
+          </label>
+          <div className={styles.composerFooter}>
+            <button
+              type="button"
+              aria-label="Send example prompt"
+              data-pressed={chat.sendPressed}
+              onClick={onSend}
+            >
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </Glass>
+      )}
+      {chat.sent && (
+        <Glass
+          className={`${styles.bubble} ${styles.userBubble}`}
+          data-speaker="user"
+        >
+          <span>You</span>
+          <p>{prompt}</p>
+        </Glass>
+      )}
+      {chat.replyVisible && (
+        <Glass
+          className={`${styles.bubble} ${styles.consultantBubble}`}
+          data-speaker="bizbox"
+        >
+          <BrandLogo onDark className={styles.bubbleBrand} />
+          <div aria-hidden="true" className={styles.replyParagraphs}>
+            {chat.paragraphs.map((paragraph, i) => (
+              <p key={i}>{paragraph || "\u00a0"}</p>
+            ))}
+          </div>
+          <span className={styles.srOnly}>{replies.join("\n\n")}</span>
+          {chat.complete && children}
+        </Glass>
+      )}
+    </div>
+  );
+}
+export function LocationQuestion({
+  elapsed,
+  reduced,
+  onSend,
+}: {
+  elapsed: number;
+  reduced: boolean;
+  onSend?: () => void;
+}) {
+  return (
+    <section
+      className={styles.questionScene}
+      aria-label="Example location question"
+    >
+      <ScriptedConversation
+        prompt={LOCATION_PROMPT}
+        replies={LOCATION_REPLY}
+        elapsed={elapsed}
+        reduced={reduced}
+        label="Location question"
+        onSend={onSend}
+      />
+    </section>
+  );
+}
+type InteriorRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+export function interiorFrame(
+  source: InteriorRect,
+  viewport: { width: number; height: number },
+  mix: number,
+): InteriorRect {
+  const t = Math.min(1, Math.max(0, mix));
+  return {
+    left: source.left * (1 - t),
+    top: source.top * (1 - t),
+    width: source.width + (viewport.width - source.width) * t,
+    height: source.height + (viewport.height - source.height) * t,
+  };
+}
 export function ConsultantScene({
   data,
   elapsed,
   reduced,
+  onSend,
+  onEnter,
+  interiorMix = 0,
+  cursorMix = 0,
+  pan = 0,
 }: {
   data: LocationStoryData;
   elapsed: number;
   reduced: boolean;
+  onSend?: () => void;
+  onEnter?: () => void;
+  interiorMix?: number;
+  cursorMix?: number;
+  pan?: number;
 }) {
-  const message = data.consultant.messages.join("\n\n");
+  const root = useRef<HTMLElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const interiorId = useId();
+  const preview = useRef<HTMLDivElement>(null);
+  const [bounds, setBounds] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    fullWidth: number;
+    fullHeight: number;
+  } | null>(null);
+  const chat = chatAt(
+    data.consultant.question,
+    data.consultant.messages,
+    elapsed,
+    reduced,
+  );
+  const mixRef = useRef(interiorMix);
+  const measureRef = useRef<() => void>(() => {});
+  useLayoutEffect(() => {
+    mixRef.current = interiorMix;
+    if (interiorMix === 0) measureRef.current();
+  }, [interiorMix]);
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!root.current || !preview.current) return;
+      const host = root.current.getBoundingClientRect(),
+        slot = preview.current.getBoundingClientRect();
+      setBounds((old) => {
+        // The host never scrolls; slot coordinates already include inner scrolling.
+        const source = {
+          left: slot.left - host.left,
+          top: slot.top - host.top,
+          width: slot.width,
+          height: slot.height,
+        };
+        const next = {
+          ...source,
+          fullWidth: host.width,
+          fullHeight: host.height,
+        };
+        return old &&
+          Object.keys(next).every(
+            (key) =>
+              Math.abs(
+                old[key as keyof typeof old] - next[key as keyof typeof next],
+              ) < 0.5,
+          )
+          ? old
+          : next;
+      });
+    };
+    measureRef.current = measure;
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (root.current) observer.observe(root.current);
+    if (preview.current) observer.observe(preview.current);
+    const scrollHost = scroller.current;
+    const onScroll = () => {
+      if (mixRef.current === 0) measure();
+    };
+    scrollHost?.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      observer.disconnect();
+      scrollHost?.removeEventListener("scroll", onScroll);
+      measureRef.current = () => {};
+    };
+  }, [chat.complete]);
+  const imageFrame = bounds
+    ? interiorFrame(
+        bounds,
+        { width: bounds.fullWidth, height: bounds.fullHeight },
+        interiorMix,
+      )
+    : undefined;
   return (
     <section
+      ref={root}
       className={styles.consultantScene}
       aria-label="Example consultant recommendation"
+      data-interior-mix={interiorMix}
     >
-      <Glass className={`${styles.bubble} ${styles.userBubble}`}>
-        <span>You</span>
-        <p>{data.consultant.question}</p>
-      </Glass>
-      <Glass className={`${styles.bubble} ${styles.consultantBubble}`}>
-        <BrandLogo onDark className={styles.bubbleBrand} />
-        <p aria-hidden="true">
-          {typingAt(message, elapsed, 350, reduced)}
-          <span className={styles.caret} />
-        </p>
-        <span className={styles.srOnly}>{message}</span>
-      </Glass>
-      <p className={styles.qualifier}>
-        Prepared example · modeled, not a forecast
-      </p>
+      <div
+        ref={scroller}
+        className={styles.consultantScroller}
+        data-consultant-scroller="true"
+        style={{
+          pointerEvents: interiorMix > 0 ? "none" : undefined,
+          overflow: interiorMix > 0 ? "hidden" : undefined,
+        }}
+        inert={interiorMix > 0.5}
+      >
+        <div
+          className={styles.consultantConversation}
+          style={{
+            opacity: 1 - smooth(0, 0.55, interiorMix),
+            visibility: interiorMix === 1 ? "hidden" : "visible",
+          }}
+          inert={interiorMix > 0.5}
+        >
+          <ScriptedConversation
+            prompt={data.consultant.question}
+            replies={data.consultant.messages}
+            elapsed={elapsed}
+            reduced={reduced}
+            label="Consultant question"
+            onSend={onSend}
+          >
+            <div
+              ref={preview}
+              className={styles.interiorPreview}
+              data-interior-preview="true"
+              role="group"
+              aria-label="Generated café interior preview"
+              aria-owns={interiorId}
+            ></div>
+          </ScriptedConversation>
+          <p className={styles.qualifier}>
+            Prepared example · modeled, not a forecast
+          </p>
+        </div>
+      </div>
+      <div
+        id={interiorId}
+        className={styles.sharedInterior}
+        hidden={!chat.complete && interiorMix === 0}
+        data-shared-interior="true"
+        style={
+          imageFrame
+            ? { ...imageFrame, borderRadius: 18 * (1 - interiorMix) }
+            : undefined
+        }
+      >
+        <Image
+          src="/landing-assets/guided-demo/cafe-interior-v1.png"
+          alt="Generated example café with green tile and walnut furniture"
+          style={{
+            transform: `scale(${1 + 0.04 * pan}) translateX(${-pan * 0.6}%)`,
+          }}
+          fill
+          sizes="100vw"
+          priority
+        />
+        <div
+          className={styles.interiorPreviewControls}
+          style={{
+            opacity: 1 - smooth(0, 0.45, interiorMix),
+            visibility: interiorMix >= 0.5 ? "hidden" : "visible",
+          }}
+          inert={interiorMix >= 0.5}
+        >
+          <button type="button" onClick={onEnter}>
+            See inside <Icon name="arrow" />
+          </button>
+          <svg
+            className={styles.demoCursor}
+            style={{
+              opacity: cursorMix > 0 ? 1 : 0,
+              transform: `translate(${(1 - cursorMix) * 45}px,${(1 - cursorMix) * 35}px) scale(${1 - 0.12 * smooth(0.65, 0.8, cursorMix) + 0.12 * smooth(0.8, 1, cursorMix)})`,
+            }}
+            viewBox="0 0 24 28"
+            aria-hidden="true"
+          >
+            <path
+              d="M2 2v20l6-5 5 10 4-2-5-9h9Z"
+              fill="white"
+              stroke="#25333b"
+            />
+          </svg>
+        </div>
+      </div>
+      {interiorMix > 0.5 && (
+        <span className={styles.imageNote}>Illustrative interior</span>
+      )}
     </section>
   );
 }
@@ -135,73 +455,6 @@ export function MorningScene({
         <p>{time} · modeled demand, not measured footfall</p>
       </div>
     </div>
-  );
-}
-export function InteriorScene({
-  data,
-  mix,
-  onEnter,
-  cursorMix,
-  pan,
-}: {
-  data: LocationStoryData;
-  mix: number;
-  onEnter: () => void;
-  cursorMix: number;
-  pan: number;
-}) {
-  const selected = data.sites.find((site) => site.id === data.selectedId)!;
-  return (
-    <section
-      className={styles.interiorScene}
-      aria-label="Illustrative café interior"
-    >
-      <div
-        className={styles.interiorImage}
-        style={{
-          clipPath: `inset(${(1 - mix) * 23}% ${(1 - mix) * 18}% round ${(1 - mix) * 22}px)`,
-        }}
-      >
-        <Image
-          src="/landing-assets/guided-demo/cafe-interior-v1.png"
-          alt="Generated example café with green tile and walnut furniture"
-          style={{
-            transform: `scale(${1 + 0.04 * pan}) translateX(${-pan * 0.6}%)`,
-          }}
-          fill
-          sizes="100vw"
-          priority
-        />
-      </div>
-      <div
-        className={styles.interiorPrompt}
-        style={{
-          opacity: 1 - mix,
-          visibility: mix === 1 ? "hidden" : "visible",
-        }}
-      >
-        <Glass className={styles.insideButton}>
-          <button type="button" onClick={onEnter}>
-            See inside <Icon name="arrow" />
-          </button>
-          <span>{selected.name} · example space</span>
-          <small>
-            {dollars(selected.rent)} / month · {number(selected.size)} sq ft
-          </small>
-        </Glass>
-        <svg
-          className={styles.demoCursor}
-          style={{
-            transform: `translate(${(1 - cursorMix) * 70}px,${(1 - cursorMix) * 75}px) scale(${1 - 0.12 * smooth(0.65, 0.8, cursorMix) + 0.12 * smooth(0.8, 1, cursorMix)})`,
-          }}
-          viewBox="0 0 24 28"
-          aria-hidden="true"
-        >
-          <path d="M2 2v20l6-5 5 10 4-2-5-9h9Z" fill="white" stroke="#25333b" />
-        </svg>
-      </div>
-      <span className={styles.imageNote}>Illustrative interior</span>
-    </section>
   );
 }
 export function CounterComparison({
@@ -329,23 +582,29 @@ export function CounterComparison({
   );
 }
 export function CounterQuestion({
+  demo,
   elapsed,
   reduced,
+  onSend,
 }: {
+  demo: LandingDemoData;
   elapsed: number;
   reduced: boolean;
+  onSend?: () => void;
 }) {
-  const text = "What if I add a second staffed counter?";
   return (
-    <div className={styles.counterQuestion}>
-      <Glass className={`${styles.bubble} ${styles.userBubble}`}>
-        <span>You</span>
-        <p aria-hidden="true">
-          {typingAt(text, elapsed, 100, reduced)}
-          <span className={styles.caret} />
-        </p>
-        <span className={styles.srOnly}>{text}</span>
-      </Glass>
-    </div>
+    <section
+      className={styles.counterQuestion}
+      aria-label="Example counter question"
+    >
+      <ScriptedConversation
+        prompt={COUNTER_PROMPT}
+        replies={counterReply(demo)}
+        elapsed={elapsed}
+        reduced={reduced}
+        label="Counter question"
+        onSend={onSend}
+      />
+    </section>
   );
 }

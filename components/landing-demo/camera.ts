@@ -14,12 +14,13 @@ export function cameraAt(
   viewport: Viewport,
   macbook: MacbookFrame,
   input: number,
+  options: { heroScale?: number; heroCenterY?: number } = {},
 ) {
   const entry = Number.isFinite(input) ? Math.min(1, Math.max(0, input)) : 0;
   const portrait = viewport.width <= 700 && viewport.height > 480;
   const landscape = viewport.width <= 1000 && viewport.height <= 480;
   const compactLandscape = landscape && viewport.width <= 700;
-  const width = landscape
+  const naturalWidth = landscape
     ? Math.min(
         viewport.width * 0.5,
         (viewport.height * 0.8 * macbook.width) / macbook.height,
@@ -29,6 +30,7 @@ export function cameraAt(
         1000,
         (viewport.height * 0.6 * macbook.width) / macbook.height,
       );
+  const width = naturalWidth * (options.heroScale ?? 1);
   const height = (width * macbook.height) / macbook.width;
   const left = landscape
     ? viewport.width * 0.73 - width / 2
@@ -37,7 +39,7 @@ export function cameraAt(
     ? viewport.height * 0.36
     : landscape
       ? (viewport.height - height) / 2 + 24
-      : viewport.height * 0.61 - height / 2;
+      : viewport.height * (options.heroCenterY ?? 0.61) - height / 2;
   const [tl, tr, , bl] = macbook.screenQuad;
   const initial = {
     left: left + tl.x * width,

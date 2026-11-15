@@ -7,7 +7,7 @@ import {
   test,
 } from "./fixtures";
 
-// HAC-129: the BizBox landing is served at "/" and leads into the guided onboarding and
+// The preserved static preview leads into the guided onboarding and
 // the workspace. Every network boundary is a page.route mock: no model, voice, map tile,
 // Matterport or database service is called.
 
@@ -89,9 +89,9 @@ const contentMode = (page: Page) =>
         .bizboxState?.contentMode,
   );
 
-/** Opens "/" and waits for the scene to finish initializing (WebGL or its fallback). */
+/** Opens the legacy preview and waits for WebGL or its fallback to initialize. */
 async function openLanding(page: Page) {
-  await page.goto("/");
+  await page.goto("/landing-preview/index.html");
   await expect(
     page.getByRole("heading", {
       level: 1,
@@ -163,16 +163,16 @@ test.beforeEach(async ({ page, clearIntakeStorage }) => {
   await clearIntakeStorage();
 });
 
-test.describe("the landing at /", () => {
-  test("is served in the app, not from /landing-preview, under the BizBox name", async ({
+test.describe("the legacy landing preview", () => {
+  test("preserves the BizBox preview and its absolute asset paths", async ({
     page,
   }) => {
     const requested = await mockNetwork(page);
     await openLanding(page);
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/landing-preview\/index\.html$/);
     await expect(page).toHaveTitle(/BizBox/);
-    expect(requested).not.toContain("/landing-preview/index.html");
-    // Its assets come from absolute paths, so it renders at "/" as at any other route.
+    expect(requested).toContain("/landing-preview/index.html");
+    // Legacy assets remain absolute while the root homepage evolves independently.
     expect(requested).toContain("/landing-preview/app.js");
     await expect(
       page.getByRole("link", { name: "BizBox home" }),
@@ -312,7 +312,7 @@ test.describe("landing to onboarding to workspace", () => {
       .toEqual({ value: "Quick-service food", origin: "founder" });
 
     // Back at the landing, the same call-to-action now offers to continue, without a second store.
-    await page.goto("/");
+    await page.goto("/landing-preview/index.html");
     await page.locator(".nav-cta").click();
     await expect(page).toHaveURL(/\/start$/);
     await expect(

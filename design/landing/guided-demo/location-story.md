@@ -1,4 +1,6 @@
-# Café location story — local review
+# Café location story
+
+**Current release:** Akshar requested the newest refinement as the homepage at `/`. It shares the story component with `/landing-story`; older demo/static routes remain available. Open BizBox now uses `/start` so each founder creates or resumes their own project. PR139 is the earlier merged checkpoint; the refinement below supersedes its visual presentation.
 
 Akshar approved implementation after the ten-screen discussion, then changed the consultant to its own screen after analytics: a speech bubble appears before the response text. Existing design is required. Review route: `/landing-story`. The pushed `/landing-demo` implementation remains unchanged.
 
@@ -45,3 +47,15 @@ The previous checkpoint failed browser CI because several shared-client tests st
 A genuine 768px workspace navigation overflow was also reproduced: its popup sized itself against the viewport despite being positioned within a narrower header. Its width now follows that header. The existing geometry test fails before the fix and passes afterward.
 
 Fresh lint, typecheck, production build and full unit suite pass (2,020 tests, 51 existing skips). The full WebKit accessibility suite passes all 48 tests; the previous intake contrast result did not reproduce in nine targeted runs or the full suite, so no speculative contrast override was introduced. A separate focused diff review found no actionable issues. Full runs of the four affected browser specs pass across Chromium, WebKit and mobile Chrome: 324 passed, 6 pre-existing browser-specific skips. GitHub CI is the remaining readiness gate.
+
+## Homepage refinement
+
+Compact bundled DM Sans headings replace the oversized light hierarchy. Optional camera settings reduce the desktop hardware and aperture together; default camera behavior remains unchanged for the earlier demo. The story-only seven-second onboarding selects the café, writes the brief, moves rent from $3,500 to $4,500, changes staffing from two to one and confirms the brief after entry settles. Pause preserves the input values; reduced motion shows the final confirmed state.
+
+Each chat starts in a composer, sends a right-aligned user bubble and types a separate BizBox reply. A reversible bounded desktop swipe connects the question, actual Vexcel map and map-free analytics. Property facts appear progressively; comparison bars emphasize the existing engine-backed $88/$46 included-cost result and $42 difference. Counter chat derives its 110-customer/$72 labor/$6,000 setup explanation from server-prepared data. No fixture simulation is imported into the client. Chat clocks stop at their completion.
+
+The consultant reply contains a crisp generated interior preview and See inside control. A separate non-scrolling image layer preserves the same image node as it expands, while the inner chat scroller tracks preview bounds. Browser verification covered 390×667 after 76.5px inner scrolling: zero source-image offset; the same image filled 390×667, rotated to 667×390 and reversed to its slot within 0.18px. Desktop/390px hero, prompt, comparison and counter chat had no horizontal overflow. Paused business setup held at 4,041ms / $4,200, then finished at $4,500 / one staff member. Actual map rendering retained one viewport and 18 Montrose/30 Heights road samples; analytics released the canvas.
+
+Integration preserved newer main changes. The eight add/add conflicts caused by the prior squash merge were resolved only after verifying every upstream conflicted file exactly matched PR139’s 346b1b6 checkpoint; only the subsequent landing refinements were selected. No force push or teammate-file replacement is used.
+
+Final homepage candidate: lint, typecheck and production build pass; full unit suite passes 2,032 tests with 51 existing skips. Environment-file and client-bundle guards pass. Homepage/retained-preview tests pass across Chromium, WebKit and mobile Chrome: 62 passed with one existing WebKit keyboard skip. Chat-first entry and smoke checks pass all 30 cases across those browsers. The chat test now waits for the Send control to become enabled before its next Enter, rather than racing a received request against its still-pending reply. No retries, timeouts or CI gates were weakened. New root tests verify no legacy iframe/script, own-project creation/resume, keyboard entry, phone/tablet/desktop sizing and confirmed reduced-motion onboarding.
