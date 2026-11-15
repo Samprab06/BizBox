@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Entity, Viewer } from "cesium";
+import type { Entity, Rectangle, Viewer } from "cesium";
 import {
   daylight,
   demandAnchors,
@@ -32,8 +32,12 @@ import {
 } from "@/components/city/cesium-agents";
 import { sampleTripFrame } from "@/components/city/trip-frame";
 import {
+  ASSUMED_BUILDING_METERS,
   MAX_FOOTPRINT_METERS,
+  footprintAt,
+  footprintBlocks,
   footprintSource,
+  loadAreaFootprints,
   loadSiteFootprint,
 } from "@/components/city/building-footprint";
 import type { DayResult } from "@/lib/sim/contracts";
@@ -104,6 +108,7 @@ export default function Neighborhood({
     | { status: "loading" | "none" | "failed" }
     | { status: "found"; match: "contains" | "nearest"; distanceMeters: number }
   >({ status: "loading" });
+  const [mapSource, setMapSource] = useState<"vexcel" | "osm">("vexcel");
   const agentsVisibleRef = useRef(agentsVisible);
   useEffect(() => {
     agentsRef.current = agents;
@@ -239,6 +244,25 @@ export default function Neighborhood({
       );
       viewer.scene.primitives.add(tileset);
       const city = viewer;
+      // HAC-77: the Vexcel route serves one collection (Houston). Outside its
+      // region, hide the empty mesh and draw OpenStreetMap building blocks instead.
+      // `boundingVolume` exists at runtime but is missing from Cesium's typings.
+      const region = (
+        tileset.root as unknown as {
+          boundingVolume?: { rectangle?: Rectangle };
+        }
+      ).boundingVolume?.rectangle;
+      const covered = region
+        ? Cesium.Rectangle.contains(
+            region,
+            Cartographic.fromDegrees(longitude, latitude),
+          )
+        : Cartesian3.distance(
+            tileset.boundingSphere.center,
+            Cartesian3.fromDegrees(longitude, latitude),
+          ) <= tileset.boundingSphere.radius;
+      tileset.show = covered;
+      setMapSource(covered ? "vexcel" : "osm");
       // HAC-77: the selected-site pin and modeled customers, driven by the page clock.
       const agentLayer = createAgentLayer(
         Cesium,
@@ -262,6 +286,46 @@ export default function Neighborhood({
       void (async () => {
         try {
           const template = await getRoadTemplate(roadRequests.signal);
+          if (!covered) {
+            const footprints = await loadAreaFootprints(
+              template,
+              [longitude, latitude],
+              roadRequests.signal,
+            );
+            if (closed || city.isDestroyed()) return;
+            const match = footprintAt(footprints, [longitude, latitude]);
+            for (const block of footprintBlocks(footprints, [
+              longitude,
+              latitude,
+            ])) {
+              const selected = block.footprint === match?.footprint;
+              city.entities.add({
+                polygon: {
+                  hierarchy: Cartesian3.fromDegreesArray(block.outer.flat()),
+                  height: 0,
+                  extrudedHeight: block.heightMeters,
+                  material: selected
+                    ? Color.fromCssColorString("#818cf8")
+                    : Color.fromCssColorString("#94a3b8").withAlpha(0.85),
+                  outline: true,
+                  outlineColor:
+                    Color.fromCssColorString("#0f172a").withAlpha(0.4),
+                },
+              });
+            }
+            setBuilding(
+              match
+                ? {
+                    status: "found",
+                    match: match.match,
+                    distanceMeters: match.distanceMeters,
+                  }
+                : { status: "none" },
+            );
+            setStatus("ready");
+            if (visibleRef.current) city.scene.requestRender();
+            return;
+          }
           const found = await loadSiteFootprint(
             template,
             [longitude, latitude],
@@ -306,7 +370,8 @@ export default function Neighborhood({
           if (!closed) setBuilding({ status: "failed" });
         }
       })();
-      let groundSampled = false;
+      // Without the mesh the blocks would be sampled as ground; stay at street level.
+      let groundSampled = !covered;
       const updateAgents = () => {
         if (!groundSampled) {
           // Sit the dots on the rendered mesh once it has loaded under the site.
@@ -860,6 +925,13 @@ export default function Neighborhood({
         </div>
         <div className="mb-4">
           <span className="text-xs font-medium">Selected site</span>
+          {mapSource === "osm" && (
+            <p className="mt-1 text-[11px]">
+              No Vexcel 3D coverage here. Showing OpenStreetMap building blocks;
+              heights from OSM where mapped, otherwise assumed{" "}
+              {ASSUMED_BUILDING_METERS} m.
+            </p>
+          )}
           <p role="status" className="mt-1 text-[11px] text-viewport-muted">
             {building.status === "loading"
               ? "Finding the building…"

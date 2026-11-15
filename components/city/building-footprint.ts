@@ -159,3 +159,71 @@ export async function loadSiteFootprint(
     site,
   );
 }
+
+/** Height used for footprints without an OSM height in the no-Vexcel fallback. */
+export const ASSUMED_BUILDING_METERS = 6;
+/** Radius of buildings drawn around the site when there is no Vexcel mesh. */
+export const FALLBACK_RADIUS_METERS = 400;
+
+export type FootprintBlock = {
+  outer: Position[];
+  heightMeters: number;
+  heightSource: "osm" | "assumed";
+  footprint: Footprint;
+};
+
+/**
+ * Footprints within `radiusMeters` of the site as blocks to extrude. Heights come
+ * from OSM where mapped; otherwise they are marked as assumed.
+ */
+export function footprintBlocks(
+  footprints: readonly Footprint[],
+  site: Position,
+  radiusMeters = FALLBACK_RADIUS_METERS,
+): FootprintBlock[] {
+  const local = toMeters(site);
+  return footprints.flatMap((footprint) => {
+    const outer = footprint.rings[0];
+    const near = outer.some((point) => {
+      const [x, y] = local(point);
+      return Math.hypot(x, y) <= radiusMeters;
+    });
+    if (!near) return [];
+    return [
+      {
+        outer: [...outer],
+        heightMeters: footprint.heightMeters ?? ASSUMED_BUILDING_METERS,
+        heightSource: footprint.heightMeters === null ? "assumed" : "osm",
+        footprint,
+      },
+    ];
+  });
+}
+
+/** Footprints from the 3 × 3 tiles around the site, for the no-Vexcel fallback. */
+export async function loadAreaFootprints(
+  template: string,
+  site: Position,
+  signal: AbortSignal,
+): Promise<Footprint[]> {
+  const { x, y } = tileFor(site[0], site[1]);
+  const tiles = [-1, 0, 1].flatMap((dx) =>
+    [-1, 0, 1].map((dy) => ({ x: x + dx, y: y + dy })),
+  );
+  const results = await Promise.all(
+    tiles.map(async (tile) => {
+      const url = template
+        .replace("{z}", String(FOOTPRINT_ZOOM))
+        .replace("{x}", String(tile.x))
+        .replace("{y}", String(tile.y));
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error("Building tile unavailable");
+      return parseBuildingFootprints(
+        await response.arrayBuffer(),
+        tile.x,
+        tile.y,
+      );
+    }),
+  );
+  return results.flat();
+}

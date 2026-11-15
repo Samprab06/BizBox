@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { footprintAt, tileFor, type Footprint } from "./building-footprint";
+import {
+  ASSUMED_BUILDING_METERS,
+  footprintAt,
+  footprintBlocks,
+  tileFor,
+  type Footprint,
+} from "./building-footprint";
 
 const site = [-95.3914, 29.7458] as const;
 const metersToLng = (m: number) =>
@@ -70,5 +76,20 @@ describe("tileFor", () => {
     expect(lng(x + 1)).toBeGreaterThan(site[0]);
     expect(lat(y)).toBeGreaterThanOrEqual(site[1]);
     expect(lat(y + 1)).toBeLessThan(site[1]);
+  });
+});
+
+describe("footprintBlocks", () => {
+  it("keeps footprints near the site and marks heights by source", () => {
+    const blocks = footprintBlocks(
+      [square(0, 0, 10, 12), square(100, 0, 10, null), square(900, 0, 10, 20)],
+      site,
+    );
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({ heightMeters: 12, heightSource: "osm" });
+    expect(blocks[1]).toMatchObject({
+      heightMeters: ASSUMED_BUILDING_METERS,
+      heightSource: "assumed",
+    });
   });
 });
