@@ -44,10 +44,9 @@ The seeded example project is `houston-coffee`. A first visit to `/start` create
 
 ## Landing design checkpoint
 
-The draft **BizBox** landing preview is available at `/landing-preview/index.html` when
-the app is running. It is separate from the homepage. See the
-[landing handoff](docs/landing/README.md) for the current prototype, content wireframe,
-pending UX decisions, and resume instructions.
+The **BizBox** homepage at `/` presents the café decision story: business setup, two Houston locations, the modeled morning, consultant tradeoffs, an interior preview and the one/two-counter experiment. **Open BizBox** goes through `/start` to create or resume the visitor’s own project.
+
+`/landing-story` mirrors the story for review; `/landing-demo` and the earlier `/landing-preview/index.html` remain available. See the [current landing handoff](design/landing/guided-demo/location-story.md) for motion behavior, illustrative data assumptions and verification.
 
 ## Stack
 

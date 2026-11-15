@@ -1,5 +1,7 @@
 # BizBox landing checkpoint — HAC-114
 
+**Current implementation:** the refined café story now serves `/`, with the current handoff in [location-story.md](../../design/landing/guided-demo/location-story.md). Akshar explicitly requested pushing and merging it as the site homepage. The remaining text is the historical HAC-114 prototype record; its earlier discussion and approval boundaries do not describe the current release. The static prototype remains available at `/landing-preview/index.html`.
+
 This draft preserves the current landing prototype and design work so it can be reviewed and continued. It is not the final landing page and does not replace the application's homepage.
 
 ## Open the preview

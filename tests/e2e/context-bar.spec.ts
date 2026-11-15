@@ -53,6 +53,13 @@ test("context persists across all existing workspace routes and labels fixture s
     await expect(
       bar.getByRole("link", { name: "View baseline scenario: Baseline" }),
     ).toHaveAttribute("href", /\/comparison\?site=heights/);
+    if (/^(map|comparison|replay)\?/.test(route)) {
+      await expect(page.getByRole("link", { name: "Finish brief" }))
+        .toHaveAttribute("href", "/projects/houston-coffee/intake");
+      await expect(page.getByRole("button", {
+        name: /Retry (search|comparison)/,
+      })).toHaveCount(0);
+    }
   }
 });
 
