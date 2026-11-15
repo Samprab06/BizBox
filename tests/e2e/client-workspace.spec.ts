@@ -234,6 +234,13 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: /Run baseline/ }),
       ).toHaveCount(0);
+      // Scene 1: results are their own step; "Change a site" returns to the list, and a new
+      // selection locks the later steps again.
+      await expect(page).toHaveURL(/step=results/);
+      await page
+        .getByRole("button", { name: "Change a site", exact: true })
+        .click();
+      await expect(page).toHaveURL(/step=locations/);
       await showList(page);
       await locations
         .getByRole("checkbox", { name: "Compare 202 Invented St" })
@@ -241,12 +248,14 @@ for (const viewport of [
       await expect(
         page.getByRole("region", { name: "Location comparison results" }),
       ).toHaveCount(0);
-      await page
-        .getByRole("button", { name: "Edit choices", exact: true })
-        .click();
       await expect(
         page.getByRole("button", { name: "Compare 2 units", exact: true }),
       ).toBeDisabled();
+      await expect(
+        page
+          .getByRole("navigation", { name: "Progress" })
+          .locator('[data-flow-step="results"]'),
+      ).toHaveAttribute("data-flow-status", "locked");
       await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       expect(
@@ -320,7 +329,7 @@ test("unavailable inventory never substitutes example properties", async ({
   ).toHaveCount(0);
 });
 
-test("unit labels, explicit pair selection and failed comparison retain exactly the chosen source facts", async ({
+test("unit labels, explicit selection up to three and failed comparison retain exactly the chosen source facts", async ({
   page,
 }) => {
   const { search } = await services(page);
@@ -335,8 +344,13 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
   c.propertyId = "103";
   c.listingId = "203";
   c.candidate.address = "303 Other St";
-  search.candidates = [b, c, a];
-  search.totalMatched = 3;
+  const d = structuredClone(c);
+  d.candidate.id = "204:304";
+  d.propertyId = "104";
+  d.listingId = "204";
+  d.candidate.address = "404 Fourth St";
+  search.candidates = [b, c, a, d];
+  search.totalMatched = 4;
   const attempts: string[][] = [];
   await page.route("**/api/comparisons", (route) => {
     attempts.push(route.request().postDataJSON().candidateIds);
@@ -346,7 +360,7 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
     });
   });
   await page.goto("/projects/houston-coffee/workspace");
-  await expect(page.getByText("Comparison 0/2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Comparison 0/3", { exact: true })).toBeVisible();
   await showList(page);
   await expect(
     page.getByRole("checkbox", {
@@ -370,7 +384,7 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
     .getByRole("button", { name: "Add to comparison", exact: true })
     .click();
   const tray = page.getByRole("region", { name: "Comparison shortlist" });
-  await expect(tray).toContainText("Comparison 2/2");
+  await expect(tray).toContainText("Comparison 2/3");
   await expect(tray).toContainText("101 Invented St · Unit 1");
   await expect(tray).toContainText("101 Invented St · Unit 2");
   expect(attempts).toEqual([]);
@@ -379,6 +393,17 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
     .click();
   await page
     .getByRole("button", { name: "View 303 Other St · Unit 1", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  await expect(tray).toContainText("Comparison 3/3");
+  // Scene 1: at most three units; a fourth waits until one is removed.
+  await page
+    .getByRole("button", { name: "Choose another unit", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "View 404 Fourth St · Unit 1", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Add to comparison", exact: true }),
@@ -390,9 +415,9 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
       exact: true,
     })
     .click();
-  await page
-    .getByRole("button", { name: "Add to comparison", exact: true })
-    .click();
+  await expect(
+    page.getByRole("button", { name: "Add to comparison", exact: true }),
+  ).toBeEnabled();
   await page
     .getByRole("button", { name: "Compare 2 units", exact: true })
     .click();
@@ -408,6 +433,7 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
     .click();
   await expect(comparison.getByRole("alert")).toContainText(
     "Comparison unavailable",
+    { timeout: 15_000 },
   );
   expect(attempts).toEqual([["202:302", "203:303"]]);
   await expect(

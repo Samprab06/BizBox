@@ -139,6 +139,12 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 const events = (posts: IntakePost[]) =>
   posts.flatMap((post) => (post.event ? [post.event] : []));
 
+/** The header stepper's status for one step (current, reached or locked). */
+const stepStatus = (page: Page, step: string) =>
+  page
+    .getByRole("navigation", { name: "Progress" })
+    .locator(`[data-flow-step="${step}"]`);
+
 test.use({ viewport: { width: 1440, height: 960 } });
 
 test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rerun, final plan", async ({
@@ -195,6 +201,19 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
   await expect(
     page.getByRole("region", { name: "Location comparison results" }),
   ).toBeVisible();
+  // The stepper follows the workspace: results is current, compare reached, finalize locked.
+  await expect(stepStatus(page, "results")).toHaveAttribute(
+    "data-flow-status",
+    "current",
+  );
+  await expect(stepStatus(page, "compare")).toHaveAttribute(
+    "data-flow-status",
+    "reached",
+  );
+  await expect(stepStatus(page, "finalize")).toHaveAttribute(
+    "data-flow-status",
+    "locked",
+  );
   expect(runs[0]).toEqual({ candidateIds: [...threeSiteIds] });
   await expect
     .poll(() => events(posts).map((e) => e.kind))
@@ -243,6 +262,10 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
   await composer.fill("Let's go with 101 Invented St");
   await composer.press("Enter");
   await expect(page).toHaveURL(/step=finalize/);
+  await expect(stepStatus(page, "finalize")).toHaveAttribute(
+    "data-flow-status",
+    "current",
+  );
   await expect(
     page.getByRole("heading", { name: "101 Invented St", exact: true }),
   ).toBeVisible();

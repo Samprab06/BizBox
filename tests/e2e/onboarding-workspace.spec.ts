@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { liveSearch, liveSiteId } from "./live-site-fixtures";
+import { liveSearch } from "./live-site-fixtures";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import {
   closeConsultant,
@@ -22,6 +22,14 @@ const storageKey = "sitework:intake:v1:houston-coffee";
 const draftKey = "bizbox:assistant-draft:v1:houston-coffee";
 
 const title = (page: Page) => page.locator("#onboarding-title");
+/** Scene 1: the questionnaire's finish leads to the workspace's `locations` step. */
+const findLocations = (page: Page) =>
+  page.getByRole("link", { name: /Find my locations/ });
+/** Scene 1: the header stepper is the way back to the brief (no "Edit brief" link). */
+const briefStep = (page: Page) =>
+  page
+    .getByRole("navigation", { name: "Progress" })
+    .locator('[data-flow-step="questions"] a');
 const proceed = (page: Page) =>
   page.getByRole("button", { name: "Continue", exact: true });
 const assistant = (page: Page) =>
@@ -166,7 +174,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`at ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport });
 
-    test("onboarding hands the same session to the workspace, and Edit brief returns to it", async ({
+    test("onboarding hands the same session to the workspace, and the stepper returns to the brief", async ({
       page,
     }) => {
       const { state } = await mockServices(page, { listings: true });
@@ -174,10 +182,10 @@ for (const viewport of VIEWPORTS) {
       await expectNoOverflow(page);
 
       // The finish opens the workspace with this brief; unavailable inventory does not invent a selected site.
-      const open = page.getByRole("link", { name: "Open workspace" });
+      const open = findLocations(page);
       await expect(open).toHaveAttribute(
         "href",
-        "/projects/houston-coffee/workspace",
+        "/projects/houston-coffee/workspace?step=locations",
       );
       state.live = true;
       const initialSearch = page.waitForRequest(
@@ -240,12 +248,10 @@ for (const viewport of VIEWPORTS) {
       ).toBeVisible();
       await expectNoOverflow(page);
 
-      // Edit brief resumes the same review without inventing a selected example space.
-      const edit = page.getByRole("link", { name: "Edit brief" });
-      await expect(edit).toHaveAttribute(
-        "href",
-        `/projects/houston-coffee/intake?site=${encodeURIComponent(liveSiteId)}`,
-      );
+      // The stepper's first step resumes the same review without inventing a selected
+      // example space.
+      const edit = briefStep(page);
+      await expect(edit).toHaveAttribute("href", "/projects/houston-coffee/intake");
       await closeConsultant(page);
       await edit.click();
       await expect(title(page)).toHaveText("Review your business");
@@ -257,15 +263,12 @@ for (const viewport of VIEWPORTS) {
         (request) =>
           request.url().endsWith("/api/sites") && request.method() === "POST",
       );
-      await page.getByRole("link", { name: "Open workspace" }).click();
+      await findLocations(page).click();
       expect(
         (await revisedSearch).postDataJSON().profile.economics
           .monthlyRentCeilingCents.value,
       ).toBe(520000);
-      await expect(location).toContainText("101 Invented St");
-      await expect(page).toHaveURL(
-        new RegExp(`site=${encodeURIComponent(liveSiteId)}`),
-      );
+      await expect(page).toHaveURL(/workspace\?step=locations/);
       expect((await savedSession(page))?.profile.rent).toEqual({
         value: "5200",
         origin: "founder",
@@ -274,27 +277,27 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test("one conversation and one draft follow the founder across Text, Voice, Edit brief and reload", async ({
+test("one conversation and one draft follow the founder across Text, Voice, the brief and reload", async ({
   page,
 }) => {
   const { state, messages, held } = await mockServices(page);
   await completeOnboarding(page);
   state.live = true;
-  await page.getByRole("link", { name: "Open workspace" }).click();
+  await findLocations(page).click();
   await openWorkspaceConsultant(page);
   await expect(
     assistant(page).getByText("Live", { exact: true }),
   ).toBeVisible();
 
-  // A draft survives the Voice tab, a trip to Edit brief and back, and a reload.
+  // A draft survives the Voice tab, a trip to the brief and back, and a reload.
   await composer(page).fill("Is parking nearby?");
   await tab(page, "Voice").click();
   await tab(page, "Text").click();
   await expect(composer(page)).toHaveValue("Is parking nearby?");
   await closeConsultant(page);
-  await page.getByRole("link", { name: "Edit brief" }).click();
+  await briefStep(page).click();
   await expect(title(page)).toHaveText("Review your business");
-  await page.getByRole("link", { name: "Open workspace" }).click();
+  await findLocations(page).click();
   await openWorkspaceConsultant(page);
   await expect(composer(page)).toHaveValue("Is parking nearby?");
   await page.reload();
@@ -336,39 +339,20 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
     session?.messages.filter((entry) => entry.text === "Is parking nearby?"),
   ).toHaveLength(1);
 
-  // HAC-143: the detailed form has no composer of its own. The consultant dock stays
-  // mounted, so its draft follows the founder there and sending uses the same action.
+  // Scene 1: the questionnaire (guided or detailed form) shows no dock; the conversation
+  // continues in the workspace.
+  await expect(assistant(page)).toHaveCount(0);
   await page.goto(workspaceHref("houston-coffee", "workspace"));
-  await openConsultant(page);
-  await tab(page, "Text").click();
-  await composer(page).fill("Second thought");
-  await closeConsultant(page);
-  await page.getByRole("link", { name: "Edit brief" }).click();
-  await page.getByRole("link", { name: "Edit all fields" }).click();
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Business profile" }),
-  ).toBeVisible();
-  await openConsultant(page);
-  await expect(composer(page)).toHaveValue("Second thought");
-  await composer(page).press("Enter");
-  await expect.poll(() => held.length).toBe(2);
-  expect(messages[1]!.message).toBe("Second thought");
-  await held[1]!.fulfill({ json: reply("Noted from the form.") });
-  await expect(formLog).toContainText("Noted from the form.");
-  await closeConsultant(page);
-  await page.getByRole("link", { name: "Back to guided setup" }).click();
-  await page.getByRole("link", { name: "Open workspace" }).click();
   await openWorkspaceConsultant(page);
-  await expect(log(page)).toContainText("Noted from the form.");
-  await expect(log(page)).toContainText("Second thought");
+  await expect(log(page)).toContainText("Street parking is limited.");
 });
 
-test("the offline assistant keeps its draft and invents no reply, even after Edit brief", async ({
+test("the offline assistant keeps its draft and invents no reply, even after revisiting the brief", async ({
   page,
 }) => {
   await mockServices(page);
   await completeOnboarding(page);
-  await page.getByRole("link", { name: "Open workspace" }).click();
+  await findLocations(page).click();
   await openWorkspaceConsultant(page);
   await expect(
     assistant(page).getByText("Offline", { exact: true }),
@@ -379,8 +363,8 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
     "nothing was sent",
   );
   await closeConsultant(page);
-  await page.getByRole("link", { name: "Edit brief" }).click();
-  await page.getByRole("link", { name: "Open workspace" }).click();
+  await briefStep(page).click();
+  await findLocations(page).click();
   await openWorkspaceConsultant(page);
   await expect(composer(page)).toHaveValue("Anyone there?");
   await expect(log(page)).not.toContainText("Anyone there?");
@@ -391,7 +375,7 @@ test("the finish and the workspace work from the keyboard, with a visible focus 
 }) => {
   await mockServices(page);
   await completeOnboarding(page);
-  const open = page.getByRole("link", { name: "Open workspace" });
+  const open = findLocations(page);
   await open.focus();
   await expect(open).toBeFocused();
   await page.keyboard.press("Enter");
@@ -399,8 +383,8 @@ test("the finish and the workspace work from the keyboard, with a visible focus 
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
 
-  // Edit brief is reachable by Tab and opens with Enter.
-  const edit = page.getByRole("link", { name: "Edit brief" });
+  // The stepper's brief step is reachable by Tab and opens with Enter.
+  const edit = briefStep(page);
   await edit.focus();
   await expect(edit).toBeFocused();
   const outline = await edit.evaluate(
@@ -431,7 +415,7 @@ test("the workspace plays no animation under reduced motion", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await mockServices(page);
   await completeOnboarding(page);
-  await page.getByRole("link", { name: "Open workspace" }).click();
+  await findLocations(page).click();
   await openWorkspaceConsultant(page);
   await expect(
     assistant(page).getByText("Offline", { exact: true }),
