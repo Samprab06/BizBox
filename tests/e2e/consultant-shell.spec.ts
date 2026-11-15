@@ -1,6 +1,7 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import {
+  closeConsultant,
   expandProjectNavigation,
   expect,
   expectNoA11yViolations,
@@ -52,6 +53,8 @@ const log = (page: Page) =>
 
 /** Client-side navigation through the project's own links (never page.goto). */
 async function navigate(page: Page, label: string, path: RegExp) {
+  // On a phone the open sheet covers the page, so the founder closes it to navigate.
+  await closeConsultant(page);
   await expandProjectNavigation(page);
   await page
     .getByRole("navigation", { name: "Project views", exact: true })

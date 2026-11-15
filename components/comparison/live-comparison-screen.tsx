@@ -270,8 +270,9 @@ export function LiveComparisonScreen({
         )}
         {busy && (
           <p role="status" className="text-sm text-muted">
-            Evaluating seeded weekday and weekend scenarios. This can take a few
-            seconds.
+            {controller.panelProgress
+              ? "The Jev customer panel is still answering; the comparison runs once every persona has answered."
+              : "Evaluating seeded weekday and weekend scenarios. This can take a few seconds."}
           </p>
         )}
       </div>

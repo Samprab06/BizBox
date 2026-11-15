@@ -31,6 +31,12 @@ import type {
   SensitivityResult,
 } from "@/lib/contracts/evaluation";
 import type { AssemblyMetadata } from "@/lib/evaluation/assemble";
+import {
+  createPanelResendBackoff,
+  PanelInProgressBodySchema,
+  panelProgressMessage,
+  type PanelProgressCount,
+} from "@/lib/panel/progress";
 
 export type LiveComparisonPayload = {
   comparisonId: string;
@@ -57,6 +63,8 @@ export type LiveComparisonController = {
   setSelectedIds: (ids: string[]) => void;
   payload: LiveComparisonPayload | null;
   message: string;
+  /** HAC-155: a deadline-limited Jev panel still being resumed; never a finished result. */
+  panelProgress: PanelProgressCount | null;
   notes: string[];
   demandSource: DemandSource;
   demandSourceReason: string;
@@ -148,6 +156,17 @@ async function api<T>(
   timeout = 15_000,
   fetcher: typeof fetch = fetch,
 ): Promise<T> {
+  const { ok, body } = await send(path, init, timeout, fetcher);
+  if (!ok) throw new Error("Service unavailable");
+  return schema.parse(body);
+}
+
+async function send(
+  path: string,
+  init: RequestInit,
+  timeout: number,
+  fetcher: typeof fetch,
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (init.signal?.aborted) controller.abort();
@@ -159,8 +178,12 @@ async function api<T>(
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!response.ok) throw new Error("Service unavailable");
-    return schema.parse(await response.json());
+    if (!response.ok) return { ok: false, status: response.status, body: null };
+    return {
+      ok: true,
+      status: response.status,
+      body: await response.json(),
+    };
   } finally {
     clearTimeout(timer);
     init.signal?.removeEventListener("abort", abort);
@@ -174,12 +197,65 @@ const post = (body: unknown, signal?: AbortSignal): RequestInit => ({
   signal,
 });
 
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/**
+ * POST /api/comparisons until it returns the comparison. A 202 `in_progress` (HAC-155) means the
+ * Jev panel hit the function deadline with its answers cached: it is reported through
+ * `onProgress` and the same body is resent with `createPanelResendBackoff`. Never an error and
+ * never a result by itself.
+ */
+async function postComparison(
+  body: unknown,
+  signal: AbortSignal | undefined,
+  fetcher: typeof fetch,
+  onProgress?: (progress: PanelProgressCount) => void,
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = wait,
+) {
+  const backoff = createPanelResendBackoff();
+  for (;;) {
+    const response = await send(
+      "/api/comparisons",
+      post(body, signal),
+      90_000,
+      fetcher,
+    );
+    if (!response.ok) throw new Error("Service unavailable");
+    if (response.status !== 202) return PayloadSchema.parse(response.body);
+    const progress = PanelInProgressBodySchema.parse(response.body);
+    onProgress?.({
+      completedPersonas: progress.completedPersonas,
+      totalPersonas: progress.totalPersonas,
+    });
+    const delay = backoff.next(progress);
+    if (delay === null) throw new Error("Jev panel is not making progress");
+    await sleep(delay, signal);
+  }
+}
+
 export async function requestLiveComparison(
   profile: BusinessProfile,
   candidateIds: string[],
   demandSource: DemandSource,
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
+  options: {
+    onProgress?: (progress: PanelProgressCount) => void;
+    sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  } = {},
 ) {
   if (
     !candidateIds.length ||
@@ -197,20 +273,17 @@ export async function requestLiveComparison(
   );
   if (saved.profile.projectId !== profile.projectId)
     throw new Error("Profile identity mismatch");
-  const payload = await api(
-    "/api/comparisons",
-    PayloadSchema,
-    post(
-      {
-        projectId: profile.projectId,
-        profileId: saved.profile.id,
-        candidateIds,
-        demandSource,
-      },
-      signal,
-    ),
-    90_000,
+  const payload = await postComparison(
+    {
+      projectId: profile.projectId,
+      profileId: saved.profile.id,
+      candidateIds,
+      demandSource,
+    },
+    signal,
     fetcher,
+    options.onProgress,
+    options.sleep,
   );
   if (
     payload.result.projectId !== profile.projectId ||
@@ -396,6 +469,9 @@ export function useLiveComparison(
     reason: string;
   } | null>(null);
   const [running, setRunning] = useState(false);
+  const [panelProgress, setPanelProgress] = useState<PanelProgressCount | null>(
+    null,
+  );
   const [failure, setFailure] = useState("");
   const [sensitivity, setSensitivity] = useState<
     LiveComparisonController["sensitivity"] & { comparisonId: string | null }
@@ -518,6 +594,7 @@ export function useLiveComparison(
     sensitivityOperation.current?.abort();
     sensitivityOperation.current = null;
     setRunning(true);
+    setPanelProgress(null);
     setFailure("");
     setSensitivity({
       loading: false,
@@ -531,6 +608,13 @@ export function useLiveComparison(
         selectedIds,
         capability?.jev ? "jev" : "huff",
         controller.signal,
+        fetch,
+        {
+          onProgress: (progress) => {
+            if (mounted.current && operation.current === controller)
+              setPanelProgress(progress);
+          },
+        },
       );
       if (mounted.current && operation.current === controller) {
         writeShortlist(projectId, selectedIds);
@@ -544,7 +628,10 @@ export function useLiveComparison(
     } finally {
       if (operation.current === controller) {
         operation.current = null;
-        if (mounted.current) setRunning(false);
+        if (mounted.current) {
+          setRunning(false);
+          setPanelProgress(null);
+        }
       }
     }
   };
@@ -631,8 +718,10 @@ export function useLiveComparison(
     selectedIds,
     setSelectedIds,
     payload: stored.payload,
+    panelProgress: running ? panelProgress : null,
     message:
       failure ||
+      (running && panelProgress ? panelProgressMessage(panelProgress) : "") ||
       (search.state.mode === "example"
         ? search.state.message
         : search.state.mode === "live" && !candidates.length

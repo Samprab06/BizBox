@@ -125,9 +125,10 @@ async function completeOnboarding(page: Page) {
   await proceed(page).click();
   await page.getByRole("button", { name: "Mid-range" }).click();
   await proceed(page).click();
-  await page
-    .getByRole("textbox", { name: "When will you be open?" })
-    .fill("11am – 11pm");
+  // HAC-154: the hours dial starts at 9:00 AM – 5:00 PM; Continue confirms it.
+  await expect(
+    page.getByRole("slider", { name: "Opening time" }),
+  ).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
   await proceed(page).click();
   await proceed(page).click();
   await page.getByRole("button", { name: "Skip" }).click();
@@ -192,6 +193,7 @@ for (const viewport of VIEWPORTS) {
         "href",
         "/projects/houston-coffee/intake?site=montrose",
       );
+      await closeConsultant(page);
       await edit.click();
       await expect(title(page)).toHaveText("Review your business");
       await page.getByRole("button", { name: "Edit monthly rent" }).click();
@@ -223,6 +225,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await tab(page, "Voice").click();
   await tab(page, "Text").click();
   await expect(composer(page)).toHaveValue("Is parking nearby?");
+  await closeConsultant(page);
   await page.getByRole("link", { name: "Edit brief" }).click();
   await expect(title(page)).toHaveText("Review your business");
   await page.getByRole("link", { name: "Open workspace" }).click();
@@ -271,6 +274,7 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await openConsultant(page);
   await tab(page, "Text").click();
   await composer(page).fill("Second thought");
+  await closeConsultant(page);
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Edit all fields" }).click();
   await expect(
@@ -306,6 +310,7 @@ test("the offline assistant keeps its draft and invents no reply, even after Edi
   await expect(assistant(page).getByRole("alert")).toContainText(
     "nothing was sent",
   );
+  await closeConsultant(page);
   await page.getByRole("link", { name: "Edit brief" }).click();
   await page.getByRole("link", { name: "Open workspace" }).click();
   await openWorkspaceConsultant(page);

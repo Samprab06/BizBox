@@ -96,7 +96,7 @@ export function createPostgresInvestigationToolDependencies(): InvestigationTool
       signal.throwIfAborted();
       return response;
     },
-    async assemble(profile, ids, options, signal) {
+    async assemble(profile, ids, options, signal, deadline) {
       signal.throwIfAborted();
       const inputProfile = structuredClone(profile);
       if (options.price !== undefined)
@@ -146,6 +146,7 @@ export function createPostgresInvestigationToolDependencies(): InvestigationTool
           demandSource: options.mode === "huff" ? "huff" : "jev",
         },
         deps,
+        deadline,
       );
       signal.throwIfAborted();
       return assembled;

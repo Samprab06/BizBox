@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { CopilotDock } from "@/components/copilot/copilot-dock";
+import { CopilotProvider } from "@/components/copilot/copilot-provider";
 import { ConsultantShell } from "@/components/shell/consultant-shell";
 import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
@@ -32,11 +34,19 @@ export default async function ProjectLayout({
         </div>
       </header>
       {project ? (
-        <ConsultantShell projectId={projectId} project={project}>
-          <ProjectContextProvider project={project}>
-            {children}
-          </ProjectContextProvider>
-        </ConsultantShell>
+        // HAC-84's copilot (scenario, plan, proposed changes) sits in the consultant's dock
+        // under the assistant, so every consultant panel persists with the shell.
+        <CopilotProvider projectId={project.id}>
+          <ConsultantShell
+            projectId={projectId}
+            project={project}
+            companion={<CopilotDock />}
+          >
+            <ProjectContextProvider project={project}>
+              {children}
+            </ProjectContextProvider>
+          </ConsultantShell>
+        </CopilotProvider>
       ) : (
         <main className="min-w-0 px-5 py-7 sm:px-8">{children}</main>
       )}
