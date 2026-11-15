@@ -154,6 +154,6 @@ test("when a project cannot be created, /start offers a retry and the example pr
 test("a malformed project ID still shows the way back", async ({ page }) => {
   await page.goto(workspaceHref("p-not-a-real-id", "map"));
   await expect(
-    page.getByRole("heading", { name: /could not be found/i }),
+    page.getByRole("heading", { level: 1, name: "Page not found" }),
   ).toBeVisible();
 });

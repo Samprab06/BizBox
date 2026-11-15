@@ -87,7 +87,7 @@ test.describe("every view passes the axe scan", () => {
   test("project unavailable state", async ({ page }) => {
     await page.goto(workspaceHref("no-such-project", "map"));
     await expect(
-      page.getByRole("heading", { name: /could not be found/i }),
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
     await expectNoA11yViolations(page);
   });
