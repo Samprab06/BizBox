@@ -76,7 +76,7 @@ test("first load shows the fixture conversation, the profile panel and the first
   // The first missing field is the next prompt.
   await expect(stillNeeded(page)).toHaveText(ALL_MISSING);
   await expect(page.getByLabel("Your answer · Business concept")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
 });
 
 test("answering each prompt fills its profile field and moves to the next one", async ({ page }) => {
@@ -103,7 +103,7 @@ test("answering each prompt fills its profile field and moves to the next one", 
   await expect(page.getByText("All required fields are filled.")).toBeVisible();
   await expect(stillNeeded(page)).toHaveCount(0);
   await expect(chatBox(page)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
   await expect(conversation(page)).toContainText("Your profile has all the required fields. Review your answers in the form.");
 });
 
@@ -336,7 +336,7 @@ test("the whole intake can be completed with the keyboard only", async ({ page, 
   await page.keyboard.type(last.text);
   if (browserName !== "webkit") {
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "Send" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Send", exact: true })).toBeFocused();
   }
   await page.keyboard.press("Enter");
 

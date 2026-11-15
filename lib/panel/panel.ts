@@ -363,15 +363,28 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
 /**
  * Runs the panel for several candidate sites on the same personas, one table per site. All
  * sites share one cache read (a single round trip) and one write buffer, and all their calls
- * share the client's limiter.
+ * share the client's limiter. `competitorsForSite` (HAC-156) gives each site its own competitor
+ * set instead of the shared `competitors`, so a site's prompts and cache keys do not depend on
+ * which other candidates are in the run.
  */
 export async function runPanelForSites(
-  opts: Omit<RunPanelOptions, "site"> & { sites: CandidateSite[] },
+  opts: Omit<RunPanelOptions, "site"> & {
+    sites: CandidateSite[];
+    competitorsForSite?: (site: CandidateSite) => Competitor[];
+  },
 ): Promise<{ tables: BehaviorTable[]; stats: PanelStats; progress: PanelProgress }> {
   const started = performance.now();
-  const { sites, ...rest } = opts;
+  const { sites, competitorsForSite, ...rest } = opts;
   const runs =
-    sites.length === 0 ? [] : await runPlans(await Promise.all(sites.map((site) => planSite({ ...rest, site }))));
+    sites.length === 0
+      ? []
+      : await runPlans(
+          await Promise.all(
+            sites.map((site) =>
+              planSite({ ...rest, site, competitors: competitorsForSite?.(site) ?? rest.competitors }),
+            ),
+          ),
+        );
   const stats: PanelStats = {
     calls: sum(runs.map((r) => r.stats.calls)),
     cacheHits: sum(runs.map((r) => r.stats.cacheHits)),

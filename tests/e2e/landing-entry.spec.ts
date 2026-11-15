@@ -1,6 +1,11 @@
 import type { Page } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
 // HAC-129: the BizBox landing is served at "/" and leads into the guided onboarding and
 // the workspace. Every network boundary is a page.route mock: no model, voice, map tile,
@@ -318,9 +323,7 @@ test.describe("landing to onboarding to workspace", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Workspace" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("complementary", { name: "Assistant" }),
-    ).toBeVisible();
+    await openConsultant(page);
   });
 
   test("the landing's final stage leads a returning founder to their own workspace", async ({

@@ -2,7 +2,13 @@
 
 import { agentViewForRoute } from "@/lib/client/agent-view-context";
 import Link from "next/link";
-import { useCallback, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
@@ -125,12 +131,28 @@ export function ContextBar({ model }: { model: WorkspaceContextModel }) {
   );
 }
 
+const ProjectContextModelState = createContext<WorkspaceContextModel | null>(
+  null,
+);
+
+/** Optional presentation of the active registry model inside a lifted project provider. */
+export function ProjectContextBar() {
+  const model = useContext(ProjectContextModelState);
+  return model ? <ContextBar model={model} /> : null;
+}
+
+/** Presentation alias used by the navigation shell's context chips. */
+export const ProjectContextChips = ProjectContextBar;
+
 export function ProjectContextProvider({
   project,
   children,
+  showContextBar = true,
 }: {
   project: PreviewProject;
   children: ReactNode;
+  /** Keep the default standalone presentation; persistent shells can place the bar explicitly. */
+  showContextBar?: boolean;
 }) {
   const [reports, setReports] = useState<Record<string, WorkspaceReport>>({});
   const publish = useCallback<WorkspacePublisher>((source, report) => {
@@ -157,8 +179,10 @@ export function ProjectContextProvider({
       <AgentViewContextState.Provider
         value={agentViewForRoute(project.id, pathname, search, reports)}
       >
-        <ContextBar model={model} />
-        {children}
+        <ProjectContextModelState.Provider value={model}>
+          {showContextBar && <ProjectContextBar />}
+          {children}
+        </ProjectContextModelState.Provider>
       </AgentViewContextState.Provider>
     </WorkspacePublicationContext.Provider>
   );

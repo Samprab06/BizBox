@@ -52,6 +52,17 @@ The live test in `jev-client.test.ts` runs only when `JEV_API_KEY` is set.
   job active with reason `Jev panel in progress (n/N personas)` (advance answers 202).
   Shared wording, 202 body schema and client backoff: `progress.ts`.
 
+## Per-site competitor sets (HAC-156)
+
+- `runPanelForSites({ competitorsForSite })` gives each site its own competitor options.
+  `assembleEvaluation` fills it with `siteJevCompetitors`: that site's own catchment only, venues
+  with coordinates, deduplicated by source ID, sorted by stable venue ID, capped at
+  `JEV_MAX_COMPETITORS` (20). The HAC-60 union study area still drives the population and Huff.
+- The stored comparison's `assembly.jevCompetitorSet` records `version`
+  (`JEV_COMPETITOR_SET_VERSION`) and each site's competitor IDs.
+- Limit: personas are still built from the union study area (seeded by its ID), so changing the
+  candidate set can still change persona attributes, and with them the prompts and cache keys.
+
 ## Proposed `jev_cache` table (for `lib/db/schema.ts`, HAC-9)
 
 Not wired yet; add this once HAC-9's Drizzle schema exists, then implement `JevCache` over it

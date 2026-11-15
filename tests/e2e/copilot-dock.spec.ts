@@ -1,5 +1,12 @@
 import type { Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test, PROJECT_ID } from "./fixtures";
+import {
+  closeConsultant,
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+  PROJECT_ID,
+} from "./fixtures";
 
 /**
  * HAC-84: the copilot dock lives in the project layout and talks to HAC-83's runtime.
@@ -112,6 +119,8 @@ test("a 503 shows a useful unavailable state; the dock survives navigation and p
     }),
   );
   await gotoView("map");
+  // HAC-143: the copilot sits in the consultant dock (a closed sheet on a phone).
+  await openConsultant(page);
   const dock = dockOf(page);
   const toggle = dock.getByRole("button", { name: "Show copilot" });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -131,13 +140,16 @@ test("a 503 shows a useful unavailable state; the dock survives navigation and p
   await dock.getByLabel(/Active scenario/).selectOption("early");
   await expectNoA11yViolations(page);
 
-  // Client navigation keeps the layout, and with it the dock, mounted.
+  // Client navigation keeps the layout, and with it the dock, mounted. On a phone the
+  // founder closes the consultant sheet to reach the page's navigation.
+  await closeConsultant(page);
   await page
     .getByRole("navigation", { name: "Project views" })
     .getByRole("link", { name: "Comparison", exact: true })
     .first()
     .click();
   await expect(page).toHaveURL(/\/comparison/);
+  await openConsultant(page);
   await expect(
     dock.getByRole("button", { name: "Hide copilot" }),
   ).toBeVisible();
@@ -145,6 +157,7 @@ test("a 503 shows a useful unavailable state; the dock survives navigation and p
 
   // A reload in the same tab restores it from session storage.
   await page.reload();
+  await openConsultant(page);
   await expect(dock.getByLabel(/Active scenario/)).toHaveValue("early");
 });
 
@@ -173,6 +186,8 @@ test("one diff card per mutation; Keep and Revert work from the keyboard", async
     });
   });
   await gotoView("map");
+  // HAC-143: the copilot sits in the consultant dock (a closed sheet on a phone).
+  await openConsultant(page);
   const dock = dockOf(page);
   await dock.getByRole("button", { name: "Show copilot" }).click();
   const cards = dock.getByTestId("copilot-diff-card");
@@ -227,6 +242,8 @@ test("Revert saves a revert version through the scenario route", async ({
   );
 
   await gotoView("map");
+  // HAC-143: the copilot sits in the consultant dock (a closed sheet on a phone).
+  await openConsultant(page);
   const dock = dockOf(page);
   await dock.getByRole("button", { name: "Show copilot" }).click();
   const card = dock.getByTestId("copilot-diff-card").first();

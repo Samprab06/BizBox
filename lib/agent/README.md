@@ -154,6 +154,10 @@ Replay joins its selected-site report with its same-route stored comparison.
 Listing labels, addresses and other arbitrary display copy are never included.
 Only identifiers already published by a screen are sent; scenario, investigation
 and minute fields stay absent until a screen reports them.
+The project registry provider wraps the persistent consultant shell so its shared
+conversation and stable voice adapter read the same active view. The separate
+`ProjectContextBar` consumer keeps the visual context inside the page; standalone
+providers retain their default context-bar presentation.
 
 Before a message reaches the model, the server rechecks comparison, scenario and
 investigation references using project-scoped reads. Site/candidate references

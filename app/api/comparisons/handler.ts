@@ -168,6 +168,9 @@ export function createComparisonsHandler({
         assembly = {
           findings: assembled.findings,
           assumptions: assembled.assumptions,
+          ...(assembled.jevCompetitorSet
+            ? { jevCompetitorSet: assembled.jevCompetitorSet }
+            : {}),
         };
       } else evaluationRequest = EvaluationRequestSchema.parse(body);
       const run = evaluateSites(evaluationRequest);

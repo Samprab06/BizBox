@@ -14,7 +14,11 @@ import {
 } from "@/lib/demand/fixtures";
 import { createMemoryComparisonStore } from "@/lib/evaluation/store";
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
-import { AssemblyError, PanelInProgressError } from "@/lib/evaluation/assemble";
+import {
+  AssemblyError,
+  JEV_COMPETITOR_SET_VERSION,
+  PanelInProgressError,
+} from "@/lib/evaluation/assemble";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import { createSensitivityHandler } from "./[comparisonId]/sensitivity/handler";
 import {
@@ -168,6 +172,10 @@ describe("POST /api/comparisons", () => {
       projectId: "p1",
     };
     const deadlines: unknown[] = [];
+    const jevCompetitorSet = {
+      version: JEV_COMPETITOR_SET_VERSION,
+      sites: { "201:301": { competitorIds: ["comp_a"], capped: false } },
+    };
     const assemble = vi
       .fn()
       .mockImplementationOnce(async (_input: unknown, deadline: unknown) => {
@@ -179,6 +187,7 @@ describe("POST /api/comparisons", () => {
         return {
           findings: [],
           assumptions: {},
+          jevCompetitorSet,
           request: EvaluationRequestSchema.parse(evaluationRequest()),
         };
       });
@@ -209,6 +218,10 @@ describe("POST /api/comparisons", () => {
     const second = await handler(post(body));
     expect(second.status).toBe(201);
     expect(store.records.size).toBe(1);
+    // HAC-156: the stored comparison keeps the Jev competitor-set provenance.
+    expect(
+      store.records.get("p1/resumed_1")?.evaluation.assembly?.jevCompetitorSet,
+    ).toEqual(jevCompetitorSet);
     expect(assemble.mock.calls[0]![0]).toEqual(assemble.mock.calls[1]![0]);
     expect(deadlines).toEqual([
       expect.objectContaining({ deadlineAt: 36_000 }),

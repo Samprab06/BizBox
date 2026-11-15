@@ -382,3 +382,123 @@ describe("durable copilot runtime", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("proactive diagnosis (HAC-89)", () => {
+  function diagnosingRuntime(
+    choices: { tool: string; argsJson?: string }[],
+    runStatus: string,
+  ) {
+    const choose = vi.fn<CopilotDecisionModel>(async () => {
+      const choice = choices.shift() ?? { tool: "finish" };
+      return {
+        tool: choice.tool,
+        argsJson: choice.argsJson ?? "{}",
+        findings: [],
+        reply: "",
+        todos: [],
+      };
+    });
+    const execute = vi.fn(async (name: string) =>
+      name === "set_staffing"
+        ? { status: "created", scenarioId: "child-1" }
+        : name === "run_scenario"
+          ? {
+              status: runStatus,
+              scenarioId: "child-1",
+              executionId: "exec-1",
+              comparisonId: "c-child",
+              references: [],
+            }
+          : { status: "diagnosed", demandSource: "huff", findings: [] },
+    );
+    const instance = createCopilotRuntime({
+      store: memoryStore(),
+      choose,
+      tools: {
+        definitions: [
+          ...definitions,
+          {
+            name: "diagnose",
+            description: "Diagnose",
+            schema: { parse: (input: unknown) => input },
+          },
+        ],
+        execute,
+      } as unknown as Tools,
+      validateContext: vi.fn(async () => {}),
+      newId: (() => {
+        let n = 0;
+        return () => `id-${++n}`;
+      })(),
+    });
+    return { instance, choose, execute };
+  }
+  async function approveRun(instance: ReturnType<typeof createCopilotRuntime>) {
+    await collect(instance.start(context.projectId, request(), signal));
+    const [proposal] = (await instance.snapshot(context.projectId)).proposals;
+    return collect(
+      instance.start(
+        context.projectId,
+        {
+          ...request("Run it", "request-run"),
+          proposalAction: { proposalId: proposal!.id, action: "run" },
+        },
+        signal,
+      ),
+    );
+  }
+
+  it("diagnoses a succeeded human-approved run without a model decision or another run", async () => {
+    const { instance, choose, execute } = diagnosingRuntime(
+      [
+        { tool: "set_staffing", argsJson: '{"scenario_id":"base-1"}' },
+        { tool: "finish" },
+        { tool: "run_scenario", argsJson: '{"scenario_id":"child-1"}' },
+        { tool: "finish" },
+      ],
+      "succeeded",
+    );
+    const events = await approveRun(instance);
+    expect(execute.mock.calls.map(([name]) => name)).toEqual([
+      "set_staffing",
+      "run_scenario",
+      "diagnose",
+    ]);
+    const calls = execute.mock.calls as unknown as [
+      string,
+      unknown,
+      Record<string, unknown>,
+    ][];
+    expect(calls[2][1]).toEqual({ scenario_id: "child-1" });
+    expect(calls[2][2]).toMatchObject({ scenarioId: "child-1" });
+    // Two decisions per turn; the diagnosis itself was never a model choice.
+    expect(choose).toHaveBeenCalledTimes(4);
+    const diagnosed = events.find(
+      (event) => event.type === "tool_completed" && event.tool === "diagnose",
+    );
+    expect(diagnosed?.sources).toContainEqual(
+      expect.objectContaining({ kind: "fallback" }),
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: "turn_finished",
+      status: "completed",
+    });
+  });
+
+  it("does not diagnose a run that has not succeeded yet", async () => {
+    const { instance, execute } = diagnosingRuntime(
+      [
+        { tool: "set_staffing", argsJson: '{"scenario_id":"base-1"}' },
+        { tool: "finish" },
+        { tool: "run_scenario", argsJson: '{"scenario_id":"child-1"}' },
+        { tool: "finish" },
+      ],
+      "running",
+    );
+    await approveRun(instance);
+    expect(execute.mock.calls.map(([name]) => name)).toEqual([
+      "set_staffing",
+      "run_scenario",
+    ]);
+  });
+});

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { getPreviewProject } from "@/lib/workspace-preview";
 import { resolveWorkspaceContext } from "@/lib/client/workspace-context";
-import { ContextBar } from "./context-bar";
+import { ContextBar, ProjectContextBar } from "./context-bar";
 
 const model = resolveWorkspaceContext({
   project: getPreviewProject("houston-coffee")!,
@@ -45,4 +45,8 @@ describe("ContextBar", () => {
     expect(html).toContain("Live comparison");
     expect(html).toContain("Modeled, not a forecast");
   });
+});
+
+it("keeps the optional context-bar consumer inert outside its project registry", () => {
+  expect(renderToStaticMarkup(h(ProjectContextBar))).toBe("");
 });

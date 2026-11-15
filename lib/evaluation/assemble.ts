@@ -72,6 +72,19 @@ export type AssemblyFinding = {
   message: string;
   siteId?: string;
 };
+/**
+ * HAC-156: version of the rule that picks each site's Jev competitors: that site's own
+ * catchment only, venues with source coordinates, deduplicated by source ID, sorted by stable
+ * venue ID, capped at `JEV_MAX_COMPETITORS`. Bump it when the rule changes (cache keys change).
+ */
+export const JEV_COMPETITOR_SET_VERSION = "hac156-site-catchment-v1";
+/** Jev `where` options per site besides the site itself and "none". */
+export const JEV_MAX_COMPETITORS = 20;
+export type JevCompetitorSet = {
+  version: typeof JEV_COMPETITOR_SET_VERSION;
+  /** Per candidate site ID: the competitor IDs Jev was shown, in prompt order. */
+  sites: Record<string, { competitorIds: string[]; capped: boolean }>;
+};
 export type AssemblyMetadata = {
   /** Immutable scenario and optional layout snapshot used by HAC-81. */
   scenario?: {
@@ -85,6 +98,8 @@ export type AssemblyMetadata = {
     string,
     { value: number; origin: Origin; evidenceIds: string[] }
   >;
+  /** Provenance of the per-site Jev competitor sets, when Jev was asked (HAC-156). */
+  jevCompetitorSet?: JevCompetitorSet;
 };
 export type AssembledEvaluation = AssemblyMetadata & {
   request: EvaluationRequest;
@@ -253,6 +268,7 @@ export async function assembleEvaluation(
   const rows = new Map(result.candidates.map((row) => [row.candidate.id, row]));
   const sites: EvaluationSite[] = [];
   const catchments: AssemblyCatchment[] = [];
+  const siteCatchments = new Map<string, AssemblyCatchment>();
   const panelSites: CandidateSite[] = [];
   for (const id of input.candidateIds) {
     const row = rows.get(id);
@@ -443,7 +459,9 @@ export async function assembleEvaluation(
         "Jev parking input uses false for unverified parking, origin default.",
         id,
       );
-    catchments.push(await deps.getCatchment(id, profile));
+    const bundle = await deps.getCatchment(id, profile);
+    catchments.push(bundle);
+    siteCatchments.set(id, bundle);
   }
   if (!sites.length)
     throw new AssemblyError(
@@ -638,7 +656,6 @@ export async function assembleEvaluation(
       findings,
     );
   const competitors: Storefront[] = [];
-  const panelCompetitors: Competitor[] = [];
   const seen = new Set<string>();
   const seenSources = new Set<string>();
   for (const bundle of ordered)
@@ -693,24 +710,52 @@ export async function assembleEvaluation(
         anchorCoTenants: anchors,
         origin: location.origin,
       });
-      panelCompetitors.push({
-        id: optionId(competitor.id),
-        lat: location.lat,
-        lng: location.lng,
-        brandClass: "independent",
-        businessType: category === "fitness" ? "fitness_studio" : category,
-        priceUsd: price,
-      });
     }
   finding(
     "COMPETITOR_DEFAULTS",
     "Competitor size/frontage/position/anchors, price and independent brand class are uncalibrated defaults; only location/category come from source records.",
   );
+  let jevCompetitorSet: JevCompetitorSet | undefined;
   if (input.demandSource === "jev" && deps.jev && price > 0) {
+    // HAC-156: the union study area above stays for the population and Huff, but each site's
+    // Jev competitors come from its own catchment only, so adding or removing other candidates
+    // leaves that site's prompts and Jev cache keys unchanged.
+    const businessType = category === "fitness" ? "fitness_studio" : category;
+    const perSite = new Map<string, Competitor[]>();
+    const canonicalCompetitors = new Map<string, string>();
+    jevCompetitorSet = { version: JEV_COMPETITOR_SET_VERSION, sites: {} };
+    for (const site of sites) {
+      const bundle = siteCatchments.get(site.siteId)!;
+      const { competitors: chosen, eligibleCount } = siteJevCompetitors(
+        bundle,
+        { businessType, priceUsd: price },
+      );
+      if (eligibleCount > chosen.length)
+        finding(
+          "JEV_COMPETITORS_CAPPED",
+          `Jev was shown ${chosen.length} of ${eligibleCount} competitors in this site's catchment (lowest stable venue IDs first).`,
+          site.siteId,
+        );
+      jevCompetitorSet.sites[site.siteId] = {
+        competitorIds: chosen.map((c) => c.sourceId),
+        capped: eligibleCount > chosen.length,
+      };
+      for (const c of chosen)
+        canonicalCompetitors.set(c.competitor.id, c.sourceId);
+      perSite.set(
+        optionId(site.siteId),
+        chosen.map((c) => c.competitor),
+      );
+    }
+    finding(
+      "JEV_COMPETITOR_SET",
+      `Jev competitor options come from each site's own catchment (${JEV_COMPETITOR_SET_VERSION}); the shared study area is used for population and Huff only.`,
+    );
     const { tables, progress } = await runPanelForSites({
       personaSet,
       sites: panelSites,
-      competitors: panelCompetitors,
+      competitors: [],
+      competitorsForSite: (site) => perSite.get(site.id) ?? [],
       need: {
         businessType: category === "fitness" ? "fitness_studio" : category,
         priceUsd: price,
@@ -727,6 +772,7 @@ export async function assembleEvaluation(
     const canonical = new Map([
       ...sites.map((s) => [optionId(s.siteId), s.siteId] as const),
       ...competitors.map((c) => [optionId(c.id), c.id] as const),
+      ...canonicalCompetitors,
     ]);
     for (const site of sites) {
       const table = tables.find((t) => t.siteId === optionId(site.siteId));
@@ -783,7 +829,55 @@ export async function assembleEvaluation(
     demandSource: input.demandSource,
     ...(input.seeds ? { seeds: input.seeds } : {}),
   });
-  return { request, findings, assumptions };
+  return {
+    request,
+    findings,
+    assumptions,
+    ...(jevCompetitorSet ? { jevCompetitorSet } : {}),
+  };
+}
+
+/**
+ * HAC-156: one site's Jev competitor options, from that site's own catchment only (never the
+ * shared study area): venues with source coordinates, deduplicated by source ID, sorted by
+ * stable venue ID and capped at `JEV_MAX_COMPETITORS`. A pure function of the site's catchment,
+ * so other candidates in the comparison cannot change it.
+ */
+export function siteJevCompetitors(
+  bundle: AssemblyCatchment,
+  options: { businessType: Competitor["businessType"]; priceUsd: number },
+): {
+  competitors: { sourceId: string; competitor: Competitor }[];
+  eligibleCount: number;
+} {
+  const sources = new Set<string>();
+  const eligible = [...bundle.response.competitors]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .flatMap((competitor) => {
+      if (competitor.sourceIds.some((id) => sources.has(id))) return [];
+      const location = competitor.sourceIds
+        .map((id) => bundle.locations?.competitors?.[id])
+        .find((p) => p !== undefined);
+      if (!location) return [];
+      competitor.sourceIds.forEach((id) => sources.add(id));
+      return [
+        {
+          sourceId: competitor.id,
+          competitor: {
+            id: optionId(competitor.id),
+            lat: location.lat,
+            lng: location.lng,
+            brandClass: "independent" as const,
+            businessType: options.businessType,
+            priceUsd: options.priceUsd,
+          },
+        },
+      ];
+    });
+  return {
+    competitors: eligible.slice(0, JEV_MAX_COMPETITORS),
+    eligibleCount: eligible.length,
+  };
 }
 
 export async function assembleEvaluationRequest(

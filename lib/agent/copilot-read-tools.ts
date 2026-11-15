@@ -29,6 +29,8 @@ import {
 import type { ScenarioService } from "@/lib/scenario/service";
 import type { StoredComparison } from "@/lib/evaluation/store";
 import type { CopilotMutationContext } from "./copilot-tools";
+import type { ExperimentDiffCard } from "@/lib/contracts/copilot-read-tools";
+import { assessExperiment, diagnose, DiagnosisScopeError } from "./diagnose";
 
 export type ScopedSiteSearchResult = {
   projectId: string;
@@ -60,13 +62,6 @@ export type CopilotReadDependencies = {
     signal: AbortSignal,
     scenarioId?: string,
   ) => Promise<{ comparison: CopilotStoredComparison; run: SiteRun } | null>;
-  /** HAC-89 owns classification. Only a scoped delegation receipt crosses this boundary. */
-  diagnose?: (
-    projectId: string,
-    scenario: Scenario,
-    comparison: StoredComparison,
-    signal: AbortSignal,
-  ) => Promise<{ actionId: string }>;
   /** HAC-88 owns client dispatch and confirmation, not this registry. */
   focusView?: (
     projectId: string,
@@ -109,7 +104,7 @@ const descriptions: Record<CopilotReadToolName, string> = {
   explain_hour:
     "Read one saved representative run's hourly trace, not the all-seed aggregate; returns metric references only.",
   diagnose:
-    "Delegate a verified saved comparison to the optional HAC-89 diagnosis adapter, otherwise explicitly unsupported.",
+    "Classify each site and hour block of the scenario's verified saved run (demand-, capacity- or rent-limited, competitor leakage). Findings cite run IDs, hour blocks and metric references; up to three experiments name existing tools to propose. A child of a diagnosed scenario also gets a diff card against its parent. Never runs anything.",
   focus_view:
     "Delegate a scoped view request to the optional HAC-88 client adapter; this tool does not dispatch client actions itself.",
 };
@@ -497,25 +492,45 @@ export function createCopilotReadTools(deps: CopilotReadDependencies) {
           case "diagnose": {
             const input = CopilotReadSchemas.diagnose.parse(args);
             const scenario = await scenarioFor(input.scenario_id, context);
-            if (!deps.diagnose || !deps.comparisonForScenario)
-              return unsupported();
+            if (!deps.comparisonForScenario) return unsupported();
             const comparison = await comparisonFor(scenario, context);
-            const receipt = z
-              .object({ actionId: id })
-              .strict()
-              .parse(
-                await deps.diagnose(
-                  context.projectId,
-                  scenario,
-                  comparison,
-                  context.signal,
-                ),
-              );
+            const diagnosis = diagnose(scenario, comparison);
+            let experimentCard: ExperimentDiffCard | undefined;
+            if (scenario.parentId !== null) {
+              // Optional: the parent may have no saved run, or a stale one, which
+              // only drops the card; it never fails the child's own diagnosis.
+              try {
+                const parent = await scenarioFor(
+                  scenario.parentId,
+                  context,
+                  false,
+                );
+                const parentComparison = await comparisonFor(parent, context);
+                experimentCard = assessExperiment({
+                  parent,
+                  parentComparison,
+                  child: scenario,
+                  childComparison: comparison,
+                });
+              } catch (error) {
+                context.signal.throwIfAborted();
+                if (
+                  !(error instanceof ReadBoundaryError) &&
+                  !(error instanceof DiagnosisScopeError) &&
+                  !(
+                    error &&
+                    typeof error === "object" &&
+                    "code" in error &&
+                    error.code === "not_found"
+                  )
+                )
+                  throw error;
+              }
+            }
             output = {
-              status: "delegated",
-              scenarioId: scenario.id,
-              actionId: receipt.actionId,
-              warnings: [],
+              status: "diagnosed",
+              ...diagnosis,
+              ...(experimentCard ? { experimentCard } : {}),
             };
             break;
           }
@@ -565,14 +580,16 @@ export function createCopilotReadTools(deps: CopilotReadDependencies) {
         const code: FailureCode =
           error instanceof ReadBoundaryError
             ? error.code
-            : error instanceof z.ZodError
-              ? "INVALID_INPUT"
-              : error &&
-                  typeof error === "object" &&
-                  "code" in error &&
-                  error.code === "not_found"
-                ? "NOT_FOUND"
-                : "UNAVAILABLE";
+            : error instanceof DiagnosisScopeError
+              ? "STALE_CONTEXT"
+              : error instanceof z.ZodError
+                ? "INVALID_INPUT"
+                : error &&
+                    typeof error === "object" &&
+                    "code" in error &&
+                    error.code === "not_found"
+                  ? "NOT_FOUND"
+                  : "UNAVAILABLE";
         return {
           status: "rejected",
           code,

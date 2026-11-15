@@ -130,6 +130,8 @@ solid light-gray fields/evidence, dark `#17181d` text, dark primary actions and 
 action text. Warning/error text keeps the old proven dark amber/red print values.
 Glass loses transparency, blur and shadows. Scenario names, solid/dashed cues and
 evidence labels remain visible on paper. Screen and print tokens are tested separately.
+The persistent consultant is hidden in print, and its grid becomes a full-width page.
+Printing restores the plan even when the consultant is expanded to focus mode.
 
 `components/ui/contrast.test.ts` resolves aliases, solid/alpha hex and RGB/RGBA,
 then composites supported surfaces against explicit underlays. It checks every

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, openConsultant, test } from "./fixtures";
 import { fields } from "../../components/intake/profile";
 import { syntheticHoustonFixture } from "../../fixtures/houston-coffee";
 import { IntakeRequestSchema } from "../../lib/contracts/intake";
@@ -101,6 +101,13 @@ test("the displayed workspace site accompanies 'compare this one' in the real ch
     });
   });
   await page.goto("/projects/houston-coffee/workspace");
+  await openConsultant(page);
+  await expect(
+    page.getByRole("complementary", { name: "Assistant" }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("complementary", { name: "Project context" }),
+  ).toHaveCount(1);
   await expect(
     page.getByRole("region", { name: "Selected location" }),
   ).toContainText(candidate.address);
