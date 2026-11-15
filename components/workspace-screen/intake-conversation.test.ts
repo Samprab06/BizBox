@@ -160,3 +160,78 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     });
   });
 });
+
+it("serializes the same validated-shape view with the shared text/voice body", () => {
+  const view = { stage: "site", siteId: "screen" } as const;
+  const body = intakeRequestBody(session, "Compare this one", view);
+  expect(
+    IntakeRequestSchema.parse(JSON.parse(JSON.stringify(body))).view,
+  ).toEqual(view);
+});
+
+it("seeds only missing API draft leaves from the completed browser search form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee for commuters",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Favor Montrose",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      missingRequiredFields: [],
+      findings: [],
+      state: {
+        draft: {
+          businessName: "Actual business",
+          economics: {
+            startupBudgetCents: {
+              value: null,
+              unit: "USD cents",
+              origin: "founder",
+              evidenceIds: ["stated-unknown"],
+              unknownReason: "I do not know",
+            },
+          },
+        },
+        assumptions: {},
+      },
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  const parsed = IntakeRequestSchema.parse(body);
+  expect(parsed.state?.draft.businessName).toBe("Actual business");
+  expect(parsed.state?.draft.economics?.startupBudgetCents).toEqual(
+    browser.live?.state.draft.economics?.startupBudgetCents,
+  );
+  expect(parsed.state?.draft.economics?.averageTicketCents).toMatchObject({
+    value: null,
+    origin: "default",
+  });
+  expect(parsed.state?.draft.capacity?.serviceMinutes?.origin).toBe("default");
+  expect(parsed.state?.draft.capacity?.servers?.origin).toBe("founder");
+  expect(
+    intakeRequestBody(
+      browser,
+      undefined,
+      { stage: "workspace", siteId: "screen" },
+      "houston-coffee",
+    ).state,
+  ).toEqual(browser.live?.state);
+});

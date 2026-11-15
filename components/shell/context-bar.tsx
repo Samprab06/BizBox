@@ -1,5 +1,6 @@
 "use client";
 
+import { agentViewForRoute } from "@/lib/client/agent-view-context";
 import Link from "next/link";
 import { useCallback, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -14,6 +15,7 @@ import {
 } from "@/lib/client/workspace-context";
 import {
   useContextIntake,
+  AgentViewContextState,
   WorkspacePublicationContext,
   type WorkspacePublisher,
 } from "@/lib/client/use-workspace-context";
@@ -152,8 +154,12 @@ export function ProjectContextProvider({
   });
   return (
     <WorkspacePublicationContext.Provider value={publish}>
-      <ContextBar model={model} />
-      {children}
+      <AgentViewContextState.Provider
+        value={agentViewForRoute(project.id, pathname, search, reports)}
+      >
+        <ContextBar model={model} />
+        {children}
+      </AgentViewContextState.Provider>
     </WorkspacePublicationContext.Provider>
   );
 }

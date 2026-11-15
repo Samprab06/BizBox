@@ -106,7 +106,7 @@ function logTurn(fields: Record<string, unknown>) {
 export function createDeepIntakeRunner(
   model: NonNullable<CreateDeepAgentParams["model"]>,
 ): IntakeRunner {
-  return async ({ session, message, signal }) => {
+  return async ({ session, message, signal, viewContextLine }) => {
     let saves = 0;
     let saved = 0;
     let rejectedUnknowns = 0;
@@ -179,7 +179,15 @@ export function createDeepIntakeRunner(
     });
     const tally = new UsageTally();
     const finish = (outcome: string) =>
-      logTurn({ outcome, saves, saved, rejectedUnknowns, ...tally.usage });
+      logTurn({
+        outcome,
+        saves,
+        saved,
+        rejectedUnknowns,
+        viewContextBytes: new TextEncoder().encode(viewContextLine ?? "")
+          .length,
+        ...tally.usage,
+      });
     let result;
     try {
       result = await agent.invoke(
@@ -187,7 +195,7 @@ export function createDeepIntakeRunner(
           messages: [
             {
               role: "user",
-              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}\n\nFounder says:\n${message}`,
+              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}${viewContextLine ? `\n${viewContextLine}` : ""}\n\nFounder says:\n${message}`,
             },
           ],
         },

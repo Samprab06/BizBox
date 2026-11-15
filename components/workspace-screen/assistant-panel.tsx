@@ -144,6 +144,7 @@ export function AssistantPanel({
     readContext: () => ({
       projectId,
       mode: "chat",
+      view: conversation.view,
       ...(selectedSiteId && selectedSiteId.length <= 200
         ? { selectedSiteId }
         : {}),

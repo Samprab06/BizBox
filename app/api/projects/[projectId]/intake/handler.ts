@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
@@ -8,12 +9,20 @@ import {
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
 
+import {
+  formatViewContext,
+  resolveViewContext,
+  InvalidViewReferenceError,
+  type ViewContextLookups,
+} from "@/lib/agent/view-context";
+
 const MAX_BODY_BYTES = 64 * 1024;
 const projectIdSchema = z.string().trim().min(1).max(200);
 type Context = { params: Promise<{ projectId: string }> };
 type Dependencies = {
   projectExists: (projectId: string) => Promise<boolean>;
   runAgent?: IntakeRunner;
+  viewContextLookups?: ViewContextLookups;
   onCompleted?: (
     projectId: string,
     input: z.infer<typeof IntakeRequestSchema>,
@@ -124,6 +133,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
     } catch (error) {
       return invalid(error);
     }
+    let validatedView: AgentViewContext | undefined;
     let assistantMessage =
       session.snapshot().nextQuestion?.question ??
       "Review your profile, assumptions, and findings.";
@@ -140,17 +150,29 @@ export function createIntakeHandler(dependencies: Dependencies) {
           onAbort = () => reject(new Error("Intake deadline exceeded"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        // The agent SDK loads only here, so validation never depends on it (HAC-58).
-        const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
-        assistantMessage = await Promise.race([
-          runAgent({
+        const runTurn = async () => {
+          const view = await resolveViewContext(
+            projectId,
+            input.view,
+            dependencies.viewContextLookups,
+            session.snapshot().profile,
+          );
+          signal.throwIfAborted();
+          validatedView = view;
+          const viewContextLine = view ? formatViewContext(view) : undefined;
+          // SDK loading follows validation; ownership failure never spends a model call.
+          const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
+          signal.throwIfAborted();
+          return runAgent({
             session,
-            message: input.message,
+            message: input.message!,
             signal,
-          }),
-          aborted,
-        ]);
+            viewContextLine,
+          });
+        };
+        assistantMessage = await Promise.race([runTurn(), aborted]);
       } catch (error) {
+        if (error instanceof InvalidViewReferenceError) return invalid(error);
         if (error instanceof ModelRuntimeUnavailableError)
           return json(
             {
@@ -196,9 +218,12 @@ export function createIntakeHandler(dependencies: Dependencies) {
     }
     if (dependencies.onCompleted) {
       try {
+        const recordedInput = { ...input };
+        delete recordedInput.view;
+        if (validatedView) recordedInput.view = validatedView;
         await dependencies.onCompleted(
           projectId,
-          input,
+          recordedInput,
           assistantMessage,
           session.snapshot(),
         );

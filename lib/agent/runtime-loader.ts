@@ -10,6 +10,8 @@ export type IntakeRunner = (input: {
   session: IntakeSession;
   message: string;
   signal: AbortSignal;
+  /** Bounded line assembled only after server scope validation. */
+  viewContextLine?: string;
 }) => Promise<string>;
 
 export class ModelRuntimeUnavailableError extends Error {

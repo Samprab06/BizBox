@@ -114,3 +114,48 @@ Unavailable/empty/provider-error and ambiguous-account states are optional
 financial limitations, not invented zero cash and not a reason to fail an
 otherwise useful location investigation. See the final consultant revision in
 [the Nessie spec](../../docs/integrations/nessie.md).
+
+## Current screen context (HAC-149)
+
+Each typed or spoken intake turn may include the existing strict `view` contract
+(`AgentViewContextSchema`). The client derives it from reports published for this
+project and the active route, omitting examples, loading state IDs and URL-only IDs.
+Replay joins its selected-site report with its same-route stored comparison.
+Listing labels, addresses and other arbitrary display copy are never included.
+Only identifiers already published by a screen are sent; scenario, investigation
+and minute fields stay absent until a screen reports them.
+
+Before a message reaches the model, the server rechecks comparison, scenario and
+investigation references using project-scoped reads. Site/candidate references
+must occur in those scoped comparison/scenario artifacts or the top-eight shortlist
+recomputed with the existing search function and server inventory. Search uses the
+canonical complete intake draft bound to the path project, falling back to the latest
+saved project profile. For a completed browser form, the shared request builder reuses
+`profileFromIntake` (the same normalization used by listing search) to seed only
+missing draft leaves through the existing `state` contract. Explicit live values,
+unknowns, origin labels and assumptions survive; pending form edits still apply last.
+Incomplete forms keep their previous state. No profile/request schema is added.
+This is a read-only operation; no search registry, migration,
+model request or profile persistence is added. A known-invalid reference returns
+422 before a model call. If neither a complete draft nor a saved profile exists,
+selection IDs and minute are removed and the context reports `phase: "missing"`,
+so incomplete-intake conversations can continue without asserting a selected site.
+Lookup failures return sanitized 503s. Validation shares the existing 20-second
+turn deadline; a lookup completing after cancellation cannot start a model call.
+
+The runner receives one JSON context line next to the draft, capped at **1,024 UTF-8
+bytes including its prefix**. This is a conservative **1,024-token upper bound** for
+byte-level BPE, not a tokenizer estimate. Lower-priority fields are dropped whole;
+oversized JSON-escaped selection IDs are removed, never truncated. The line contains
+only schema fields and rechecked IDs. Turn logs add only `viewContextBytes`; context
+content is not logged. The thread recorder receives only the resolved view.
+
+Patch-only edits remain SDK-free and skip context lookup; their unvalidated `view`
+is discarded before thread recording. Voice's `readContext` exposes the same view
+and fingerprints it to discard speech captured before the screen changed. Spoken
+transcripts use the same intake endpoint/validation as typing. Realtime remains a
+transcription/read-aloud transport and receives no business context instructions.
+
+HAC-144 action-tool integration is a separate dependency. When that change lands,
+retain the server-validated `viewContextLine` path and remove any raw `request.view`
+prompt append; do not send both representations to the model.

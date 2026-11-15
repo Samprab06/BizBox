@@ -5,6 +5,7 @@ import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import Link from "next/link";
+import { useAgentViewContext } from "@/lib/client/use-workspace-context";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { applyIntakeReply, intakeRequestBody, postIntakeMessage, withFounderMessage, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
@@ -67,6 +68,7 @@ function useLiveIntake(projectId: string) {
 }
 
 function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: string; projectId: string; mode: IntakeMode; siteId?: string }) {
+  const view = useAgentViewContext();
   const [session, setSession] = useState(() => readSession(storageKey));
   const [message, setMessage] = useState("");
   // HAC-129: the live composer shares its draft with the workspace assistant.
@@ -120,7 +122,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
 
   async function sendLive(text: string | undefined, appendFounder: boolean): Promise<string | null> {
     const current = latest.current;
-    const body = intakeRequestBody(current, text);
+    const body = intakeRequestBody(current, text, view, projectId);
     if (!text && !body.patch) return null;
     save(appendFounder && text ? withFounderMessage(current, text) : current);
     setBusy(true);
@@ -172,7 +174,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
   }
 
   const voiceAdapter: VoiceAdapter = {
-    readContext: () => ({ projectId, mode: "intake", prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
+    readContext: () => ({ projectId, mode: "intake", view, prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
     submitTranscript: text => submitMessage(text, currentPrompt()),
   };
 
