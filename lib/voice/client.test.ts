@@ -681,6 +681,43 @@ describe("microphone readiness", () => {
 });
 
 describe("spoken reply delivery", () => {
+  it.each([false, true])(
+    "finishes the utterance recorded before mute (committed before mute: %s)",
+    async (committedBeforeMute) => {
+      const f = fixture();
+      const commit = () => f.event(JSON.stringify({
+        type: "input_audio_buffer.committed",
+        item_id: "before-mute",
+        previous_item_id: null,
+      }));
+      try {
+        await f.client.start();
+        f.event(JSON.stringify({
+          type: "input_audio_buffer.speech_started",
+          item_id: "before-mute",
+        }));
+        if (committedBeforeMute) commit();
+        f.client.setMuted(true);
+        expect(f.track.enabled).toBe(false);
+        if (!committedBeforeMute) commit();
+        f.event(completed("before-mute", "What is the rent?"));
+        await flush();
+        expect(f.submit).toHaveBeenCalledExactlyOnceWith("What is the rent?");
+        const request = f.channel.sent.find(
+          e => e.type === "response.create",
+        ) as { response: { metadata: unknown } };
+        expect(request).toBeDefined();
+        f.event(JSON.stringify({
+          type: "response.created",
+          response: { id: "muted-reply", metadata: request.response.metadata },
+        }));
+        expect(f.audio.muted).toBe(false);
+        expect(f.client.snapshot.muted).toBe(true);
+      } finally {
+        f.client.stop();
+      }
+    },
+  );
   it("keeps the agent reply audible when only the microphone is muted", async () => {
     let resolve!: (text: string) => void;
     const f = fixture({

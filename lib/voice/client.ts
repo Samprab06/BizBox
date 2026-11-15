@@ -380,7 +380,9 @@ export class VoiceClient {
       run.captures.delete(id);
       run.committed.add(id);
       run.lastCommitted = id;
-      const discarded = capture.muted || this.snapshot.muted;
+      // Mute blocks new captures, not words already recorded before the click.
+      // Provider commit/transcription events may arrive after tracks are disabled.
+      const discarded = capture.muted;
       run.queue.push({
         id,
         context: capture.context,
@@ -411,7 +413,7 @@ export class VoiceClient {
         return;
       }
       run.seen.add(id);
-      pending.text = pending.discarded || this.snapshot.muted ? "" : text;
+      pending.text = pending.discarded ? "" : text;
       if (pending.text) this.interrupt();
       if (run.queue[0]?.text !== undefined) void this.drain(run);
     } else if (event.type === "input_audio_buffer.speech_started") {
@@ -648,14 +650,8 @@ export class VoiceClient {
       track.enabled = !muted;
     });
     this.snapshot = { ...this.snapshot, muted };
-    if (muted) {
-      // This control mutes input only. Stop speaking owns reply cancellation.
-      this.send(run, { type: "input_audio_buffer.clear" });
-      run.queue.length = 0;
-      run.captures.forEach((capture) => {
-        capture.muted = true;
-      });
-    }
+    // Disabling the track sends silence, allowing VAD to finish the current
+    // utterance. Clearing its buffer/queue here would erase pre-mute input.
     this.update(
       this.snapshot.phase,
       muted
@@ -663,7 +659,9 @@ export class VoiceClient {
           ? "Microphone muted. Waiting for the agent’s reply."
           : this.snapshot.phase === "speaking"
             ? "Microphone muted. Reply audio is still on."
-            : "Microphone muted."
+            : run.queue.length || [...run.captures.values()].some(c => !c.muted)
+              ? "Microphone muted. Finishing your answer…"
+              : "Microphone muted."
         : "Microphone on.",
     );
   }

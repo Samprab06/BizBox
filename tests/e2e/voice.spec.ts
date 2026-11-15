@@ -829,12 +829,18 @@ test("workspace voice uses the text agent tools and speaks its reply while the m
   ).toBeVisible();
   await page.getByRole("tab", { name: "Voice", exact: true }).click();
   await start(page);
-  await page.evaluate(() =>
-    window.__voice.complete(
-      "spoken-comparison",
-      "Compare these three locations",
-    ),
-  );
+  await page.evaluate(() => window.__voice.emit({
+    type: "input_audio_buffer.speech_started",
+    item_id: "spoken-comparison",
+  }));
+  // The founder finishes speaking and mutes before the provider has transcribed it.
+  await voice(page)
+    .getByRole("button", { name: "Mute microphone", exact: true })
+    .click();
+  await page.evaluate(() => window.__voice.complete(
+    "spoken-comparison",
+    "Compare these three locations",
+  ));
   await expect.poll(() => messages.length).toBe(1);
   expect(messages[0]).toMatchObject({
     message: "Compare these three locations",
@@ -844,9 +850,6 @@ test("workspace voice uses the text agent tools and speaks its reply while the m
       candidateIds: [...threeSiteIds],
     },
   });
-  await voice(page)
-    .getByRole("button", { name: "Mute microphone", exact: true })
-    .click();
   release();
   await expect(page).toHaveURL(/step=results/);
   expect(comparisons).toHaveLength(1);
