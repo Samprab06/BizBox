@@ -84,3 +84,12 @@ Final exact-source evidence: lint/typecheck/build pass, 1,416 unit tests pass (4
 - [x] Suppress only obsolete leading intake opener in workspace after valid completed brief; retain original history, actual offline status and Text/Voice continuity. Show saved context without a synthetic reply.
 - [x] Reproduce offline-onboarding request bootstrap and stale-draft bugs with two failing tests. Include current representable founder answers in message requests through the existing API schema; preserve form-only pending-edit synchronization.
 - [x] Exact-source lint/typecheck/build passed; 1,423 unit tests /43 existing skips and 76 desktop Chromium /2 existing skips passed. Local delivery only. Source imagery coverage and local consultant configuration remain explicit limitations. No new provider, model call, runtime or production work.
+
+## Continuous Houston geographic context
+
+- [x] Replace black overview gaps with real geographic tiles from the already-used OpenFreeMap source, rendered within the existing Cesium Viewer.
+- [x] Hide Vexcel above 10 km camera height; preserve real close-up mesh and exact source-coordinate pins. Use a -200 m display-only floor below negative mesh elevations; never feed it to simulation.
+- [x] Bound context tile cache/concurrency and dispose requests; retain base/pins if Vexcel is missing or fails, and settle unavailable close-up coverage honestly.
+- [x] Verify source decoding, lifecycle/LOD and actual IAB rendering; lint/typecheck/build passed, 1,429 unit tests passed (43 existing skips), and 76 desktop Chromium cases passed (2 existing skips). After the single-line first-tile recovery correction, rerun affected provider tests, lint/typecheck/build and desktop suite.
+
+No new vendor, dependency, API key, data contract or runtime integration. Manager owns documentation and final verification.
