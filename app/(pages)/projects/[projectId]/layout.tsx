@@ -19,7 +19,7 @@ export default async function ProjectLayout({
             href="/projects/houston-coffee/intake"
             className="inline-flex items-center"
           >
-            <BrandLogo priority className="h-8 w-auto" />
+            <BrandLogo onDark priority className="h-8 w-auto print:invert" />
           </Link>
         </div>
       </header>
