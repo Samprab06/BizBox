@@ -374,6 +374,37 @@ describe("HAC-168 founder requirements survive flags-only replies", () => {
     expect(next.profile.requirements).toEqual(requirements);
   });
 
+  it("keeps a pending numbered edit sent alongside an unrelated chat turn", () => {
+    const edited = { value: "Parking for 6 cars", origin: "founder" as const };
+    const oldFlags = patchFromForm(
+      { requirements: { value: "Street frontage", origin: "founder" } },
+      ["requirements"],
+    )!.mustHaves as NonNullable<IntakeResponse["draft"]["mustHaves"]>;
+    const sent: IntakeSession = {
+      ...saved,
+      profile: { requirements: edited },
+      live: {
+        state: { draft: { mustHaves: oldFlags }, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const outgoing = intakeRequestBody(sent, "What about rent?");
+    const returned = outgoing.patch!.mustHaves as NonNullable<
+      IntakeResponse["draft"]["mustHaves"]
+    >;
+    const next = applyIntakeReply(
+      withFounderMessage(sent, "What about rent?"),
+      sent,
+      { ...reply, draft: { ...reply.draft, mustHaves: returned } },
+    );
+    expect(next.profile.requirements).toEqual(edited);
+    expect(next.pending).toEqual([]);
+    expect(next.live?.state.draft.mustHaves).toEqual(returned);
+    expect(returned.parking?.value).toBe(true);
+    expect(returned.frontage?.value).toBeNull();
+  });
+
   it("still applies later chat-driven requirement changes", () => {
     const settled = {
       ...saved,

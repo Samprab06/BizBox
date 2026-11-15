@@ -197,8 +197,13 @@ export function applyIntakeReply(
       // Flags are a search projection, not a replacement for the founder's sentence.
       // A form-only acknowledgement cannot add free text. Chat can change the flags,
       // but unchanged values (including provenance-only updates) keep the original wording.
+      // A chat request may also carry a pending form edit. Compare against the
+      // flags actually sent in that patch, rather than the older live snapshot.
       const previous =
-        sent.live?.state.draft.mustHaves ?? mustHaves(profile.requirements);
+        sentKeys.has("requirements") && sent.profile.requirements
+          ? mustHaves(sent.profile.requirements)
+          : (sent.live?.state.draft.mustHaves ??
+            mustHaves(profile.requirements));
       const returned = result.draft.mustHaves;
       const unchanged = (
         ["frontage", "corner", "parking", "groundFloor"] as const
