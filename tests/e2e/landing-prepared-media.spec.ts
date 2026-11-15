@@ -1,4 +1,231 @@
 import { expect, test } from "./fixtures";
+import type { Page } from "@playwright/test";
+
+const mediaDiagnostic = process.env.BIZBOX_MEDIA_DIAGNOSTIC === "1";
+const forceMediaLoad = process.env.BIZBOX_MEDIA_FORCE_LOAD === "1";
+const mediaRequests = new WeakMap<Page, unknown[]>();
+
+test.beforeEach(async ({ page }) => {
+  if (!mediaDiagnostic && !forceMediaLoad) return;
+  if (mediaDiagnostic) {
+    const requests: unknown[] = [];
+    mediaRequests.set(page, requests);
+    page.on("request", (request) => {
+      if (/\.(mp4|webm)(?:\?|$)/.test(request.url()))
+        requests.push({
+          event: "request",
+          url: request.url(),
+          range: request.headers().range,
+        });
+    });
+    page.on("response", (response) => {
+      if (/\.(mp4|webm)(?:\?|$)/.test(response.url()))
+        requests.push({
+          event: "response",
+          url: response.url(),
+          status: response.status(),
+        });
+    });
+    page.on("requestfailed", (request) => {
+      if (/\.(mp4|webm)(?:\?|$)/.test(request.url()))
+        requests.push({
+          event: "requestfailed",
+          url: request.url(),
+          error: request.failure()?.errorText,
+        });
+    });
+  }
+  await page.addInitScript(
+    ({ diagnostic, forceLoad }) => {
+      const events: unknown[] = [];
+      const ids = new WeakMap<HTMLMediaElement, number>();
+      const nodes = new Set<HTMLMediaElement>();
+      const loaded = new WeakSet<HTMLMediaElement>();
+      const snapshot = (element: HTMLMediaElement) => {
+        if (!ids.has(element)) ids.set(element, nodes.size + 1);
+        nodes.add(element);
+        return {
+          id: ids.get(element),
+          connected: element.isConnected,
+          readyState: element.readyState,
+          networkState: element.networkState,
+          paused: element.paused,
+          muted: element.muted,
+          defaultMuted: element.defaultMuted,
+          currentSrc: element.currentSrc,
+          currentTime: element.currentTime,
+          visibility: document.visibilityState,
+          bounds: element.getBoundingClientRect().toJSON(),
+          style: {
+            display: getComputedStyle(element).display,
+            visibility: getComputedStyle(element).visibility,
+            opacity: getComputedStyle(element).opacity,
+          },
+          storyChapter: document
+            .querySelector("[data-story-chapter]")
+            ?.getAttribute("data-story-chapter"),
+          storyPaused: !!document.querySelector(
+            'button[aria-label="Resume story"]',
+          ),
+          activation: navigator.userActivation && {
+            active: navigator.userActivation.isActive,
+            seen: navigator.userActivation.hasBeenActive,
+          },
+          src: element.getAttribute("src"),
+          preload: element.preload,
+          mutedAttribute: element.hasAttribute("muted"),
+          playsInline: element.hasAttribute("playsinline"),
+          sources: [...element.querySelectorAll("source")].map((source) => ({
+            src: source.getAttribute("src"),
+            type: source.type,
+          })),
+          error: element.error && {
+            code: element.error.code,
+            message: element.error.message,
+          },
+        };
+      };
+      const record = (
+        event: string,
+        element: HTMLMediaElement,
+        detail?: unknown,
+      ) => {
+        if (diagnostic && events.length < 240)
+          events.push({
+            event,
+            at: Math.round(performance.now()),
+            ...snapshot(element),
+            detail,
+          });
+      };
+      if (diagnostic) {
+        Object.assign(window, {
+          __bizboxMediaDiagnostic: {
+            events,
+            final: () => [...nodes].map(snapshot),
+          },
+        });
+        for (const name of [
+          "loadstart",
+          "loadedmetadata",
+          "loadeddata",
+          "durationchange",
+          "canplay",
+          "canplaythrough",
+          "play",
+          "playing",
+          "pause",
+          "waiting",
+          "stalled",
+          "suspend",
+          "abort",
+          "emptied",
+          "error",
+          "ended",
+          "seeking",
+          "seeked",
+          "timeupdate",
+        ]) {
+          document.addEventListener(
+            name,
+            (event) => {
+              const target = event.target;
+              const element =
+                target instanceof HTMLMediaElement
+                  ? target
+                  : target instanceof HTMLSourceElement
+                    ? target.parentElement
+                    : null;
+              if (element instanceof HTMLMediaElement) record(name, element);
+            },
+            true,
+          );
+        }
+        document.addEventListener(
+          "click",
+          (event) => {
+            if (
+              (event.target as Element | null)?.closest?.(
+                "[data-play-recording]",
+              )
+            )
+              events.push({
+                event: "manual-click",
+                at: Math.round(performance.now()),
+                activation: navigator.userActivation?.isActive,
+                visibility: document.visibilityState,
+              });
+          },
+          true,
+        );
+      }
+      const nativePlay = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () {
+        record("play-call", this);
+        if (forceLoad && !loaded.has(this)) {
+          loaded.add(this);
+          if (this.readyState === 0) {
+            record("force-load", this);
+            this.load();
+          }
+        }
+        let result: Promise<void>;
+        try {
+          result = nativePlay.call(this);
+        } catch (error) {
+          record("play-threw", this, String(error));
+          throw error;
+        }
+        void result.then(
+          () => record("play-resolved", this),
+          (error: unknown) =>
+            record(
+              "play-rejected",
+              this,
+              error instanceof DOMException
+                ? { name: error.name, message: error.message }
+                : String(error),
+            ),
+        );
+        return result;
+      };
+    },
+    { diagnostic: mediaDiagnostic, forceLoad: forceMediaLoad },
+  );
+});
+
+test.afterEach(async ({ page }, info) => {
+  if (!mediaDiagnostic) return;
+  const browser = await page
+    .evaluate(() => {
+      const diagnostic = (
+        window as typeof window & {
+          __bizboxMediaDiagnostic?: {
+            events: unknown[];
+            final: () => unknown[];
+          };
+        }
+      ).__bizboxMediaDiagnostic;
+      return (
+        diagnostic && { events: diagnostic.events, final: diagnostic.final() }
+      );
+    })
+    .catch((error: unknown) => ({ collectorError: String(error) }));
+  const report = {
+    project: info.project.name,
+    test: info.title,
+    forceLoad: forceMediaLoad,
+    status: info.status,
+    requests: mediaRequests.get(page),
+    browser,
+  };
+  const json = JSON.stringify(report);
+  console.log(`BIZBOX_MEDIA_DIAGNOSTIC ${json}`);
+  await info.attach("prepared-media-diagnostic", {
+    body: json,
+    contentType: "application/json",
+  });
+});
 
 async function seek(page: import("@playwright/test").Page, progress: number) {
   await page.evaluate(
