@@ -4,7 +4,13 @@ import {
   MAX_VIEW_CANDIDATES,
   type AgentViewContext,
 } from "@/lib/contracts/agent";
-import { reportsForRoute, type WorkspaceReport } from "./workspace-context";
+import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
+import { flowStepFromLocation } from "./flow-progress";
+import {
+  reportsForRoute,
+  type WorkspaceObservation,
+  type WorkspaceReport,
+} from "./workspace-context";
 
 /** Only the active registry publication proves an ID is displayed. URL IDs alone do not. */
 export function agentViewForRoute(
@@ -17,8 +23,12 @@ export function agentViewForRoute(
   const stage = AgentStageSchema.safeParse(
     detail ? "site" : pathname.split("/").at(-1),
   );
+  // Scene 1: the guided-flow step comes from the URL alone (the stepper's own rule).
+  const step = flowStepFromLocation(pathname, search);
+  const flowStep = step ? { step } : {};
   const view: AgentViewContext = {
     stage: stage.success ? stage.data : "workspace",
+    ...flowStep,
   };
   const observations = reportsForRoute(
     reports,
@@ -100,6 +110,55 @@ export function agentViewForRoute(
       observation.candidates[0];
     if (displayed && !displayed.synthetic) view.siteId = displayed.id;
   } else if (selected && candidates.includes(selected)) view.siteId = selected;
+  if (view.stage === "workspace")
+    Object.assign(view, workspaceFlowView(observations, view.candidateIds));
   const parsed = AgentViewContextSchema.safeParse(view);
-  return parsed.success ? parsed.data : { stage: view.stage };
+  return parsed.success ? parsed.data : { stage: view.stage, ...flowStep };
 }
+
+/**
+ * Scene 1: the listing facts for the displayed candidates (in `candidateIds` order, which is
+ * the search's ranking) and the comparison shortlist, from the workspace's comparison report.
+ * Facts the listing lacks are left out, never guessed.
+ */
+export function workspaceFlowView(
+  observations: readonly WorkspaceObservation[],
+  candidateIds: readonly string[] | undefined,
+): Pick<AgentViewContext, "candidates" | "shortlistIds"> {
+  const comparison = observations.find((entry) => entry.kind === "comparison");
+  if (!comparison || comparison.kind !== "comparison" || !candidateIds?.length)
+    return {};
+  const byId = new Map(
+    comparison.candidates
+      .filter((entry) => !entry.synthetic)
+      .map((entry) => [entry.id, entry]),
+  );
+  const candidates = candidateIds.flatMap((id) => {
+    const entry = byId.get(id);
+    const address = entry?.address.trim().slice(0, 300);
+    if (!entry || !address) return [];
+    return [
+      {
+        id,
+        address,
+        ...(isFact(entry.monthlyRentUsd, 0)
+          ? { monthlyRentUsd: entry.monthlyRentUsd }
+          : {}),
+        ...(isFact(entry.sqft, Number.MIN_VALUE) ? { sqft: entry.sqft } : {}),
+        ...(isFact(entry.score, -Infinity) ? { score: entry.score } : {}),
+      },
+    ];
+  });
+  const shortlistIds = (comparison.shortlistIds ?? [])
+    .filter((id) => candidateIds.includes(id))
+    .slice(0, MAX_COMPARE_UNITS);
+  return {
+    ...(candidates.length
+      ? { candidates: candidates.slice(0, MAX_VIEW_CANDIDATES) }
+      : {}),
+    ...(comparison.shortlistIds ? { shortlistIds } : {}),
+  };
+}
+
+const isFact = (value: number | undefined, min: number): value is number =>
+  typeof value === "number" && Number.isFinite(value) && value >= min;

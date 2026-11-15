@@ -21,20 +21,27 @@ import { INTAKE_UPDATED_EVENT } from "./intake-events";
 import {
   activeComparisonId,
   comparisonStorageKey,
+  pickSiteTweaks,
   readSavedComparison,
   readShortlist,
   restoreShortlist,
+  siteTweaksKey,
   writeSavedComparison,
   writeShortlist,
   type SavedComparison,
 } from "./project-store";
+import { readFlowState, useFlowProgress } from "./flow-progress";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
-import type {
-  DemandSource,
-  EvaluationResult,
-  SensitivityAssumption,
-  SensitivityResult,
+import {
+  MAX_COMPARE_UNITS,
+  type DemandSource,
+  type EvaluationResult,
+  type SensitivityAssumption,
+  type SensitivityResult,
+  type SiteTweakMap,
 } from "@/lib/contracts/evaluation";
+import type { FlowEvent } from "@/lib/contracts/agent";
+import type { ContextListing } from "./workspace-context";
 import type { AssemblyMetadata } from "@/lib/evaluation/assemble";
 import {
   createPanelResendBackoff,
@@ -59,6 +66,19 @@ export type LiveComparisonPayload = {
     rankingMatches: boolean;
     topMatches: boolean;
   } | null;
+  /**
+   * Scene 1: the tweaks this run used (`siteTweaksKey`), known from the saved comparison;
+   * "" or absent means none.
+   */
+  tweaksKey?: string;
+};
+
+/** Scene 1: what the running comparison is doing, for the progress panel. */
+export type ComparisonRun = {
+  siteIds: string[];
+  demandSource: DemandSource;
+  /** `Date.now()` when the run began. */
+  startedAt: number;
 };
 
 export type LiveComparisonController = {
@@ -72,11 +92,18 @@ export type LiveComparisonController = {
   message: string;
   /** HAC-155: a deadline-limited Jev panel still being resumed; never a finished result. */
   panelProgress: PanelProgressCount | null;
+  /** Scene 1: the run in progress, or null. */
+  activeRun?: ComparisonRun | null;
+  /** Scene 1: `siteTweaksKey` of the current selection; compare with `payload.tweaksKey`. */
+  tweaksKey?: string;
+  /** Scene 1: why the last run failed (the selection is kept), or "". */
+  runError?: string;
   notes: string[];
   demandSource: DemandSource;
   demandSourceReason: string;
   retry: () => void;
-  run: () => Promise<void>;
+  /** Runs the selection, or `ids` (which then become the selection). */
+  run: (ids?: string[]) => Promise<void>;
   sensitivity: {
     loading: boolean;
     result: SensitivityResult | null;
@@ -263,6 +290,8 @@ export async function requestLiveComparison(
   options: {
     onProgress?: (progress: PanelProgressCount) => void;
     sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    /** Scene 1: per-site tweaks (filtered to `candidateIds`; sent only when non-empty). */
+    siteTweaks?: SiteTweakMap;
   } = {},
 ) {
   if (
@@ -281,12 +310,15 @@ export async function requestLiveComparison(
   );
   if (saved.profile.projectId !== profile.projectId)
     throw new Error("Profile identity mismatch");
+  const siteTweaks = pickSiteTweaks(candidateIds, options.siteTweaks ?? {});
+  const tweaksKey = siteTweaksKey(candidateIds, siteTweaks);
   const payload = await postComparison(
     {
       projectId: profile.projectId,
       profileId: saved.profile.id,
       candidateIds,
       demandSource,
+      ...(tweaksKey ? { siteTweaks } : {}),
     },
     signal,
     fetcher,
@@ -301,14 +333,68 @@ export async function requestLiveComparison(
   )
     throw new Error("Comparison identity mismatch");
   return {
-    payload,
+    payload: { ...payload, tweaksKey } as LiveComparisonPayload,
     saved: {
       projectId: profile.projectId,
       comparisonId: payload.comparisonId,
       profileId: saved.profile.id,
       profileVersion: saved.profile.version,
       intakeFingerprint: fingerprint(profile),
+      tweaksKey,
     } satisfies SavedComparison,
+  };
+}
+
+/** Scene 1: which quarter of the Jev panel has answered (0-4); 4 is every persona. */
+export function progressBand({
+  completedPersonas,
+  totalPersonas,
+}: PanelProgressCount): number {
+  if (totalPersonas <= 0) return 0;
+  const share = Math.min(1, Math.max(0, completedPersonas / totalPersonas));
+  return Math.floor(share * 4);
+}
+
+/**
+ * Scene 1: the `comparison_progress` event to post for this poll, or null. The consultant
+ * hears about a run at most once per 25% band (25, 50, 75, 100%), never on every poll.
+ */
+export function progressReport(
+  lastBand: number,
+  progress: PanelProgressCount,
+): { band: number; event: FlowEvent | null } {
+  const band = progressBand(progress);
+  if (band <= lastBand || progress.totalPersonas <= 0)
+    return { band: Math.max(band, lastBand), event: null };
+  return {
+    band,
+    event: {
+      kind: "comparison_progress",
+      completed: Math.min(progress.completedPersonas, progress.totalPersonas),
+      total: progress.totalPersonas,
+    },
+  };
+}
+
+/** Scene 1: the listing facts the consultant may cite, for the workspace report. */
+export function contextListing(
+  entry: SiteSearchResult["candidates"][number],
+): ContextListing {
+  const { candidate } = entry;
+  const rent =
+    entry.baseRentCents.value !== null &&
+    entry.baseRentCents.unit === "USD cents/month"
+      ? entry.baseRentCents.value / 100
+      : undefined;
+  const sqft = candidate.floorAreaSqFt.value ?? undefined;
+  return {
+    id: candidate.id,
+    name: candidate.name,
+    address: candidate.address,
+    synthetic: candidate.synthetic,
+    ...(rent !== undefined && rent >= 0 ? { monthlyRentUsd: rent } : {}),
+    ...(sqft !== undefined && sqft > 0 ? { sqft } : {}),
+    score: entry.score,
   };
 }
 
@@ -326,6 +412,7 @@ export async function runAgentComparison(
     storage?: Pick<Storage, "getItem">;
     onProgress?: (progress: PanelProgressCount) => void;
     sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+    siteTweaks?: SiteTweakMap;
   } = {},
 ) {
   const fetcher = options.fetcher ?? fetch;
@@ -354,7 +441,11 @@ export async function runAgentComparison(
     capability?.jevConfigured ? "jev" : "huff",
     options.signal,
     fetcher,
-    { onProgress: options.onProgress, sleep: options.sleep },
+    {
+      onProgress: options.onProgress,
+      sleep: options.sleep,
+      siteTweaks: options.siteTweaks,
+    },
   );
   writeShortlist(projectId, siteIds);
   writeSavedComparison(response.saved);
@@ -462,7 +553,14 @@ export function useStoredComparison(
           saved.intakeFingerprint !== fingerprint(intake.profile);
         update({
           phase: "ready",
-          payload: { ...payload, outdated: payload.outdated || changed },
+          payload: {
+            ...payload,
+            outdated: payload.outdated || changed,
+            tweaksKey:
+              saved?.comparisonId === comparisonId
+                ? (saved.tweaksKey ?? "")
+                : "",
+          },
           message: "",
           failed: false,
         });
@@ -501,6 +599,7 @@ export function useStoredComparison(
             payload.outdated ||
             !current ||
             fingerprint(current) !== saved.intakeFingerprint,
+          tweaksKey: saved.tweaksKey ?? "",
         },
         message: "",
         failed: false,
@@ -528,20 +627,53 @@ export function useStoredComparison(
 export function useLiveComparison(
   projectId: string,
   initialComparisonId?: string,
-  options: { manualSelection?: boolean } = {},
+  options: {
+    manualSelection?: boolean;
+    /**
+     * Scene 1: told when a run starts, makes panel progress (at most once per 25% band),
+     * finishes or fails. Called synchronously; must not throw or block the run.
+     */
+    onFlowEvent?: (event: FlowEvent) => void;
+  } = {},
 ): LiveComparisonController {
   const [attempt, setAttempt] = useState(0);
   const search = useSiteSearch(projectId, attempt);
   const stored = useStoredComparison(projectId, initialComparisonId);
   const [selectedIds, setSelectedIdsState] = useState<string[]>([]);
+  const selectedRef = useRef(selectedIds);
   // HAC-135: the shortlist is saved per project, so it survives navigation.
   const setSelectedIds = useCallback(
     (ids: string[]) => {
+      const current = selectedRef.current;
+      // A failed run's message belongs to the units it ran; another choice clears it.
+      if (
+        ids.length !== current.length ||
+        ids.some((id) => !current.includes(id))
+      )
+        setFailure("");
+      selectedRef.current = ids;
       setSelectedIdsState(ids);
       writeShortlist(projectId, ids);
     },
     [projectId],
   );
+  useEffect(() => {
+    selectedRef.current = selectedIds;
+  }, [selectedIds]);
+  const flowEventRef = useRef(options.onFlowEvent);
+  useEffect(() => {
+    flowEventRef.current = options.onFlowEvent;
+  }, [options.onFlowEvent]);
+  const emit = (event: FlowEvent) => {
+    try {
+      flowEventRef.current?.(event);
+    } catch {
+      /* The consultant hearing about the run never affects the run. */
+    }
+  };
+  // Scene 1: per-site tweaks from the guided flow apply to the next run.
+  const { siteTweaks } = useFlowProgress(projectId).state;
+  const [activeRun, setActiveRun] = useState<ComparisonRun | null>(null);
   const [capability, setCapability] = useState<{
     jev: boolean;
     reason: string;
@@ -631,11 +763,15 @@ export function useLiveComparison(
       if (!first) return current.filter((id) => ids.includes(id));
       const saved = readShortlist(localStorage, projectId);
       const restored = restoreShortlist(saved, ids);
-      // HAC-162: the client workspace starts with nothing chosen and compares at most two
-      // units, so it restores only a saved shortlist that already fits that limit.
-      if (options.manualSelection)
-        return saved && restored.length <= 2 ? restored : [];
-      return restored;
+      // HAC-162: the client workspace starts with nothing chosen and compares at most
+      // MAX_COMPARE_UNITS units, so it restores only a saved shortlist that fits that limit.
+      const next = options.manualSelection
+        ? saved && restored.length <= MAX_COMPARE_UNITS
+          ? restored
+          : []
+        : restored;
+      selectedRef.current = next;
+      return next;
     });
   }, [candidateKey, search.state.mode, projectId, options.manualSelection]);
   const retry = () => {
@@ -643,18 +779,21 @@ export function useLiveComparison(
     setAttempt((n) => n + 1);
     stored.retry();
   };
-  const run = async () => {
-    if (
-      operation.current ||
-      search.state.mode !== "live" ||
-      !selectedIds.length
-    )
-      return;
+  const run = async (override?: string[]) => {
+    if (operation.current || search.state.mode !== "live") return;
+    const live = candidates.map(({ candidate }) => candidate.id);
+    const ids = override
+      ? [...new Set(override)].filter((id) => live.includes(id))
+      : selectedRef.current;
+    if (!ids.length) return;
+    if (override) setSelectedIds(ids);
+    const demandSource: DemandSource = capability?.jev ? "jev" : "huff";
     const controller = new AbortController();
     operation.current = controller;
     sensitivityOperation.current?.abort();
     sensitivityOperation.current = null;
     setRunning(true);
+    setActiveRun({ siteIds: ids, demandSource, startedAt: Date.now() });
     setPanelProgress(null);
     setFailure("");
     setSensitivity({
@@ -663,36 +802,51 @@ export function useLiveComparison(
       error: null,
       comparisonId: null,
     });
+    if (ids.length <= MAX_COMPARE_UNITS)
+      emit({ kind: "comparison_started", siteIds: ids, demandSource });
+    let band = 0;
     try {
       const response = await requestLiveComparison(
         search.state.profile,
-        selectedIds,
-        capability?.jev ? "jev" : "huff",
+        ids,
+        demandSource,
         controller.signal,
         fetch,
         {
           onProgress: (progress) => {
-            if (mounted.current && operation.current === controller)
-              setPanelProgress(progress);
+            if (!mounted.current || operation.current !== controller) return;
+            setPanelProgress(progress);
+            const report = progressReport(band, progress);
+            band = report.band;
+            if (report.event) emit(report.event);
           },
+          // Read at run time: an agent's tweak may land in the same reply as the run.
+          siteTweaks: readFlowState(projectId).siteTweaks,
         },
       );
       if (mounted.current && operation.current === controller) {
-        writeShortlist(projectId, selectedIds);
+        writeShortlist(projectId, ids);
         stored.adopt(response.payload, response.saved);
+        emit({
+          kind: "comparison_finished",
+          comparisonId: response.payload.comparisonId,
+        });
       }
     } catch {
-      if (mounted.current && operation.current === controller)
+      if (mounted.current && operation.current === controller) {
         setFailure(
           options.manualSelection
             ? "Comparison unavailable. Your selected units are unchanged."
             : "Live comparison could not be run. Showing example data; retry to try again.",
         );
+        emit({ kind: "comparison_failed", reason: "Comparison unavailable" });
+      }
     } finally {
       if (operation.current === controller) {
         operation.current = null;
         if (mounted.current) {
           setRunning(false);
+          setActiveRun(null);
           setPanelProgress(null);
         }
       }
@@ -771,9 +925,19 @@ export function useLiveComparison(
       synthetic: stored.payload?.comparison?.synthetic,
       outdated: stored.payload?.outdated,
       siteIds: stored.payload?.result.ranking ?? [],
-      candidates: candidates.map((entry) => entry.candidate),
+      candidates: candidates.map(contextListing),
+      ...(options.manualSelection
+        ? { shortlistIds: selectedIds.slice(0, MAX_COMPARE_UNITS) }
+        : {}),
     }),
-    [phase, search.readiness.status, stored.payload, candidates],
+    [
+      phase,
+      search.readiness.status,
+      stored.payload,
+      candidates,
+      selectedIds,
+      options.manualSelection,
+    ],
   );
   useWorkspaceReport(projectId, context);
   return {
@@ -784,6 +948,9 @@ export function useLiveComparison(
     setSelectedIds,
     payload: stored.payload,
     panelProgress: running ? panelProgress : null,
+    activeRun: running ? activeRun : null,
+    tweaksKey: siteTweaksKey(selectedIds, siteTweaks),
+    runError: failure,
     message:
       failure ||
       (running && panelProgress ? panelProgressMessage(panelProgress) : "") ||

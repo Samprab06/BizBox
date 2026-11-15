@@ -8,6 +8,10 @@ export type ContextListing = {
   name: string;
   address: string;
   synthetic: boolean;
+  /** Scene 1: listing facts the consultant may cite (absent when the listing lacks them). */
+  monthlyRentUsd?: number;
+  sqft?: number;
+  score?: number;
 };
 export type WorkspaceObservation =
   | {
@@ -33,6 +37,8 @@ export type WorkspaceObservation =
       outdated?: boolean;
       siteIds: string[];
       candidates: ContextListing[];
+      /** Scene 1: the units in the comparison shortlist (workspace only). */
+      shortlistIds?: string[];
     }
   | {
       kind: "plan";

@@ -1,6 +1,7 @@
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { InteriorResponse } from "@/lib/contracts/interior";
+import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import {
   groupListingMarkers,
   validListingCoordinates,
@@ -30,7 +31,7 @@ export function toggleComparisonUnit(
   id: string,
 ): string[] {
   if (ids.includes(id)) return ids.filter((value) => value !== id);
-  return ids.length >= 2 ? [...ids] : [...ids, id];
+  return ids.length >= MAX_COMPARE_UNITS ? [...ids] : [...ids, id];
 }
 export function unitAddress(
   entry: WorkspaceCandidate,
@@ -67,13 +68,18 @@ export function candidateMarkers(candidates: readonly WorkspaceCandidate[]) {
   );
 }
 
-/** A previous comparison must never masquerade as the newly selected locations. */
+/**
+ * A previous comparison must never masquerade as the newly selected locations. Scene 1: nor
+ * as a run with other per-site tweaks (`tweaksKey`, from `siteTweaksKey`; "" for none).
+ */
 export function comparisonMatchesSelection(
   payload: LiveComparisonPayload | null,
   ids: readonly string[],
+  tweaksKey = "",
 ) {
   if (!payload || payload.outdated || payload.comparison?.synthetic !== false)
     return false;
+  if ((payload.tweaksKey ?? "") !== tweaksKey) return false;
   const actual = payload.result.sites.map((site) => site.siteId).sort();
   return JSON.stringify(actual) === JSON.stringify([...ids].sort());
 }

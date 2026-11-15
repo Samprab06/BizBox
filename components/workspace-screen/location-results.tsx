@@ -70,7 +70,7 @@ export function LocationResults({
           />
         ))}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-agent-anchor="comparison_table">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">
             Server-calculated location results with modeled ranges

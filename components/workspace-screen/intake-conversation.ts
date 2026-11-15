@@ -14,7 +14,7 @@ import {
   profileFromIntake,
 } from "@/lib/client/intake-business-profile";
 import { IntakeDraftSchema, type IntakeState } from "@/lib/contracts/intake";
-import type { AgentViewContext } from "@/lib/contracts/agent";
+import type { AgentViewContext, FlowEvent } from "@/lib/contracts/agent";
 import {
   formFromDraft,
   IntakeResponseSchema,
@@ -117,6 +117,22 @@ export function intakeRequestBody(
   };
 }
 
+/**
+ * Scene 1: a browser event for the consultant (FlowEvent), sent instead of a founder
+ * message. It carries the round-tripped state and the screen, never a form patch.
+ */
+export function flowEventRequestBody(
+  session: IntakeSession,
+  event: FlowEvent,
+  view?: AgentViewContext,
+) {
+  return {
+    ...(session.live?.state ? { state: session.live.state } : {}),
+    event,
+    ...(view ? { view } : {}),
+  };
+}
+
 export function withFounderMessage(
   session: IntakeSession,
   text: string,
@@ -150,7 +166,9 @@ export const assistantCopy: IntakeCopy = {
 export async function postIntakeMessage(
   fetchImpl: typeof fetch,
   projectId: string,
-  body: ReturnType<typeof intakeRequestBody>,
+  body:
+    | ReturnType<typeof intakeRequestBody>
+    | ReturnType<typeof flowEventRequestBody>,
   copy: IntakeCopy = assistantCopy,
 ): Promise<IntakeOutcome> {
   let response: Response;
