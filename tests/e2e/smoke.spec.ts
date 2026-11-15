@@ -1,7 +1,7 @@
 import type { View } from "../../lib/client/workspace-routes";
 import { expect, test } from "./fixtures";
 
-test("/ serves the BizBox landing, and /start opens a new project's chat", async ({ page }) => {
+test("/ serves the BizBox landing, and /start opens a new project's questionnaire", async ({ page }) => {
   // HAC-136: /start creates a project; the suite has no database, so creation is mocked.
   await page.route("**/api/projects", (route) =>
     route.request().method() === "POST"
@@ -12,7 +12,7 @@ test("/ serves the BizBox landing, and /start opens a new project's chat", async
   await expect(page).toHaveURL(/\/$/);
   await expect(page).toHaveTitle(/BizBox/);
   await page.goto("/start");
-  await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
+  await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
 });
 
 // Each view's <h1>, as rendered by components/workspace-view.tsx.

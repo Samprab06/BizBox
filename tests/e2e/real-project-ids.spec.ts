@@ -65,9 +65,9 @@ test("a fresh brief creates its own project, and map, site and plan load for it"
 }) => {
   const creates = await mockServices(page);
 
-  // A first visit to /start creates one project and opens its chat-first entry (HAC-150).
+  // A first visit to /start creates one project and opens its questionnaire (Scene 1).
   await page.goto("/start");
-  await expect(page).toHaveURL(new RegExp(`/projects/${NEW_PROJECT}$`));
+  await expect(page).toHaveURL(new RegExp(`/projects/${NEW_PROJECT}/intake$`));
   expect(creates).toHaveLength(1);
   expect(
     await page.evaluate(() =>
@@ -85,10 +85,10 @@ test("a fresh brief creates its own project, and map, site and plan load for it"
   );
 
   // Returning to /start resumes this project rather than creating another: a finished brief
-  // lands docked on its workspace.
+  // continues at its Top locations step.
   await page.goto("/start");
   await expect(page).toHaveURL(
-    new RegExp(`${workspaceHref(NEW_PROJECT, "workspace")}$`),
+    new RegExp(`/projects/${NEW_PROJECT}/workspace\\?step=locations$`),
   );
   expect(creates).toHaveLength(1);
 
