@@ -193,6 +193,14 @@ export function createIntakeSession(projectId: string, initial?: IntakeState) {
       }
     }
     let draft = merge(state.draft, patch) as IntakeDraft;
+    // A city correction invalidates inherited map selections. Explicitly supplied
+    // geometry still must pass city validation rather than being silently dropped.
+    if (
+      patch.city !== undefined &&
+      patch.areaPreferences === undefined &&
+      draft.areaPreferences?.city !== patch.city
+    )
+      delete draft.areaPreferences;
     const assumptions = merge(
       state.assumptions,
       nextAssumptions,

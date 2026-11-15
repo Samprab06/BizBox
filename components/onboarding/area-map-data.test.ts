@@ -26,6 +26,20 @@ describe("area map intake answers", () => {
     );
     expect(areaMapSummary(value)).not.toContain('"rectangles"');
   });
+  it("recovers damaged saved payloads without nesting a second marker on redraw", () => {
+    for (const value of [
+      "near offices\n[BizBox area map v1] {bad",
+      "near offices\n[BizBox area map v2] {}",
+    ]) {
+      const parsed = readAreaMap(value, "Houston");
+      expect(parsed.previous).toBe("near offices");
+      const reset = writeAreaMap([], "Houston", parsed.previous, []);
+      expect(reset).toBe("near offices");
+      const redrawn = writeAreaMap([], "Houston", parsed.previous, rectangles);
+      expect(readAreaMap(redrawn, "Houston").rectangles).toEqual(rectangles);
+      expect(redrawn.match(/\[BizBox area map/g)).toHaveLength(1);
+    }
+  });
   it("never caps or silently truncates selections", () => {
     const selections = Array.from({ length: 1000 }, (_, i): Rectangle => ({
       bounds: [-95.4, 29.7, -95.3 + i / 100000, 29.8],

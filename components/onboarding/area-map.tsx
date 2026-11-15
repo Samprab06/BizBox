@@ -477,7 +477,7 @@ export function AreaMap({
         <span>
           {tool === "erase"
             ? "Click an area or drag a box to erase selections."
-            : "Drag a rectangle. Green favors an area; red avoids it."}
+            : "Drag a rectangle. Green prioritizes listings; red excludes them."}
         </span>
         <span aria-live="polite">
           {all.length

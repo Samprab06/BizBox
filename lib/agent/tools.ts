@@ -3,7 +3,7 @@ import { z } from "zod";
 import { BusinessProfileSchema, type BusinessProfile } from "@/lib/contracts";
 import {
   IntakeDraftSchema,
-  IntakePatchSchema,
+  ModelIntakePatchSchema,
   type IntakeState,
 } from "@/lib/contracts/intake";
 import {
@@ -58,7 +58,7 @@ const filters = z
   })
   .strict();
 export const InvestigationToolSchemas = {
-  save_profile: z.object({ patch: IntakePatchSchema }).strict(),
+  save_profile: z.object({ patch: ModelIntakePatchSchema }).strict(),
   search_sites: z.object({ filters: filters.default({}) }).strict(),
   get_catchment: z.object({ site_id: siteIds.element }).strict(),
   poll_customers: z
@@ -870,4 +870,3 @@ export function createInvestigationTools(
     },
   };
 }
-

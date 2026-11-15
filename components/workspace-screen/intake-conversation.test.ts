@@ -1,3 +1,4 @@
+import { writeAreaMap } from "@/components/onboarding/area-map-data";
 import { describe, expect, it, vi } from "vitest";
 import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import {
@@ -625,5 +626,83 @@ describe("Scene 1 request history and flow events", () => {
       expect(next.profile.areas?.value).toBe("Favor Midtown; Avoid downtown");
       expect(next.profile.areas?.origin).toBe("founder");
     });
+  });
+});
+
+describe("current map geometry across assistant round trips", () => {
+  const rectangle = {
+    bounds: [-95.5, 29.6, -95.3, 29.8] as [number, number, number, number],
+    brush: "avoid" as const,
+  };
+  const founder = (value: string) => ({ value, origin: "founder" as const });
+  it("keeps drawn areas when the agent returns only a textual restatement", () => {
+    const map = writeAreaMap([], "Houston", "", [rectangle]);
+    const saved: IntakeSession = {
+      profile: { city: founder("Houston"), areas: founder(map) },
+      messages: [],
+    };
+    const merged = applyIntakeReply(saved, saved, {
+      ...reply,
+      draft: { city: "Houston", preferredAreas: ["Houston"] },
+    });
+    expect(merged.profile.areas?.value).toBe(map);
+    expect(merged.live?.state.draft.areaPreferences).toEqual({
+      city: "Houston",
+      rectangles: [rectangle],
+    });
+  });
+  it("sends the current map on events and an explicit clear over stale saved geometry", () => {
+    const saved: IntakeSession = {
+      profile: { city: founder("Houston"), areas: founder("No preference") },
+      messages: [],
+      live: {
+        state: {
+          draft: {
+            city: "Houston",
+            areaPreferences: { city: "Houston", rectangles: [rectangle] },
+          },
+          assumptions: {},
+        },
+        findings: [],
+        missingRequiredFields: [],
+      },
+    };
+    const request = flowEventRequestBody(saved, { kind: "arrived_workspace" });
+    expect(request.patch?.areaPreferences).toEqual({
+      city: "Houston",
+      rectangles: [],
+    });
+    expect(IntakeRequestSchema.safeParse(request).success).toBe(true);
+  });
+  it("keeps a later city edit and clears old rectangles when an earlier reply arrives", () => {
+    const map = writeAreaMap([], "Houston", "", [rectangle]);
+    const sent: IntakeSession = {
+      profile: { city: founder("Houston"), areas: founder(map) },
+      messages: [],
+    };
+    const now: IntakeSession = {
+      ...sent,
+      profile: {
+        city: founder("Los Angeles"),
+        areas: founder("No preference"),
+      },
+      pending: ["city", "areas"],
+    };
+    const merged = applyIntakeReply(now, sent, {
+      ...reply,
+      draft: {
+        city: "Houston",
+        areaPreferences: { city: "Houston", rectangles: [rectangle] },
+      },
+    });
+    expect(merged.profile.city?.value).toBe("Los Angeles");
+    expect(merged.profile.areas?.value).toBe("No preference");
+    expect(merged.live?.state.draft).toMatchObject({
+      city: "Los Angeles",
+      areaPreferences: { city: "Los Angeles", rectangles: [] },
+    });
+    expect(
+      IntakeRequestSchema.safeParse({ state: merged.live?.state }).success,
+    ).toBe(true);
   });
 });

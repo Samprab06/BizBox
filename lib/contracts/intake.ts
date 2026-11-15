@@ -5,6 +5,7 @@ import {
   UiActionListSchema,
 } from "./agent";
 import { AssumedValueSchema, BusinessProfileSchema } from "./index";
+import { areaPreferencesMatchCity } from "./area-preferences";
 
 const shape = BusinessProfileSchema.shape;
 const nonnegative = AssumedValueSchema.refine(
@@ -45,7 +46,7 @@ export const IntakeAssumptionsSchema = z
 
 // Keep the canonical leaf constraints while allowing an unfinished interview.
 // Metadata belongs to the route/session, never to a founder or model patch.
-export const IntakeDraftSchema = z
+const IntakeDraftObjectSchema = z
   .object({
     businessName: shape.businessName.optional(),
     concept: shape.concept.optional(),
@@ -54,6 +55,7 @@ export const IntakeDraftSchema = z
     city: shape.city.optional(),
     preferredAreas: shape.preferredAreas.optional(),
     avoidedAreas: shape.avoidedAreas.optional(),
+    areaPreferences: shape.areaPreferences,
     targetCustomers: shape.targetCustomers.optional(),
     mustHaves: shape.mustHaves.partial().strict().optional(),
     objective: shape.objective.optional(),
@@ -74,10 +76,26 @@ export const IntakeDraftSchema = z
     derivedDefaults: shape.derivedDefaults.partial().strict().optional(),
   })
   .strict();
-export const IntakePatchSchema = IntakeDraftSchema.extend({
+const cityConsistency = {
+  path: ["areaPreferences", "city"],
+  message: "Map preferences must match the profile city",
+};
+export const IntakeDraftSchema = IntakeDraftObjectSchema.refine(
+  areaPreferencesMatchCity,
+  cityConsistency,
+);
+const IntakePatchObjectSchema = IntakeDraftObjectSchema.extend({
   category: z.string().trim().min(1).max(100).optional(),
   assumptions: IntakeAssumptionsSchema.optional(),
 }).strict();
+export const IntakePatchSchema = IntakePatchObjectSchema.refine(
+  areaPreferencesMatchCity,
+  cityConsistency,
+);
+/** Geometry comes from the founder's map, never from model-authored patches. */
+export const ModelIntakePatchSchema = IntakePatchObjectSchema.omit({
+  areaPreferences: true,
+});
 export const IntakeStateSchema = z
   .object({
     draft: IntakeDraftSchema,

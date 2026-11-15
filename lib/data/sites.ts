@@ -47,6 +47,42 @@ export function searchSites(
   const inventory = SiteInventorySchema.parse(inventoryInput);
   const properties = new Map(inventory.properties.map((p) => [p.id, p]));
   const evidence = new Map<string, SiteSearchResult["evidence"][number]>();
+  const rectangles = request.profile.areaPreferences?.rectangles ?? [];
+  const favored = rectangles.filter((rectangle) => rectangle.brush === "favor");
+  const avoided = rectangles.filter((rectangle) => rectangle.brush === "avoid");
+  // Determine membership once per building, using only verified inventory coordinates.
+  const areaMembership = new Map(
+    inventory.properties.map((property) => {
+      const known = property.longitude !== null && property.latitude !== null;
+      const contains = ({
+        bounds: [west, south, east, north],
+      }: (typeof rectangles)[number]) =>
+        known &&
+        property.longitude! >= west &&
+        property.longitude! <= east &&
+        property.latitude! >= south &&
+        property.latitude! <= north;
+      const excluded = avoided.some(contains);
+      return [
+        property.id,
+        { known, excluded, preferred: !excluded && favored.some(contains) },
+      ] as const;
+    }),
+  );
+  const areaEvidenceId = "founder-area-preferences-v1";
+  if (rectangles.length)
+    evidence.set(areaEvidenceId, {
+      id: areaEvidenceId,
+      origin: "founder",
+      description:
+        "Founder-drawn map preferences: red rectangles exclude matching building coordinates; eligible green matches sort first. Rectangle edges are included and red wins overlaps.",
+      sources: [],
+      limitations: [
+        "Map rectangles are founder preferences, not observed listing attributes or predictions of sales or profit. Numeric pre-scores are unchanged.",
+        "Building coordinates determine membership; they do not describe a leased unit's footprint or validate neighborhood boundaries.",
+        "Unknown coordinates are excluded when red rectangles exist; otherwise they remain eligible without green preference.",
+      ],
+    });
   const scoreEvidenceId = "default-site-prescore-v1";
   evidence.set(scoreEvidenceId, {
     id: scoreEvidenceId,
@@ -55,7 +91,7 @@ export function searchSites(
       "Illustrative deterministic pre-score: rent fit 40, size fit 20, position 15, building frontage 15, anchor cotenants reserved maximum 10 (currently unknown, no credit); not a sales forecast or calibrated demand model.",
     sources: [],
     limitations: [
-      "Known monthly base rent sorts ahead of unknown rent, then score descending and stable site ID.",
+      "Within each founder map preference group, known monthly base rent sorts ahead of unknown rent, then score descending and stable site ID.",
       "Unknown observations earn no feature or rent bonus.",
     ],
   });
@@ -224,6 +260,11 @@ export function searchSites(
         ? Math.round((rate * space.sizeSqFt * 100) / 12)
         : null;
     const flags: string[] = [];
+    if (rectangles.length) {
+      const membership = areaMembership.get(property.id)!;
+      if (membership.preferred) flags.push("preferred_area");
+      if (!membership.known) flags.push("area_location_unknown");
+    }
     if (space.sizeSqFt === null) flags.push("size_unknown");
     if (base === null) flags.push("rent_unknown");
     if ((low === null) !== (high === null)) flags.push("rent_single_endpoint");
@@ -372,6 +413,7 @@ export function searchSites(
       ref(property, "city", "primaryAddress.city"),
       ref(space, "spaceUse", prefix + "spaceUse"),
       scoreEvidenceId,
+      ...(rectangles.length ? [areaEvidenceId] : []),
     ]);
     const evidenceIds = [...refs].sort(compareId);
     return {
@@ -416,6 +458,10 @@ export function searchSites(
     "retailUse",
     (s) => s.data.spaceUse === "Retail" || s.data.spaceUse === "OfficeRetail",
   );
+  if (avoided.length) {
+    filter("areaLocationKnown", (s) => areaMembership.get(s.propertyId)!.known);
+    filter("avoidedAreas", (s) => !areaMembership.get(s.propertyId)!.excluded);
+  }
   filter(
     "size",
     (s) =>
@@ -454,6 +500,8 @@ export function searchSites(
     .map((s) => described.get(s.id)!)
     .sort(
       (a, b) =>
+        Number(areaMembership.get(b.propertyId)!.preferred) -
+          Number(areaMembership.get(a.propertyId)!.preferred) ||
         Number(b.baseRentCents.value !== null) -
           Number(a.baseRentCents.value !== null) ||
         b.score - a.score ||

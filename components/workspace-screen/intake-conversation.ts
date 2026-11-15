@@ -1,3 +1,4 @@
+import { areaPreferencesFromAnswer } from "@/lib/client/area-preferences";
 /**
  * HAC-128: the workspace assistant talks to the existing intake agent
  * (POST /api/projects/[projectId]/intake) and keeps its history in the existing intake
@@ -81,9 +82,17 @@ function currentViewState(
   const searchDraft = Object.fromEntries(
     Object.entries(profile).filter(([key]) => key in IntakeDraftSchema.shape),
   );
-  const draft = IntakeDraftSchema.safeParse(
-    fillMissing(session.live?.state.draft, searchDraft),
-  );
+  const draft = IntakeDraftSchema.safeParse({
+    ...(fillMissing(session.live?.state.draft, searchDraft) as Record<
+      string,
+      unknown
+    >),
+    // Map geometry belongs to the latest form, never an older assistant snapshot.
+    areaPreferences: profile.areaPreferences ?? {
+      city: profile.city,
+      rectangles: [],
+    },
+  });
   // Partial live constraints can conflict with older completed form values (e.g. hours).
   // Keep the valid original state so sending a turn never fails during serialization.
   if (!draft.success) return session.live?.state;
@@ -144,7 +153,7 @@ function historyField(session: IntakeSession) {
 
 /**
  * Scene 1: a browser event for the consultant (FlowEvent), sent instead of a founder
- * message. It carries the round-tripped state and the screen, never a form patch.
+ * message. It carries round-tripped state, the screen and the latest city/map patch.
  */
 export function flowEventRequestBody(
   session: IntakeSession,
@@ -153,6 +162,7 @@ export function flowEventRequestBody(
 ) {
   return {
     ...(session.live?.state ? { state: session.live.state } : {}),
+    patch: patchFromForm(session.profile, ["city", "areas"]),
     event,
     ...(view ? { view } : {}),
     ...historyField(session),
@@ -246,6 +256,9 @@ export function applyIntakeReply(
     { value: string; origin: "default" | "founder" },
   ][]) {
     if (stillPending.includes(key)) continue;
+    // Model wording must not erase founder-drawn geometry. A city change clears it below.
+    if (key === "areas" && profile.areas?.value.includes("[BizBox area map"))
+      continue;
     if (key === "requirements" && profile.requirements?.origin === "founder") {
       // Flags are a search projection, not a replacement for the founder's sentence.
       // A form-only acknowledgement cannot add free text. Chat can change the flags,
@@ -271,12 +284,35 @@ export function applyIntakeReply(
     if (existing && sameAnswer(key, existing.value, answer.value)) continue;
     profile[key] = answer;
   }
+  if (
+    profile.city?.value !== now.profile.city?.value &&
+    profile.areas?.value.includes("[BizBox area map")
+  ) {
+    profile.areas = { value: "No preference", origin: "founder" };
+  }
+  const latestCity = profile.city?.value;
+  const area =
+    latestCity === "Houston" || latestCity === "Los Angeles"
+      ? areaPreferencesFromAnswer(profile.areas?.value, latestCity)
+      : null;
+  const draft =
+    area &&
+    !area.error &&
+    (area.mapped ||
+      result.draft.areaPreferences ||
+      now.live?.state.draft.areaPreferences)
+      ? {
+          ...result.draft,
+          city: latestCity as "Houston" | "Los Angeles",
+          areaPreferences: area.preferences,
+        }
+      : result.draft;
   return {
     ...now,
     profile,
     pending: stillPending,
     live: {
-      state: { draft: result.draft, assumptions: result.assumptions },
+      state: { draft, assumptions: result.assumptions },
       missingRequiredFields: result.missingRequiredFields,
       findings: result.findings,
     },
