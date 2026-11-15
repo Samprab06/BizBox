@@ -1,11 +1,12 @@
+import { colorVar } from "@/lib/design/tokens";
 import { hourLabel, type SiteHours } from "./hourly-overlay";
 
 /** One color and dash pattern per shortlisted site, so lines differ without relying on color. */
 const series = [
-  { color: "var(--color-baseline)", dash: undefined },
-  { color: "#b5653a", dash: "6 4" },
-  { color: "#4f6fa8", dash: "2 3" },
-  { color: "#8a5a9e", dash: "8 3 2 3" },
+  { color: colorVar("baseline"), dash: undefined },
+  { color: colorVar("alternative"), dash: "6 4" },
+  { color: colorVar("warn"), dash: "2 3" },
+  { color: colorVar("danger"), dash: "8 3 2 3" },
 ] as const;
 const styleFor = (index: number) => series[index % series.length];
 
@@ -52,9 +53,7 @@ export function PeakSparkline({ data }: { data: SiteHours }) {
             height={height - y(h.arrivals)}
             rx={1}
             fill={
-              h.hour === peakHour
-                ? "var(--color-baseline)"
-                : "var(--color-muted)"
+              h.hour === peakHour ? colorVar("baseline") : colorVar("muted")
             }
           />
         ))}
@@ -62,7 +61,7 @@ export function PeakSparkline({ data }: { data: SiteHours }) {
           <path
             d={capacity}
             fill="none"
-            stroke="#b5653a"
+            stroke={colorVar("warn")}
             strokeWidth={1.5}
             strokeDasharray="3 2"
           />
@@ -139,14 +138,14 @@ export function WaitOverlayChart({
               x2={width - pad.right}
               y1={y(tick)}
               y2={y(tick)}
-              stroke="var(--color-line)"
+              stroke={colorVar("line")}
             />
             <text
               x={pad.left - 8}
               y={y(tick) + 4}
               textAnchor="end"
               fontSize={11}
-              fill="var(--color-muted)"
+              fill={colorVar("muted")}
             >
               {tick}m
             </text>
@@ -159,7 +158,7 @@ export function WaitOverlayChart({
             y={height - 8}
             textAnchor="middle"
             fontSize={11}
-            fill="var(--color-muted)"
+            fill={colorVar("muted")}
           >
             {hourLabel(hour)}
           </text>

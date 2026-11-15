@@ -1,5 +1,6 @@
 "use client";
 
+import { colorValue } from "@/lib/design/tokens";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
   Component,
@@ -147,12 +148,12 @@ function FloorPlanCanvas({
         <ReplayCamera controlsRef={controls} enabled={cameraOn} />
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[9, 7]} />
-          <meshBasicMaterial color="#e2efdf" />
+          <meshBasicMaterial color={colorValue("panel-raised")} />
         </mesh>
         {Array.from({ length: stations }, (_, index) => (
           <mesh key={index} position={[index * 2.5 - 1.25, 0.35, -1.45]}>
             <boxGeometry args={[1.9, 0.7, 0.85]} />
-            <meshBasicMaterial color="#1b4937" />
+            <meshBasicMaterial color={colorValue("muted")} />
           </mesh>
         ))}
         {customers.map(({ id, x, z }) => (
@@ -166,7 +167,7 @@ function FloorPlanCanvas({
           >
             <sphereGeometry args={[0.27, 16, 12]} />
             <meshBasicMaterial
-              color={id === selected ? "#b05317" : "#407baf"}
+              color={colorValue(id === selected ? "warn" : "accent")}
             />
           </mesh>
         ))}
@@ -176,7 +177,7 @@ function FloorPlanCanvas({
           <button
             type="button"
             aria-pressed={moving}
-            className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium ${moving ? "border-pine bg-pine text-white" : "border-line bg-paper text-pine"}`}
+            className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium ${moving ? "border-accent bg-accent hover:bg-accent-hover text-on-accent" : "border-line bg-canvas text-accent"}`}
             onClick={() => setMoving(!moving)}
           >
             {moving ? (
@@ -190,14 +191,14 @@ function FloorPlanCanvas({
         )}
         <button
           type="button"
-          className="rounded-lg border border-line bg-paper px-3 py-2 text-sm font-medium text-pine"
+          className="rounded-lg border border-line bg-canvas px-3 py-2 text-sm font-medium text-accent"
           onClick={() => controls.current?.reset()}
         >
           Reset camera
         </button>
       </div>
       {touch && moving && (
-        <p className="absolute bottom-2 left-2 rounded bg-paper/90 px-2 py-1 text-xs text-muted">
+        <p className="absolute bottom-2 left-2 rounded bg-canvas/90 px-2 py-1 text-xs text-muted">
           Drag to orbit · pinch to zoom
         </p>
       )}

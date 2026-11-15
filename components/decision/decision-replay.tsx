@@ -49,7 +49,7 @@ export function DecisionReplay(
         </span>
         <a
           href={props.fullReplayHref}
-          className="shrink-0 font-semibold text-pine underline"
+          className="shrink-0 font-semibold text-accent underline"
         >
           Full replay
         </a>
@@ -58,7 +58,7 @@ export function DecisionReplay(
         role="img"
         aria-label={`${frame.waiting.length} waiting, ${frame.serving.length} in service, ${frame.served} served, ${frame.left} left at ${clock(minute)}. ${stations} schematic service lanes.`}
         viewBox="0 0 320 160"
-        className="mt-1 h-40 w-full rounded-lg border border-line bg-mint"
+        className="mt-1 h-40 w-full rounded-lg border border-line bg-field"
       >
         <text x="12" y="17" fill="var(--color-ink)" fontSize="11">
           Service lanes · schematic
@@ -116,7 +116,7 @@ export function DecisionReplay(
           aria-label="Decision replay time"
           aria-valuetext={clock(minute)}
           type="range"
-          className="min-w-0 flex-1 accent-pine"
+          className="min-w-0 flex-1 accent-accent"
           min={bounds.openMin}
           max={bounds.closeMin}
           step="0.01"

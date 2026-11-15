@@ -156,7 +156,7 @@ export function LiveReplayScreen({
         {payload.outdated && (
           <p
             role="status"
-            className="mt-3 rounded-lg border border-line bg-paper p-3 text-sm"
+            className="mt-3 rounded-lg border border-line bg-canvas p-3 text-sm"
           >
             Outdated comparison: this run uses an earlier profile snapshot.
           </p>
@@ -189,7 +189,7 @@ export function LiveReplayScreen({
         {(["weekday", "weekend"] as const).map((day) => (
           <Link
             key={day}
-            className="rounded-lg border border-line px-3 py-2 capitalize aria-[current=page]:bg-pine aria-[current=page]:text-white"
+            className="rounded-lg border border-line px-3 py-2 capitalize aria-[current=page]:bg-accent aria-[current=page]:text-on-accent"
             aria-current={day === dayType ? "page" : undefined}
             href={replayHref(
               project.id,
@@ -215,7 +215,7 @@ export function LiveReplayScreen({
           </p>
           <button
             type="button"
-            className="rounded-lg bg-pine px-4 py-2 font-semibold text-white"
+            className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent"
             onClick={() => {
               setState({ kind: "loading" });
               setAttempt((value) => value + 1);
