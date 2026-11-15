@@ -7,8 +7,9 @@ import {
   test,
 } from "./fixtures";
 
-// HAC-128: the BizBox workspace screen. HAC-143: the assistant is the consultant shell's dock
-// (a bottom sheet under 768 px, opened with `openConsultant`). Every network boundary is a page.route mock: no
+// HAC-128/HAC-130: the connected BizBox workspace screen. HAC-143: the assistant is the consultant
+// shell's dock (a bottom sheet under 768 px, opened with `openConsultant`). Every network boundary
+// is a page.route mock: no
 // model, voice, listing or database service is called.
 
 const VIEWPORTS = [
@@ -59,6 +60,9 @@ async function mockServices(page: Page, options: { live?: boolean } = {}) {
   await page.route("**/api/sites", (route) =>
     route.fulfill({ status: 503, json: { message: "not used" } }),
   );
+  await page.route("**/api/comparisons/capabilities", (route) =>
+    route.fulfill({ json: { jevConfigured: false } }),
+  );
   return { calls, pending };
 }
 
@@ -79,6 +83,9 @@ async function open(page: Page, projectId: string, consultant = true) {
   await expect(
     assistant(page).getByText("Live", { exact: true }),
   ).toBeVisible();
+  await expect(
+    assistant(page).locator('[data-agent-availability="live"]'),
+  ).toHaveCount(1);
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -100,7 +107,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`at ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test("Text and Voice share the draft, history and location disclosure", async ({
+    test("Text and Voice share the draft and history without fabricated listings", async ({
       page,
       projectId,
     }) => {
@@ -108,31 +115,31 @@ for (const viewport of VIEWPORTS) {
       // The location panel is checked first: on a phone the open sheet covers most of it.
       await open(page, projectId, false);
 
-      // One header, one selected location (an example, labelled as such) and a labelled city photo.
+      // Missing inventory must not present the decorative city photo as a property or map.
       await expect(
         page
           .getByRole("region", { name: "Workspace", exact: true })
           .getByText("Houston", { exact: true }),
       ).toBeVisible();
-      const location = page.getByRole("region", { name: "Selected location" });
-      await expect(
-        location.getByRole("heading", { name: "Montrose storefront" }),
-      ).toBeVisible();
-      await expect(
-        location.getByText("Example", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        location.getByText("City preview · photo, not a map"),
-      ).toBeVisible();
-      const details = location.getByRole("button", {
-        name: "Details",
-        exact: true,
+      const location = page.getByRole("region", {
+        name: "Location and interior workspace",
       });
-      await details.click();
-      await expect(details).toHaveAttribute("aria-expanded", "true");
+      await expect(location.getByText("Complete your brief")).toBeVisible();
       await expect(
-        location.getByRole("link", { name: "Open site detail" }),
-      ).toBeVisible();
+        page.getByRole("heading", { name: "Montrose storefront" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText("City preview · photo, not a map", { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        location.getByRole("button", {
+          name: "Compare locations",
+          exact: true,
+        }),
+      ).toBeDisabled();
+      await expect(
+        location.getByRole("button", { name: "Interior", exact: true }),
+      ).toBeDisabled();
       await openConsultant(page);
       await expect(
         assistant(page).getByText("Live", { exact: true }),
@@ -193,7 +200,7 @@ for (const viewport of VIEWPORTS) {
       await expect(textLog).toContainText(
         "Street parking is limited near Montrose.",
       );
-      await expect(details).toHaveAttribute("aria-expanded", "true");
+      await expect(location.getByText("Complete your brief")).toBeVisible();
 
       // Later messages carry the round-tripped intake state, as the intake screen does.
       await composer(page).press("Enter");
@@ -243,8 +250,8 @@ test("offline, nothing is sent, the draft is kept and no reply is invented", asy
   await page.goto(workspaceHref(projectId, "workspace"));
   await openConsultant(page);
   await expect(
-    assistant(page).getByText("Offline", { exact: true }),
-  ).toBeVisible();
+    assistant(page).locator('[data-agent-availability="offline"]'),
+  ).toHaveCount(1);
   await composer(page).fill("Hello?");
   await composer(page).press("Enter");
   await expect(assistant(page).getByRole("alert")).toContainText(

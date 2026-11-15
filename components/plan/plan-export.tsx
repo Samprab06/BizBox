@@ -141,7 +141,7 @@ export function PlanExport({
       <p role="status">
         Choose a saved comparison first.{" "}
         <Link
-          className="font-semibold text-pine underline"
+          className="font-semibold text-accent underline"
           href={comparisonLink}
         >
           Open the comparison
@@ -158,7 +158,7 @@ export function PlanExport({
           its plan.
         </p>
         <Link
-          className="mt-3 inline-block font-semibold text-pine underline"
+          className="mt-3 inline-block font-semibold text-accent underline"
           href={comparisonLink}
         >
           Rerun the comparison
@@ -170,7 +170,7 @@ export function PlanExport({
       <p role="alert">
         {state.message}{" "}
         <Link
-          className="font-semibold text-pine underline"
+          className="font-semibold text-accent underline"
           href={comparisonLink}
         >
           Back to the comparison
@@ -194,7 +194,7 @@ export function PlanExport({
         <button
           type="button"
           onClick={() => window.print()}
-          className="rounded bg-pine px-3 py-2 text-sm font-semibold text-white print:hidden"
+          className="rounded bg-accent hover:bg-accent-hover px-3 py-2 text-sm font-semibold text-on-accent print:hidden"
         >
           Print or save as PDF
         </button>

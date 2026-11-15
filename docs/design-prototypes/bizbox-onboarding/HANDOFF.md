@@ -8,6 +8,16 @@ clear to translucent. Do not restore those effects. Preserve the concise individ
 questions, Other as a disabled Coming soon option, real city photography, disabled preview cities and
 GetA5-inspired rulers. See [README.md](README.md) for preview commands and edit points.
 
+The area-preferences question is now a plain typed textarea, per Akshar's follow-up.
+Do not show neighborhood suggestion chips or preselected answers. Preserve the
+full saved value and unsaved draft through the existing intake save path.
+
+The subsequent main-chat direction lives in
+[the Stage 2 handoff](../consultant-workspace/storyboard-2026-11-14/README.md).
+It calls for the existing reactive voice orb and a 3D visualization/consultant split.
+The older final-screen description below records the first reference revision;
+it does not supersede the new Stage 2 layout or production Vexcel/Matterport work.
+
 ## Final screen revision
 
 The workspace now uses one city/budget header, one selected-location panel and one

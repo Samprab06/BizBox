@@ -1,92 +1,174 @@
 "use client";
 
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useId, useState } from "react";
-import { useSiteSearch } from "@/lib/client/use-site-search";
-import { workspaceHref } from "@/lib/client/workspace-routes";
+import { useSearchParams } from "next/navigation";
+import { useLiveComparison } from "@/lib/client/live-comparison";
+import { TaskNav } from "@/components/shell/task-nav";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { useConsultant } from "@/components/shell/consultant-shell";
-import { parseIntakeSession } from "./intake-conversation";
-import { LocationPanel } from "./location-panel";
-import { cityPhotoFor, selectedSpace, workspaceHeader } from "./model";
+import {
+  useConsultant,
+  useConsultantVoice,
+} from "@/components/shell/consultant-shell";
 import { useContextIntake } from "@/lib/client/use-workspace-context";
+import { VOICE_LIMITS } from "@/lib/voice/contracts";
+import { WorkspaceShell } from "./workspace-shell";
+import { workspaceHeader } from "./model";
+import { parseIntakeSession } from "./intake-conversation";
+import { realCandidates, comparisonMatchesSelection } from "./client-model";
+import { LocationExperience } from "./location-experience";
+import { WorkspaceBackdrop } from "./workspace-backdrop";
+import type { ListingCameraRequest } from "@/components/city/listing-markers";
 
 /**
- * HAC-128: the screen a founder lands on after onboarding: one city/budget header and one
- * selected-location panel. HAC-143: the assistant (Text / Voice over one conversation) is
- * the consultant shell's dock in the project layout, so it is not mounted here.
+ * HAC-128/HAC-130: the client workspace over real listings and the Cesium location layer.
+ * HAC-143: the assistant (Text / Voice over one conversation) is the consultant shell's dock
+ * in the project layout, so it is not mounted here; this screen reuses that conversation and
+ * only supplies the selected listing to the dock's voice context. No alternate store.
  */
 export function WorkspaceScreen({
   projectId,
   project,
   siteId,
+  navigation,
+  tilesetUrl,
 }: {
   projectId: string;
   project: PreviewProject | null;
   siteId?: string;
+  navigation?: ReactNode;
+  tilesetUrl?: string;
 }) {
-  const headingId = useId();
   const consultant = useConsultant();
   // Outside a project layout (no shell) the saved session is read directly.
   const raw = useContextIntake(projectId);
   const session = consultant?.conversation.session ?? parseIntakeSession(raw);
-  const { state: search } = useSiteSearch(projectId);
-  const [expanded, setExpanded] = useState(false);
+  const controller = useLiveComparison(projectId);
+  const [view, setView] = useState<"locations" | "interior" | "results">(
+    "locations",
+  );
+  const search = useSearchParams();
+  const [cameraRequest, setCameraRequest] = useState<ListingCameraRequest>({
+    kind: "overview",
+    revision: 0,
+  });
+  const candidates = useMemo(
+    () => realCandidates(controller.candidates),
+    [controller.candidates],
+  );
+  const requested = search.get("site") ?? siteId;
+  const selected =
+    candidates.find((entry) => entry.candidate.id === requested) ??
+    candidates[0];
+  const selectedId = selected?.candidate.id;
+  useEffect(() => {
+    // If changed criteria exclude the old space, its URL must follow the new
+    // eligible selection just like the details, map and consultant context.
+    if (
+      controller.search?.status !== "ready" ||
+      !requested ||
+      !selectedId ||
+      requested === selectedId
+    )
+      return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("site", selectedId);
+    window.history.replaceState(null, "", url);
+  }, [controller.search?.status, requested, selectedId]);
   const header = workspaceHeader(session, project);
-  const space = selectedSpace(search, project, siteId);
-  const selected = space.kind === "space" ? space : undefined;
+  const summary = [
+    "City: " + header.city,
+    "Business: " + header.business,
+    header.budget,
+    selected
+      ? "Selected listing: " +
+        selected.candidate.address +
+        ". Site ID: " +
+        selected.candidate.id
+      : "No listing selected",
+    comparisonMatchesSelection(controller.payload, controller.selectedIds) &&
+    controller.payload
+      ? "Comparison: " + controller.payload.comparisonId
+      : "No saved location comparison",
+  ].join(". ");
+  // The dock's voice reads the selected real listing from this screen while it is mounted.
+  useConsultantVoice({
+    readContext: () => ({
+      projectId,
+      mode: "chat",
+      ...(selectedId && selectedId.length <= 200
+        ? { selectedSiteId: selectedId }
+        : {}),
+      summary: summary.slice(0, VOICE_LIMITS.summaryChars),
+    }),
+    submitTranscript: async (text) =>
+      consultant ? consultant.conversation.submit(text) : null,
+  });
+  function select(id: string) {
+    if (!candidates.some((entry) => entry.candidate.id === id)) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("site", id);
+    // Let Next publish this user-driven URL change to useSearchParams. Passing
+    // its private history state marks the call as internal and skips that update.
+    window.history.replaceState(null, "", url);
+    setCameraRequest((request) => ({
+      kind: "selection",
+      revision: request.revision + 1,
+    }));
+  }
   return (
-    <section
-      aria-labelledby={headingId}
-      className="mt-6 min-w-0 rounded-3xl bg-viewport-canvas p-4 text-viewport-ink sm:p-6"
-    >
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1
-            id={headingId}
-            className="text-xs font-semibold tracking-widest text-viewport-muted uppercase"
-          >
-            Workspace
-          </h1>
-          <p className="mt-1 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {header.city}
-          </p>
-          <p className="mt-2 flex flex-wrap gap-x-2 text-sm text-viewport-muted">
-            <span>{header.business}</span>
-            <span aria-hidden="true">/</span>
-            <span>
-              {header.budget}
-              {header.budgetIsDefault && " (default)"}
-            </span>
-          </p>
-        </div>
-        <Link
-          href={workspaceHref(projectId, "intake", selected?.id)}
-          prefetch={false}
-          className="flex items-center gap-2 rounded-xl border border-viewport-line px-4 py-2.5 text-sm hover:bg-viewport-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink"
-        >
-          Edit brief
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            aria-hidden="true"
-            className="size-4"
-          >
-            <path d="m12 4 4 4M3 17l4-1L17 6l-3-3L4 13l-1 4Z" />
-          </svg>
-        </Link>
-      </header>
-      <div className="mt-5 grid min-w-0 gap-4 lg:h-[560px]">
-        <LocationPanel
-          projectId={projectId}
-          photo={cityPhotoFor(header.city)}
-          space={space}
-          expanded={expanded}
-          onExpandedChange={setExpanded}
+    <WorkspaceShell
+      header={header}
+      projectId={projectId}
+      selectedSiteId={selected?.candidate.id}
+      navigation={
+        navigation ?? (
+          <TaskNav
+            projectId={projectId}
+            route="workspace"
+            siteId={selected?.candidate.id ?? siteId ?? project?.sites[0]?.id}
+            compact
+            disclosureLabel="Views"
+            footer={
+              <Link
+                href="/workspace/credits.html"
+                className="mt-4 inline-block text-xs underline"
+              >
+                Photo credits
+              </Link>
+            }
+          />
+        )
+      }
+      backdrop={
+        <WorkspaceBackdrop
+          city={header.city}
+          interior={view === "interior"}
+          selected={selected}
+          tilesetUrl={tilesetUrl}
+          candidates={candidates}
+          onSelect={select}
+          cameraRequest={cameraRequest}
         />
-      </div>
-    </section>
+      }
+    >
+      <LocationExperience
+        key={projectId}
+        projectId={projectId}
+        controller={controller}
+        candidates={candidates}
+        selected={selected}
+        onSelect={select}
+        view={view}
+        onViewChange={setView}
+        onOverview={() => {
+          setView("locations");
+          setCameraRequest((request) => ({
+            kind: "overview",
+            revision: request.revision + 1,
+          }));
+        }}
+      />
+    </WorkspaceShell>
   );
 }

@@ -86,17 +86,17 @@ export function LiveComparisonScreen({
   if (phase === "example")
     return (
       <div className="min-w-0 space-y-6">
-        <div className="rounded-lg bg-paper p-4">
+        <div className="rounded-lg bg-canvas p-4">
           <p role="alert">{controller.message}</p>
           <Link
-            className="mt-3 inline-block font-semibold text-pine underline"
+            className="mt-3 inline-block font-semibold text-accent underline"
             href={workspaceHref(project.id, "intake")}
           >
             Review intake
           </Link>
           <button
             type="button"
-            className="ml-4 rounded bg-pine px-3 py-2 text-white"
+            className="ml-4 rounded bg-accent hover:bg-accent-hover px-3 py-2 text-on-accent"
             onClick={controller.retry}
           >
             Retry comparison
@@ -154,7 +154,7 @@ export function LiveComparisonScreen({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine disabled:opacity-50"
+                className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent disabled:opacity-50"
                 onClick={() => {
                   void controller.run();
                 }}
@@ -165,7 +165,7 @@ export function LiveComparisonScreen({
               <button
                 type="button"
                 disabled={busy || controller.sensitivity.loading}
-                className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine disabled:opacity-50"
+                className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent disabled:opacity-50"
                 onClick={() => {
                   setAssumption(nextAssumption.value);
                   sensitivitySelect.current?.focus();
@@ -176,7 +176,7 @@ export function LiveComparisonScreen({
             ) : (
               <a
                 href="#comparison-evidence"
-                className="font-semibold text-pine underline"
+                className="font-semibold text-accent underline"
               >
                 Open the evidence
               </a>
@@ -213,7 +213,7 @@ export function LiveComparisonScreen({
             >
               <input
                 type="checkbox"
-                className="mt-1 accent-pine"
+                className="mt-1 accent-accent"
                 checked={controller.selectedIds.includes(candidate.id)}
                 onChange={(event) =>
                   controller.setSelectedIds(
@@ -248,7 +248,7 @@ export function LiveComparisonScreen({
         <button
           type="button"
           disabled={busy || !controller.selectedIds.length}
-          className="rounded-lg bg-pine px-4 py-2 font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent disabled:opacity-50"
           onClick={() => {
             void controller.run();
           }}
@@ -262,7 +262,7 @@ export function LiveComparisonScreen({
         {!busy && (
           <button
             type="button"
-            className="font-semibold text-pine underline"
+            className="font-semibold text-accent underline"
             onClick={controller.retry}
           >
             Refresh candidates
@@ -299,7 +299,7 @@ export function LiveComparisonScreen({
           <ComparisonEvidence payload={payload} />
           {!payload.outdated && (
             <Link
-              className="inline-block font-semibold text-pine underline"
+              className="inline-block font-semibold text-accent underline"
               href={`/projects/${encodeURIComponent(project.id)}/plan?comparison=${encodeURIComponent(payload.comparisonId)}`}
             >
               Export the location plan
@@ -423,7 +423,7 @@ function ComparisonResults({
                   {(["weekday", "weekend"] as const).map((day) => (
                     <Link
                       key={day}
-                      className="my-1 block font-semibold text-pine underline"
+                      className="my-1 block font-semibold text-accent underline"
                       href={`${workspaceHref(projectId, "replay", site.siteId)}&comparison=${encodeURIComponent(payload.comparisonId)}&day=${day}`}
                     >
                       Replay {day}
@@ -529,7 +529,7 @@ function Sensitivity({
         </label>
         <button
           type="button"
-          className="rounded-lg bg-pine px-4 py-2 font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent disabled:opacity-50"
           disabled={disabled || sensitivity.loading}
           onClick={() => {
             void controller.runSensitivity(assumption);
@@ -668,7 +668,7 @@ function RobustnessDetails({ payload }: { payload: LiveComparisonPayload }) {
       {(robustness.robustTo.length > 0 ||
         robustness.missingInformation.length > 0) && (
         <details>
-          <summary className="cursor-pointer font-semibold text-pine">
+          <summary className="cursor-pointer font-semibold text-accent">
             Decision evidence
           </summary>
           <ul className="mt-2 space-y-1">

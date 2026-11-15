@@ -85,9 +85,7 @@ test("live statistics use the selected scenario and shared replay clock", async 
   await expect(stats.getByRole("img")).toHaveAccessibleName(baseline!);
 
   await scenario.selectOption("1");
-  await expect(stats.getByRole("heading")).toContainText(
-    "Two staffed counters",
-  );
+  await expect(stats.getByRole("heading")).toContainText("Two staffed counters");
   await seek.press("End");
   await expect(stats.getByRole("img")).not.toHaveAccessibleName(baseline!);
   await expect(

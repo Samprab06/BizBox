@@ -31,6 +31,8 @@ type Props = {
   seeds?: readonly number[];
   synthetic?: boolean;
   modelVersion?: string;
+  /** Business-facing copy for the connected founder workspace. */
+  founderLabels?: boolean;
 };
 export function StationCalloutController({ seeds, ...props }: Props) {
   const seedKey = seeds?.join(",");
@@ -55,7 +57,11 @@ function StationController({
   seedKey,
   synthetic,
   modelVersion,
+  founderLabels = false,
 }: Omit<Props, "seeds"> & { seedKey?: string }) {
+  const configurationNames = founderLabels
+    ? { ...names, baseline: "Current setup" }
+    : names;
   const [plan, setPlan] = useState<StationExperimentRun | null>(null),
     [loading, setLoading] = useState(true),
     [writing, setWriting] = useState(false),
@@ -201,7 +207,9 @@ function StationController({
       className="min-w-0 space-y-3 text-sm"
     >
       <h4 className="text-base font-semibold">
-        Check whole-day station alternatives
+        {founderLabels
+          ? "Compare service setups"
+          : "Check whole-day station alternatives"}
       </h4>
       <p className={muted}>
         Uses saved assumptions and the original paired seeds. Options run one at
@@ -258,7 +266,7 @@ function StationController({
                 key={config.id}
                 className="min-w-0 rounded border border-[var(--sw-line)] p-3"
               >
-                <strong>{names[config.id]}</strong>
+                <strong>{configurationNames[config.id]}</strong>
                 <p className="mt-1 font-semibold">
                   {config.status}
                   {config.cached ? " · cached" : ""}
@@ -286,7 +294,8 @@ function StationController({
           </p>
           {visible.confirmation && (
             <p className="font-semibold text-[var(--sw-assumption-ink)]">
-              Next configuration: {names[visible.confirmation.configurationId]}{" "}
+              Next configuration:{" "}
+              {configurationNames[visible.confirmation.configurationId]}{" "}
               requires {visible.confirmation.costUnits} units;{" "}
               {visible.confirmation.remainingUnits} units remain. Already
               completed configurations stay recorded.
@@ -302,7 +311,7 @@ function StationController({
             <div className="border-t border-[var(--sw-line)] pt-4">
               <StationCallout
                 value={result.selected}
-                sourceLabel={`Saved evaluated baseline ${result.identity.baselineComparisonId}`}
+                sourceLabel={`${founderLabels ? "Saved current setup" : "Saved evaluated baseline"} ${result.identity.baselineComparisonId}`}
               />
             </div>
           )}
@@ -330,7 +339,9 @@ function StationController({
                 ? `Confirm ${visible.confirmation?.costUnits ?? ""} budget units`
                 : completed || visible.status === "running"
                   ? "Continue station experiment"
-                  : "Run planned station configurations"}
+                  : founderLabels
+                    ? "Compare setups"
+                    : "Run planned station configurations"}
           </button>
         )}
         <button

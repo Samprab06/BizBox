@@ -99,14 +99,17 @@ export function ComparisonScreen({
         nextAction={
           <a
             href="#example-visit-frequency"
-            className="font-semibold text-pine underline"
+            className="font-semibold text-accent underline"
           >
             Change visit frequency
           </a>
         }
       />
       {previousId && previousId !== id && (
-        <p role="status" className="rounded-lg border border-line bg-paper p-3">
+        <p
+          role="status"
+          className="rounded-lg border border-line bg-canvas p-3"
+        >
           This comparison is outdated.{" "}
           <Link
             className="font-semibold underline"
@@ -132,7 +135,7 @@ export function ComparisonScreen({
             ))}
           </select>
         </label>
-        <button className="rounded-lg bg-pine px-4 py-2 font-semibold text-white">
+        <button className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent">
           Run scenario
         </button>
       </form>
@@ -171,7 +174,7 @@ export function ComparisonScreen({
                 </td>
                 <td>
                   <Link
-                    className="font-semibold text-pine underline"
+                    className="font-semibold text-accent underline"
                     href={comparisonLink(
                       project.id,
                       "replay",
@@ -183,7 +186,7 @@ export function ComparisonScreen({
                   </Link>
                   {row.site.id === "montrose" ? (
                     <Link
-                      className="ml-3 font-semibold text-pine underline"
+                      className="ml-3 font-semibold text-accent underline"
                       href={workspaceHref(project.id, "simulator", row.site.id)}
                     >
                       View on street
