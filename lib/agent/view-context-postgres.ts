@@ -7,13 +7,11 @@ import { investigations, profiles } from "@/lib/db/schema";
 import { loadSiteInventory } from "@/app/api/sites/inventory";
 import { searchSites } from "@/lib/data/sites";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
-import { createPostgresScenarioRepository } from "@/lib/scenario/repository";
 import type { ViewContextLookups } from "./view-context";
 
 /** Read-only, lazy composition. Global listing existence never establishes project scope. */
 export function createPostgresViewContextLookups(): ViewContextLookups {
   const comparisons = createPostgresComparisonStore();
-  const scenarios = createPostgresScenarioRepository();
   return {
     async comparison(projectId, id) {
       const record = await comparisons.load(projectId, id);
@@ -31,7 +29,9 @@ export function createPostgresViewContextLookups(): ViewContextLookups {
         siteIds: record.evaluation.request.sites.map((site) => site.siteId),
       };
     },
-    scenario: (projectId, id) => scenarios.get(projectId, id),
+    // Scene 1 removed the Copilot, the only client that sent a scenarioId. The view no
+    // longer resolves scenarios, so any scenarioId fails closed as an invalid reference.
+    scenario: async () => null,
     async investigation(projectId, id) {
       const [record] = await getDb()
         .select({ id: investigations.id, projectId: investigations.projectId })

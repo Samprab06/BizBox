@@ -148,16 +148,10 @@ const focusRing =
 export function ConsultantShell({
   projectId,
   project,
-  companion,
   children,
 }: {
   projectId: string;
   project: PreviewProject | null;
-  /**
-   * Consultant panels shown under the assistant in the same dock, e.g. HAC-84's copilot
-   * (scenario, plan, proposed changes). They persist across navigation with the shell.
-   */
-  companion?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -387,7 +381,7 @@ export function ConsultantShell({
           {/* Collapsed on a phone, the panel is hidden but stays mounted (voice keeps running). */}
           <div
             id={sheetId}
-            className={`min-h-0 flex-1 flex-col ${companion ? "overflow-y-auto overscroll-contain" : ""} ${focus ? "flex h-full" : sheetOpen ? "flex h-[70dvh] md:h-auto" : "hidden md:flex"}`}
+            className={`min-h-0 flex-1 flex-col ${focus ? "flex h-full" : sheetOpen ? "flex h-[70dvh] md:h-auto" : "hidden md:flex"}`}
           >
             <AssistantPanel
               projectId={projectId}
@@ -397,13 +391,8 @@ export function ConsultantShell({
               voiceAdapter={voiceAdapter}
               actions={toggleLayout}
               inline={focus ? answerCard : undefined}
-              className={
-                companion
-                  ? "min-h-[420px] flex-1 shrink-0"
-                  : "h-full min-h-0 md:min-h-[420px]"
-              }
+              className="h-full min-h-0 md:min-h-[420px]"
             />
-            {companion && <div className="shrink-0">{companion}</div>}
           </div>
         </div>
       </div>

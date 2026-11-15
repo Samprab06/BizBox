@@ -100,6 +100,14 @@ export const EvaluationSiteSchema = z
     jevPersonaSet: PersonaSet.optional(),
     /** Panel coverage when Jev was asked for this site (HAC-101); carried to the result. */
     jevPanel: JevPanelCoverageSchema.optional(),
+    /**
+     * Scene 1: the ticket (USD) this site's cached Jev answers were collected at, set only when
+     * a per-site price tweak replaced `config.prices.avgTicketUsd` with a different price. With
+     * Jev demand the evaluator rescales each persona's visits by its cached price acceptance
+     * from this price to the site's ticket, as the global `overrides.priceUsd` does for every
+     * site. Absent means the ticket is the price Jev was asked at (all earlier requests).
+     */
+    jevBasePriceUsd: z.number().positive().finite().optional(),
     /** Origin of config.service.meanServiceMin (founder when the profile states it). */
     serviceMeanOrigin: z
       .enum(["costar", "public", "founder", "default"])

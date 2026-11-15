@@ -56,7 +56,3 @@ export function loadIntakeRunner(): Promise<IntakeRunner> {
 export function loadInvestigationPlannerModule() {
   return loadOrThrow(() => import("./investigation-planner"));
 }
-
-export function loadCopilotModelModule() {
-  return loadOrThrow(() => import("./copilot-model"));
-}
