@@ -9,6 +9,7 @@ import {
   ModelRuntimeUnavailableError,
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
+import type { JobsPort } from "@/lib/agent/job-tools";
 import {
   ruleBasedUiActions,
   type IntakeUiLookups,
@@ -22,6 +23,8 @@ type Dependencies = {
   runAgent?: IntakeRunner;
   /** HAC-144: trusted ID checks for the UI tools. Without them no UI tools are bound. */
   uiLookups?: IntakeUiLookups;
+  /** HAC-151: server ports for the `jobs` tools (shortlist, comparison, investigation, plan). */
+  jobs?: JobsPort;
   newActionId?: () => string;
   onCompleted?: (
     projectId: string,
@@ -167,6 +170,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
                     projectId,
                     lookups: dependencies.uiLookups,
                     view: input.view,
+                    ...(dependencies.jobs ? { jobs: dependencies.jobs } : {}),
                     actions,
                     newId,
                   },

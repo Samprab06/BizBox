@@ -4,6 +4,7 @@ import { projects } from "@/lib/db/schema";
 import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
 import { createPostgresIntakeUiLookups } from "./ui-lookups";
+import { createPostgresJobsPort } from "@/lib/agent/job-tools-postgres";
 import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ export const POST = createIntakeHandler({
     return rows.length === 1;
   },
   uiLookups: createPostgresIntakeUiLookups(),
+  jobs: createPostgresJobsPort(),
 });
 
 export const GET = createIntakeCapabilitiesHandler();

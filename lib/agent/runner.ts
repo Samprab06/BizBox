@@ -7,6 +7,11 @@ import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { z } from "zod";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
 import { INTAKE_QUESTIONS } from "./intake";
+import {
+  createJobToolExecutor,
+  JOB_TOOL_NAMES,
+  JOB_TOOL_SPECS,
+} from "./job-tools";
 import { createUiToolExecutor, UI_TOOL_NAMES, UI_TOOL_SPECS } from "./ui-tools";
 import {
   intakeBrief,
@@ -46,6 +51,9 @@ If only average ticket or price tier is known, ask about the other. Do not chang
 
 /** HAC-144: added only when the UI tools are bound; they are the one exception to the rule above. */
 const uiInstructions = `UI tools (${UI_TOOL_NAMES.join(", ")}) move the founder's screen. They are the only other service you may call. Use them when the founder asks to see something, or show_step map once the profile is complete. At most 3 per turn, usually in the same step as save_profile. Use only site, comparison and investigation IDs from the founder's screen context or tool results; never invent IDs. If one is rejected, say so instead of retrying.`;
+
+/** HAC-151: added only when the jobs port is bound. */
+const jobInstructions = `Job tools (${JOB_TOOL_NAMES.join(", ")}) do work for the founder. "Compare my top three": set_shortlist with those site IDs, then run_comparison; say it is running. start_investigation needs a complete profile: if it reports missing fields, ask for them. Only one investigation at a time, and a daily limit; if refused, tell the founder. Site IDs only from the screen context or tool results. Count toward the 3 actions per turn. Do not repeat a call.`;
 
 /** Model-facing tool schema: the contract's JSON schema without server-owned provenance. */
 function slimPatchSchema(): Record<string, unknown> {
@@ -186,10 +194,34 @@ export function createDeepIntakeRunner(
           ),
         )
       : [];
+    const runJobTool =
+      ui?.jobs
+        ? createJobToolExecutor(
+            { ...ui, jobs: ui.jobs },
+            {
+              profile: () => session.snapshot().profile,
+              missing: () => session.snapshot().missingRequiredFields,
+              draftCity: () => session.snapshot().draft.city,
+            },
+          )
+        : undefined;
+    const jobTools = runJobTool
+      ? JOB_TOOL_SPECS.map((spec) =>
+          tool(
+            (args) => {
+              signal.throwIfAborted();
+              return runJobTool(spec.name, args);
+            },
+            spec,
+          ),
+        )
+      : [];
     const agent = createDeepAgent({
       model,
-      tools: [saveProfile, ...uiTools],
-      systemPrompt: ui ? `${instructions}\n${uiInstructions}` : instructions,
+      tools: [saveProfile, ...uiTools, ...jobTools],
+      systemPrompt: ui
+        ? `${instructions}\n${uiInstructions}${runJobTool ? `\n${jobInstructions}` : ""}`
+        : instructions,
       // Override default tool-bearing middleware. No file or delegation capabilities
       // are needed for intake, and no checkpointer/store is configured.
       middleware: [
