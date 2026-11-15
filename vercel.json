@@ -4,7 +4,8 @@
   "git": {
     "deploymentEnabled": {
       "**": false,
-      "main": true
+      "main": true,
+      "frank/scene-1-flow": true
     }
   },
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude)docs/**' ':(exclude)tests/**' ':(exclude)**/*.md' ':(exclude)**/*.test.ts' ':(exclude)**/*.test.tsx' ':(exclude).github/**'"
