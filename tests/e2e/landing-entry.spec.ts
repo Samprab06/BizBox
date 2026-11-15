@@ -181,6 +181,36 @@ test.describe("the legacy landing preview", () => {
     await expect(page.locator("body")).not.toContainText(/sitework/i);
   });
 
+  test("serves landing assets, page metadata and the app icon from /", async ({
+    page,
+  }) => {
+    const failedResponses: string[] = [];
+    page.on("response", (response) => {
+      if (response.status() >= 400 && response.status() < 500) {
+        failedResponses.push(`${response.status()} ${response.url()}`);
+      }
+    });
+
+    await openLanding(page);
+    expect(failedResponses).toEqual([]);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      "content",
+      /service business/,
+    );
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
+      "content",
+      /^BizBox/,
+    );
+    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+      "content",
+      "https://usebizbox.app/landing-preview/assets/product-screen.jpg",
+    );
+    await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/icon");
+    const icon = await page.request.get("/icon");
+    expect(icon.ok()).toBe(true);
+    expect(icon.headers()["content-type"]).toContain("image/png");
+  });
+
   test("the live map stage uses the simulator route and unloads its frame when scrolled away", async ({
     page,
   }) => {
