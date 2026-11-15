@@ -19,6 +19,7 @@ import {
   type AgentViewContext,
   type UiAction,
 } from "@/lib/contracts/agent";
+import type { JobsPort } from "./job-tools";
 
 /**
  * Trusted lookups. Each answers from server-side stores (the CoStar inventory, the
@@ -41,6 +42,8 @@ export type IntakeUiContext = {
   projectId: string;
   lookups: IntakeUiLookups;
   view?: AgentViewContext;
+  /** HAC-151: server-side job ports; binds the `jobs` tool group (lib/agent/job-tools.ts). */
+  jobs?: JobsPort;
   /** Filled by the tools; the handler returns it even when the turn hits its step budget. */
   actions: UiAction[];
   newId: () => string;
@@ -132,6 +135,10 @@ function describe(action: UiAction) {
       return "the location plan";
     case "highlight":
       return `the ${action.target} element`;
+    case "set_shortlist":
+      return `a shortlist of ${action.siteIds.length} site(s)`;
+    case "run_comparison":
+      return `a comparison of ${action.siteIds.length} site(s)`;
   }
 }
 
