@@ -21,6 +21,7 @@ const site = {
       modelId: "Synthetic01",
       spaceId: "12:34",
       displayApproved: true,
+      isPublic: true,
       hasExterior: null,
       dimensions: null,
       source: provenance,
@@ -141,6 +142,79 @@ describe("interior selection", () => {
       ),
     ).toMatchObject({ kind: "modeled" });
   });
+  describe("public-scan gate (HAC-137)", () => {
+    const withModel = (patch: {
+      displayApproved: boolean;
+      isPublic: boolean | null;
+    }) => ({
+      ...site,
+      floorPlanUri: null,
+      models: [{ ...site.models[0]!, ...patch }],
+    });
+    it("serves a public, display-approved scan", async () => {
+      expect(
+        await resolveInterior(
+          "12:34",
+          async () => withModel({ displayApproved: true, isPublic: true }),
+          { allowLicensedAssets: true },
+        ),
+      ).toMatchObject({ kind: "scan", modelId: "Synthetic01" });
+    });
+    it("keeps a public but unapproved scan out of the response", async () => {
+      const result = await resolveInterior(
+        "12:34",
+        async () => withModel({ displayApproved: false, isPublic: true }),
+        { allowLicensedAssets: true },
+      );
+      expect(result.kind).toBe("modeled");
+      expect(JSON.stringify(result)).not.toMatch(/Synthetic01/);
+    });
+    it.each([
+      ["private", false],
+      ["never checked", null],
+    ] as const)(
+      "keeps an approved but %s scan out of the response",
+      async (_label, isPublic) => {
+        const result = await resolveInterior(
+          "12:34",
+          async () => withModel({ displayApproved: true, isPublic }),
+          { allowLicensedAssets: true },
+        );
+        expect(result.kind).toBe("modeled");
+        expect(result.provenance.limitations.join(" ")).toMatch(
+          /approved public scan/,
+        );
+        expect(JSON.stringify(result)).not.toMatch(/Synthetic01/);
+      },
+    );
+    it("prefers a public approved property scan over a private space scan", async () => {
+      const result = await resolveInterior(
+        "12:34",
+        async () => ({
+          ...site,
+          models: [
+            { ...site.models[0]!, isPublic: false },
+            { ...site.models[0]!, modelId: "Property001", spaceId: null },
+          ],
+        }),
+        { allowLicensedAssets: true },
+      );
+      expect(result).toMatchObject({ kind: "scan", modelId: "Property001" });
+    });
+    it("leaves the compiled fixtures unchanged", async () => {
+      for (const id of [
+        "interior-public-demo",
+        "interior-fixture-scan",
+        "interior-fixture-floorplan",
+        "interior-fixture-modeled",
+      ])
+        expect(
+          await resolveInterior(id, async () => {
+            throw new Error("must stay offline");
+          }),
+        ).toEqual(getInteriorFixture(id));
+    });
+  });
   it("does not treat an unknown site as a modeled candidate", async () => {
     await expect(
       resolveInterior("12:34", async () => null),
@@ -185,6 +259,27 @@ describe("interior source repository", () => {
       propertyId: "56",
       models: [],
     });
+  });
+  it("reads the public-check flag and treats a missing value as unchecked", async () => {
+    const model = {
+      model_id: "Synthetic01",
+      costar_space_id: "12:34",
+      has_exterior: null,
+      display_approved: true,
+      dimensions: null,
+      source: provenance,
+    };
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { id: "12:34", property_id: "56", floor_plan_uri: null },
+      ])
+      .mockResolvedValueOnce([
+        { ...model, is_public: true },
+        { ...model, model_id: "Property001", is_public: null },
+      ]);
+    const result = await readInteriorSite({ execute }, "12:34");
+    expect(result?.models.map((m) => m.isPublic)).toEqual([true, null]);
   });
   it("surfaces a missing registry rather than fabricating empty inventory", async () => {
     const execute = vi
