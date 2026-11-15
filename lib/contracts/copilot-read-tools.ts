@@ -130,12 +130,23 @@ export const CandidateReferenceSchema = z
     evidenceIds: z.array(id).min(1),
   })
   .strict();
+/** HAC-89: one segment's modeled choice share for one store (the site or a competitor). */
+export const SegmentShareReferenceSchema = z
+  .object({
+    kind: z.literal("segment_share"),
+    comparisonId: id,
+    siteId: id,
+    segment: id,
+    storeId: id,
+  })
+  .strict();
 export const CopilotReadReferenceSchema = z.union([
   ScenarioValueReferenceSchema,
   ComparisonMetricReferenceSchema,
   ComparisonDeltaReferenceSchema,
   HourMetricReferenceSchema,
   CandidateReferenceSchema,
+  SegmentShareReferenceSchema,
 ]);
 const warnings = z.array(
   z.enum([
@@ -144,8 +155,97 @@ const warnings = z.array(
     "NO_CANDIDATES",
     "INTERVAL_DELTAS_NOT_PAIRED_CONFIDENCE",
     "MISSING_HOURLY_WAIT",
+    "HUFF_FALLBACK_DEMAND",
+    "NO_BOTTLENECK_FOUND",
   ]),
 );
+
+// ---------------------------------------------------------------------------
+// HAC-89: post-run bottleneck diagnosis and proposed experiments
+// ---------------------------------------------------------------------------
+
+export const BottleneckSchema = z.enum([
+  "demand_limited",
+  "capacity_limited",
+  "rent_limited",
+  "competitor_leakage",
+]);
+export type Bottleneck = z.infer<typeof BottleneckSchema>;
+
+/** Local-clock hours [startHour, endHour) of one saved representative run. */
+export const DiagnosisHourBlockSchema = z
+  .object({
+    day: z.enum(["weekday", "weekend"]),
+    runId: id,
+    startHour: hour,
+    endHour: z.number().int().min(1).max(24),
+  })
+  .strict()
+  .refine((b) => b.endHour > b.startHour, "End hour must follow start hour");
+export type DiagnosisHourBlock = z.infer<typeof DiagnosisHourBlockSchema>;
+
+export const DiagnosisReferenceSchema = z.union([
+  ComparisonMetricReferenceSchema,
+  HourMetricReferenceSchema,
+  SegmentShareReferenceSchema,
+]);
+
+/** A finding never carries numeric prose: values resolve through its references. */
+export const DiagnosisFindingSchema = z
+  .object({
+    id,
+    siteId: id,
+    bottleneck: BottleneckSchema,
+    comparisonId: id,
+    runIds: z.array(id).min(1),
+    hourBlocks: z.array(DiagnosisHourBlockSchema).min(1),
+    segment: id.optional(),
+    competitorId: id.optional(),
+    summary: z.string().trim().min(1).max(500),
+    references: z.array(DiagnosisReferenceSchema).min(1),
+  })
+  .strict();
+export type DiagnosisFinding = z.infer<typeof DiagnosisFindingSchema>;
+
+export const DiagnosisExperimentSchema = z
+  .object({
+    id,
+    title: z.string().trim().min(1).max(200),
+    findingIds: z.array(id).min(1),
+    /** An existing copilot tool; mutations become proposals, never runs. */
+    tool: z.enum(["set_stations", "set_hours", "find_sites"]),
+    args: z.record(z.string(), z.json()),
+    expectedEffect: z
+      .object({
+        siteId: id,
+        metric: ComparisonMetricSchema,
+        direction: z.enum(["decrease", "increase"]),
+      })
+      .strict(),
+    /** True when the human must choose Run before any result exists. */
+    requiresRun: z.boolean(),
+  })
+  .strict();
+export type DiagnosisExperiment = z.infer<typeof DiagnosisExperimentSchema>;
+
+/** A human-approved experiment's saved result against the diagnosed baseline. */
+export const ExperimentDiffCardSchema = z
+  .object({
+    /** Null when the child matches no proposed experiment (for example a manual edit). */
+    experimentId: id.nullable(),
+    baseScenarioId: id,
+    experimentScenarioId: id,
+    baseComparisonId: id,
+    experimentComparisonId: id,
+    siteId: id,
+    metric: ComparisonMetricSchema,
+    direction: z.enum(["decrease", "increase"]),
+    verdict: z.enum(["improved", "worse", "no_change"]),
+    winner: z.boolean(),
+    references: z.array(ComparisonDeltaReferenceSchema).min(1),
+  })
+  .strict();
+export type ExperimentDiffCard = z.infer<typeof ExperimentDiffCardSchema>;
 export const CopilotReadResultSchema = z.discriminatedUnion("status", [
   z
     .object({
@@ -186,6 +286,19 @@ export const CopilotReadResultSchema = z.discriminatedUnion("status", [
       hour,
       day: z.enum(["weekday", "weekend"]),
       references: z.array(HourMetricReferenceSchema),
+      warnings,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("diagnosed"),
+      scenarioId: id,
+      comparisonId: id,
+      demandSource: z.enum(["jev", "huff"]),
+      findings: z.array(DiagnosisFindingSchema).max(40),
+      experiments: z.array(DiagnosisExperimentSchema).max(3),
+      /** Present when this scenario's parent has a verified saved comparison. */
+      experimentCard: ExperimentDiffCardSchema.optional(),
       warnings,
     })
     .strict(),

@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const assetURL = (name) => new URL(`./assets/${name}`, import.meta.url).href;
 const canvas = $('scene');
 const copy = $('story-copy');
 const title = $('story-title');
@@ -443,10 +444,12 @@ async function start() {
     resize();
     const loader = new THREE.TextureLoader();
     textures = await Promise.all(['houston-sunset.jpg', 'storefront-sunset.jpg', 'interior-sunset.jpg'].map(async (name) => {
-      const texture = await loader.loadAsync(`assets/${name}`); texture.colorSpace = THREE.SRGBColorSpace; return texture;
+      const texture = await loader.loadAsync(assetURL(name));
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
     }));
     requestDraw();
-    const gltf = await new THREE.GLTFLoader().loadAsync('assets/bizbox-scene.glb');
+    const gltf = await new THREE.GLTFLoader().loadAsync(assetURL('bizbox-scene.glb'));
     // GLTFLoader suffixes duplicate Blender names, including unreachable export nodes.
     const named = (name) => {
       let found = null;

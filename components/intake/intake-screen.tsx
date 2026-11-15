@@ -1,19 +1,19 @@
 "use client";
 
-import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
+import { Markdown } from "@/components/ui/markdown";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
-import { VoicePanel } from "@/components/voice/voice-panel";
+import { useConsultant, useConsultantVoice } from "@/components/shell/consultant-shell";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import Link from "next/link";
-import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { applyIntakeReply, intakeRequestBody, postIntakeMessage, withFounderMessage, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
-import { useAssistantDraft } from "@/components/workspace-screen/use-assistant-draft";
+import { VOICE_LIMITS } from "@/lib/voice/contracts";
+import { useState, useSyncExternalStore } from "react";
+import { sessionOrInitial, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
+import type { IntakeConversation, SendOptions } from "@/components/workspace-screen/use-intake-conversation";
 import { assumptionRows } from "./live";
-import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, profileValidationMessage, updateProfile, type IntakeSession } from "./profile";
+import { intakeReadiness } from "./readiness";
+import { answerPrompt, fields, missingFields, profileValidationMessage, editIntakeField } from "./profile";
 
 type Key = (typeof fields)[number]["key"];
-type Failure = { message: string; retry?: string };
 
 /** Wording for the detailed form; the request itself is the workspace assistant's (HAC-129). */
 const formCopy: IntakeCopy = {
@@ -33,135 +33,55 @@ export function intakeHref(projectId: string, mode: IntakeMode, siteId?: string)
 }
 
 export function IntakeScreen({ projectId, mode = "guided", siteId }: { projectId: string; mode?: IntakeMode; siteId?: string }) {
-  const key = `sitework:intake:v1:${projectId}`;
   const ready = useSyncExternalStore(subscribe, () => true, () => false);
-  if (!ready) return <p role="status">Loading intake…</p>;
-  return <IntakeForm key={key} storageKey={key} projectId={projectId} mode={mode} siteId={siteId} />;
+  const consultant = useConsultant();
+  if (!ready || !consultant) return <p role="status">Loading intake…</p>;
+  return <IntakeForm projectId={projectId} mode={mode} siteId={siteId} conversation={consultant.conversation} />;
 }
 
-function readSession(key: string): IntakeSession {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? intakeSessionSchema.parse(JSON.parse(saved)) : initialSession;
-  } catch {
-    return initialSession;
-  }
-}
+/** Wording, placement and the "edits still work" note for the form's own requests. */
+const formSend: SendOptions = { source: "page", copy: formCopy, suffix: "Your profile edits still work." };
 
-/** HAC-66: live when the server reports an intake model; otherwise the labelled offline fixture. */
-function useLiveIntake(projectId: string) {
-  const [live, setLive] = useState(false);
-  useEffect(() => {
-    let active = true;
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/intake`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: { modelConfigured?: unknown } | null) => {
-        if (active) setLive(body?.modelConfigured === true);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
-  return live;
-}
-
-function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: string; projectId: string; mode: IntakeMode; siteId?: string }) {
-  const [session, setSession] = useState(() => readSession(storageKey));
+/**
+ * HAC-143: the form keeps no conversation state of its own. History, the request queue,
+ * the availability probe and failures are the consultant shell's (one per project); live
+ * chat and voice happen in the consultant dock. The form adds structured edits, the offline
+ * fixture's prompt-by-prompt answers and, while it is open, prompt-guarded voice answers.
+ */
+function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: string; mode: IntakeMode; siteId?: string; conversation: IntakeConversation }) {
+  const { read, save, enqueue, sendNow, syncEdits, report, busy, storageError } = conversation;
+  const session = conversation.session ?? sessionOrInitial(null);
+  const live = conversation.availability === "live";
+  const failure = conversation.failure?.source === "page" ? conversation.failure : null;
   const [message, setMessage] = useState("");
-  // HAC-129: the live composer shares its draft with the workspace assistant.
-  const [liveDraft, setLiveDraft] = useAssistantDraft(projectId);
   const [drafts, setDrafts] = useState<Partial<Record<Key, string>>>({});
-  const [storageError, setStorageError] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  const live = useLiveIntake(projectId);
-  // The latest session for async callbacks; save() and the storage listener keep it current.
-  const latest = useRef(session);
-  const requests = useRef<Promise<unknown>>(Promise.resolve());
-  const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const missing = missingFields(session.profile);
   const next = missing[0];
+  const readiness = intakeReadiness(session, drafts);
 
-  useEffect(() => {
-    const sync = (event: StorageEvent) => {
-      if (event.key !== storageKey) return;
-      const stored = readSession(storageKey);
-      latest.current = stored;
-      setSession(stored);
-    };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, [storageKey]);
+  const sync = () => syncEdits(formSend);
+  const currentPrompt = () => missingFields(read().profile)[0]?.label ?? "Review your profile";
 
-  function save(updated: IntakeSession) {
-    latest.current = updated;
-    setSession(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      window.dispatchEvent(new CustomEvent(INTAKE_UPDATED_EVENT, { detail: { key: storageKey } }));
-      setStorageError(false);
-    } catch {
-      setStorageError(true);
-    }
-  }
-
-  /** Sends the founder's message (or only pending form edits) with the round-tripped state. */
-  function enqueue(action: () => Promise<string | null>): Promise<string | null> {
-    const result = requests.current.then(() => mounted.current ? action() : null);
-    requests.current = result.catch(() => null);
-    return result;
-  }
-
-  function send(text: string | undefined, appendFounder: boolean): Promise<string | null> {
-    return enqueue(() => sendLive(text, appendFounder));
-  }
-
-  async function sendLive(text: string | undefined, appendFounder: boolean): Promise<string | null> {
-    const current = latest.current;
-    const body = intakeRequestBody(current, text);
-    if (!text && !body.patch) return null;
-    save(appendFounder && text ? withFounderMessage(current, text) : current);
-    setBusy(true);
-    setFailure(null);
-    try {
-      // HAC-129: the request and reply merge are the workspace assistant's own functions.
-      const outcome = await postIntakeMessage(fetch, projectId, body, formCopy);
-      if (!mounted.current) return null;
-      if (!outcome.ok) {
-        setFailure({
-          message: `${outcome.message} Your profile edits still work.`,
-          retry: outcome.retryable ? text ?? "" : undefined,
-        });
-        return null;
-      }
-      save(applyIntakeReply(latest.current, current, outcome.result, Boolean(text)));
-      return outcome.result.assistantMessage;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** Sends committed form edits as a structured patch; no model call is needed. */
-  function sync() {
-    // A pending retry carries these edits with it, so it is not pre-empted.
-    if (live && !busy && failure?.retry === undefined && latest.current.pending?.length) void send(undefined, false);
-  }
-
-  const currentPrompt = () => missingFields(latest.current.profile)[0]?.label ?? "Review your profile";
-
-  /** Typed and spoken messages share this existing-state action queue. */
+  /** Typed fixture answers and spoken answers share the project's one action queue. */
   function submitMessage(raw: string, expectedPrompt?: string): Promise<string | null> {
     const text = raw.trim();
     if (!text) return Promise.resolve(null);
+    if (live) {
+      // Checked before sending: a spoken answer must not land on a prompt that has moved on.
+      return enqueue(async () => {
+        if (expectedPrompt !== undefined && expectedPrompt !== currentPrompt()) {
+          report("Your intake changed before this voice answer could be applied. Please repeat it or keep typing.", "page");
+          return null;
+        }
+        return sendNow(text, true, formSend);
+      });
+    }
     return enqueue(async () => {
       if (expectedPrompt !== undefined && expectedPrompt !== currentPrompt()) {
-        setFailure({ message: "Your intake changed before this voice answer could be applied. Please repeat it or keep typing." });
+        report("Your intake changed before this voice answer could be applied. Please repeat it or keep typing.", "page");
         return null;
       }
-      if (live) return sendLive(text, true);
-      const current = latest.current;
+      const current = read();
       const prompt = missingFields(current.profile)[0];
       const updated = answerPrompt(current, text);
       if (updated === current || updated.messages.length <= current.messages.length) return null;
@@ -171,10 +91,11 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
     });
   }
 
-  const voiceAdapter: VoiceAdapter = {
-    readContext: () => ({ projectId, mode: "intake", prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
+  // HAC-143: the dock's one voice session answers the form's current prompt while it is open.
+  useConsultantVoice({
+    readContext: () => ({ projectId, mode: "intake", view: conversation.view, prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
     submitTranscript: text => submitMessage(text, currentPrompt()),
-  };
+  });
 
   const assumptions = session.live ? assumptionRows(session.live.state.assumptions) : [];
   const storageAlert = storageError && <p role="alert" className="mb-4 text-sm">This browser could not save your changes.</p>;
@@ -182,9 +103,8 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
   if (mode === "guided") {
     /** HAC-127: a confirmed guided answer takes the same save path as a profile-field edit. */
     const commit = (key: Key, value: string) => {
-      const current = latest.current;
-      const pending = live ? [...new Set([...(current.pending ?? []), key])] : current.pending;
-      save({ ...current, profile: updateProfile(current.profile, key, value), pending });
+      const current = read();
+      save(editIntakeField(current, key, value, live));
       sync();
     };
     return (
@@ -200,7 +120,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
               <p>{failure.message}</p>
               {failure.retry !== undefined && (
                 <button type="button" className="mt-2 rounded-full border border-white/40 px-3 py-1" disabled={busy}
-                  onClick={() => void send(failure.retry || undefined, false)}>Retry</button>
+                  onClick={conversation.retry}>Retry</button>
               )}
             </div>
           )}
@@ -225,7 +145,11 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
             {session.messages.map((entry, index) => (
               <li key={index} className={entry.role === "founder" ? "ml-5 rounded-xl bg-mint p-3" : "mr-5 rounded-xl bg-paper p-3"}>
                 <span className="block text-xs font-semibold">{entry.role === "founder" ? "You" : "Intake"}</span>
-                <p className="mt-1 break-words text-sm">{entry.text}</p>
+                {entry.role === "founder" ? (
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm">{entry.text}</p>
+                ) : (
+                  <Markdown text={entry.text} className="mt-1 break-words text-sm" />
+                )}
               </li>
             ))}
           </ol>
@@ -234,28 +158,14 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
               <p>{failure.message}</p>
               {failure.retry !== undefined && (
                 <button type="button" className="mt-2 rounded-lg border border-line px-3 py-1" disabled={busy}
-                  onClick={() => void send(failure.retry || undefined, false)}>Retry</button>
+                  onClick={conversation.retry}>Retry</button>
               )}
             </div>
           )}
-          <VoicePanel adapter={voiceAdapter} />
           {live ? (
-            <form onSubmit={(event) => {
-              event.preventDefault();
-              const text = liveDraft.trim();
-              if (!text || busy) return;
-              setLiveDraft("");
-              void submitMessage(text);
-            }}>
-              <label className="block text-sm font-medium" htmlFor="intake-live-message">Message the intake agent</label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <input id="intake-live-message" className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2"
-                  value={liveDraft} onChange={(event) => setLiveDraft(event.target.value)} required />
-                <button type="submit" disabled={busy} className="rounded-lg bg-pine px-4 py-2 text-white disabled:opacity-60">
-                  {busy ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </form>
+            <p className="text-sm text-muted">
+              Message the intake agent in the BizBox assistant, by text or voice. Replies appear here and in the assistant.
+            </p>
           ) : (
           <form onSubmit={(event) => {
             event.preventDefault();
@@ -264,7 +174,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
             setMessage("");
           }}>
             <label className="block text-sm font-medium" htmlFor={next ? "intake-message" : undefined}>
-              {next ? `Your answer · ${next.label}` : "Your profile is complete"}
+              {next ? `Your answer · ${next.label}` : "Form fields are filled"}
             </label>
             {next && (
               <div className="mt-2 flex flex-wrap gap-2">
@@ -279,7 +189,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
         <section aria-labelledby="profile-heading">
           <h2 id="profile-heading" className="text-lg font-semibold">Business profile</h2>
           <p className="mt-2 text-sm text-muted" aria-live="polite">
-            {missing.length ? `Still needed: ${missing.map((field) => field.label).join(", ")}.` : "All required fields are filled."}
+            {readiness.message}
           </p>
           <div className="mt-5 grid gap-4">
             {fields.map((field) => {
@@ -292,9 +202,8 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
                 const invalid = profileValidationMessage(field, input);
                 setDrafts((current) => ({ ...current, [field.key]: invalid ? input : undefined }));
                 if (!invalid) {
-                  const current = latest.current;
-                  const pending = live ? [...new Set([...(current.pending ?? []), field.key])] : current.pending;
-                  save({ ...current, profile: updateProfile(current.profile, field.key, input), pending });
+                  const current = read();
+                  save(editIntakeField(current, field.key, input, live));
                 }
               };
               const inputClass = "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm";
@@ -313,7 +222,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
                       step={"numeric" in field ? 1 : undefined}
                       id={`profile-${field.key}`} value={value} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} onChange={(event) => changed(event.target.value)} onBlur={sync} />
                   )}
-                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-red-800">{error}</p>}
+                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-danger">{error}</p>}
                 </div>
               );
             })}

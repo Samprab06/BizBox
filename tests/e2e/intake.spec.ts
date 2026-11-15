@@ -76,7 +76,7 @@ test("first load shows the fixture conversation, the profile panel and the first
   // The first missing field is the next prompt.
   await expect(stillNeeded(page)).toHaveText(ALL_MISSING);
   await expect(page.getByLabel("Your answer · Business concept")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
 });
 
 test("answering each prompt fills its profile field and moves to the next one", async ({ page }) => {
@@ -98,13 +98,13 @@ test("answering each prompt fills its profile field and moves to the next one", 
     }
   }
 
-  // Nothing is missing any more.
-  await expect(page.getByText("Your profile is complete")).toBeVisible();
-  await expect(page.getByText("All required fields are filled.")).toBeVisible();
+  // The form fields are filled; full-profile readiness still awaits agent review.
+  await expect(page.getByText("Form fields are filled", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Form fields are filled\./)).toBeVisible();
   await expect(stillNeeded(page)).toHaveCount(0);
   await expect(chatBox(page)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Send" })).toHaveCount(0);
-  await expect(conversation(page)).toContainText("Your profile has all the required fields. Review your answers in the form.");
+  await expect(page.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
+  await expect(conversation(page)).toContainText("The form fields are filled. The assistant will review remaining profile details in chat.");
 });
 
 test("a rejected chat answer shows a message and keeps asking for the same field", async ({ page }) => {
@@ -206,7 +206,7 @@ test("answers survive a reload", async ({ page }) => {
 });
 
 test("answers saved under another project id do not leak into this project", async ({ page }) => {
-  // Only houston-coffee resolves to a project (other ids render "Project unavailable"),
+  // Only houston-coffee and generated p-… IDs resolve (other ids render "Project unavailable"),
   // so another project's session is simulated by writing its storage key directly.
   const other = JSON.stringify({
     profile: { concept: { value: "Other project concept", origin: "founder" } },
@@ -336,13 +336,13 @@ test("the whole intake can be completed with the keyboard only", async ({ page, 
   await page.keyboard.type(last.text);
   if (browserName !== "webkit") {
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "Send" })).toBeFocused();
+    await expect(page.getByRole("button", { name: "Send", exact: true })).toBeFocused();
   }
   await page.keyboard.press("Enter");
 
   await expect(profileField(page, last.label)).toHaveValue(last.stored);
-  await expect(page.getByText("Your profile is complete")).toBeVisible();
-  await expect(page.getByText("All required fields are filled.")).toBeVisible();
+  await expect(page.getByText("Form fields are filled", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Form fields are filled\./)).toBeVisible();
 });
 
 test("has no serious or critical accessibility violations", async ({ page }) => {
@@ -350,6 +350,6 @@ test("has no serious or critical accessibility violations", async ({ page }) => 
   await expectNoA11yViolations(page);
 
   await answerAll(page);
-  await expect(page.getByText("Your profile is complete")).toBeVisible();
+  await expect(page.getByText("Form fields are filled", { exact: true })).toBeVisible();
   await expectNoA11yViolations(page);
 });

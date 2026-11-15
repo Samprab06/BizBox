@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useId, useState, type ReactNode } from "react";
 import { StationCallout, type StationCalloutDays } from "./station-callout";
@@ -53,21 +54,22 @@ export function InsightsPanel({
         </div>
         <div role="group" aria-label="Insights day" className="flex gap-2">
           {(["weekday", "weekend"] as const).map((value) => (
-            <button
+            <Button
+              variant={dayType === value ? "primary" : "glass"}
               type="button"
               key={value}
               aria-pressed={value === dayType}
               aria-controls={id + "-day"}
               className={
-                "rounded-lg border px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)] text-sm font-semibold " +
+                "rounded-lg border px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring text-sm font-semibold " +
                 (dayType === value
-                  ? "border-pine bg-pine text-on-pine"
+                  ? "border-accent bg-accent text-on-accent"
                   : "border-[var(--sw-muted)]")
               }
               onClick={() => setDayType(value)}
             >
               {value === "weekday" ? "Weekday" : "Weekend"}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

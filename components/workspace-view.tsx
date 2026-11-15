@@ -1,4 +1,3 @@
-import { ENTRY_PROJECT_ID } from "@/components/landing/entry";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { IntakeScreen } from "@/components/intake/intake-screen";
@@ -7,6 +6,7 @@ import { SiteScreen } from "@/components/site/site-screen";
 import { TaskNav } from "@/components/shell/task-nav";
 import { workspaceHref, views, type View } from "@/lib/client/workspace-routes";
 import { getPreviewProject } from "@/lib/workspace-preview";
+import { DEMO_PROJECT_ID } from "@/lib/projects/ids";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 
 export type PreviewPageProps = {
@@ -93,7 +93,7 @@ export function WorkspaceView({
             </h2>
             <Link
               className="mt-4 inline-block font-semibold text-pine underline"
-              href={workspaceHref(project ? projectId : ENTRY_PROJECT_ID, project ? "map" : "intake")}
+              href={workspaceHref(project ? projectId : DEMO_PROJECT_ID, project ? "map" : "intake")}
             >
               {project ? "Browse spaces" : "Open example project"}
             </Link>

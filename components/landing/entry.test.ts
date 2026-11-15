@@ -3,7 +3,7 @@ import {
   initialSession,
   type IntakeSession,
 } from "@/components/intake/profile";
-import { entryTarget, hasStarted } from "./entry";
+import { entryPlan, entryTarget, hasStarted } from "./entry";
 
 const founder = (value: string) => ({ value, origin: "founder" as const });
 
@@ -27,9 +27,9 @@ const complete: IntakeSession = {
 describe("landing entry target", () => {
   it("sends a first visit, or a session that only holds defaults, into onboarding", () => {
     for (const session of [null, initialSession]) {
-      expect(entryTarget(session)).toEqual({
+      expect(entryTarget(session, "houston-coffee")).toEqual({
         kind: "onboarding",
-        href: "/projects/houston-coffee/intake",
+        href: "/projects/houston-coffee",
       });
     }
     expect(hasStarted(initialSession)).toBe(false);
@@ -40,16 +40,17 @@ describe("landing entry target", () => {
       ...initialSession,
       profile: { ...initialSession.profile, concept: founder("Bakery") },
     };
-    expect(entryTarget(partial)).toEqual({
+    expect(entryTarget(partial, "houston-coffee")).toEqual({
       kind: "returning",
       complete: false,
-      onboardingHref: "/projects/houston-coffee/intake",
+      onboardingHref: "/projects/houston-coffee",
+      briefHref: "/projects/houston-coffee/intake",
       workspaceHref: "/projects/houston-coffee/workspace",
     });
   });
 
   it("marks a fully answered profile complete", () => {
-    expect(entryTarget(complete)).toMatchObject({
+    expect(entryTarget(complete, "houston-coffee")).toMatchObject({
       kind: "returning",
       complete: true,
     });
@@ -62,5 +63,46 @@ describe("landing entry target", () => {
         messages: [...initialSession.messages, { role: "founder", text: "hi" }],
       }),
     ).toBe(true);
+  });
+
+  describe("which project /start opens (HAC-136)", () => {
+    const own = "p-0123456789abcdef0123";
+    const sessions =
+      (map: Record<string, IntakeSession>) => (projectId: string) =>
+        map[projectId] ?? null;
+
+    it("creates a project for a first visit", () => {
+      expect(entryPlan(null, sessions({}))).toEqual({ kind: "create" });
+      // A demo session holding only defaults is not a started brief.
+      expect(
+        entryPlan(null, sessions({ "houston-coffee": initialSession })),
+      ).toEqual({ kind: "create" });
+    });
+
+    it("reopens the remembered project, started or not", () => {
+      expect(entryPlan(own, sessions({}))).toEqual({
+        kind: "onboarding",
+        href: `/projects/${own}`,
+        projectId: own,
+      });
+      expect(entryPlan(own, sessions({ [own]: complete }))).toMatchObject({
+        kind: "returning",
+        complete: true,
+        projectId: own,
+        workspaceHref: `/projects/${own}/workspace`,
+      });
+    });
+
+    it("resumes a brief started on the demo project before HAC-136", () => {
+      expect(
+        entryPlan(null, sessions({ "houston-coffee": complete })),
+      ).toMatchObject({ kind: "returning", projectId: "houston-coffee" });
+    });
+
+    it("ignores a remembered ID that is not a project ID", () => {
+      expect(entryPlan("../../admin", sessions({}))).toEqual({
+        kind: "create",
+      });
+    });
   });
 });

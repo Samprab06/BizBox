@@ -1,0 +1,16 @@
+{
+  "assets": [
+    {
+      "asset": "public/landing-assets/guided-demo/cafe-overhead-one-counter-v2.png",
+      "source": "exec-97707b0a-c5ca-41f6-8862-726b0d33492f.png",
+      "dimensions": [1585, 992],
+      "bytes": 2229394,
+      "sha256": "f01f9849ec19c527dc5ec98df93c056c4d36245328212aa9a25005664ef5b3a2",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts-v3.json#oneCounter",
+      "editTarget": "public/landing-assets/guided-demo/cafe-overhead-v1.png"
+    }
+  ],
+  "geography": "Illustrative generated café, not a real listing or scan",
+  "invariants": "Same room and camera; one-terminal variant removes farther checkout; original two-terminal asset preserved. Blue customers, purple staff and numbered active station markers are separate live SVG."
+}

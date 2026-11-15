@@ -1,0 +1,15 @@
+{
+  "assets": [
+    {
+      "asset": "public/landing-assets/guided-demo/cafe-overhead-two-counters-v3.png",
+      "source": "exec-7b8f12bd-7378-452b-a603-6c83a92c487a.png",
+      "dimensions": [1586, 992],
+      "bytes": 2190260,
+      "sha256": "9b24cb98e07e090a5fdb83cac721167675e159de2169343da50cda5f5600e9f1",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts-v4.json#twoCounterIsland",
+      "editTarget": "public/landing-assets/guided-demo/cafe-overhead-one-counter-v2.png"
+    }
+  ],
+  "geography": "Illustrative cafe only; extra counter island is a proposed scenario, not a real property alteration"
+}

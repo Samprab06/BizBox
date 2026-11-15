@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
+import { cn } from "./cn";
 import type { EvidenceKind } from "@/lib/ui/evidence";
 
 const badgeClasses = {
@@ -18,13 +19,13 @@ export type EvidenceBadgeProps = Omit<
 /** Keep beside the value it qualifies. The visible text carries the meaning. */
 export function EvidenceBadge({
   kind,
-  className = "",
+  className,
   ...props
 }: EvidenceBadgeProps) {
   return (
     <span
       {...props}
-      className={`sw-evidence sw-evidence-${badgeClasses[kind]} ${className}`}
+      className={cn(`sw-evidence sw-evidence-${badgeClasses[kind]}`, className)}
     >
       {kind}
     </span>

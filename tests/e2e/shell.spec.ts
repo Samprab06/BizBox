@@ -9,7 +9,14 @@ import {
   type View,
   type WorkspaceRoute,
 } from "../../lib/client/workspace-routes";
-import { expect, test, viewHeading, expandProjectNavigation } from "./fixtures";
+import {
+  closeConsultant,
+  expect,
+  openConsultant,
+  test,
+  viewHeading,
+  expandProjectNavigation,
+} from "./fixtures";
 
 // Selection used by the nav when the page itself carries no `?site=`: the first
 // example site (components/workspace-view.tsx falls back to project.sites[0]).
@@ -391,7 +398,7 @@ test.describe("bad input", () => {
 
       if (view === "map" || view === "site") {
         await expect(
-          page.getByRole("heading", { name: /could not be found/i }),
+          page.getByRole("heading", { level: 1, name: "Page not found" }),
         ).toBeVisible();
         return;
       }
@@ -417,7 +424,7 @@ test.describe("bad input", () => {
   }) => {
     await page.goto(workspaceHref(projectId, "site", "no-such-site"));
     await expect(
-      page.getByRole("heading", { name: /could not be found/i }),
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
   });
 
@@ -431,7 +438,11 @@ test.describe("bad input", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Comparison" }),
     ).toBeVisible();
-    await expect(page.getByRole("table")).toBeVisible();
+    // The page has two tables: the comparison table and the screen-reader
+    // table behind the hourly wait chart. Target the comparison one by name.
+    await expect(
+      page.getByRole("table", { name: /^Comparison / }),
+    ).toBeVisible();
     expect(problems).toEqual([]);
   });
 
@@ -458,7 +469,7 @@ test.describe("bad input", () => {
       const response = await page.goto(path);
       expect(response?.status()).toBe(404);
       await expect(
-        page.getByRole("heading", { name: /could not be found/i }),
+        page.getByRole("heading", { level: 1, name: "Page not found" }),
       ).toBeVisible();
     });
   }
@@ -601,18 +612,37 @@ test.describe("responsive layout", () => {
           const scene = (await page
             .getByRole("region", { name: "Location and interior workspace" })
             .boundingBox())!;
-          const assistant = (await page
-            .getByRole("complementary", { name: "Assistant" })
-            .boundingBox())!;
-          const panesOverlap =
-            scene.x < assistant.x + assistant.width &&
-            assistant.x < scene.x + scene.width &&
-            scene.y < assistant.y + assistant.height &&
-            assistant.y < scene.y + scene.height;
-          expect(
-            panesOverlap,
-            "workspace visualization and assistant do not overlap",
-          ).toBe(false);
+          const assistantPanel = page.getByRole("complementary", {
+            name: "Assistant",
+          });
+          if (width < 768) {
+            // The phone assistant is intentionally a closed bottom sheet, not a second column.
+            await expect(assistantPanel).not.toBeVisible();
+            await projectNav(page).locator("summary").click();
+            await openConsultant(page);
+            await expect(
+              page.getByRole("textbox", {
+                name: "Message the BizBox assistant",
+              }),
+            ).toBeVisible();
+            const sheet = (await assistantPanel.boundingBox())!;
+            expect(sheet.x).toBeGreaterThanOrEqual(0);
+            expect(sheet.x + sheet.width).toBeLessThanOrEqual(innerWidth);
+            await closeConsultant(page);
+            await expect(assistantPanel).not.toBeVisible();
+            await expandProjectNavigation(page);
+          } else {
+            const assistant = (await assistantPanel.boundingBox())!;
+            const panesOverlap =
+              scene.x < assistant.x + assistant.width &&
+              assistant.x < scene.x + scene.width &&
+              scene.y < assistant.y + assistant.height &&
+              assistant.y < scene.y + scene.height;
+            expect(
+              panesOverlap,
+              "workspace visualization and assistant do not overlap",
+            ).toBe(false);
+          }
         } else {
           expect(
             navBox.y + navBox.height,

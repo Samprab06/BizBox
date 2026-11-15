@@ -11,8 +11,11 @@ import {
 import { profileFromIntake } from "./intake-business-profile";
 
 /** Additive client readiness; legacy consumers retain the loading/example/live modes. */
+export type NeedsBrief = { status: "needs_brief"; message: string };
+
 export type SiteSearchReadiness =
-  | { status: "loading" | "needs_brief" | "error"; message: string }
+  | NeedsBrief
+  | { status: "loading" | "error"; message: string }
   | {
       status: "empty" | "ready";
       message: string;
@@ -170,6 +173,7 @@ export function useSiteSearch(projectId: string, revision = 0) {
     () => ({
       kind: "search",
       phase: state.mode,
+      needsBrief: readiness.status === "needs_brief",
       candidates:
         state.mode === "live"
           ? state.result.candidates.map((entry) => entry.candidate)
@@ -177,7 +181,7 @@ export function useSiteSearch(projectId: string, revision = 0) {
       evidenceId:
         state.mode === "live" ? state.result.evidence[0]?.id : undefined,
     }),
-    [state],
+    [readiness.status, state],
   );
   useWorkspaceReport(projectId, context);
   return {

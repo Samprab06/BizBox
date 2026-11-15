@@ -9,6 +9,8 @@ export type MatterportSdk = MatterportSceneSdk & {
     ): Promise<unknown>;
     Transition: { INSTANT: string };
   };
+  /** Closes the iframe connection; absent from older bundle builds. */
+  disconnect?(): void;
   App: {
     state: {
       subscribe(callback: (state: { phase: string }) => void): Subscription;
@@ -24,6 +26,27 @@ export type ServiceViewpoint = {
   sweepId: string;
   rotation: { x: number; y: number };
 };
+
+/** Why the SDK viewer could not open, so the view can label its fallback. */
+export type ViewerFailure =
+  "cancelled" | "timeout" | "bundle" | "key" | "model" | "unavailable";
+export class ViewerError extends Error {
+  constructor(
+    readonly reason: ViewerFailure,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ViewerError";
+  }
+}
+// Key and domain refusals arrive as rejected connects or in-frame error text.
+const keyRefusal =
+  /(?:application|sdk|api)[ _-]?key|applicationkey|domain|origin|unauthori[sz]ed|not authori[sz]ed|forbidden|\b403\b|access denied/i;
+export function viewerFailure(error: unknown): ViewerFailure {
+  if (error instanceof ViewerError) return error.reason;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return keyRefusal.test(message) ? "key" : "unavailable";
+}
 
 /** Bound connection itself; a provider promise may otherwise never settle. */
 export function connectShowcase(
@@ -43,9 +66,10 @@ export function connectShowcase(
       if (error) reject(error);
       else resolve(sdk!);
     };
-    const abort = () => complete(new Error("Viewer connection cancelled"));
+    const abort = () =>
+      complete(new ViewerError("cancelled", "Viewer connection cancelled"));
     const timeout = setTimeout(
-      () => complete(new Error("Viewer connection timed out")),
+      () => complete(new ViewerError("timeout", "Viewer connection timed out")),
       timeoutMs,
     );
     signal.addEventListener("abort", abort, { once: true });
@@ -61,7 +85,13 @@ export function connectShowcase(
             text,
           )
         )
-          complete(new Error("Viewer model unavailable"));
+          complete(new ViewerError("model", "Viewer model unavailable"));
+        else if (
+          /(?:application|sdk) ?key\b.{0,60}(?:invalid|not (?:valid|authori[sz]ed|allowed)|refused|domain)/is.test(
+            text,
+          )
+        )
+          complete(new ViewerError("key", "Viewer SDK key refused"));
       };
       if (target.MutationObserver && target.document?.body) {
         observer = new target.MutationObserver(checkUnavailable);
@@ -73,18 +103,31 @@ export function connectShowcase(
         checkUnavailable();
       }
       if (!target.MP_SDK) {
-        complete(new Error("Viewer SDK unavailable"));
+        // Without MATTERPORT_SDK_KEY at build time the bundle page is a 404.
+        complete(new ViewerError("bundle", "Viewer SDK unavailable"));
         return;
       }
       if (!finished)
         void Promise.resolve()
           .then(() => target.MP_SDK!.connect(target))
           .then(
-            (sdk) => complete(undefined, sdk),
-            () => complete(new Error("Viewer connection unavailable")),
+            (sdk) => {
+              if (finished) sdk.disconnect?.();
+              complete(undefined, sdk);
+            },
+            (error: unknown) =>
+              complete(
+                new ViewerError(
+                  viewerFailure(error),
+                  "Viewer connection unavailable",
+                ),
+              ),
           );
-    } catch {
-      complete(new Error("Viewer connection unavailable"));
+    } catch (error) {
+      // A cross-origin or detached frame throws on access.
+      complete(
+        new ViewerError(viewerFailure(error), "Viewer connection unavailable"),
+      );
     }
   });
 }
@@ -118,9 +161,10 @@ export function waitForPlaying(
       if (error) reject(error);
       else resolve();
     };
-    const abort = () => complete(new Error("Viewer connection cancelled"));
+    const abort = () =>
+      complete(new ViewerError("cancelled", "Viewer connection cancelled"));
     const timeout = setTimeout(
-      () => complete(new Error("Viewer connection timed out")),
+      () => complete(new ViewerError("timeout", "Viewer connection timed out")),
       timeoutMs,
     );
     signal.addEventListener("abort", abort, { once: true });

@@ -10,6 +10,12 @@
  * only differ in their wording (`IntakeCopy`) and in whether a reply carries chat text.
  */
 import {
+  mustHaves,
+  profileFromIntake,
+} from "@/lib/client/intake-business-profile";
+import { IntakeDraftSchema, type IntakeState } from "@/lib/contracts/intake";
+import type { AgentViewContext } from "@/lib/contracts/agent";
+import {
   formFromDraft,
   IntakeResponseSchema,
   patchFromForm,
@@ -37,15 +43,68 @@ export function parseIntakeSession(raw: string | null): IntakeSession | null {
   }
 }
 
-/**
- * The body both surfaces send: round-tripped state, pending form edits and the message. The
- * message is omitted for a form-only sync of committed edits.
- */
-export function intakeRequestBody(session: IntakeSession, text?: string) {
+/** Keep every explicit live leaf, including null/unknown; fill only absent form-derived data. */
+function fillMissing(current: unknown, fallback: unknown): unknown {
+  if (current === undefined) return fallback;
+  if (
+    current === null ||
+    fallback === null ||
+    typeof current !== "object" ||
+    typeof fallback !== "object" ||
+    Array.isArray(current) ||
+    Array.isArray(fallback)
+  )
+    return current;
+  const existing = current as Record<string, unknown>;
+  return Object.fromEntries(
+    [...new Set([...Object.keys(fallback), ...Object.keys(existing)])].map(
+      (key) => [
+        key,
+        fillMissing(existing[key], (fallback as Record<string, unknown>)[key]),
+      ],
+    ),
+  );
+}
+
+function currentViewState(
+  session: IntakeSession,
+  projectId: string,
+): IntakeState | undefined {
+  const { profile } = profileFromIntake(session, projectId);
+  if (!profile) return session.live?.state;
+  const searchDraft = Object.fromEntries(
+    Object.entries(profile).filter(([key]) => key in IntakeDraftSchema.shape),
+  );
+  const draft = IntakeDraftSchema.safeParse(
+    fillMissing(session.live?.state.draft, searchDraft),
+  );
+  // Partial live constraints can conflict with older completed form values (e.g. hours).
+  // Keep the valid original state so sending a turn never fails during serialization.
+  if (!draft.success) return session.live?.state;
   return {
-    state: session.live?.state,
+    draft: draft.data,
+    assumptions: session.live?.state.assumptions ?? {},
+  };
+}
+
+/**
+ * Both surfaces send the existing state/patch/message contract and the active screen.
+ * A completed browser form seeds missing state only when selected-site context needs it.
+ */
+export function intakeRequestBody(
+  session: IntakeSession,
+  text?: string,
+  view?: AgentViewContext,
+  projectId?: string,
+) {
+  return {
+    state:
+      text && projectId && (view?.siteId || view?.candidateIds?.length)
+        ? currentViewState(session, projectId)
+        : session.live?.state,
     patch: patchFromForm(session.profile, session.pending ?? []),
     message: text,
+    ...(view ? { view } : {}),
   };
 }
 
@@ -59,6 +118,7 @@ export function withFounderMessage(
   };
 }
 
+/** A successful outcome carries the reply UI actions (HAC-144). */
 export type IntakeOutcome =
   | { ok: true; result: IntakeResponse }
   | { ok: false; message: string; retryable: boolean };
@@ -74,7 +134,8 @@ export const assistantCopy: IntakeCopy = {
   unreachable: "Could not reach the BizBox assistant. Please try again.",
   unavailable:
     "The BizBox assistant is temporarily unavailable. Please try again.",
-  unexpected: "The BizBox assistant sent an unexpected reply. Please try again.",
+  unexpected:
+    "The BizBox assistant sent an unexpected reply. Please try again.",
 };
 
 export async function postIntakeMessage(
@@ -131,7 +192,27 @@ export function applyIntakeReply(
     keyof IntakeSession["profile"],
     { value: string; origin: "default" | "founder" },
   ][]) {
-    if (!stillPending.includes(key)) profile[key] = answer;
+    if (stillPending.includes(key)) continue;
+    if (key === "requirements" && profile.requirements?.origin === "founder") {
+      // Flags are a search projection, not a replacement for the founder's sentence.
+      // A form-only acknowledgement cannot add free text. Chat can change the flags,
+      // but unchanged values (including provenance-only updates) keep the original wording.
+      // A chat request may also carry a pending form edit. Compare against the
+      // flags actually sent in that patch, rather than the older live snapshot.
+      const previous =
+        sentKeys.has("requirements") && sent.profile.requirements
+          ? mustHaves(sent.profile.requirements)
+          : (sent.live?.state.draft.mustHaves ??
+            mustHaves(profile.requirements));
+      const returned = result.draft.mustHaves;
+      const unchanged = (
+        ["frontage", "corner", "parking", "groundFloor"] as const
+      ).every(
+        (feature) => previous[feature]?.value === returned?.[feature]?.value,
+      );
+      if (!appendReply || unchanged) continue;
+    }
+    profile[key] = answer;
   }
   return {
     ...now,

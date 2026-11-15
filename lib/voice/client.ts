@@ -14,6 +14,8 @@ export type VoicePhase =
 export type VoiceSnapshot = {
   phase: VoicePhase;
   muted: boolean;
+  /** True only while this client owns a stream with a live audio track. */
+  microphoneReady: boolean;
   message: string;
 };
 export type AudioLevelRef = { current: number };
@@ -48,6 +50,7 @@ type Session = {
   channel?: RTCDataChannel;
   audio?: HTMLAudioElement;
   meter?: () => void;
+  removeMicrophoneListeners?: () => void;
   setupTimer?: ReturnType<typeof setTimeout>;
   endTimer?: ReturnType<typeof setTimeout>;
   seen: Set<string>;
@@ -66,12 +69,30 @@ type Session = {
   cancelled: Promise<null>;
 };
 
+/** Browser acquisition errors are classified without exposing device or provider details. */
+function microphoneFailure(error: unknown): string {
+  const name =
+    error && typeof error === "object" && "name" in error
+      ? error.name
+      : undefined;
+  if (name === "NotAllowedError" || name === "PermissionDeniedError")
+    return "Microphone permission was denied. Open this browser's site settings and allow Microphone, then select Start voice again. Select Text to keep typing.";
+  if (name === "NotFoundError" || name === "DevicesNotFoundError")
+    return "No microphone was found. Connect or select a microphone in your browser's site settings, then select Start voice again. Select Text to keep typing.";
+  if (name === "NotReadableError" || name === "TrackStartError")
+    return "Your microphone could not be opened. Close another app using it and check the selected microphone, then select Start voice again. Select Text to keep typing.";
+  if (name === "NotSupportedError")
+    return "Microphone access is not supported here. Use a supported browser on a secure HTTPS page, or select Text to keep typing.";
+  return "Your microphone is unavailable. Check the connected microphone and this browser's site settings, then select Start voice again. Select Text to keep typing.";
+}
+
 /** No business state is held here. Only the adapter may change the intake conversation. */
 export class VoiceClient {
   readonly level: AudioLevelRef;
   snapshot: VoiceSnapshot = {
     phase: "idle",
     muted: false,
+    microphoneReady: false,
     message: "Voice is off.",
   };
   private current: Session | null = null;
@@ -128,25 +149,57 @@ export class VoiceClient {
       cancelled,
     };
     this.current = run;
-    this.snapshot = { ...this.snapshot, muted: false };
-    this.update("connecting", "Connecting voice…");
+    this.snapshot = { ...this.snapshot, muted: false, microphoneReady: false };
+    this.update("connecting", "Waiting for microphone access…");
     run.setupTimer = this.dependencies.setTimer(
       () =>
         this.fail(
           run,
-          "Voice could not connect. You can keep typing and try again.",
+          this.snapshot.microphoneReady
+            ? "Voice could not connect. Check your connection and try Start voice again, or select Text to keep typing."
+            : "Microphone access has not completed. Check Microphone permission in this browser's site settings, then select Start voice again, or select Text to keep typing.",
         ),
       VOICE_LIMITS.upstreamTimeoutMs,
     );
     try {
       // Validation and permission happen before the only paid setup request.
       const context = VoiceContextSchema.parse(this.adapter.readContext());
-      const stream = await this.dependencies.getUserMedia();
+      let stream: MediaStream;
+      try {
+        stream = await this.dependencies.getUserMedia();
+      } catch (error) {
+        this.fail(run, microphoneFailure(error));
+        return;
+      }
       if (!this.valid(run)) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
       run.stream = stream;
+      const tracks = stream.getAudioTracks();
+      const hasMicrophone = () =>
+        tracks.some((track) => track.readyState === "live");
+      if (!hasMicrophone()) {
+        this.fail(run, microphoneFailure({ name: "NotFoundError" }));
+        return;
+      }
+      const microphoneEnded = () => {
+        if (!hasMicrophone())
+          this.fail(
+            run,
+            "Your microphone disconnected. Connect or select a microphone, then select Start voice again. Select Text to keep typing.",
+          );
+      };
+      tracks.forEach((track) =>
+        track.addEventListener("ended", microphoneEnded),
+      );
+      run.removeMicrophoneListeners = () =>
+        tracks.forEach((track) =>
+          track.removeEventListener("ended", microphoneEnded),
+        );
+      this.snapshot = { ...this.snapshot, microphoneReady: true };
+      this.update("connecting", "Connecting voice…");
+      if (!this.valid(run)) return;
       run.audio = this.dependencies.createAudio();
       run.audio.autoplay = true;
       run.audio.muted = true;
@@ -228,7 +281,7 @@ export class VoiceClient {
     } catch {
       this.fail(
         run,
-        "Voice is unavailable or microphone access was denied. You can keep typing and try again.",
+        "Voice could not connect. Check your connection and try Start voice again, or select Text to keep typing.",
       );
     }
   }
@@ -237,7 +290,12 @@ export class VoiceClient {
     if (!this.valid(run) || !run.ready) return;
     if (run.setupTimer) this.dependencies.clearTimer(run.setupTimer);
     run.setupTimer = undefined;
-    this.update("listening", "Listening. Speak your answer.");
+    this.update(
+      "listening",
+      this.snapshot.muted
+        ? "Microphone muted."
+        : "Listening. Speak your answer.",
+    );
   }
 
   private contextFingerprint(): string {
@@ -245,6 +303,7 @@ export class VoiceClient {
     return JSON.stringify([
       context.projectId,
       context.mode,
+      context.view,
       context.selectedSiteId,
       context.scenarioId,
       context.prompt,
@@ -544,7 +603,12 @@ export class VoiceClient {
   }
   setMuted(muted: boolean) {
     const run = this.current;
-    if (!run) return;
+    if (
+      !run ||
+      !this.snapshot.microphoneReady ||
+      !run.stream?.getAudioTracks().some((track) => track.readyState === "live")
+    )
+      return;
     run.stream?.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
     });
@@ -578,6 +642,7 @@ export class VoiceClient {
     if (run.endTimer) this.dependencies.clearTimer(run.endTimer);
     run.meter?.();
     this.level.current = 0;
+    run.removeMicrophoneListeners?.();
     run.stream?.getTracks().forEach((track) => track.stop());
     run.remote?.getTracks().forEach((track) => track.stop());
     if (run.channel) {
@@ -597,7 +662,7 @@ export class VoiceClient {
       run.audio.srcObject = null;
       run.audio.remove();
     }
-    this.snapshot = { ...this.snapshot, muted: false };
+    this.snapshot = { ...this.snapshot, muted: false, microphoneReady: false };
     this.update("idle", "Voice is off. You can keep typing.");
   }
 }
@@ -667,11 +732,22 @@ export function analyzeVoice(
 }
 export function browserVoiceDependencies(): VoiceDependencies {
   return {
-    getUserMedia: () =>
-      navigator.mediaDevices.getUserMedia({
+    getUserMedia: () => {
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices?.getUserMedia
+      )
+        return Promise.reject(
+          new DOMException(
+            "Microphone access unsupported",
+            "NotSupportedError",
+          ),
+        );
+      return navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
         video: false,
-      }),
+      });
+    },
     createPeer: () => new RTCPeerConnection(),
     createAudio: () => new Audio(),
     fetcher: (...args) => fetch(...args),

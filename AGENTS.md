@@ -2,10 +2,11 @@
 
 ## Akshar's current UI scope
 
-This project is desktop-only. As explicitly directed on 2026-11-14, skip phone/mobile
-layout work, phone-specific polish, screenshots and QA unless Akshar asks to resume it.
-Keep existing responsive behavior; do not remove it or change shared CI solely because
-of this preference. Prioritize the desktop experience across all project UI work.
+For Akshar's client-workspace UI work (HAC-130), prioritize the desktop experience. As
+directed on 2026-11-14, skip phone-specific polish, screenshots and QA there unless Akshar
+asks to resume it. This is not a project-wide rule: phone/mobile work has resumed for
+HAC-117 (landing), and other tickets follow their own acceptance criteria. Keep existing
+responsive behavior; do not remove it or change shared CI because of this preference.
 
 Read this whole file before doing anything. It is the contract between every agent on
 this project.

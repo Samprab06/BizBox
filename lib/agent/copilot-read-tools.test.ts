@@ -217,7 +217,7 @@ const cases: {
   { name: "find_sites", args: { scenario_id: "s1" }, status: "found" },
   { name: "compare_scenarios", args: { a: "s1", b: "s2" }, status: "compared" },
   { name: "explain_hour", args: {}, status: "explained" },
-  { name: "diagnose", args: { scenario_id: "s1" }, status: "unsupported" },
+  { name: "diagnose", args: { scenario_id: "s1" }, status: "diagnosed" },
   {
     name: "focus_view",
     args: { scenario_id: "s1", view: "overview" },
@@ -503,12 +503,8 @@ describe("read boundaries", () => {
   });
   it("delegates hooks only after validation and never forwards adapter prose or metrics", async () => {
     const { deps, context } = setup();
-    deps.diagnose = vi.fn(async () => ({ actionId: "diagnosis" }));
     deps.focusView = vi.fn(async () => ({ actionId: "focus" }));
     const registry = createCopilotReadTools(deps);
-    expect(
-      await registry.execute("diagnose", { scenario_id: "s1" }, context),
-    ).toMatchObject({ status: "delegated", actionId: "diagnosis" });
     expect(
       await registry.execute(
         "focus_view",
@@ -524,11 +520,11 @@ describe("read boundaries", () => {
       ),
     ).toMatchObject({ code: "SCOPE_CONFLICT" });
     expect(deps.focusView).toHaveBeenCalledTimes(1);
-    deps.diagnose = async () => ({ actionId: "diagnosis", secret: 42 });
+    deps.focusView = async () => ({ actionId: "focus", secret: 42 });
     expect(
       await createCopilotReadTools(deps).execute(
-        "diagnose",
-        { scenario_id: "s1" },
+        "focus_view",
+        { scenario_id: "s1", view: "overview" },
         context,
       ),
     ).toMatchObject({ status: "rejected" });

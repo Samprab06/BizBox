@@ -1,10 +1,12 @@
 "use client";
 
+import { colorValue } from "@/lib/design/tokens";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
   Component,
   useEffect,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
   type RefObject,
@@ -31,6 +33,15 @@ function hasWebGL() {
   return webglSupport;
 }
 const subscribe = () => () => {};
+
+/** HAC-124: phones and tablets, where a swipe on the canvas should scroll the page. */
+const coarseQuery = "(pointer: coarse)";
+function subscribeCoarse(onChange: () => void) {
+  const query = window.matchMedia(coarseQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const isCoarse = () => window.matchMedia(coarseQuery).matches;
 
 /** HAC-103: a renderer that still fails (lost context, driver error) shows the fallback, not the route error page. */
 class WebGLBoundary extends Component<
@@ -60,8 +71,11 @@ export default function FloorPlan(
 
 function ReplayCamera({
   controlsRef,
+  enabled,
 }: {
   controlsRef: RefObject<OrbitControls | null>;
+  /** False on touch screens until the camera is switched on, so swipes scroll the page. */
+  enabled: boolean;
 }) {
   const camera = useThree((state) => state.camera);
   const canvas = useThree((state) => state.gl.domElement);
@@ -81,6 +95,17 @@ function ReplayCamera({
     };
   }, [camera, canvas, controlsRef]);
 
+  // OrbitControls sets `touch-action: none`, which traps a page scroll that starts on the
+  // canvas. While the camera is off, ignore pointer input and let vertical swipes scroll.
+  useEffect(() => {
+    if (!controlsRef.current) return;
+    controlsRef.current.enabled = enabled;
+    controlsRef.current.domElement?.style.setProperty(
+      "touch-action",
+      enabled ? "none" : "pan-y",
+    );
+  }, [enabled, canvas, controlsRef, camera]);
+
   return null;
 }
 
@@ -98,6 +123,9 @@ function FloorPlanCanvas({
   select: (id: string) => void;
 }) {
   const controls = useRef<OrbitControls>(null);
+  const touch = useSyncExternalStore(subscribeCoarse, isCoarse, () => false);
+  const [moving, setMoving] = useState(false);
+  const cameraOn = !touch || moving;
   const customers = [
     ...waiting.map((id, index) => ({
       id,
@@ -117,15 +145,15 @@ function FloorPlanCanvas({
         camera={{ position: [0, 11, 8], zoom: 37 }}
         fallback={fallback}
       >
-        <ReplayCamera controlsRef={controls} />
+        <ReplayCamera controlsRef={controls} enabled={cameraOn} />
         <mesh rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[9, 7]} />
-          <meshBasicMaterial color="#e2efdf" />
+          <meshBasicMaterial color={colorValue("panel-raised")} />
         </mesh>
         {Array.from({ length: stations }, (_, index) => (
           <mesh key={index} position={[index * 2.5 - 1.25, 0.35, -1.45]}>
             <boxGeometry args={[1.9, 0.7, 0.85]} />
-            <meshBasicMaterial color="#1b4937" />
+            <meshBasicMaterial color={colorValue("muted")} />
           </mesh>
         ))}
         {customers.map(({ id, x, z }) => (
@@ -139,18 +167,41 @@ function FloorPlanCanvas({
           >
             <sphereGeometry args={[0.27, 16, 12]} />
             <meshBasicMaterial
-              color={id === selected ? "#b05317" : "#407baf"}
+              color={colorValue(id === selected ? "warn" : "accent")}
             />
           </mesh>
         ))}
       </Canvas>
-      <button
-        type="button"
-        className="absolute right-2 top-2 rounded-lg border border-line bg-paper px-3 py-2 text-sm font-medium text-pine"
-        onClick={() => controls.current?.reset()}
-      >
-        Reset camera
-      </button>
+      <div className="absolute right-2 top-2 flex gap-2">
+        {touch && (
+          <button
+            type="button"
+            aria-pressed={moving}
+            className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium ${moving ? "border-accent bg-accent hover:bg-accent-hover text-on-accent" : "border-line bg-canvas text-accent"}`}
+            onClick={() => setMoving(!moving)}
+          >
+            {moving ? (
+              <>
+                Done<span className="sr-only"> moving camera</span>
+              </>
+            ) : (
+              "Move camera"
+            )}
+          </button>
+        )}
+        <button
+          type="button"
+          className="rounded-lg border border-line bg-canvas px-3 py-2 text-sm font-medium text-accent"
+          onClick={() => controls.current?.reset()}
+        >
+          Reset camera
+        </button>
+      </div>
+      {touch && moving && (
+        <p className="absolute bottom-2 left-2 rounded bg-canvas/90 px-2 py-1 text-xs text-muted">
+          Drag to orbit · pinch to zoom
+        </p>
+      )}
     </div>
   );
 }

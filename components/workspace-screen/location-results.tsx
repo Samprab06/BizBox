@@ -1,5 +1,7 @@
 "use client";
 
+import { focusRing, pressable, cn } from "@/components/ui/cn";
+
 import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { WorkspaceCandidate } from "./client-model";
 import { siteDemandLabel } from "@/lib/evaluation/demand-label";
@@ -55,7 +57,11 @@ export function LocationResults({
                 <tr key={id}>
                   <th scope="row">
                     <button
-                      className="text-left underline underline-offset-4"
+                      className={cn(
+                        "rounded-control text-left underline underline-offset-4",
+                        focusRing,
+                        pressable,
+                      )}
                       onClick={() => onSelect(id)}
                     >
                       {candidate?.address ?? "Saved location"}

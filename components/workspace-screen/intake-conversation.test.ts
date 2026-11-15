@@ -4,7 +4,7 @@ import {
   initialSession,
   type IntakeSession,
 } from "@/components/intake/profile";
-import type { IntakeResponse } from "@/components/intake/live";
+import { patchFromForm, type IntakeResponse } from "@/components/intake/live";
 import {
   applyIntakeReply,
   intakeRequestBody,
@@ -71,6 +71,35 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(url).toBe("/api/projects/houston%20coffee/intake");
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body)).message).toBe("Hi");
+  });
+
+  it("HAC-144: passes the reply's UI actions through and drops a list it cannot read", async () => {
+    const actions = [{ id: "ui_1", type: "navigate", stage: "map" }];
+    const post = (body: unknown) =>
+      postIntakeMessage(
+        (async () => Response.json(body)) as unknown as typeof fetch,
+        "p",
+        intakeRequestBody(session, "Show me spaces", {
+          stage: "workspace",
+          candidateIds: ["L-1:S-1"],
+        }),
+      );
+    expect(await post({ ...reply, actions })).toEqual({
+      ok: true,
+      result: { ...reply, actions },
+    });
+    const newer = await post({
+      ...reply,
+      actions: [{ id: "x", type: "teleport" }],
+    });
+    expect(newer.ok && newer.result.actions).toBeUndefined();
+    expect(newer.ok && newer.result.assistantMessage).toBe(
+      reply.assistantMessage,
+    );
+    // The view rides on the request and the API contract accepts it.
+    const body = intakeRequestBody(session, "Hi", { stage: "map" });
+    expect(IntakeRequestSchema.parse(body).view).toEqual({ stage: "map" });
+    expect("view" in intakeRequestBody(session, "Hi")).toBe(false);
   });
 
   it("reports failures; only server errors and network failures are retryable", async () => {
@@ -158,5 +187,259 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(await fail(async () => Response.json({ nope: 1 }))).toMatchObject({
       message: "unexpected",
     });
+  });
+});
+
+it("serializes the same validated-shape view with the shared text/voice body", () => {
+  const view = { stage: "site", siteId: "screen" } as const;
+  const body = intakeRequestBody(session, "Compare this one", view);
+  expect(
+    IntakeRequestSchema.parse(JSON.parse(JSON.stringify(body))).view,
+  ).toEqual(view);
+});
+
+it("seeds only missing API draft leaves from the completed browser search form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee for commuters",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Favor Montrose",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      missingRequiredFields: [],
+      findings: [],
+      state: {
+        draft: {
+          businessName: "Actual business",
+          economics: {
+            startupBudgetCents: {
+              value: null,
+              unit: "USD cents",
+              origin: "founder",
+              evidenceIds: ["stated-unknown"],
+              unknownReason: "I do not know",
+            },
+          },
+        },
+        assumptions: {},
+      },
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  const parsed = IntakeRequestSchema.parse(body);
+  expect(parsed.state?.draft.businessName).toBe("Actual business");
+  expect(parsed.state?.draft.economics?.startupBudgetCents).toEqual(
+    browser.live?.state.draft.economics?.startupBudgetCents,
+  );
+  expect(parsed.state?.draft.economics?.averageTicketCents).toMatchObject({
+    value: null,
+    origin: "default",
+  });
+  expect(parsed.state?.draft.capacity?.serviceMinutes?.origin).toBe("default");
+  expect(parsed.state?.draft.capacity?.servers?.origin).toBe("founder");
+  expect(
+    intakeRequestBody(
+      browser,
+      undefined,
+      { stage: "workspace", siteId: "screen" },
+      "houston-coffee",
+    ).state,
+  ).toEqual(browser.live?.state);
+});
+
+it("keeps the valid original draft if filling a partial constraint would conflict with the form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Any",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      state: {
+        draft: { operatingHours: { openMinute: 1080 } },
+        assumptions: {},
+      },
+      missingRequiredFields: [],
+      findings: [],
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "Compare this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  expect(body.state).toEqual(browser.live?.state);
+  expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
+  const { createIntakeHandler } =
+    await import("@/app/api/projects/[projectId]/intake/handler");
+  const handler = createIntakeHandler({
+    projectExists: async () => true,
+    viewContextLookups: {
+      comparison: async () => null,
+      scenario: async () => null,
+      investigation: async () => null,
+      candidates: async () => null,
+    },
+    runAgent: async ({ viewContextLine }) =>
+      viewContextLine?.includes('"phase":"missing"')
+        ? "Continue the conversation"
+        : "Unexpected selection",
+  });
+  const response = await handler(
+    new Request("http://localhost/intake", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ projectId: "houston-coffee" }) },
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).assistantMessage).toBe(
+    "Continue the conversation",
+  );
+});
+
+describe("HAC-168 founder requirements survive flags-only replies", () => {
+  const text =
+    "Street frontage and a dedicated drive-up or street parking for 6 cars";
+  const requirements = { value: text, origin: "founder" as const };
+  const flags = patchFromForm({ requirements }, ["requirements"])!
+    .mustHaves as NonNullable<IntakeResponse["draft"]["mustHaves"]>;
+  const result = { ...reply, draft: { ...reply.draft, mustHaves: flags } };
+  const saved: IntakeSession = {
+    ...session,
+    profile: { requirements },
+    pending: ["requirements"],
+  };
+
+  it("keeps the original numbered sentence and origin after a guided/form sync and reload", () => {
+    const next = applyIntakeReply(saved, saved, result, false);
+    expect(next.profile.requirements).toEqual(requirements);
+    expect(next.pending).toEqual([]);
+    expect(
+      parseIntakeSession(JSON.stringify(next))?.profile.requirements,
+    ).toEqual(requirements);
+    expect(next.live?.state.draft.mustHaves).toMatchObject({
+      frontage: { value: true },
+      parking: { value: true },
+    });
+  });
+
+  it("keeps wording through an unrelated chat reply with unchanged feature values", () => {
+    const settled = {
+      ...saved,
+      pending: [],
+      live: {
+        state: { draft: result.draft, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const next = applyIntakeReply(
+      withFounderMessage(settled, "What about rent?"),
+      settled,
+      result,
+    );
+    expect(next.profile.requirements).toEqual(requirements);
+  });
+
+  it("keeps a pending numbered edit sent alongside an unrelated chat turn", () => {
+    const edited = { value: "Parking for 6 cars", origin: "founder" as const };
+    const oldFlags = patchFromForm(
+      { requirements: { value: "Street frontage", origin: "founder" } },
+      ["requirements"],
+    )!.mustHaves as NonNullable<IntakeResponse["draft"]["mustHaves"]>;
+    const sent: IntakeSession = {
+      ...saved,
+      profile: { requirements: edited },
+      live: {
+        state: { draft: { mustHaves: oldFlags }, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const outgoing = intakeRequestBody(sent, "What about rent?");
+    const returned = outgoing.patch!.mustHaves as NonNullable<
+      IntakeResponse["draft"]["mustHaves"]
+    >;
+    const next = applyIntakeReply(
+      withFounderMessage(sent, "What about rent?"),
+      sent,
+      { ...reply, draft: { ...reply.draft, mustHaves: returned } },
+    );
+    expect(next.profile.requirements).toEqual(edited);
+    expect(next.pending).toEqual([]);
+    expect(next.live?.state.draft.mustHaves).toEqual(returned);
+    expect(returned.parking?.value).toBe(true);
+    expect(returned.frontage?.value).toBeNull();
+  });
+
+  it("still applies later chat-driven requirement changes", () => {
+    const settled = {
+      ...saved,
+      pending: [],
+      live: {
+        state: { draft: result.draft, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const changed = {
+      ...result,
+      draft: {
+        ...result.draft,
+        mustHaves: { ...flags, parking: { ...flags.parking!, value: false } },
+      },
+    };
+    const next = applyIntakeReply(
+      withFounderMessage(settled, "Parking is no longer needed"),
+      settled,
+      changed,
+    );
+    expect(next.profile.requirements?.value).toBe("frontage");
+    expect(next.live?.state.draft.mustHaves?.parking?.value).toBe(false);
+  });
+
+  it("keeps newer requirements edited while the previous sync was in flight", () => {
+    const newer = { value: "Parking for 12 cars", origin: "founder" as const };
+    const next = applyIntakeReply(
+      { ...saved, profile: { requirements: newer } },
+      saved,
+      result,
+      false,
+    );
+    expect(next.profile.requirements).toEqual(newer);
+    expect(next.pending).toContain("requirements");
   });
 });

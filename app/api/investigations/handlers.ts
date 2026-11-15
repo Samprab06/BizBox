@@ -7,6 +7,7 @@ import {
   type InvestigationStepPlanner,
 } from "@/lib/agent/jobs";
 import { ModelRuntimeUnavailableError } from "@/lib/agent/runtime-loader";
+import { parsePanelProgress } from "@/lib/panel/progress";
 
 type Context = { params: Promise<{ id: string }> };
 const identifier = z.string().trim().min(1).max(200);
@@ -179,9 +180,15 @@ export function createInvestigationHandlers({
             503,
           );
         }
-        return await response(
-          await service.advance(id, planner, { maxDurationMs: 30_000 }),
-        );
+        const job = await service.advance(id, planner, {
+          maxDurationMs: 30_000,
+        });
+        // HAC-155: a Jev panel step that reached its deadline kept its answers; the client
+        // resends advance (202), and the next advance resumes from the Jev cache.
+        const panelPending =
+          (job.status === "queued" || job.status === "running") &&
+          parsePanelProgress(job.reason) !== null;
+        return await response(job, panelPending ? 202 : 200);
       } catch (error) {
         return failure(error);
       }

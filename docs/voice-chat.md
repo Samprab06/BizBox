@@ -137,3 +137,29 @@ Independent server review and targeted client re-review cleared the confirmed
 ordering, out-of-band cancellation, muted-buffer and stale-prompt races. The
 reviewer independently reran 50 route/controller cases. Goldie MIT notices are
 retained in `components/voice/LICENSE`.
+
+## Microphone readiness and recovery (HAC-172)
+
+The client snapshot's `microphoneReady` is local UI state, not an adapter or
+server contract. It becomes true only when this client owns a stream with a live
+audio track; a muted live track still supports Unmute. Waiting for microphone
+permission and connecting the voice session are separate messages. Mute is a
+no-op/disabled without that evidence, and Stop speaking also waits for the
+connection. Stop voice remains available during setup so the founder can cancel.
+A microphone acquired after cancellation is stopped before any setup request.
+Stopping, connection loss, or loss of the last live microphone track clears
+readiness and closes owned resources.
+
+Microphone permission denial points to the browser's site settings and allowing
+Microphone. Missing devices prompt connecting/selecting a microphone; busy or
+unreadable devices prompt checking the selected device and another app using it.
+Unavailable capture support points to a supported browser and HTTPS. A provider
+or connection setup failure has separate retry copy rather than being labeled a
+permission denial. Raw device/provider error text is not shown. Each recovery
+message points to the existing Text tab, which remains one click away with the
+same draft/history; no new conversation, composer or adapter is introduced.
+Compact and full VoicePanel consumers retain the same lifecycle and orb meters.
+
+Unit and browser tests use fake tracks/peers and intercepted session responses for
+pending permission, denial, missing/unreadable/unsupported microphones, setup,
+ready, disconnect and cancellation. They do not record audio or call a provider.

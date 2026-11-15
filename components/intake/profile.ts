@@ -66,13 +66,24 @@ export function updateProfile(profile: Profile, key: Key, value: string): Profil
   return { ...profile, [key]: { value, origin: "founder" } };
 }
 
+/** Track edits against an existing agent result even while its model is offline. */
+export function editIntakeField(session: IntakeSession, key: Key, value: string, agentAvailable = false): IntakeSession {
+  return {
+    ...session,
+    profile: updateProfile(session.profile, key, value),
+    pending: agentAvailable || session.live
+      ? [...new Set([...(session.pending ?? []), key])]
+      : session.pending,
+  };
+}
+
 export function answerPrompt(session: IntakeSession, text: string): IntakeSession {
   const field = missingFields(session.profile)[0];
   const answer = text.trim();
   if (!answer) return session;
 
-  let profile = session.profile;
-  let reply = "Your profile has all the required fields. You can still edit it in the form.";
+  let updated = session;
+  let reply = "The form fields are filled. The assistant will review remaining profile details in chat.";
 
   if (field) {
     const value = "options" in field
@@ -80,15 +91,15 @@ export function answerPrompt(session: IntakeSession, text: string): IntakeSessio
       : answer;
     const error = profileValidationMessage(field, value ?? answer);
     if (!error) {
-      profile = updateProfile(profile, field.key, value ?? answer);
-      const next = missingFields(profile)[0];
+      updated = editIntakeField(session, field.key, value ?? answer);
+      const next = missingFields(updated.profile)[0];
       reply = next
         ? `I saved ${field.label.toLowerCase()}. Next, enter ${next.label.toLowerCase()}.`
-        : "Your profile has all the required fields. Review your answers in the form.";
+        : "The form fields are filled. The assistant will review remaining profile details in chat.";
     } else {
       reply = error;
     }
   }
 
-  return { profile, messages: [...session.messages, { role: "founder", text: answer }, { role: "agent", text: reply }] };
+  return { ...updated, messages: [...session.messages, { role: "founder", text: answer }, { role: "agent", text: reply }] };
 }

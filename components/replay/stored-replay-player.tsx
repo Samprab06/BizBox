@@ -84,7 +84,7 @@ export function StoredReplayPlayer({
         measured floor plan.
       </p>
       <div
-        className="h-72 overflow-hidden rounded-xl border border-line bg-paper"
+        className="h-72 overflow-hidden rounded-xl border border-line bg-canvas"
         role="group"
         aria-label="Interactive modeled floor plan"
       >
@@ -99,7 +99,7 @@ export function StoredReplayPlayer({
       <div className="flex flex-wrap items-center gap-4">
         <button
           type="button"
-          className="rounded-lg bg-pine px-4 py-2 font-semibold text-white"
+          className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent"
           onClick={() => {
             if (time >= closeMin) setTime(openMin);
             setPlaying(!running);
