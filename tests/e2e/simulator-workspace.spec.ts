@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { expandProjectNavigation } from "./fixtures";
+import { closeConsultant, expandProjectNavigation, openConsultant } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/vexcel/**", (route) =>
@@ -229,6 +229,7 @@ test("invalid comparison recovery reveals a saved-focus view only once and expli
     "docked",
   );
   // A later deliberate focus choice survives the recovery component's rerender.
+  await openConsultant(page);
   await page
     .getByRole("button", { name: "Expand the assistant", exact: true })
     .click();
@@ -239,6 +240,7 @@ test("invalid comparison recovery reveals a saved-focus view only once and expli
   await page
     .getByRole("button", { name: "Show the current step", exact: true })
     .click();
+  await closeConsultant(page);
   await page
     .getByRole("link", { name: "Open the example", exact: true })
     .click();
