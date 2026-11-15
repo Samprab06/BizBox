@@ -157,6 +157,8 @@ export const FinalPlanSummarySchema = z
       })
       .strict()
       .nullable(),
+    /** The profile changed after the finalized comparison ran. */
+    outdated: z.boolean().optional(),
     risks: z.array(z.string().min(1).max(500)).max(8),
     nextSteps: z.array(z.string().min(1).max(500)).min(1).max(8),
   })

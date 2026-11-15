@@ -49,6 +49,7 @@ export async function finalizeChosenSite({
       addresses,
       tweaks,
       plan,
+      outdated: payload.outdated,
     });
   } catch {
     return null;

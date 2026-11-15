@@ -188,3 +188,69 @@ export function assumptionRows(assumptions: IntakeState["assumptions"]) {
   }
   return rows;
 }
+
+const plain = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s.:]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+const amount = (text: string) => {
+  const n = Number(text.replace(/[$,\s]/g, ""));
+  return text.trim() && Number.isFinite(n) ? n : null;
+};
+/** Area text as a set of "favor:x" / "avoid:y" entries, ignoring wording and order. */
+const areaSet = (text: string) =>
+  new Set(
+    text
+      .split(/[;,\n]+/)
+      .map((part) => plain(part))
+      .filter(Boolean)
+      .map((part) => {
+        const avoid = /^(?:avoid|not|no|away from)\s+/.test(part);
+        const name = part
+          .replace(/^(?:(?:avoid|not|no|away from|favor|favour|prefer|near)\s+)+/, "")
+          .trim();
+        return `${avoid ? "avoid" : "favor"}:${name}`;
+      }),
+  );
+const sameSet = (a: Set<string>, b: Set<string>) =>
+  a.size === b.size && [...a].every((x) => b.has(x));
+
+/**
+ * True when `incoming` says the same thing as the founder's `existing` answer for `key`
+ * (same hours, numbers, requirement flags, areas or customers), so a chat reply that merely
+ * restates it leaves the saved wording and origin alone.
+ */
+export function sameAnswer(key: Key, existing: string, incoming: string): boolean {
+  if (plain(existing) === plain(incoming)) return true;
+  switch (key) {
+    case "rent":
+    case "buildout":
+    case "staff": {
+      const a = amount(existing);
+      return a !== null && a === amount(incoming);
+    }
+    case "hours": {
+      const a = operatingHours(existing);
+      const b = operatingHours(incoming);
+      return Boolean(a && b && a.openMinute === b.openMinute && a.closeMinute === b.closeMinute);
+    }
+    case "requirements": {
+      const a = mustHaves({ value: existing, origin: "founder" });
+      const b = mustHaves({ value: incoming, origin: "founder" });
+      return (["frontage", "corner", "parking", "groundFloor"] as const).every(
+        (f) => a[f]?.value === b[f]?.value,
+      );
+    }
+    case "areas":
+      return sameSet(areaSet(existing), areaSet(incoming));
+    case "customers": {
+      const list = (t: string) =>
+        new Set(t.split(/[;,\n]+|\band\b/).map(plain).filter(Boolean));
+      return sameSet(list(existing), list(incoming));
+    }
+    default:
+      return false;
+  }
+}

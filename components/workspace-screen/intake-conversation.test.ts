@@ -527,4 +527,103 @@ describe("Scene 1 request history and flow events", () => {
     expect(body.history).toHaveLength(12);
     expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
   });
+
+  describe("restated answers do not drift the profile", () => {
+    const founder = (value: string) => ({ value, origin: "founder" as const });
+    const saved: IntakeSession = {
+      profile: {
+        areas: founder("near campus, avoid Downtown"),
+        customers: founder("students and remote workers"),
+        hours: founder("7am-3pm"),
+        rent: founder("$4,500"),
+        requirements: founder("Needs frontage and parking"),
+        concept: founder("Neighborhood coffee bar"),
+      },
+      messages: [],
+      pending: [],
+    };
+    const restated = {
+      ...reply,
+      draft: {
+        concept: "Neighborhood coffee bar",
+        preferredAreas: ["Near Campus"],
+        avoidedAreas: ["downtown"],
+        targetCustomers: ["Students", "remote workers"],
+        operatingHours: { openMinute: 420, closeMinute: 900 },
+        economics: {
+          monthlyRentCeilingCents: {
+            value: 450000,
+            unit: "USD cents/month",
+            origin: "founder",
+            evidenceIds: [],
+          },
+        },
+        mustHaves: {
+          frontage: {
+            value: true,
+            unit: "boolean",
+            origin: "founder",
+            evidenceIds: [],
+          },
+          corner: {
+            value: false,
+            unit: "boolean",
+            origin: "founder",
+            evidenceIds: [],
+          },
+          parking: {
+            value: true,
+            unit: "boolean",
+            origin: "founder",
+            evidenceIds: [],
+          },
+          groundFloor: {
+            value: false,
+            unit: "boolean",
+            origin: "founder",
+            evidenceIds: [],
+          },
+        },
+      },
+    } as unknown as IntakeResponse;
+
+    it("keeps wording and origin when the draft means the same thing", () => {
+      const next = applyIntakeReply(saved, saved, restated);
+      expect(next.profile.areas).toEqual(saved.profile.areas);
+      expect(next.profile.customers).toEqual(saved.profile.customers);
+      expect(next.profile.hours).toEqual(saved.profile.hours);
+      expect(next.profile.rent).toEqual(saved.profile.rent);
+      expect(next.profile.concept).toEqual(saved.profile.concept);
+    });
+
+    it("keeps a default origin when the restated value is unchanged", () => {
+      const withDefault: IntakeSession = {
+        ...saved,
+        profile: {
+          ...saved.profile,
+          rent: { value: "4500", origin: "default" },
+        },
+      };
+      const next = applyIntakeReply(withDefault, withDefault, restated);
+      expect(next.profile.rent).toEqual({ value: "4500", origin: "default" });
+    });
+
+    it("still applies real changes and marks them as the founder's", () => {
+      const changed = {
+        ...restated,
+        draft: {
+          ...restated.draft,
+          operatingHours: { openMinute: 360, closeMinute: 900 },
+          preferredAreas: ["Midtown"],
+        },
+      } as unknown as IntakeResponse;
+      const next = applyIntakeReply(saved, saved, changed);
+      expect(next.profile.hours).toEqual({
+        value: "06:00–15:00",
+        origin: "founder",
+      });
+      expect(next.profile.areas?.value).toBe("Favor Midtown; Avoid downtown");
+      expect(next.profile.areas?.origin).toBe("founder");
+    });
+  });
 });

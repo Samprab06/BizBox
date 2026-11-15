@@ -40,6 +40,8 @@ export type PrintablePlan = {
   sections: PrintableSection[];
   attributions: { label: string; detail: string }[];
   limitations: string[];
+  /** The profile changed after this comparison ran; the plan still reflects the run. */
+  outdated: boolean;
 };
 
 export class PlanExportRefusal extends Error {
@@ -64,7 +66,7 @@ const ComparisonSchema = z.object({
 });
 export type ExportComparison = z.infer<typeof ComparisonSchema>;
 
-/** Fail closed before rendering: the comparison must be this project's and current. */
+/** Fail closed before rendering: the comparison must be this project's. An outdated one still exports. */
 export function requireCurrentComparison(
   value: unknown,
   projectId: string,
@@ -79,11 +81,6 @@ export function requireCurrentComparison(
     throw new PlanExportRefusal(
       "invalid",
       "The saved comparison could not be verified.",
-    );
-  if (parsed.data.outdated)
-    throw new PlanExportRefusal(
-      "outdated",
-      "This comparison is outdated: the profile changed after it ran. Rerun the comparison before exporting.",
     );
   return parsed.data;
 }
@@ -114,6 +111,9 @@ const LIMITATIONS = [
   "Scenario recommendation, not a sales forecast: every figure is a modelled range under the stated assumptions.",
   "Photos, floor plans, 3D scans and listing remarks are not included until their export terms are confirmed.",
 ];
+
+export const OUTDATED_LIMITATION =
+  "This plan uses your answers as they were when this comparison ran; they've changed since. Rerun the comparison to update these modeled ranges.";
 
 export function referenceLabel(ref: PlanReference): string {
   if ("comparisonId" in ref)
@@ -289,6 +289,9 @@ export function preparePlanExport(input: {
     tied: plan.tiedSiteIds.map((id) => site(id)!),
     sections: sections.filter((s) => s.rows.length || s.notes.length),
     attributions: ATTRIBUTIONS,
-    limitations: LIMITATIONS,
+    limitations: comparison.outdated
+      ? [OUTDATED_LIMITATION, ...LIMITATIONS]
+      : LIMITATIONS,
+    outdated: comparison.outdated,
   };
 }

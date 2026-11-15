@@ -8,8 +8,9 @@ import {
   planContextSource,
   type WorkspaceObservation,
 } from "@/lib/client/workspace-context";
-import { workspaceHref } from "@/lib/client/workspace-routes";
+import { flowStepHref } from "@/lib/client/flow-steps";
 import {
+  OUTDATED_LIMITATION,
   PlanExportRefusal,
   preparePlanExport,
   type PrintablePlan,
@@ -18,7 +19,6 @@ import {
 type State =
   | { kind: "loading" }
   | { kind: "ready"; plan: PrintablePlan }
-  | { kind: "outdated" }
   | { kind: "error"; message: string };
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -110,31 +110,25 @@ export function PlanExport({
           owner: contextOwner,
           observation: {
             kind: "plan",
-            phase:
-              error instanceof PlanExportRefusal && error.code === "outdated"
-                ? "outdated"
-                : "error",
+            phase: "error",
             comparisonId,
             siteIds: [],
             ...source,
           },
         });
-        if (error instanceof PlanExportRefusal && error.code === "outdated")
-          setState({ kind: "outdated" });
-        else
-          setState({
-            kind: "error",
-            message:
-              error instanceof PlanExportRefusal
-                ? error.message
-                : "The plan could not be loaded.",
-          });
+        setState({
+          kind: "error",
+          message:
+            error instanceof PlanExportRefusal
+              ? error.message
+              : "The plan could not be loaded.",
+        });
       }
     })();
     return () => controller.abort();
   }, [projectId, comparisonId, investigationId, contextOwner]);
 
-  const comparisonLink = workspaceHref(projectId, "comparison");
+  const comparisonLink = flowStepHref(projectId, "compare");
   if (resolved === undefined) return <p role="status">Preparing the plan…</p>;
   if (!comparisonId)
     return (
@@ -149,22 +143,6 @@ export function PlanExport({
       </p>
     );
   if (state.kind === "loading") return <p role="status">Preparing the plan…</p>;
-  if (state.kind === "outdated")
-    return (
-      <div role="alert" className="rounded-xl border border-line p-4">
-        <p className="font-semibold">This comparison is outdated.</p>
-        <p className="mt-1 text-sm">
-          The profile changed after it ran. Rerun the comparison, then export
-          its plan.
-        </p>
-        <Link
-          className="mt-3 inline-block font-semibold text-accent underline"
-          href={comparisonLink}
-        >
-          Rerun the comparison
-        </Link>
-      </div>
-    );
   if (state.kind === "error")
     return (
       <p role="alert">
@@ -199,6 +177,17 @@ export function PlanExport({
           Print or save as PDF
         </button>
       </header>
+      {plan.outdated && (
+        <p role="status" className="rounded-xl border border-line p-3 text-sm">
+          {OUTDATED_LIMITATION}{" "}
+          <Link
+            className="font-semibold text-accent underline print:hidden"
+            href={comparisonLink}
+          >
+            Rerun the comparison
+          </Link>
+        </p>
+      )}
       <section
         aria-label="Recommendation"
         className="rounded-xl border border-line p-4 print:border-0 print:p-0"
@@ -287,9 +276,11 @@ export function PlanExport({
           ))}
         </ul>
         <ul className="mt-3 space-y-1">
-          {plan.limitations.map((l) => (
-            <li key={l}>{l}</li>
-          ))}
+          {plan.limitations
+            .filter((l) => l !== OUTDATED_LIMITATION)
+            .map((l) => (
+              <li key={l}>{l}</li>
+            ))}
         </ul>
       </footer>
     </article>
