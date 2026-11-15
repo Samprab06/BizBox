@@ -12,6 +12,28 @@ const viewports = [
 ];
 
 describe("one continuous MacBook aperture and onboarding card", () => {
+  it("allows a smaller story hero without separating hardware from its aperture", () => {
+    const viewport = viewports[0];
+    const options = { heroScale: 0.86, heroCenterY: 0.65 };
+    const initial = cameraAt(viewport, macbook, 0, options);
+    expect(initial.hardware.width).toBeCloseTo(
+      cameraAt(viewport, macbook, 0).hardware.width * 0.86,
+    );
+    for (const entry of [0, 0.2, 0.6]) {
+      const { hardware, screen } = cameraAt(viewport, macbook, entry, options);
+      expect(screen.left).toBeCloseTo(
+        hardware.left + hardware.width * macbook.screenQuad[0].x,
+        7,
+      );
+      expect(screen.top).toBeCloseTo(
+        hardware.top + hardware.height * macbook.screenQuad[0].y,
+        7,
+      );
+    }
+    expect(cameraAt(viewport, macbook, 1, options).screen).toEqual(
+      cameraAt(viewport, macbook, 1).screen,
+    );
+  });
   it.each(viewports)(
     "has no final-frame geometry or card-size jump at $width×$height",
     (viewport) => {
