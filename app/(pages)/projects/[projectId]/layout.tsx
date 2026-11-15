@@ -3,10 +3,7 @@ import { BrandLogo } from "@/components/brand/brand-logo";
 import { ConsultantShell } from "@/components/shell/consultant-shell";
 import { FlowStepper } from "@/components/shell/flow-stepper";
 import { cn, focusRing } from "@/components/ui/cn";
-import {
-  ProjectContextBar,
-  ProjectContextProvider,
-} from "@/components/shell/context-bar";
+import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
 /**
@@ -49,7 +46,6 @@ export default async function ProjectLayout({
       {project ? (
         <ProjectContextProvider project={project} showContextBar={false}>
           <ConsultantShell projectId={projectId} project={project}>
-            <ProjectContextBar />
             {children}
           </ConsultantShell>
         </ProjectContextProvider>

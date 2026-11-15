@@ -40,6 +40,7 @@ export function LocationExperience({
   projectId,
   controller,
   candidates,
+  shownCount,
   selected,
   onSelect,
   step,
@@ -62,6 +63,8 @@ export function LocationExperience({
   projectId: string;
   controller: LiveComparisonController;
   candidates: WorkspaceCandidate[];
+  /** Locations shown on the map and list (top picks plus chosen). */
+  shownCount?: number;
   selected?: WorkspaceCandidate;
   onSelect: (id: string) => void;
   step: WorkspaceStep;
@@ -129,7 +132,7 @@ export function LocationExperience({
               aria-expanded={listOpen}
               onClick={onShowList}
             >
-              Show list ({candidates.length} units)
+              Show list ({shownCount ?? candidates.length} units)
             </Button>
           )}
         </div>

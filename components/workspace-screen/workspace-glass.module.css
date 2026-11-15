@@ -7,7 +7,7 @@
   min-height: 100dvh;
   flex-direction: column;
   overflow: hidden;
-  padding: 0 28px 28px;
+  padding: 20px 28px 28px;
   color: var(--color-ink);
   background: var(--color-canvas);
   font-family: var(--font-sans);
@@ -48,15 +48,21 @@
   accent-color: var(--color-accent);
 }
 
-.header {
-  position: relative;
+/* The project layout's top bar is the only header; photo credits are a corner caption. */
+.credits {
+  position: absolute;
   z-index: 5;
-  display: flex;
-  min-height: 92px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 18px 8px;
+  bottom: 6px;
+  left: 28px;
+  font-size: 11px;
+  color: var(--color-muted);
+  opacity: 0.75;
+}
+.credits a {
+  text-decoration: underline;
+}
+.credits a:hover {
+  opacity: 1;
 }
 
 .identity,
@@ -187,7 +193,7 @@
   isolation: isolate;
   display: grid;
   min-width: 0;
-  height: max(650px, calc(100dvh - 120px));
+  height: max(650px, calc(100dvh - 48px));
   max-height: 1100px;
   flex: 0 0 auto;
   grid-template-columns: minmax(0, 1fr) minmax(340px, 32%);

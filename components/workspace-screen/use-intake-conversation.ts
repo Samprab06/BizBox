@@ -233,7 +233,7 @@ export function useIntakeConversation(
       if (availability !== "live") {
         setFailure({
           message:
-            "The BizBox assistant is offline, so nothing was sent. Edit your brief in Intake instead.",
+            "The BizBox assistant is offline, so nothing was sent. Edit your brief under Your business in the top bar instead.",
           source: "assistant",
         });
         return Promise.resolve(null);
