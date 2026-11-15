@@ -120,6 +120,7 @@ export function AssistantPanel({
   onModeChange,
   voiceAdapter,
   actions,
+  inline,
   className = "",
 }: {
   projectId: string;
@@ -129,6 +130,8 @@ export function AssistantPanel({
   voiceAdapter: VoiceAdapter;
   /** Extra header controls (the shell's layout toggle). */
   actions?: ReactNode;
+  /** HAC-150: an answer card shown in the Text tab between the conversation and the composer. */
+  inline?: ReactNode;
   className?: string;
 }) {
   const [draft, setDraft] = useAssistantDraft(projectId);
@@ -253,6 +256,7 @@ export function AssistantPanel({
         {mode === "text" && (
           <>
             <Conversation conversation={conversation} id={`${base}-log-text`} />
+            {inline}
             <form
               className="border-t border-viewport-line p-4"
               onSubmit={(event) => {

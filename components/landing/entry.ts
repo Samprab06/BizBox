@@ -7,6 +7,7 @@
  * that project's ID on this device so a returning founder resumes their own brief.
  */
 import { missingFields, type IntakeSession } from "@/components/intake/profile";
+import { entryPath } from "@/components/shell/entry-flow";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { DEMO_PROJECT_ID, isKnownProjectId } from "@/lib/projects/ids";
 
@@ -18,7 +19,10 @@ export type EntryTarget =
   | {
       kind: "returning";
       complete: boolean;
+      /** The project's chat-first entry (HAC-150); a complete brief docks from there. */
       onboardingHref: string;
+      /** The guided intake, kept as the "Edit brief" view. */
+      briefHref: string;
       workspaceHref: string;
     };
 
@@ -40,14 +44,16 @@ export function entryTarget(
   session: IntakeSession | null,
   projectId: string,
 ): EntryTarget {
-  // The guided onboarding is the intake view's default (HAC-127).
-  const onboardingHref = workspaceHref(projectId, "intake");
+  // HAC-150: the chat-first entry is where the brief is taken; the guided intake (HAC-127)
+  // remains as the "Edit brief" view.
+  const onboardingHref = entryPath(projectId);
   if (!session || !hasStarted(session))
     return { kind: "onboarding", href: onboardingHref };
   return {
     kind: "returning",
     complete: missingFields(session.profile).length === 0,
     onboardingHref,
+    briefHref: workspaceHref(projectId, "intake"),
     workspaceHref: workspaceHref(projectId, "workspace"),
   };
 }

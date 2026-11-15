@@ -29,7 +29,7 @@ describe("landing entry target", () => {
     for (const session of [null, initialSession]) {
       expect(entryTarget(session, "houston-coffee")).toEqual({
         kind: "onboarding",
-        href: "/projects/houston-coffee/intake",
+        href: "/projects/houston-coffee",
       });
     }
     expect(hasStarted(initialSession)).toBe(false);
@@ -43,7 +43,8 @@ describe("landing entry target", () => {
     expect(entryTarget(partial, "houston-coffee")).toEqual({
       kind: "returning",
       complete: false,
-      onboardingHref: "/projects/houston-coffee/intake",
+      onboardingHref: "/projects/houston-coffee",
+      briefHref: "/projects/houston-coffee/intake",
       workspaceHref: "/projects/houston-coffee/workspace",
     });
   });
@@ -81,7 +82,7 @@ describe("landing entry target", () => {
     it("reopens the remembered project, started or not", () => {
       expect(entryPlan(own, sessions({}))).toEqual({
         kind: "onboarding",
-        href: `/projects/${own}/intake`,
+        href: `/projects/${own}`,
         projectId: own,
       });
       expect(entryPlan(own, sessions({ [own]: complete }))).toMatchObject({

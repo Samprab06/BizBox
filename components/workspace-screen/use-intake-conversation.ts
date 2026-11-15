@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeSession } from "@/components/intake/profile";
+import type { UiAction } from "@/lib/contracts/agent";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
 import {
   useAgentViewContext,
@@ -78,8 +79,16 @@ function useAgentAvailability(projectId: string): AgentAvailability {
  * and voice input and the intake screen's form (structured edits, offline fixture answers)
  * all go through `enqueue`, so there is one queue per project.
  */
-export function useIntakeConversation(projectId: string) {
+export function useIntakeConversation(
+  projectId: string,
+  /** HAC-150: told of the UI actions on each successful reply (the shell watches for `navigate`). */
+  onActions?: (actions: UiAction[]) => void,
+) {
   const view = useAgentViewContext();
+  const actionsRef = useRef(onActions);
+  useEffect(() => {
+    actionsRef.current = onActions;
+  }, [onActions]);
   const key = intakeStorageKey(projectId);
   const raw = useContextIntake(projectId);
   const availability = useAgentAvailability(projectId);
@@ -178,6 +187,8 @@ export function useIntakeConversation(projectId: string) {
           return null;
         }
         save(applyIntakeReply(read(), current, outcome.result, Boolean(text)));
+        if (outcome.result.actions?.length)
+          actionsRef.current?.(outcome.result.actions);
         return outcome.result.assistantMessage;
       } finally {
         if (mounted.current) setBusy(false);
