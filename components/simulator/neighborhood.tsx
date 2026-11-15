@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Entity, Viewer } from "cesium";
 import {
@@ -26,6 +26,12 @@ import {
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
 import { readRenderPalette } from "./render-palette";
+import {
+  describeCityLoad,
+  initialCityLoad,
+  reduceCityLoad,
+} from "./city-loading";
+import { warmTileDecoders } from "./tile-decoders";
 import { createAnimatedColor } from "./animated-color";
 import {
   createListingLayer,
@@ -114,22 +120,40 @@ export default function Neighborhood({
     "loading",
   );
   const [attempt, setAttempt] = useState(0);
-  const [status, setStatus] = useState<"loading" | "ready" | "failed">(
-    "loading",
+  const [load, dispatchLoad] = useReducer(
+    reduceCityLoad,
+    undefined,
+    initialCityLoad,
   );
   const [meshStatus, setMeshStatus] = useState<ContextMeshState | "failed">(
     "hidden",
   );
   const [contextFailure, setContextFailure] = useState(false);
+  const skipped = load.phase === "skipped";
+  const status =
+    load.phase === "failed"
+      ? "failed"
+      : load.phase === "loading" || skipped
+        ? "loading"
+        : "ready";
+  const [now, setNow] = useState(0);
+  const counting = load.phase === "loading";
+  useEffect(() => {
+    if (!counting) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [counting]);
+  const view = describeCityLoad(load, now);
 
   useEffect(() => {
     let closed = false;
     let viewer: Viewer | undefined;
     const roadRequests = new AbortController();
     const element = container.current;
-    if (!element || !hasBeenVisible) return;
+    if (!element || !hasBeenVisible || skipped) return;
     const palette = readRenderPalette();
-    setStatus("loading");
+    dispatchLoad({ type: "start", at: Date.now() });
+    const decoderWarmup = new AbortController();
     const disposers: (() => void)[] = [];
     const dispose = () => {
       disposers.splice(0).forEach((stop) => stop());
@@ -160,6 +184,14 @@ export default function Neighborhood({
         Math: CesiumMath,
       } = sdk;
       if (closed) return;
+      // Decoder workers and the tileset document load in parallel, before
+      // tile content can saturate the connection (HAC-177).
+      const decoders = warmTileDecoders(sdk, {
+        signal: decoderWarmup.signal,
+        onReady: () => {
+          if (!closed) dispatchLoad({ type: "decoder-ready" });
+        },
+      });
       viewer = new Viewer(target, {
         baseLayer: false,
         // Listing context uses a display-only floor below the source mesh.
@@ -203,14 +235,16 @@ export default function Neighborhood({
           ready: () => {
             baseReady = true;
             if (!closed) {
-              setStatus("ready");
+              const at = Date.now();
+              dispatchLoad({ type: "first-building", at });
+              dispatchLoad({ type: "settled", at });
               setContextFailure(false);
             }
           },
           error: () => {
             if (!closed) {
               setContextFailure(true);
-              if (!baseReady) setStatus("failed");
+              if (!baseReady) dispatchLoad({ type: "failed" });
             }
           },
         });
@@ -243,10 +277,11 @@ export default function Neighborhood({
         ...RENDER_SETTINGS[qualityRef.current],
         ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
       };
+      dispatchLoad({ type: "engine-ready" });
       let tileset: import("cesium").Cesium3DTileset;
       try {
         if (!tilesetUrl) throw new Error("3D source unavailable");
-        tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
+        const tilesetRequest = Cesium3DTileset.fromUrl(tilesetUrl, {
           showCreditsOnScreen: true,
           maximumScreenSpaceError: initialSettings.tileError,
           cacheBytes: initialSettings.cacheBytes,
@@ -254,12 +289,21 @@ export default function Neighborhood({
           shadows: ShadowMode.DISABLED,
           lightColor: new Cartesian3(0.22, 0.22, 0.22),
           dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
-          // Regional shortlists need the desired coarse LOD, not every intermediate
-          // ancestor held by replacement traversal. Regional cache remains bounded.
-          skipLevelOfDetail: Boolean(listingOptions.current),
+          // Skip intermediate ancestors held by replacement traversal: the
+          // street view's initial request roughly halves (HAC-177). Regional
+          // shortlists also load only the desired coarse LOD. Cache stays bounded.
+          skipLevelOfDetail: true,
           immediatelyLoadDesiredLevelOfDetail: Boolean(listingOptions.current),
         });
+        void tilesetRequest.then(
+          () => {
+            if (!closed) dispatchLoad({ type: "imagery-ready" });
+          },
+          () => {},
+        );
+        [tileset] = await Promise.all([tilesetRequest, decoders]);
       } catch (error) {
+        // HAC-130: the listing overview keeps its 2D context when the 3D mesh is unavailable.
         if (!listingOptions.current) throw error;
         let previous = "";
         disposers.push(
@@ -721,22 +765,40 @@ export default function Neighborhood({
       void updateRoads();
       const stopWatching = tileset.tileVisible.addEventListener(() => {
         stopWatching();
-        if (!closed && !listingOptions.current) setStatus("ready");
+        // The listing overview is ready when its map context is (see attachContextImagery).
+        if (closed || listingOptions.current) return;
+        const at = Date.now();
+        dispatchLoad({ type: "first-building", at });
+        // allTilesLoaded can fire on the frame before the last tile renders.
+        if (tileset.tilesLoaded) dispatchLoad({ type: "settled", at });
       });
       disposers.push(stopWatching);
       disposers.push(
+        tileset.loadProgress.addEventListener(
+          (pending: number, processing: number) => {
+            if (!closed)
+              dispatchLoad({ type: "progress", pending, processing });
+          },
+        ),
+        tileset.tileLoad.addEventListener((tile: object) => {
+          // External tileset documents are not buildings.
+          if (!closed && Reflect.get(tile, "hasTilesetContent") !== true)
+            dispatchLoad({ type: "tile-ready" });
+        }),
+        tileset.allTilesLoaded.addEventListener(() => {
+          if (!closed) dispatchLoad({ type: "settled", at: Date.now() });
+        }),
         tileset.tileFailed.addEventListener(() => {
           if (!closed && !listingOptions.current)
-            setStatus((current) =>
-              current === "loading" ? "failed" : current,
-            );
+            dispatchLoad({ type: "failed" });
         }),
       );
       viewer.scene.requestRender();
     }
 
     void load(element).catch(() => {
-      if (!closed) setStatus("failed");
+      if (!closed) dispatchLoad({ type: "failed" });
+      decoderWarmup.abort();
       roadRequests.abort();
       trafficEntities.current = () => {};
       updateScene.current = () => {};
@@ -747,6 +809,7 @@ export default function Neighborhood({
     });
     return () => {
       closed = true;
+      decoderWarmup.abort();
       roadRequests.abort();
       trafficEntities.current = () => {};
       updateScene.current = () => {};
@@ -760,11 +823,13 @@ export default function Neighborhood({
     hasBeenVisible,
     illustrativeOverlays,
     birdseye,
+    skipped,
   ]);
 
   return (
     <div
       id="neighborhood"
+      data-city-stage={view.stage}
       className="relative h-full w-full overflow-hidden bg-canvas text-ink"
     >
       <div
@@ -790,7 +855,6 @@ export default function Neighborhood({
               className="ml-2 underline"
               onClick={() => {
                 setTrafficVisible(true);
-                setStatus("loading");
                 setAttempt((value) => value + 1);
               }}
             >
@@ -802,18 +866,66 @@ export default function Neighborhood({
 
       {status !== "ready" && (
         <div
-          role="status"
-          className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted"
+          data-city-overlay
+          className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-muted"
         >
-          {status === "loading" ? (
-            <span className="flex items-center gap-3">
-              <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
-              {listingLayer ? "Loading map context" : "Loading 3D neighborhood"}
-            </span>
-          ) : listingLayer ? (
-            "Map context unavailable. Retry the map."
+          {listingLayer ? (
+            load.phase === "failed" ? (
+              <p role="status">Map context unavailable. Retry the map.</p>
+            ) : (
+              <span role="status" className="flex items-center gap-3">
+                <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+                Loading map context
+              </span>
+            )
+          ) : load.phase === "failed" ? (
+            <p role="status">{view.title}</p>
+          ) : skipped ? (
+            <div className="pointer-events-auto grid justify-items-center gap-2 rounded bg-panel-raised px-4 py-3 text-center">
+              <p role="status">
+                {view.title}. The timeline and replay still work.
+              </p>
+              <Button
+                variant="quiet"
+                type="button"
+                className="underline"
+                onClick={() => dispatchLoad({ type: "start", at: Date.now() })}
+              >
+                Load 3D neighborhood
+              </Button>
+            </div>
           ) : (
-            "3D neighborhood unavailable. Check WebGL support or retry imagery."
+            <div className="pointer-events-auto grid max-w-sm justify-items-center gap-1.5 rounded bg-panel-raised/90 px-4 py-3 text-center">
+              <div role="status" className="grid justify-items-center gap-1.5">
+                <span className="flex items-center gap-3 text-ink">
+                  <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+                  Loading 3D neighborhood: {view.title}
+                </span>
+                <span className="text-xs">
+                  {[
+                    view.step &&
+                      `Step ${view.step.index} of ${view.step.total}`,
+                    view.detail,
+                    `${view.elapsedSeconds} s`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </div>
+              {view.offerSkip && (
+                <p className="text-xs">
+                  Taking longer than usual.{" "}
+                  <Button
+                    variant="quiet"
+                    type="button"
+                    className="underline"
+                    onClick={() => dispatchLoad({ type: "skip" })}
+                  >
+                    Skip 3D view
+                  </Button>
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -835,6 +947,15 @@ export default function Neighborhood({
                   : "3D imagery not available here"}
           </p>
         )}
+      {!listingLayer && load.phase === "visible" && (
+        <p
+          role="status"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 w-max max-w-[min(30rem,50%)] -translate-x-1/2 rounded bg-panel-raised px-2 py-1 text-center text-[11px] text-muted"
+        >
+          {view.title} · {view.detail} · first buildings after{" "}
+          {view.elapsedSeconds} s
+        </p>
+      )}
 
       {illustrativeOverlays && (
         <GlassControl

@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useMemo, useState, useCallback } from "react";
+import { memo, useMemo, useState, useCallback } from "react";
 import type { LocationStoryData } from "./location-data";
 import { groupListingMarkers } from "@/components/city/listing-markers";
 import type { ListingLayerOptions } from "@/components/city/listing-layer";
@@ -20,7 +20,7 @@ const Neighborhood = dynamic(
   },
 );
 type Projection = { id: string; x: number; y: number };
-export function StoryMap({
+export const StoryMap = memo(function StoryMap({
   data,
   minute,
   expanded,
@@ -184,4 +184,4 @@ export function StoryMap({
       </div>
     </div>
   );
-}
+});
