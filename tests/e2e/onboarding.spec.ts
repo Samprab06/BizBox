@@ -114,6 +114,12 @@ for (const viewport of [
       await expect(exact(page)).toHaveValue("4600");
       await page.keyboard.press("PageDown");
       await expect(exact(page)).toHaveValue("3600");
+      for (const invalidRent of ["0", "99999999999"]) {
+        await exact(page).fill(invalidRent);
+        await proceed(page).click();
+        await expect(card(page).getByRole("alert")).toHaveText("Enter a whole dollar amount from $1 to $20,000.");
+        await expect(exact(page)).toHaveAttribute("aria-invalid", "true");
+      }
       await exact(page).fill("4550");
       await expect(ruler(page)).toHaveAttribute("aria-valuetext", "$4,550");
       await expectNoOverflow(page);
@@ -121,6 +127,10 @@ for (const viewport of [
 
       // Buildout: drag the ruler 10 detents.
       await expect(title(page)).toHaveText("What’s your buildout budget?");
+      await exact(page).fill("0");
+      await proceed(page).click();
+      await expect(card(page).getByRole("alert")).toHaveText("Enter a whole dollar amount from $1 to $500,000.");
+      await exact(page).fill("80000");
       const box = (await ruler(page).boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
@@ -146,6 +156,11 @@ for (const viewport of [
       await proceed(page).click();
 
       await expect(title(page)).toHaveText("How many people will be on shift?");
+      await exact(page).fill("");
+      await proceed(page).click();
+      await expect(card(page).getByRole("alert")).toHaveText("Enter how many people will be on shift.");
+      await expect(exact(page)).toHaveValue("");
+      await exact(page).fill("2");
       await ruler(page).focus();
       await page.keyboard.press("ArrowUp");
       await expect(exact(page)).toHaveValue("3");
@@ -158,6 +173,7 @@ for (const viewport of [
       await expect(title(page)).toHaveText("Review your business");
       await expect(card(page).getByText("Quick food", { exact: true })).toBeVisible();
       await expect(card(page).getByText("$4,550")).toBeVisible();
+      await expect(card(page).getByText("Favor: Atwater Village; Avoid: noisy intersections")).toBeVisible();
       await page.getByRole("button", { name: "Edit staff" }).click();
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await proceed(page).click();
