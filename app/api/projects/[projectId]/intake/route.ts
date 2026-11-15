@@ -1,3 +1,4 @@
+import { createPostgresViewContextLookups } from "@/lib/agent/view-context-postgres";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { projects } from "@/lib/db/schema";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export const POST = createIntakeHandler({
+  viewContextLookups: createPostgresViewContextLookups(),
   onCompleted: createIntakeThreadRecorder(),
   projectExists: async (projectId) => {
     const rows = await getDb()

@@ -1,3 +1,5 @@
+import { formatViewContext } from "./view-context";
+import { AgentViewContextSchema } from "@/lib/contracts/agent";
 import { AIMessage } from "@langchain/core/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UiAction } from "@/lib/contracts/agent";
@@ -222,6 +224,7 @@ describe("deepagents intake binding", () => {
       inputTokens: 1600,
       outputTokens: 50,
       totalTokens: 1650,
+      viewContextBytes: 0,
     });
     expect(lines[0]).not.toContain("secret-ish");
   });
@@ -252,6 +255,9 @@ const runWithUi = (
     session,
     message,
     signal: new AbortController().signal,
+    viewContextLine: options.view
+      ? formatViewContext(AgentViewContextSchema.parse(options.view))
+      : undefined,
     ui: {
       projectId: UI_FIXTURE.projectId,
       lookups,
@@ -403,4 +409,39 @@ describe("HAC-144 UI tool group", () => {
     expect(badTarget).toMatch(/^Error/);
     expect(noSite).toContain("needs a siteId");
   });
+});
+
+it("HAC-149 includes only the bounded validated view line and logs its size", async () => {
+  const log = vi.spyOn(console, "info").mockImplementation(() => {});
+  const { resolveViewContext, formatViewContext } =
+    await import("./view-context");
+  const view = await resolveViewContext(
+    "project-1",
+    { stage: "site", siteId: "screen", candidateIds: ["screen", "cheap"] },
+    {
+      comparison: async () => null,
+      scenario: async () => null,
+      investigation: async () => null,
+      candidates: async () => ["screen", "cheap"],
+    },
+  );
+  const line = formatViewContext(view!);
+  const model = new ScriptedModel([new AIMessage("Compare screen with cheap")]);
+  const reply = await createDeepIntakeRunner(model)({
+    session: createIntakeSession("project-1"),
+    message: "Compare this one with the cheapest",
+    signal: new AbortController().signal,
+    viewContextLine: line,
+  });
+  expect(reply).toBe("Compare screen with cheap");
+  const messages = model.calls[0]
+    .map((message) => String(message.content))
+    .join("\n");
+  expect(messages).toContain(line);
+  expect(messages).not.toContain("Founder's screen");
+  const entries = log.mock.calls.map(([entry]) => JSON.parse(String(entry)));
+  expect(entries.at(-1)).toMatchObject({
+    viewContextBytes: new TextEncoder().encode(line).length,
+  });
+  expect(JSON.stringify(entries)).not.toContain("screen");
 });

@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
-import { useContextIntake } from "@/lib/client/use-workspace-context";
+import {
+  useAgentViewContext,
+  useContextIntake,
+} from "@/lib/client/use-workspace-context";
 import {
   applyIntakeReply,
   intakeEndpoint,
@@ -44,6 +47,7 @@ function useAgentAvailability(projectId: string): AgentAvailability {
  * Text and voice both call `submit`, so they share one history and one request queue.
  */
 export function useIntakeConversation(projectId: string) {
+  const view = useAgentViewContext();
   const key = intakeStorageKey(projectId);
   const raw = useContextIntake(projectId);
   const session = useMemo(() => parseIntakeSession(raw), [raw]);
@@ -86,7 +90,7 @@ export function useIntakeConversation(projectId: string) {
   const send = useCallback(
     async (text: string, appendFounder: boolean): Promise<string | null> => {
       const current = read();
-      const body = intakeRequestBody(current, text);
+      const body = intakeRequestBody(current, text, view, projectId);
       if (appendFounder) save(withFounderMessage(current, text));
       setBusy(true);
       setFailure(null);
@@ -106,7 +110,7 @@ export function useIntakeConversation(projectId: string) {
         if (mounted.current) setBusy(false);
       }
     },
-    [projectId, read, save],
+    [projectId, read, save, view],
   );
 
   const enqueue = useCallback(
@@ -145,6 +149,7 @@ export function useIntakeConversation(projectId: string) {
 
   return {
     session,
+    view,
     messages: session?.messages ?? [],
     availability,
     busy,

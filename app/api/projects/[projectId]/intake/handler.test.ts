@@ -6,10 +6,7 @@ import { founderAnswers } from "@/lib/agent/__fixtures__/founder";
 import { BusinessProfileSchema } from "@/lib/contracts";
 import { AIMessage } from "@langchain/core/messages";
 import { createIntakeSession } from "@/lib/agent/intake";
-import {
-  createDeepIntakeRunner,
-  INTAKE_TIMEOUT_MS,
-} from "@/lib/agent/runner";
+import { createDeepIntakeRunner, INTAKE_TIMEOUT_MS } from "@/lib/agent/runner";
 import {
   fixtureUiLookups,
   ScriptedModel,
@@ -264,6 +261,15 @@ describe("HAC-144 intake UI actions", () => {
       projectExists: async () => true,
       runAgent: createDeepIntakeRunner(model),
       uiLookups: fixtureUiLookups(),
+      viewContextLookups: {
+        comparison: async () => null,
+        scenario: async () => null,
+        investigation: async () => null,
+        candidates: async () => [
+          UI_FIXTURE.montroseSiteId,
+          UI_FIXTURE.heightsSiteId,
+        ],
+      },
       newActionId: () => `ui_${++n}`,
     });
   };
@@ -328,7 +334,6 @@ describe("HAC-144 intake UI actions", () => {
     const response = await uiHandler(model)(
       request({
         message: "open my plan",
-        view: { stage: "workspace", siteId: "L-spoof:S-1" },
       }),
       context(UI_FIXTURE.projectId),
     );
@@ -340,17 +345,19 @@ describe("HAC-144 intake UI actions", () => {
   it("returns the actions collected so far when the step budget runs out", async () => {
     const targets = ["map", "candidate_list", "site_summary"];
     const model = new ScriptedModel(
-      Array.from({ length: 20 }, (_, index) =>
-        new AIMessage({
-          content: "",
-          tool_calls: [
-            {
-              id: `h-${index}`,
-              name: "highlight",
-              args: { target: targets[index % 3] },
-            },
-          ],
-        }),
+      Array.from(
+        { length: 20 },
+        (_, index) =>
+          new AIMessage({
+            content: "",
+            tool_calls: [
+              {
+                id: `h-${index}`,
+                name: "highlight",
+                args: { target: targets[index % 3] },
+              },
+            ],
+          }),
       ),
     );
     const response = await uiHandler(model)(
@@ -372,11 +379,15 @@ describe("HAC-144 intake UI actions", () => {
       newActionId: () => `ui_${++n}`,
     });
     const session = createIntakeSession("project-1");
-    for (const answer of founderAnswers.slice(0, -1)) session.saveProfile(answer);
+    for (const answer of founderAnswers.slice(0, -1))
+      session.saveProfile(answer);
     const { draft, assumptions } = session.snapshot();
     const completing = await (
       await handler(
-        request({ state: { draft, assumptions }, patch: founderAnswers.at(-1) }),
+        request({
+          state: { draft, assumptions },
+          patch: founderAnswers.at(-1),
+        }),
         context(),
       )
     ).json();
@@ -388,11 +399,340 @@ describe("HAC-144 intake UI actions", () => {
     const again = await (
       await handler(
         request({
-          state: { draft: completing.draft, assumptions: completing.assumptions },
+          state: {
+            draft: completing.draft,
+            assumptions: completing.assumptions,
+          },
         }),
         context(),
       )
     ).json();
     expect(again.actions).toEqual([]);
   });
+});
+
+describe("HAC-149 view scope before a model turn", () => {
+  const lookups = {
+    comparison: async (projectId: string, id: string) =>
+      id === "mine" ? { id, projectId, siteIds: ["screen"] } : null,
+    scenario: async () => null,
+    investigation: async () => null,
+    candidates: async () => ["screen", "cheap"],
+  };
+  it("passes one bounded selected-site line for typed/spoken shared turns", async () => {
+    const runAgent = vi.fn(
+      async ({ viewContextLine }: { viewContextLine?: string }) =>
+        viewContextLine?.includes('"siteId":"screen"')
+          ? "Compare screen with cheap"
+          : "No selection",
+    );
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: lookups,
+      runAgent,
+    });
+    const response = await handler(
+      request({
+        message: "Compare this one with the cheapest",
+        view: {
+          stage: "site",
+          siteId: "screen",
+          candidateIds: ["screen", "cheap"],
+        },
+      }),
+      context(),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).assistantMessage).toBe(
+      "Compare screen with cheap",
+    );
+  });
+  it("rejects a spoofed comparison without invoking the model or exposing the ID", async () => {
+    const runAgent = vi.fn();
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: lookups,
+      runAgent,
+    });
+    const response = await handler(
+      request({
+        message: "this one",
+        view: { stage: "comparison", comparisonId: "private-other-project" },
+      }),
+      context(),
+    );
+    expect(response.status).toBe(422);
+    expect(await response.text()).not.toContain("private-other-project");
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+  it("strips unavailable site scope so an incomplete profile can keep chatting", async () => {
+    const runAgent = vi.fn(async (input: { viewContextLine?: string }) => {
+      void input;
+      return "Continue";
+    });
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: { ...lookups, candidates: async () => null },
+      runAgent,
+    });
+    expect(
+      (
+        await handler(
+          request({
+            message: "this one",
+            view: { stage: "workspace", siteId: "screen" },
+          }),
+          context(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(runAgent.mock.calls[0]?.[0]).toMatchObject({
+      viewContextLine: expect.stringContaining('"phase":"missing"'),
+    });
+    expect(JSON.stringify(runAgent.mock.calls)).not.toContain("screen");
+  });
+  it("passes the canonical completed draft profile for server recomputation", async () => {
+    const { createIntakeSession } = await import("@/lib/agent/intake");
+    const session = createIntakeSession("project-1");
+    for (const answer of founderAnswers) session.saveProfile(answer);
+    const snapshot = session.snapshot();
+    const candidates = vi.fn(async () => ["screen"]);
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: { ...lookups, candidates },
+      runAgent: async () => "okay",
+    });
+    expect(
+      (
+        await handler(
+          request({
+            state: { draft: snapshot.draft, assumptions: snapshot.assumptions },
+            message: "this one",
+            view: { stage: "site", siteId: "screen" },
+          }),
+          context(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(candidates.mock.calls[0]).toEqual([
+      "project-1",
+      expect.objectContaining({ projectId: "project-1", category: "coffee" }),
+    ]);
+  });
+  it("sanitizes lookup outages before invoking the model", async () => {
+    const runAgent = vi.fn();
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: {
+        ...lookups,
+        comparison: async () => {
+          throw new Error("secret database detail");
+        },
+      },
+      runAgent,
+    });
+    const response = await handler(
+      request({
+        message: "hi",
+        view: { stage: "comparison", comparisonId: "mine" },
+      }),
+      context(),
+    );
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("secret database detail");
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+  it("skips view lookup for SDK-free patch-only edits", async () => {
+    const comparison = vi.fn();
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      viewContextLookups: { ...lookups, comparison },
+    });
+    expect(
+      (
+        await handler(
+          request({
+            patch: { concept: "Coffee" },
+            view: { stage: "comparison", comparisonId: "irrelevant" },
+          }),
+          context(),
+        )
+      ).status,
+    ).toBe(200);
+    expect(comparison).not.toHaveBeenCalled();
+  });
+  it("bounds lookup time and prevents a late paid model call", async () => {
+    vi.useFakeTimers();
+    try {
+      let release!: (value: string[]) => void;
+      const candidates = vi.fn(
+        () =>
+          new Promise<string[]>((resolve) => {
+            release = resolve;
+          }),
+      );
+      const runAgent = vi.fn();
+      const handler = createIntakeHandler({
+        projectExists: async () => true,
+        viewContextLookups: { ...lookups, candidates },
+        runAgent,
+      });
+      const response = handler(
+        request({ message: "hi", view: { stage: "site", siteId: "screen" } }),
+        context(),
+      );
+      await vi.waitFor(() => expect(candidates).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(INTAKE_TIMEOUT_MS);
+      expect((await response).status).toBe(503);
+      release(["screen"]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+it("does not record unvalidated view IDs from patch-only edits in the thread", async () => {
+  const onCompleted = vi.fn(async (projectId: string, input: unknown) => {
+    void projectId;
+    void input;
+  });
+  const handler = createIntakeHandler({
+    projectExists: async () => true,
+    onCompleted,
+  });
+  expect(
+    (
+      await handler(
+        request({
+          patch: { concept: "Coffee" },
+          view: { stage: "comparison", comparisonId: "unvalidated" },
+        }),
+        context(),
+      )
+    ).status,
+  ).toBe(200);
+  expect(onCompleted.mock.calls[0]?.[1]).not.toHaveProperty("view");
+});
+
+it("resolves this one from the actual complete unsaved browser form and shared request", async () => {
+  const { fields, intakeSessionSchema } =
+    await import("@/components/intake/profile");
+  const { profileFromIntake } =
+    await import("@/lib/client/intake-business-profile");
+  const { intakeRequestBody } =
+    await import("@/components/workspace-screen/intake-conversation");
+  const { searchSites } = await import("@/lib/data/sites");
+  const values = {
+    concept: "Coffee for commuters",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Favor Montrose",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser = intakeSessionSchema.parse({
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+  });
+  const inventory = {
+    synthetic: false,
+    properties: [
+      {
+        id: "property",
+        city: "Houston",
+        latitude: 29.75,
+        longitude: -95.38,
+        retail: true,
+        data: {},
+        source: {
+          origin: "costar" as const,
+          dataset: "commercial-property",
+          recordId: "property",
+          field: "id",
+        },
+      },
+    ],
+    spaces: [
+      {
+        id: "screen",
+        listingId: "listing",
+        propertyId: "property",
+        active: true,
+        retail: true,
+        sizeSqFt: 1200,
+        data: {
+          spaceUse: "Retail",
+          askingRentUsdPerSfYearLow: 24,
+          askingRentUsdPerSfYearHigh: 24,
+          serviceTypeName: "FullService",
+        },
+        source: {
+          origin: "costar" as const,
+          dataset: "commercial-listing-summary",
+          recordId: "listing",
+          field: "id",
+        },
+      },
+    ],
+    tenancies: [],
+  };
+  const searchProfile = profileFromIntake(browser, "houston-coffee").profile!;
+  const visible = searchSites(
+    { profile: searchProfile },
+    inventory,
+  ).candidates.map((entry) => entry.candidate.id);
+  expect(visible).toEqual(["screen"]);
+  const candidates = vi.fn(
+    async (
+      projectId: string,
+      profile?: import("@/lib/contracts").BusinessProfile | null,
+    ) => {
+      expect(profile?.projectId).toBe(projectId);
+      expect(profile?.capacity.serviceMinutes.origin).toBe(
+        searchProfile.capacity.serviceMinutes.origin,
+      );
+      expect(profile?.economics.averageTicketCents).toEqual(
+        searchProfile.economics.averageTicketCents,
+      );
+      return profile
+        ? searchSites({ profile }, inventory).candidates.map(
+            (entry) => entry.candidate.id,
+          )
+        : null;
+    },
+  );
+  const handler = createIntakeHandler({
+    projectExists: async () => true,
+    viewContextLookups: {
+      comparison: async () => null,
+      scenario: async () => null,
+      investigation: async () => null,
+      candidates,
+    },
+    runAgent: async ({ viewContextLine }) =>
+      viewContextLine?.includes('"siteId":"screen"')
+        ? "Compare screen with the cheapest"
+        : "Missing selection",
+  });
+  const body = intakeRequestBody(
+    browser,
+    "Compare this one with the cheapest",
+    { stage: "workspace", siteId: "screen", candidateIds: visible },
+    "houston-coffee",
+  );
+  const response = await handler(request(body), context("houston-coffee"));
+  expect(response.status).toBe(200);
+  expect((await response.json()).assistantMessage).toBe(
+    "Compare screen with the cheapest",
+  );
+  expect(candidates).toHaveBeenCalledOnce();
 });

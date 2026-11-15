@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { UiActionListSchema, type UiAction } from "@/lib/contracts/agent";
+import {
+  UiActionListSchema,
+  type UiAction,
+  type AgentViewContext,
+} from "@/lib/contracts/agent";
 import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
@@ -9,10 +13,14 @@ import {
   ModelRuntimeUnavailableError,
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
+import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
+
 import {
-  ruleBasedUiActions,
-  type IntakeUiLookups,
-} from "@/lib/agent/ui-tools";
+  formatViewContext,
+  resolveViewContext,
+  InvalidViewReferenceError,
+  type ViewContextLookups,
+} from "@/lib/agent/view-context";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const projectIdSchema = z.string().trim().min(1).max(200);
@@ -20,6 +28,7 @@ type Context = { params: Promise<{ projectId: string }> };
 type Dependencies = {
   projectExists: (projectId: string) => Promise<boolean>;
   runAgent?: IntakeRunner;
+  viewContextLookups?: ViewContextLookups;
   /** HAC-144: trusted ID checks for the UI tools. Without them no UI tools are bound. */
   uiLookups?: IntakeUiLookups;
   newActionId?: () => string;
@@ -135,6 +144,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
     } catch (error) {
       return invalid(error);
     }
+    let validatedView: AgentViewContext | undefined;
     let assistantMessage =
       session.snapshot().nextQuestion?.question ??
       "Review your profile, assumptions, and findings.";
@@ -154,28 +164,39 @@ export function createIntakeHandler(dependencies: Dependencies) {
           onAbort = () => reject(new Error("Intake deadline exceeded"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        // The agent SDK loads only here, so validation never depends on it (HAC-58).
-        const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
-        assistantMessage = await Promise.race([
-          runAgent({
+        const runTurn = async () => {
+          const view = await resolveViewContext(
+            projectId,
+            input.view,
+            dependencies.viewContextLookups,
+            session.snapshot().profile,
+          );
+          signal.throwIfAborted();
+          validatedView = view;
+          const viewContextLine = view ? formatViewContext(view) : undefined;
+          const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
+          signal.throwIfAborted();
+          return runAgent({
             session,
-            message: input.message,
+            message: input.message!,
             signal,
+            viewContextLine,
             ...(dependencies.uiLookups
               ? {
                   ui: {
                     projectId,
                     lookups: dependencies.uiLookups,
-                    view: input.view,
+                    view,
                     actions,
                     newId,
                   },
                 }
               : {}),
-          }),
-          aborted,
-        ]);
+          });
+        };
+        assistantMessage = await Promise.race([runTurn(), aborted]);
       } catch (error) {
+        if (error instanceof InvalidViewReferenceError) return invalid(error);
         if (error instanceof ModelRuntimeUnavailableError)
           return json(
             {
@@ -230,9 +251,12 @@ export function createIntakeHandler(dependencies: Dependencies) {
     }
     if (dependencies.onCompleted) {
       try {
+        const recordedInput = { ...input };
+        delete recordedInput.view;
+        if (validatedView) recordedInput.view = validatedView;
         await dependencies.onCompleted(
           projectId,
-          input,
+          recordedInput,
           assistantMessage,
           session.snapshot(),
         );

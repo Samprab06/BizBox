@@ -1,3 +1,4 @@
+import { AgentViewContextSchema } from "@/lib/contracts/agent";
 import { z } from "zod";
 
 export const VOICE_LIMITS = {
@@ -17,6 +18,7 @@ export const VoiceContextSchema = z
   .object({
     projectId: identity,
     mode: z.enum(["intake", "chat"]).default("intake"),
+    view: AgentViewContextSchema.optional(),
     selectedSiteId: identity.optional(),
     scenarioId: identity.optional(),
     prompt: z.string().max(VOICE_LIMITS.promptChars).optional(),
