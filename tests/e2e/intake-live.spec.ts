@@ -1,6 +1,6 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, test } from "./fixtures";
+import { expect, openConsultant, test } from "./fixtures";
 
 // HAC-66: the intake screen talks to POST /api/projects/[id]/intake when a model is
 // configured. Every response here is a page.route mock: no model or database is called.
@@ -36,8 +36,12 @@ async function open(page: Page) {
   await expect(page.getByText("Live intake agent. Answers are kept in this browser.")).toBeVisible();
 }
 
+// HAC-143: the form has no composer of its own; messages go through the consultant dock.
 async function say(page: Page, text: string) {
-  const box = page.getByRole("textbox", { name: "Message the intake agent" });
+  await openConsultant(page);
+  const dock = page.getByRole("complementary", { name: "Assistant" });
+  await expect(dock.getByText("Live", { exact: true })).toBeVisible();
+  const box = dock.getByRole("textbox", { name: "Message the BizBox assistant" });
   await box.fill(text);
   await box.press("Enter");
 }
