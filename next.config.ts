@@ -9,6 +9,21 @@ const nextConfig: NextConfig = {
   // module", HAC-58). Only CommonJS packages stay external. langsmith must stay
   // external: bundling it pulls in its optional sandbox import of `ws`.
   serverExternalPackages: ["postgres", "langsmith"],
+  // Only content-hashed derivatives use long-lived browser caching. Original
+  // media and mutable routes retain their existing cache behavior.
+  async headers() {
+    return [
+      {
+        source: "/landing-assets/optimized/:asset(.*\\.webp)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

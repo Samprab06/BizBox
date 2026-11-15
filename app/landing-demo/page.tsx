@@ -7,6 +7,8 @@ import macbook from "@/public/landing-assets/guided-demo/macbook-gpt-v3.json";
 const geist = localFont({
   src: "../../public/fonts/geist-latin.woff2",
   display: "swap",
+  // Shared landing CSS must not preload this legacy font on the DM Sans homepage.
+  preload: false,
   weight: "100 900",
   variable: "--font-bizbox",
 });
