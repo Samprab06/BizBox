@@ -7,9 +7,11 @@ import { Stat } from "@/components/ui/stat";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { statsAt } from "./stats";
 
-export type PlaybackSpeed = 1 | 6 | 18 | 60;
+export const playbackSpeeds = [0.5, 1, 2, 4, 6, 18, 60] as const;
+export type PlaybackSpeed = (typeof playbackSpeeds)[number];
 export type StatsCardProps = {
   run: DayResult;
+  runLabel?: string;
   /** Distinct sites from the same scenario/day with matching opening hours. */
   areaRuns?: readonly DayResult[];
   scope: "site" | "area";
@@ -37,7 +39,10 @@ export function StatsCard(props: StatsCardProps) {
     [scope, areaRuns, run],
   );
   const stats = useMemo(() => statsAt(runs, minute), [runs, minute]);
-  const maxServed = Math.max(1, stats.served);
+  const maxServed = Math.max(
+    1,
+    runs.reduce((total, { metrics }) => total + metrics.served, 0),
+  );
   const width = stats.closeMin - stats.openMin;
   const points = stats.purchases
     .map(
@@ -56,7 +61,9 @@ export function StatsCard(props: StatsCardProps) {
       className="w-full max-w-md"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Modeled day so far</h2>
+        <h2 className="font-semibold">
+          Modeled day so far{props.runLabel ? ` · ${props.runLabel}` : ""}
+        </h2>
         <EvidenceBadge kind="Simulation" />
       </div>
       <div
@@ -154,7 +161,7 @@ export function StatsCard(props: StatsCardProps) {
             props.onSpeedChange(Number(e.target.value) as PlaybackSpeed)
           }
         >
-          {[1, 6, 18, 60].map((value) => (
+          {playbackSpeeds.map((value) => (
             <option key={value} value={value}>
               {value}×
             </option>

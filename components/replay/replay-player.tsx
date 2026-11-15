@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { InspectPanel } from "@/components/city/inspect-panel";
+import type { InspectPersona } from "@/lib/sim/inspect";
 import type { DayResult } from "@/lib/sim/contracts";
 import type { examplePersonas } from "../comparison/example-comparison";
 import { replayAt } from "./replay-state";
@@ -9,10 +11,6 @@ import { replayAt } from "./replay-state";
 const FloorPlan = dynamic(() => import("./floor-plan"), {
   ssr: false,
   loading: () => <p className="p-4">Loading layout...</p>,
-});
-const percent = new Intl.NumberFormat("en-US", {
-  style: "percent",
-  maximumFractionDigits: 1,
 });
 
 function clock(minute: number) {
@@ -33,8 +31,19 @@ export function ReplayPlayer({
   const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState("");
   const frame = replayAt(run.events, time);
-  const customer = frame.arrivals.get(selected);
-  const persona = personas.find((entry) => entry.id === customer?.personaId);
+  const inspectPersonas = useMemo(
+    () =>
+      personas.map((persona): InspectPersona => ({
+        id: persona.id,
+        label: persona.label,
+        answers: {
+          source: "Synthetic choice shares",
+          where: persona.destinations,
+          visitsPerMonth: persona.monthlyVisits ?? null,
+        },
+      })),
+    [personas],
+  );
   const running = playing && time < closeMin;
 
   useEffect(() => {
@@ -114,54 +123,15 @@ export function ReplayPlayer({
         {frame.waiting.length} waiting · {frame.serving.length} in service ·{" "}
         {frame.served} served · {frame.left} left
       </p>
-      <label className="grid max-w-sm gap-1 text-sm font-medium">
-        Inspect a customer
-        <select
-          className="rounded-lg border border-line p-2"
-          value={customer ? selected : ""}
-          onChange={(event) => setSelected(event.target.value)}
-        >
-          <option value="">Choose an arrival</option>
-          {[...frame.arrivals.keys()].map((id) => (
-            <option key={id} value={id}>
-              {id.replace("customer-", "Customer ")}
-            </option>
-          ))}
-        </select>
-      </label>
-      {customer && (
-        <dl className="space-y-2 rounded-xl border border-line p-4 text-sm">
-          <div>
-            <dt className="font-semibold">Persona</dt>
-            <dd>{persona?.label ?? customer.personaId}</dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Synthetic choice shares</dt>
-            <dd>
-              {persona?.destinations
-                .map(
-                  ({ label, share }) =>
-                    `${label} ${share === null ? "unknown" : percent.format(share)}`,
-                )
-                .join(" · ") || "Unavailable"}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Expected visits per month</dt>
-            <dd>{persona?.monthlyVisits ?? "Unavailable"}</dd>
-          </div>
-          <div>
-            <dt className="font-semibold">Stay probability at arrival</dt>
-            <dd>
-              {percent.format(customer.stayProbability)} with{" "}
-              {customer.lineLength} waiting ·{" "}
-              {customer.decision === "join"
-                ? "Joined the line"
-                : "Left on arrival"}
-            </dd>
-          </div>
-        </dl>
-      )}
+      <InspectPanel
+        events={run.events}
+        minute={time}
+        closeMin={closeMin}
+        selectedId={selected}
+        onSelect={setSelected}
+        personas={inspectPersonas}
+        followUnavailableReason="the modeled floor plan shows the whole shop"
+      />
     </div>
   );
 }
