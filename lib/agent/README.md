@@ -78,6 +78,23 @@ undefined, and the tool result tells the model so. The model-facing tool schema 
 server-owned `origin` and `evidenceIds` (about half the size), the draft context and tool
 results are compact, and each turn logs one `intake_turn` line with token counts only.
 
+## Scene 1 guided flow
+
+One consultant leads the founder through five steps (`FLOW_STEP_IDS`: questions, locations,
+compare, results, finalize); `FLOW_INSTRUCTIONS` in `runner.ts` is the prompt. Bound tools:
+`open_site`, `focus_map`, `highlight` (in-workspace only; the legacy page jumps below stay
+in `ui-tools.ts` but are not bound), the flow tools in `flow-tools.ts` (`present_top_sites`,
+`set_site_tweaks`, `go_to_step`, `read_comparison_results`, `finalize_plan`) and
+`set_shortlist`/`run_comparison` (at most `MAX_COMPARE_UNITS` sites).
+
+A browser `event` (no `message`) is its own turn: the model gets a `[flow event]` note, not
+"Founder says", and only `open_site`, `focus_map`, `highlight`, `present_top_sites`,
+`go_to_step` and `read_comparison_results` are bound, so nothing runs, tweaks or finalizes
+without the founder's words. `comparison_finished` pre-loads the stored results into the
+note. Without a model, or if the agent fails or is silent, the handler returns
+`fallbackFlowEventTurn`'s deterministic reply. The handler sorts each reply's actions with
+`orderUiActions` (shortlist, tweaks, run, finalize, step, then what to show).
+
 ## UI-action tools (HAC-144)
 
 The consultant moves the founder through the app with eight tools (`ui-tools.ts`):

@@ -6,6 +6,7 @@ import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
 import { createPostgresIntakeUiLookups } from "./ui-lookups";
 import { createPostgresJobsPort } from "@/lib/agent/job-tools-postgres";
+import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export const POST = createIntakeHandler({
   },
   uiLookups: createPostgresIntakeUiLookups(),
   jobs: createPostgresJobsPort(),
+  comparisonResults: createPostgresComparisonStore(),
 });
 
 export const GET = createIntakeCapabilitiesHandler();

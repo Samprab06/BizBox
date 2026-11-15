@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq } from "drizzle-orm";
-import { BusinessProfileSchema } from "@/lib/contracts";
+import { BusinessProfileSchema, type BusinessProfile } from "@/lib/contracts";
+import { AgentViewCandidateSchema } from "@/lib/contracts/agent";
 import { getDb } from "@/lib/db/client";
 import { investigations, profiles } from "@/lib/db/schema";
 import { loadSiteInventory } from "@/app/api/sites/inventory";
@@ -45,31 +46,56 @@ export function createPostgresViewContextLookups(): ViewContextLookups {
       return record ?? null;
     },
     async candidates(projectId, currentProfile) {
-      let profile = currentProfile;
-      if (!profile) {
-        const [record] = await getDb()
-          .select({
-            id: profiles.id,
-            projectId: profiles.projectId,
-            version: profiles.version,
-            snapshot: profiles.snapshot,
-          })
-          .from(profiles)
-          .where(eq(profiles.projectId, projectId))
-          .orderBy(desc(profiles.version))
-          .limit(1);
-        if (!record) return null;
-        profile = BusinessProfileSchema.parse(record.snapshot);
-        if (profile.id !== record.id || profile.version !== record.version)
-          throw new Error("Profile scope mismatch");
-      }
-      if (profile.projectId !== projectId)
-        throw new Error("Profile scope mismatch");
-      const result = searchSites(
-        { profile, limit: 8 },
-        await loadSiteInventory(),
-      );
-      return result.candidates.map((entry) => entry.candidate.id);
+      const result = await search(projectId, currentProfile);
+      return result
+        ? result.candidates.map((entry) => entry.candidate.id)
+        : null;
+    },
+    async candidateFacts(projectId, currentProfile) {
+      const result = await search(projectId, currentProfile);
+      if (!result) return null;
+      return result.candidates.flatMap(({ candidate, score }) => {
+        const rentCents = candidate.monthlyRentCents.value;
+        const sqft = candidate.floorAreaSqFt.value;
+        const fact = AgentViewCandidateSchema.safeParse({
+          id: candidate.id,
+          address: candidate.address.slice(0, 300),
+          ...(rentCents !== null && rentCents >= 0
+            ? { monthlyRentUsd: rentCents / 100 }
+            : {}),
+          ...(sqft !== null && sqft > 0 ? { sqft } : {}),
+          ...(Number.isFinite(score) ? { score } : {}),
+        });
+        return fact.success ? [fact.data] : [];
+      });
     },
   };
+}
+
+/** The server shortlist for the canonical current or latest saved profile; null without one. */
+async function search(
+  projectId: string,
+  currentProfile?: BusinessProfile | null,
+) {
+  let profile = currentProfile;
+  if (!profile) {
+    const [record] = await getDb()
+      .select({
+        id: profiles.id,
+        projectId: profiles.projectId,
+        version: profiles.version,
+        snapshot: profiles.snapshot,
+      })
+      .from(profiles)
+      .where(eq(profiles.projectId, projectId))
+      .orderBy(desc(profiles.version))
+      .limit(1);
+    if (!record) return null;
+    profile = BusinessProfileSchema.parse(record.snapshot);
+    if (profile.id !== record.id || profile.version !== record.version)
+      throw new Error("Profile scope mismatch");
+  }
+  if (profile.projectId !== projectId)
+    throw new Error("Profile scope mismatch");
+  return searchSites({ profile, limit: 8 }, await loadSiteInventory());
 }

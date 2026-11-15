@@ -11,11 +11,8 @@
  */
 import { z } from "zod";
 import type { BusinessProfile } from "@/lib/contracts";
-import {
-  MAX_FOCUS_SITES,
-  MAX_UI_ACTIONS,
-  type UiAction,
-} from "@/lib/contracts/agent";
+import { MAX_UI_ACTIONS, type UiAction } from "@/lib/contracts/agent";
+import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import type { InvestigationJob } from "@/lib/contracts/investigations";
 import type { ProfileStore } from "@/lib/profiles/store";
 import type { IntakeUiContext } from "./ui-tools";
@@ -96,17 +93,16 @@ export function createJobsPort(deps: {
 const SiteIds = z
   .array(z.string().trim().regex(/^\d+:\d+$/, "must look like 123:456"))
   .min(1)
-  .max(MAX_FOCUS_SITES);
+  .max(MAX_COMPARE_UNITS);
 const SPECS = {
   set_shortlist: {
     schema: z.object({ siteIds: SiteIds }),
-    description:
-      "Replace the founder's comparison shortlist (1-8 candidate sites). Use only site IDs from the screen context or tool results.",
+    description: `Replace the founder's comparison shortlist (1-${MAX_COMPARE_UNITS} candidate sites): swap, add or drop a site. Use only site IDs from the screen context or tool results.`,
   },
   run_comparison: {
     schema: z.object({ siteIds: SiteIds.optional() }),
     description:
-      "Compare candidate sites for the founder: omit siteIds to use the shortlist you just set or the screen's candidates. The comparison runs in the founder's browser, then opens.",
+      "Run (or rerun) the comparison only after the founder has agreed to it in their message. Omit siteIds to use the shortlist you just set, the view's shortlist, or the top candidates. It runs in the founder's browser on the compare step.",
   },
   start_investigation: {
     schema: z.object({ question: z.string().trim().min(1).max(500).optional() }),
@@ -120,6 +116,15 @@ const SPECS = {
 } as const;
 export type JobToolName = keyof typeof SPECS;
 export const JOB_TOOL_NAMES = Object.keys(SPECS) as JobToolName[];
+/**
+ * Scene 1: the job tools the guided-flow consultant is given. start_investigation and
+ * open_plan open legacy pages (the investigation comparison and the plan page), so they are
+ * no longer bound; finalize_plan (flow-tools.ts) ends the flow instead.
+ */
+export const FLOW_JOB_TOOL_NAMES: readonly JobToolName[] = [
+  "set_shortlist",
+  "run_comparison",
+];
 export const JOB_TOOL_SPECS = JOB_TOOL_NAMES.map((name) => {
   const schema = z.toJSONSchema(SPECS[name].schema) as Record<string, unknown>;
   delete schema.$schema;
@@ -183,8 +188,17 @@ export function createJobToolExecutor(
         await shortlistCall;
       }
       const ids = [
-        ...new Set(parsed.siteIds ?? shortlist ?? context.view?.candidateIds ?? []),
-      ];
+        ...new Set(
+          parsed.siteIds ??
+            shortlist ??
+            (context.view?.shortlistIds?.length
+              ? context.view.shortlistIds
+              : undefined) ??
+            context.view?.candidateIds ??
+            context.view?.candidates?.map((site) => site.id) ??
+            [],
+        ),
+      ].slice(0, MAX_COMPARE_UNITS);
       if (!ids.length)
         throw new Rejected(
           "No sites to compare. Call set_shortlist first or ask the founder which sites.",
@@ -193,13 +207,9 @@ export function createJobToolExecutor(
         throw new Rejected(
           `The profile is not complete (missing: ${session.missing().join(", ") || "unknown"}). Ask the founder for those first.`,
         );
-      await checkSites(ids.slice(0, MAX_FOCUS_SITES));
-      queue({
-        id: context.newId(),
-        type: "run_comparison",
-        siteIds: ids.slice(0, MAX_FOCUS_SITES),
-      });
-      return `Queued: the comparison of ${Math.min(ids.length, MAX_FOCUS_SITES)} site(s) starts in the founder's browser and opens when done. Tell the founder it is running.`;
+      await checkSites(ids);
+      queue({ id: context.newId(), type: "run_comparison", siteIds: ids });
+      return `Queued: the comparison of ${ids.length} site(s) starts in the founder's browser on the compare step. Tell the founder it is running and can take a few minutes.`;
     },
     async start_investigation(args) {
       const { question } = SPECS.start_investigation.schema.parse(args);
