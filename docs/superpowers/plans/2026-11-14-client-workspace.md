@@ -63,3 +63,17 @@ Akshar requested the real returned locations in Cesium, specifically from above.
 - [x] Audit all four captured real CoStar coordinates against Cesium entity round-trips (error below1e-10degrees), identity tileset matrix and overhead orientation. Fresh live browser tag selection confirms expected site/URL/details and stable canvas.
 - [x] Diagnose transient same-host Vercel edge reset read-only. Restore owned4201 preview via temporary process-local DNS preference, normal TLS retained. No repository transport workaround or cached-data fallback.
 - [x] Final exact-source checks passed: lint/typecheck/build, 1,416 unit tests /43 existing skips, 11 affected desktop Chromium regressions. Actual live address-tag selection and overview checked; coordinate audit documented. Local commit only; no publication authorized.
+
+## Houston map-first exploration
+
+Akshar explicitly narrowed the next pass to Houston onboarding → real matching pins → click for details. No agentic-chat integration, simulation, analytics or LA provider work is part of this pass.
+
+- [x] Default arrival shows the map and genuine returned property tags, without an automatic selection, property sheet or card carousel.
+- [x] Explicit pin/list selection opens actual property/unit facts in a dedicated side panel; close clears selection and restores exploration. Coincident units share one pin and are distinguished by source rent/size.
+- [x] Optional results list and Property/Chat controls preserve the existing conversation, and remain usable inside the narrow desktop Codex preview container without covering the map. This is desktop-window behavior, not resumed phone work.
+- [x] Changed criteria invalidate stale selection; no hardcoded sample locations, fabricated coordinates or expanded search contracts. Retain the existing eight-space response limit and distinguish shown results/property groups from total matched spaces.
+- [x] Verify changed Houston briefs/categories, native actual-user-tab pin/details flow, full desktop flow and exact-source checks. Preserve unrelated onboarding/prototype files; local delivery only.
+
+Frontend specialist owns workspace components/CSS and affected regressions. Manager owns review, exact-source validation, native browser QA, documentation and handoff. Existing city annotation layer, Vexcel provider/budgets, runtime and data contracts remain unchanged.
+
+Final exact-source evidence: lint/typecheck/build pass, 1,416 unit tests pass (43 existing skips), and 74 desktop Chromium cases pass (2 existing skips). Two legacy navigation expectations were updated because this workspace no longer propagates a fictional default site. Native actual IAB tab9 verified clear arrival, pin-to-property selection, grouped-unit rent/size/ID changes, close/query clearing and optional8of115list. Native screenshots: `/tmp/bizbox-houston-map-first-iab.png` and `/tmp/bizbox-houston-property-details-iab.png`. These use live source data, not API fixtures.

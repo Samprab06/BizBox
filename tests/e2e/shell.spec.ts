@@ -11,8 +11,8 @@ import {
 } from "../../lib/client/workspace-routes";
 import { expect, test, viewHeading, expandProjectNavigation } from "./fixtures";
 
-// Selection used by the nav when the page itself carries no `?site=`: the first
-// example site (components/workspace-view.tsx falls back to project.sites[0]).
+// Legacy WorkspaceView pages use the first example site when no selection exists.
+// The client workspace propagates only an explicitly eligible selection.
 const DEFAULT_SITE = "montrose";
 // Screens rendered by WorkspaceView (heading plus a labelled region) ...
 const VIEW_ORDER = Object.keys(views) as View[];
@@ -71,10 +71,14 @@ test.describe("navigation", () => {
       NAV_ORDER.map((route) => routeLabels[route]),
     );
 
-    for (const route of NAV_ORDER) {
+    for (const [index, route] of NAV_ORDER.entries()) {
       await expandProjectNavigation(page);
       await navLink(page, route).click();
-      const expectedHref = workspaceHref(projectId, route, DEFAULT_SITE);
+      const expectedHref = workspaceHref(
+        projectId,
+        route,
+        NAV_ORDER[index - 1] === "workspace" ? undefined : DEFAULT_SITE,
+      );
       await expect(page).toHaveURL(
         (url) => url.pathname + url.search === expectedHref,
       );
@@ -152,7 +156,11 @@ test.describe("navigation", () => {
         await expect(nextLink).toHaveCount(0);
         return;
       }
-      const nextHref = workspaceHref(projectId, next.route, DEFAULT_SITE);
+      const nextHref = workspaceHref(
+        projectId,
+        next.route,
+        route === "workspace" ? undefined : DEFAULT_SITE,
+      );
       await expect(nextLink).toHaveText(`Next: ${next.step}`);
       await expect(nextLink).toHaveAttribute("href", nextHref);
       await nextLink.click();

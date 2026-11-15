@@ -55,6 +55,32 @@ async function services(page: Page) {
   return { posts, search };
 }
 
+async function showList(page: Page) {
+  if (
+    !(await page.getByRole("group", { name: "Matching locations" }).isVisible())
+  )
+    await page.getByRole("button", { name: /^Show list/ }).click();
+}
+async function showChat(page: Page) {
+  if (
+    !(await page
+      .getByRole("textbox", { name: "Message the BizBox assistant" })
+      .isVisible())
+  )
+    await page
+      .getByRole("button", { name: "Chat", exact: true })
+      .last()
+      .click();
+}
+async function more(page: Page) {
+  if (
+    !(await page
+      .getByRole("button", { name: "Compare locations", exact: true })
+      .isVisible())
+  )
+    await page.getByText("More", { exact: true }).click();
+}
+
 for (const viewport of [
   { width: 1366, height: 900 },
   { width: 820, height: 1180 },
@@ -68,12 +94,10 @@ for (const viewport of [
       const { posts } = await services(page);
       await page.goto("/projects/houston-coffee/workspace");
       const locations = page.getByRole("group", { name: "Matching locations" });
-      await expect(
-        locations.getByRole("button", { name: "View 101 Invented St" }),
-      ).toBeVisible();
+      await expect(locations).toHaveCount(0);
       await expect(
         page.getByRole("region", { name: "Selected location" }),
-      ).toContainText("101 Invented St");
+      ).toHaveCount(0);
       await expect(
         page.getByText("City preview · photo, not a map"),
       ).toHaveCount(0);
@@ -81,7 +105,9 @@ for (const viewport of [
       const composer = page.getByRole("textbox", {
         name: "Message the BizBox assistant",
       });
+      await showChat(page);
       await composer.fill("Keep this question while I explore");
+      await showList(page);
       await locations
         .getByRole("button", { name: "View 202 Invented St" })
         .click();
@@ -98,6 +124,7 @@ for (const viewport of [
           exact: true,
         }),
       ).toBeVisible();
+      await showChat(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       await page.getByRole("tab", { name: "Voice", exact: true }).click();
       await expect(
@@ -111,6 +138,7 @@ for (const viewport of [
       await page
         .getByRole("button", { name: "Locations", exact: true })
         .click();
+      await more(page);
       await page
         .getByRole("button", { name: "Compare locations", exact: true })
         .click();
@@ -128,6 +156,7 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: /Run baseline/ }),
       ).toHaveCount(0);
+      await showList(page);
       await locations
         .getByRole("checkbox", { name: "Compare 202 Invented St" })
         .uncheck();
@@ -137,6 +166,7 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: "Compare locations", exact: true }),
       ).toBeDisabled();
+      await showChat(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       expect(
         await page.evaluate(
@@ -174,7 +204,7 @@ test("only a matching non-demo registry scan can mount the Matterport view", asy
       },
     }),
   );
-  await page.goto("/projects/houston-coffee/workspace");
+  await page.goto("/projects/houston-coffee/workspace?site=201%3A301");
   await expect(
     page.getByRole("button", { name: "View interior", exact: true }),
   ).toBeVisible();
@@ -201,6 +231,7 @@ test("unavailable inventory never substitutes example properties", async ({
   await expect(
     page.getByRole("group", { name: "Matching locations" }),
   ).toHaveCount(0);
+  await more(page);
   await expect(
     page.getByRole("button", { name: "Compare locations", exact: true }),
   ).toBeDisabled();
@@ -310,6 +341,7 @@ test.describe("inventory readiness desktop", () => {
       .getByRole("region", { name: "Location and interior workspace" })
       .getByRole("button", { name: "Retry", exact: true })
       .click();
+    await showList(page);
     await expect(
       page.getByRole("group", { name: "Matching locations" }),
     ).toBeVisible();
@@ -372,9 +404,14 @@ test.describe("inventory readiness desktop", () => {
     });
     await page.goto("/projects/houston-coffee/workspace");
     const locations = page.getByRole("group", { name: "Matching locations" });
+    await showList(page);
     await locations
       .getByRole("button", { name: "View 202 Invented St", exact: true })
       .click();
+    await expect(
+      page.getByRole("region", { name: "Selected location" }),
+    ).toContainText("202 Invented St");
+    await showChat(page);
     await page
       .getByRole("textbox", { name: "Message the BizBox assistant" })
       .fill("Retain this draft");
@@ -413,10 +450,12 @@ test.describe("inventory readiness desktop", () => {
           r.limit === 8 && Object.keys(r).sort().join(",") === "limit,profile",
       ),
     ).toBe(true);
+    await page.getByRole("button", { name: "Property", exact: true }).click();
     await expect(
       page.getByRole("region", { name: "Selected location" }),
     ).toContainText("202 Invented St");
     await expect(page).toHaveURL(/site=202%3A302/);
+    await showChat(page);
     await expect(
       page.getByRole("textbox", { name: "Message the BizBox assistant" }),
     ).toHaveValue("Retain this draft");
@@ -433,17 +472,123 @@ test.describe("inventory readiness desktop", () => {
     await expect.poll(() => requests.length).toBe(3);
     await expect(
       page.getByRole("region", { name: "Selected location" }),
-    ).toContainText("101 Invented St");
-    await expect(page).toHaveURL(/site=201%3A301/);
+    ).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]site=/);
+    await showList(page);
     await expect(
       locations.getByRole("button", {
         name: "View 202 Invented St",
         exact: true,
       }),
     ).toHaveCount(0);
+    await showChat(page);
     await expect(
       page.getByRole("textbox", { name: "Message the BizBox assistant" }),
     ).toHaveValue("Retain this draft");
     await expectNoA11yViolations(page);
   });
 });
+
+for (const width of [1366, 500, 640, 820]) {
+  test.describe(`map-first desktop preview ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } });
+    if (width === 1366)
+      test("keyboard discovery moves focus into property details and returns to the map action", async ({
+        page,
+      }) => {
+        await services(page);
+        await page.goto("/projects/houston-coffee/workspace");
+        const show = page.getByRole("button", { name: /^Show list/ });
+        await show.focus();
+        await page.keyboard.press("Enter");
+        const option = page.getByRole("button", {
+          name: "View 101 Invented St",
+          exact: true,
+        });
+        await option.focus();
+        await page.keyboard.press("Enter");
+        const property = page.getByRole("region", {
+          name: "Selected location",
+        });
+        await expect(property).toBeFocused();
+        await property
+          .getByRole("button", { name: "Close property details" })
+          .focus();
+        await page.keyboard.press("Enter");
+        await expect(show).toBeFocused();
+        await expect(property).toHaveCount(0);
+      });
+    test("arrival is clear; explicit list selection reveals grouped facts and Close clears a deep link", async ({
+      page,
+    }) => {
+      const { search, posts } = await services(page);
+      search.candidates[1].candidate.floorAreaSqFt.value = 1600;
+      search.candidates[1].baseRentCents.value = 190000;
+      await page.route("**/api/sites", (route) =>
+        route.fulfill({ json: search }),
+      );
+      await page.goto("/projects/houston-coffee/workspace");
+      await expect(
+        page.getByRole("button", { name: "Show list (2 spaces)" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("region", { name: "Selected location" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("group", { name: "Matching locations" }),
+      ).toHaveCount(0);
+      await expect(page.locator("[data-map-sheet]")).toHaveCount(0);
+      await showList(page);
+      await expect(
+        page.getByText("2 of 2 matching spaces shown", { exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", { name: "View 101 Invented St", exact: true })
+        .click();
+      const property = page.getByRole("region", { name: "Selected location" });
+      await expect(property).toBeVisible();
+      await expect(property).toContainText("Asking rent / month");
+      const units = property.getByRole("region", {
+        name: "Spaces at this location",
+      });
+      await expect(units.getByRole("button")).toHaveCount(2);
+      await units.getByRole("button", { name: /1,600 sq ft/ }).click();
+      await expect(page).toHaveURL(/site=202%3A302/);
+      await expect(property).toContainText("202 Invented St");
+      const viewport = await page.locator("[data-map-viewport]").boundingBox();
+      const panel = await property.boundingBox();
+      expect(viewport!.height).toBeGreaterThan(350);
+      const visualization = await page
+        .locator("[data-map-viewport]")
+        .evaluate((element) =>
+          element.parentElement!.getBoundingClientRect().toJSON(),
+        );
+      expect(Math.abs(visualization.height - viewport!.height)).toBeLessThan(2);
+      if (width <= 850)
+        expect(panel!.y).toBeGreaterThanOrEqual(viewport!.y + viewport!.height);
+      if (width > 850)
+        expect(panel!.x).toBeGreaterThanOrEqual(viewport!.x + viewport!.width);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({ path: `/tmp/bizbox-map-first-${width}.png` });
+      await property
+        .getByRole("button", { name: "Close property details" })
+        .click();
+      await expect(page).not.toHaveURL(/[?&]site=/);
+      await expect(property).toHaveCount(0);
+      // Closing an initially server-rendered explicit URL must not revive its prop.
+      await page.goto("/projects/houston-coffee/workspace?site=201%3A301");
+      await expect(property).toContainText("101 Invented St");
+      await property
+        .getByRole("button", { name: "Close property details" })
+        .click();
+      await expect(page).not.toHaveURL(/[?&]site=/);
+      await expect(property).toHaveCount(0);
+      expect(posts).toHaveLength(0);
+      await expectNoA11yViolations(page);
+    });
+  });
+}

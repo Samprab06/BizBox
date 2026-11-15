@@ -2,21 +2,17 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
 import type { LiveComparisonController } from "@/lib/client/live-comparison";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import {
   comparisonMatchesSelection,
-  candidateFitReasons,
   candidateMarkers,
-  searchFilterLabel,
   searchPresentation,
   type WorkspaceCandidate,
 } from "./client-model";
-import { metricText } from "./model";
 import { LocationResults } from "./location-results";
 import styles from "./workspace-glass.module.css";
-import type { SiteSearchReadiness } from "@/lib/client/use-site-search";
+import { SearchFilterSummary } from "./property-details";
 
 const StationCalloutController = dynamic(
   () =>
@@ -25,42 +21,6 @@ const StationCalloutController = dynamic(
     ),
   { ssr: false },
 );
-
-function SearchFilterSummary({ search }: { search: SiteSearchReadiness }) {
-  return (
-    <div className="mt-3 space-y-2 text-xs">
-      {search.status === "empty" || search.status === "ready" ? (
-        <>
-          {search.emptyReason && <p>{search.emptyReason}</p>}
-          <p>
-            {search.totalMatched.toLocaleString("en-US")} listings matched the
-            saved filters.
-          </p>
-          <ul className="space-y-1">
-            {search.filters.map((filter) => (
-              <li key={filter.name}>
-                {searchFilterLabel(filter.name)}:{" "}
-                {filter.before.toLocaleString("en-US")} →{" "}
-                {filter.after.toLocaleString("en-US")}
-              </li>
-            ))}
-          </ul>
-          {search.mostRestrictiveFilter && (
-            <p>
-              Largest reduction:{" "}
-              {searchFilterLabel(search.mostRestrictiveFilter)}
-            </p>
-          )}
-          {search.notes.map((note, index) => (
-            <p key={index}>{note}</p>
-          ))}
-        </>
-      ) : (
-        <p>{search.message}</p>
-      )}
-    </div>
-  );
-}
 
 export function LocationExperience({
   projectId,
@@ -71,6 +31,8 @@ export function LocationExperience({
   view,
   onViewChange: setView,
   onOverview,
+  onShowList,
+  listOpen,
 }: {
   projectId: string;
   controller: LiveComparisonController;
@@ -80,12 +42,10 @@ export function LocationExperience({
   view: "locations" | "interior" | "results";
   onViewChange: (view: "locations" | "interior" | "results") => void;
   onOverview?: () => void;
+  onShowList?: () => void;
+  listOpen?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const markers = candidateMarkers(candidates);
-  const missingCoordinates =
-    candidates.length -
-    markers.reduce((count, marker) => count + marker.members.length, 0);
   const payload =
     controller.phase === "ready" &&
     comparisonMatchesSelection(controller.payload, controller.selectedIds)
@@ -97,13 +57,6 @@ export function LocationExperience({
   const running = controller.phase === "running";
   const search = controller.search;
   const searchUi = searchPresentation(search, controller.phase === "loading");
-  const searchProfile =
-    search?.status === "ready" || search?.status === "empty"
-      ? search.profile
-      : undefined;
-  const selectedFit = selected
-    ? candidateFitReasons(selected, searchProfile)
-    : [];
   const selectedIds = controller.selectedIds.filter((id) =>
     candidates.some((entry) => entry.candidate.id === id),
   );
@@ -111,14 +64,6 @@ export function LocationExperience({
     !running && controller.phase !== "loading" && selectedIds.length >= 2;
   function select(id: string) {
     onSelect(id);
-    setExpanded(false);
-  }
-  function compareId(id: string, checked: boolean) {
-    controller.setSelectedIds(
-      checked
-        ? [...new Set([...selectedIds, id])]
-        : selectedIds.filter((value) => value !== id),
-    );
   }
 
   return (
@@ -133,45 +78,58 @@ export function LocationExperience({
           role="group"
           aria-label="Workspace view"
         >
-          <button
-            aria-pressed={view === "locations"}
-            onClick={() => setView("locations")}
-          >
-            Locations
-          </button>
+          {view !== "locations" && (
+            <button onClick={() => setView("locations")}>Locations</button>
+          )}
           {view === "locations" && markers.length > 0 && onOverview && (
             <button onClick={onOverview}>All locations</button>
           )}
-          <button
-            aria-pressed={view === "interior"}
-            disabled={!selected}
-            onClick={() => setView("interior")}
-          >
-            Interior
-          </button>
-          {payload && (
+          {candidates.length > 0 && (
             <button
-              aria-pressed={view === "results"}
-              onClick={() => setView("results")}
+              data-show-location-list
+              aria-expanded={listOpen}
+              onClick={onShowList}
             >
-              Results
+              Show list ({candidates.length} spaces)
             </button>
           )}
         </div>
-        <button
-          className={styles.primary}
-          disabled={!canCompare}
-          onClick={() => {
-            setView("results");
-            void controller.run();
-          }}
-        >
-          {running ? "Comparing…" : "Compare locations"}
-        </button>
+        <details className={styles.moreActions}>
+          <summary>More</summary>
+          <div>
+            <button
+              aria-pressed={view === "interior"}
+              disabled={!selected}
+              onClick={() => setView("interior")}
+            >
+              Interior
+            </button>
+            {payload && (
+              <button
+                aria-pressed={view === "results"}
+                onClick={() => setView("results")}
+              >
+                Results
+              </button>
+            )}
+            <button
+              className={styles.primary}
+              disabled={!canCompare}
+              onClick={() => {
+                setView("results");
+                void controller.run();
+              }}
+            >
+              {running ? "Comparing…" : "Compare locations"}
+            </button>
+          </div>
+        </details>
       </div>
 
       <div
-        data-map-sheet
+        data-map-sheet={
+          view !== "locations" || !candidates.length ? "" : undefined
+        }
         className="pointer-events-none relative z-20 mt-auto flex min-h-0 flex-col gap-3 p-3 pb-8 sm:p-4 sm:pb-8"
       >
         {view === "results" && (
@@ -197,78 +155,6 @@ export function LocationExperience({
               </div>
             )}
           </div>
-        )}
-
-        {view === "locations" && selected && (
-          <section
-            className={styles.details + " pointer-events-auto max-w-lg"}
-            aria-label="Selected location"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2>{selected.candidate.address}</h2>
-                {selectedFit.length > 0 && (
-                  <p className={styles.muted + " mt-2 text-xs"}>
-                    {selectedFit.join(" · ")}
-                  </p>
-                )}
-              </div>
-              <button
-                className={styles.secondary}
-                aria-expanded={expanded}
-                aria-controls="workspace-listing-details"
-                onClick={() => setExpanded((value) => !value)}
-              >
-                Details
-              </button>
-            </div>
-            <dl>
-              <div>
-                <dt>Rent / month</dt>
-                <dd>{metricText(selected.baseRentCents)}</dd>
-              </div>
-              <div>
-                <dt>Size</dt>
-                <dd>{metricText(selected.candidate.floorAreaSqFt)} sq ft</dd>
-              </div>
-            </dl>
-            <button
-              className={styles.primary}
-              onClick={() => setView("interior")}
-            >
-              View interior
-            </button>
-            <div
-              id="workspace-listing-details"
-              hidden={!expanded}
-              className="mt-3 text-xs"
-            >
-              <p>{selected.candidate.name}</p>
-              <p className="mt-2">
-                Property-level listing coordinates; 3D imagery coverage varies.
-              </p>
-              {missingCoordinates > 0 && (
-                <p className="mt-2">
-                  {missingCoordinates}{" "}
-                  {missingCoordinates === 1 ? "space has" : "spaces have"} no
-                  mapped coordinates.
-                </p>
-              )}
-              <p className="mt-2">
-                Rent source: {selected.baseRentCents.origin}
-              </p>
-              {search && <SearchFilterSummary search={search} />}
-              {selected.flags.length > 0 && (
-                <p className="mt-2">{selected.flags.join(" · ")}</p>
-              )}
-              <Link
-                className="mt-2 inline-block underline"
-                href={workspaceHref(projectId, "site", selected.candidate.id)}
-              >
-                Full details
-              </Link>
-            </div>
-          </section>
         )}
 
         {view === "interior" && selected && (
@@ -344,85 +230,6 @@ export function LocationExperience({
               )}
             </div>
           </div>
-        )}
-
-        {view !== "interior" && candidates.length > 0 && (
-          <>
-            <div
-              className={styles.candidates + " pointer-events-auto"}
-              role="group"
-              aria-label="Matching locations"
-            >
-              {candidates.map((entry) => {
-                const marker = markers.find((group) =>
-                  group.members.some(
-                    (member) => member.siteId === entry.candidate.id,
-                  ),
-                );
-                const unit = marker
-                  ? marker.members.findIndex(
-                      (member) => member.siteId === entry.candidate.id,
-                    ) + 1
-                  : 0;
-                return (
-                  <div
-                    className={
-                      styles.candidate +
-                      (entry.candidate.id === selected?.candidate.id
-                        ? " " + styles.selectedCandidate
-                        : "")
-                    }
-                    key={entry.candidate.id}
-                  >
-                    <button
-                      className="text-left"
-                      aria-pressed={
-                        entry.candidate.id === selected?.candidate.id
-                      }
-                      aria-label={"View " + entry.candidate.address}
-                      onClick={() => select(entry.candidate.id)}
-                    >
-                      <strong className="block">
-                        {entry.candidate.address}
-                      </strong>
-                    </button>
-                    <span className={styles.muted}>
-                      {marker
-                        ? `Map ${marker.index}${marker.members.length > 1 ? ` · Space ${unit} of ${marker.members.length}` : ""}`
-                        : "Coordinates unavailable"}
-                    </span>
-                    <span className="block">
-                      {entry.baseRentCents.value === null
-                        ? "Rent unknown"
-                        : metricText(entry.baseRentCents) + "/mo"}
-                    </span>
-                    {entry.candidate.floorAreaSqFt.value !== null && (
-                      <span>
-                        {metricText(entry.candidate.floorAreaSqFt)} sq ft
-                      </span>
-                    )}
-                    {candidateFitReasons(entry, searchProfile).length > 0 && (
-                      <span className={styles.muted}>
-                        {candidateFitReasons(entry, searchProfile).join(" · ")}
-                      </span>
-                    )}
-                    <label className="mt-2 flex items-center gap-2 text-xs">
-                      <input
-                        type="checkbox"
-                        aria-label={"Compare " + entry.candidate.address}
-                        checked={selectedIds.includes(entry.candidate.id)}
-                        disabled={running}
-                        onChange={(event) =>
-                          compareId(entry.candidate.id, event.target.checked)
-                        }
-                      />
-                      Compare
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </>
         )}
       </div>
     </section>

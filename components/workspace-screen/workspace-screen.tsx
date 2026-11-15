@@ -14,12 +14,13 @@ import { useIntakeConversation } from "./use-intake-conversation";
 import { LocationExperience } from "./location-experience";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
 import type { ListingCameraRequest } from "@/components/city/listing-markers";
+import { PropertyDetails, ListingList } from "./property-details";
+import styles from "./workspace-glass.module.css";
 
 /** Reuses the current service controllers and one conversation; no alternate store. */
 export function WorkspaceScreen({
   projectId,
   project,
-  siteId,
   navigation,
   tilesetUrl,
 }: {
@@ -35,6 +36,7 @@ export function WorkspaceScreen({
     "locations",
   );
   const search = useSearchParams();
+  const [pane, setPane] = useState<"property" | "list" | "chat">("property");
   const [cameraRequest, setCameraRequest] = useState<ListingCameraRequest>({
     kind: "overview",
     revision: 0,
@@ -43,26 +45,46 @@ export function WorkspaceScreen({
     () => realCandidates(controller.candidates),
     [controller.candidates],
   );
-  const requested = search.get("site") ?? siteId;
-  const selected =
-    candidates.find((entry) => entry.candidate.id === requested) ??
-    candidates[0];
+  const requested = search.get("site") ?? undefined;
+  const selected = candidates.find((entry) => entry.candidate.id === requested);
   const selectedId = selected?.candidate.id;
   useEffect(() => {
-    // If changed criteria exclude the old space, its URL must follow the new
-    // eligible selection just like the details, map and consultant context.
+    // A criteria change must close an ineligible listing, never choose another
+    // property without the founder's intent.
     if (
-      controller.search?.status !== "ready" ||
+      !["ready", "empty", "needs_brief"].includes(
+        controller.search?.status ?? "",
+      ) ||
       !requested ||
-      !selectedId ||
-      requested === selectedId
+      selectedId
     )
       return;
     const url = new URL(window.location.href);
-    url.searchParams.set("site", selectedId);
+    url.searchParams.delete("site");
     window.history.replaceState(null, "", url);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep local tabs consistent with this guarded external URL reset.
+    setView("locations");
+    setPane("property");
   }, [controller.search?.status, requested, selectedId]);
   const header = workspaceHeader(conversation.session, project);
+  useEffect(() => {
+    if (selectedId && pane === "property")
+      document
+        .querySelector<HTMLElement>('[aria-label="Selected location"]')
+        ?.focus({ preventScroll: true });
+    if (
+      (pane !== "list" && (!selectedId || pane !== "property")) ||
+      !window.matchMedia("(min-width:480px) and (max-width:850px)").matches
+    )
+      return;
+    document
+      .querySelector<HTMLElement>(
+        pane === "list"
+          ? '[aria-label="Location list"]'
+          : '[aria-label="Selected location"]',
+      )
+      ?.scrollIntoView({ block: "nearest", behavior: "instant" });
+  }, [selectedId, pane]);
   const summary = [
     "City: " + header.city,
     "Business: " + header.business,
@@ -85,10 +107,28 @@ export function WorkspaceScreen({
     // Let Next publish this user-driven URL change to useSearchParams. Passing
     // its private history state marks the call as internal and skips that update.
     window.history.replaceState(null, "", url);
+    setView("locations");
+    setPane("property");
     setCameraRequest((request) => ({
       kind: "selection",
       revision: request.revision + 1,
     }));
+  }
+  function closeDetails() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("site");
+    window.history.replaceState(null, "", url);
+    setPane("property");
+    setView("locations");
+    setCameraRequest((request) => ({
+      kind: "overview",
+      revision: request.revision + 1,
+    }));
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLButtonElement>("[data-show-location-list]")
+        ?.focus({ preventScroll: true }),
+    );
   }
   return (
     <WorkspaceShell
@@ -100,7 +140,7 @@ export function WorkspaceScreen({
           <TaskNav
             projectId={projectId}
             route="workspace"
-            siteId={selected?.candidate.id ?? siteId ?? project?.sites[0]?.id}
+            siteId={selected?.candidate.id}
             compact
             disclosureLabel="Views"
             footer={
@@ -126,12 +166,85 @@ export function WorkspaceScreen({
         />
       }
       assistant={
-        <AssistantPanel
-          projectId={projectId}
-          conversation={conversation}
-          selectedSiteId={selected?.candidate.id}
-          summary={summary}
-        />
+        <div className={styles.sidePane} data-pane={pane}>
+          <button
+            className={styles.compactChatToggle}
+            onClick={() =>
+              setPane((value) => (value === "chat" ? "property" : "chat"))
+            }
+            aria-expanded={pane === "chat"}
+          >
+            Chat
+          </button>
+          {(selected || pane === "list") && (
+            <div
+              className={styles.paneTabs}
+              role="group"
+              aria-label="Side panel"
+            >
+              {selected && (
+                <button
+                  aria-pressed={pane === "property"}
+                  onClick={() => setPane("property")}
+                >
+                  Property
+                </button>
+              )}
+              {pane === "list" && <span>Locations</span>}
+              <button
+                aria-pressed={pane === "chat"}
+                onClick={() => setPane("chat")}
+              >
+                Chat
+              </button>
+            </div>
+          )}
+          {selected && pane === "property" && (
+            <PropertyDetails
+              selected={selected}
+              candidates={candidates}
+              search={controller.search}
+              projectId={projectId}
+              onSelect={select}
+              onClose={closeDetails}
+              onInterior={() => setView("interior")}
+            />
+          )}
+          {pane === "list" && (
+            <ListingList
+              candidates={candidates}
+              selectedIds={controller.selectedIds}
+              selectedId={selected?.candidate.id}
+              running={controller.phase === "running"}
+              search={controller.search}
+              onSelect={select}
+              onCompareIds={controller.setSelectedIds}
+              onClose={() => {
+                setPane("property");
+                requestAnimationFrame(() =>
+                  document
+                    .querySelector<HTMLButtonElement>(
+                      "[data-show-location-list]",
+                    )
+                    ?.focus({ preventScroll: true }),
+                );
+              }}
+            />
+          )}
+          <div
+            className={styles.paneChat}
+            hidden={
+              pane === "list" || (Boolean(selected) && pane === "property")
+            }
+          >
+            <AssistantPanel
+              projectId={projectId}
+              conversation={conversation}
+              selectedSiteId={selected?.candidate.id}
+              summary={summary}
+            />
+          </div>
+        </div>
       }
     >
       <LocationExperience
@@ -143,6 +256,10 @@ export function WorkspaceScreen({
         onSelect={select}
         view={view}
         onViewChange={setView}
+        onShowList={() =>
+          setPane((value) => (value === "list" ? "property" : "list"))
+        }
+        listOpen={pane === "list"}
         onOverview={() => {
           setView("locations");
           setCameraRequest((request) => ({

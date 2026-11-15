@@ -68,6 +68,9 @@ const composer = (page: Page) =>
 
 async function open(page: Page, projectId: string) {
   await page.goto(workspaceHref(projectId, "workspace"));
+  const width = page.viewportSize()?.width ?? 1366;
+  if (width >= 480 && width <= 850)
+    await page.getByRole("button", { name: "Chat", exact: true }).click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
@@ -118,6 +121,7 @@ for (const viewport of VIEWPORTS) {
       await expect(
         page.getByText("City preview · photo, not a map", { exact: true }),
       ).toHaveCount(0);
+      await location.getByText("More", { exact: true }).click();
       await expect(
         location.getByRole("button", {
           name: "Compare locations",
