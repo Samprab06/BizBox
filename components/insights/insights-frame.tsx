@@ -78,14 +78,14 @@ export function InsightFigure({
       </p>
       {note && <div className={"mt-2 text-xs " + muted}>{note}</div>}
       <details className="mt-4 min-w-0">
-        <summary className="cursor-pointer rounded text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)]">
+        <summary className="cursor-pointer rounded text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring">
           View {title.toLowerCase()} data
         </summary>
         <div
           tabIndex={0}
           role="region"
           aria-label={title + " data table"}
-          className="mt-3 max-w-full overflow-x-auto rounded focus-visible:outline-2 focus-visible:outline-[var(--sw-baseline)]"
+          className="mt-3 max-w-full overflow-x-auto rounded focus-visible:outline-2 focus-visible:outline-focus-ring"
         >
           <table className="w-full min-w-[28rem] text-left text-xs">
             <caption className={"pb-2 text-left " + muted}>

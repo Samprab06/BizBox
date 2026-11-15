@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 /**
  * HAC-99 (SIM-15): switches the workspace between the street (city) view and the
@@ -92,23 +93,25 @@ export function CityInteriorTransition({
           {HANDOFF_LABELS[view]} · {siteLabel}
         </p>
         {view === "city" ? (
-          <button
+          <Button
+            variant="primary"
             ref={enterRef}
             type="button"
             onClick={enter}
-            className="min-h-11 rounded-lg border border-pine bg-pine px-4 text-sm font-semibold text-on-pine"
+            className="min-h-11 rounded-lg border border-accent bg-accent px-4 text-sm font-semibold text-on-accent"
           >
             Enter the space
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="glass"
             ref={backRef}
             type="button"
             onClick={back}
-            className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-semibold text-pine"
+            className="min-h-11 rounded-lg border border-accent bg-panel-raised px-4 text-sm font-semibold text-accent"
           >
             Back to street
-          </button>
+          </Button>
         )}
       </div>
       {view === "city" ? city : interior}

@@ -14,6 +14,16 @@ import {
   expandProjectNavigation,
 } from "./fixtures";
 
+// Keep accessibility checks offline; DOM markers still render over this empty basemap.
+test.beforeEach(async ({ page }) => {
+  await page.route("https://tiles.openfreemap.org/**", (route) =>
+    route.fulfill({
+      json: { version: 8, sources: {}, layers: [] },
+      headers: { "access-control-allow-origin": "*" },
+    }),
+  );
+});
+
 // Every route the navigation links to, in task order.
 const NAV_ORDER: WorkspaceRoute[] = workspaceSteps.map((step) => step.route);
 const siteFor = (view: WorkspaceRoute) =>

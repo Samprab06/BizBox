@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import { liveSearch, liveSiteId } from "./live-site-fixtures";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import {
   closeConsultant,
@@ -37,6 +38,18 @@ async function openWorkspaceConsultant(page: Page) {
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("Listings unavailable", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Matching locations" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Montrose storefront", { exact: true }),
+  ).toHaveCount(0);
   await openConsultant(page);
 }
 
@@ -57,7 +70,7 @@ const reply = (assistantMessage: string) => ({
  * The intake agent starts offline (so onboarding sends nothing) and goes live when the test
  * says so. Each message POST is held until the test answers it.
  */
-async function mockServices(page: Page) {
+async function mockServices(page: Page, options: { listings?: boolean } = {}) {
   const state = { live: false };
   const messages: { message?: string; state?: unknown }[] = [];
   const held: Route[] = [];
@@ -74,8 +87,18 @@ async function mockServices(page: Page) {
       ? route.fulfill({ json: { configured: false } })
       : route.fulfill({ status: 503, json: { message: "not used" } }),
   );
+  const listingSearch = structuredClone(liveSearch);
+  listingSearch.candidates.forEach((entry) => {
+    entry.candidate.synthetic = false;
+    entry.candidate.city = "Los Angeles";
+  });
   await page.route("**/api/sites", (route) =>
-    route.fulfill({ status: 503, json: { message: "not used" } }),
+    options.listings
+      ? route.fulfill({ json: listingSearch })
+      : route.fulfill({ status: 503, json: { message: "not used" } }),
+  );
+  await page.route("**/api/comparisons/capabilities", (route) =>
+    route.fulfill({ json: { jevConfigured: false } }),
   );
   return { state, messages, held };
 }
@@ -146,7 +169,7 @@ for (const viewport of VIEWPORTS) {
     test("onboarding hands the same session to the workspace, and Edit brief returns to it", async ({
       page,
     }) => {
-      const { state } = await mockServices(page);
+      const { state } = await mockServices(page, { listings: true });
       await completeOnboarding(page);
       await expectNoOverflow(page);
 
@@ -188,18 +211,24 @@ for (const viewport of VIEWPORTS) {
         origin: "founder",
       });
 
-      // A failed real-inventory request stays unavailable; it never selects an example space.
+      // Invented real-listing API fixtures exercise identity continuity; no preview property is substituted.
+      const location = page.getByRole("region", { name: "Selected location" });
+      await expect(location).toContainText("101 Invented St");
       await expect(
-        header.getByRole("status").filter({ hasText: "Listings unavailable" }),
+        location.getByText("Unknown", { exact: true }),
       ).toBeVisible();
+      await expect(location).toContainText("1,250 sq ft");
       await expect(
-        header.getByRole("group", { name: "Matching locations" }),
+        page.getByRole("group", { name: "Matching locations" }),
+      ).toBeVisible();
+      await expect(location.getByText("Example", { exact: true })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByText("City preview · photo, not a map", { exact: true }),
       ).toHaveCount(0);
       await expect(
-        header.getByRole("button", { name: "Interior", exact: true }),
-      ).toBeDisabled();
-      await expect(
-        page.getByRole("region", { name: "Selected location" }),
+        page.getByText("Montrose storefront", { exact: true }),
       ).toHaveCount(0);
       await expect(
         assistant(page).getByText(
@@ -212,7 +241,7 @@ for (const viewport of VIEWPORTS) {
       const edit = page.getByRole("link", { name: "Edit brief" });
       await expect(edit).toHaveAttribute(
         "href",
-        "/projects/houston-coffee/intake",
+        `/projects/houston-coffee/intake?site=${encodeURIComponent(liveSiteId)}`,
       );
       await closeConsultant(page);
       await edit.click();
@@ -230,12 +259,10 @@ for (const viewport of VIEWPORTS) {
         (await revisedSearch).postDataJSON().profile.economics
           .monthlyRentCeilingCents.value,
       ).toBe(520000);
-      await expect(
-        header.getByText("Los Angeles", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        header.getByRole("status").filter({ hasText: "Listings unavailable" }),
-      ).toBeVisible();
+      await expect(location).toContainText("101 Invented St");
+      await expect(page).toHaveURL(
+        new RegExp(`site=${encodeURIComponent(liveSiteId)}`),
+      );
       expect((await savedSession(page))?.profile.rent).toEqual({
         value: "5200",
         origin: "founder",
@@ -433,8 +460,8 @@ test("the guided stage is dark glass on the photo, one question at a time, with 
     const css = getComputedStyle(el);
     return { fill: css.backgroundColor, blur: css.backdropFilter };
   });
-  expect(style.fill).toBe("rgba(16, 19, 27, 0.44)");
-  expect(style.blur).toBe("blur(12px)");
+  expect(style.fill).toBe("rgba(15, 16, 21, 0.4)");
+  expect(style.blur).toBe("blur(16px)");
   await expect(
     page.getByRole("button", { name: "Other Coming soon" }),
   ).toBeDisabled();

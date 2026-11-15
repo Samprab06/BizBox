@@ -2,10 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import type { Profile } from "@/components/intake/profile";
 import { ClockDial } from "./clock-dial";
-import { DEFAULT_RANGE, formatHoursValue, parseHoursValue } from "./clock-dial-math";
+import {
+  DEFAULT_RANGE,
+  formatHoursValue,
+  parseHoursValue,
+} from "./clock-dial-math";
 import { CurvedRuler } from "./curved-ruler";
 import {
   categoryChoices,
@@ -29,6 +39,11 @@ import {
   type Step,
 } from "./flow";
 import styles from "./onboarding.module.css";
+import { Button, buttonVariants, buttonSizes } from "@/components/ui/button";
+import { Pill } from "@/components/ui/pill";
+import { Input, Textarea } from "@/components/ui/input";
+import { Glass } from "@/components/ui/glass";
+import { cn, focusRing, pressable } from "@/components/ui/cn";
 
 const steps: readonly Step[] = [...questionSteps, "review"];
 
@@ -51,7 +66,9 @@ export function OnboardingFlow({
   notice?: ReactNode;
 }) {
   const [step, setStep] = useState<Step>(() => resumeStep(profile));
-  const [drafts, setDrafts] = useState<Partial<Record<QuestionStep, string>>>({});
+  const [drafts, setDrafts] = useState<Partial<Record<QuestionStep, string>>>(
+    {},
+  );
   const [error, setError] = useState<string | undefined>();
   const [returnToReview, setReturnToReview] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -62,13 +79,17 @@ export function OnboardingFlow({
   }, [step]);
 
   const savedCity = profile.city?.value;
-  const city: City = cityChoices.some((choice) => choice.value === savedCity) ? (savedCity as City) : "Houston";
+  const city: City = cityChoices.some((choice) => choice.value === savedCity)
+    ? (savedCity as City)
+    : "Houston";
 
   function valueOf(key: QuestionStep): string {
     const draft = drafts[key];
     if (draft !== undefined) return draft;
     const initial = initialValue(key, profile);
-    return initial === "" && isRulerStep(key) ? String(rulers[key].start) : initial;
+    return initial === "" && isRulerStep(key)
+      ? String(rulers[key].start)
+      : initial;
   }
 
   function go(next: Step) {
@@ -84,7 +105,8 @@ export function OnboardingFlow({
       return;
     }
     const saved = profile[key];
-    if (saved?.value !== value || saved.origin !== "founder") onCommit(key, value);
+    if (saved?.value !== value || saved.origin !== "founder")
+      onCommit(key, value);
     setDrafts((current) => ({ ...current, [key]: undefined }));
     const next = returnToReview ? "review" : steps[steps.indexOf(key) + 1]!;
     if (next === "review") setReturnToReview(false);
@@ -101,27 +123,69 @@ export function OnboardingFlow({
     setDrafts((current) => ({ ...current, [key]: value }));
   };
 
-  const shownCity = step === "city" ? (cityChoices.find((choice) => choice.value === valueOf("city"))?.value ?? city) : city;
+  const shownCity =
+    step === "city"
+      ? (cityChoices.find((choice) => choice.value === valueOf("city"))
+          ?.value ?? city)
+      : city;
   const photo = cityChoices.find((choice) => choice.value === shownCity)!;
   const credit = photoCredits[shownCity];
   const index = steps.indexOf(step);
   const skip = step !== "review" ? skipValues[step] : undefined;
 
   return (
-    <div className={`${styles.stage} flex min-h-[600px] flex-col items-center justify-center px-3 py-6 sm:px-10 sm:py-12`}>
+    <div
+      className={`${styles.stage} rounded-panel bg-canvas text-ink flex min-h-[600px] flex-col items-center justify-center px-3 py-6 sm:px-10 sm:py-12`}
+    >
       <div className={styles.photo} aria-hidden="true">
-        <Image key={photo.photo} src={photo.photo} alt="" fill sizes="(max-width: 768px) 100vw, 1100px" priority />
+        <Image
+          key={photo.photo}
+          src={photo.photo}
+          alt=""
+          fill
+          sizes="(max-width: 768px) 100vw, 1100px"
+          priority
+        />
       </div>
-      <div className={styles.dim} aria-hidden="true" />
-      <section aria-labelledby="onboarding-title" className={`${styles.glass} w-full max-w-[45rem] backdrop-blur-[12px] p-5 sm:p-8`}>
+      <div className={`${styles.dim} bg-canvas/70`} aria-hidden="true" />
+      <Glass
+        role="region"
+        aria-labelledby="onboarding-title"
+        className="w-full max-w-[45rem] p-5 sm:p-8"
+      >
         <form onSubmit={submit} noValidate>
-          <div key={step} className={styles.fade} data-step={step}>
-            <h2 id="onboarding-title" ref={heading} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl">
+          <div
+            key={step}
+            className="animate-question-in motion-reduce:animate-none"
+            data-step={step}
+          >
+            <h2
+              id="onboarding-title"
+              ref={heading}
+              tabIndex={-1}
+              className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
+            >
               {titles[step]}
             </h2>
-            <div className="mt-6">{step === "review" ? <Review profile={profile} onEdit={(key) => { setReturnToReview(true); go(key); }} /> : answer(step)}</div>
+            <div className="mt-6">
+              {step === "review" ? (
+                <Review
+                  profile={profile}
+                  onEdit={(key) => {
+                    setReturnToReview(true);
+                    go(key);
+                  }}
+                />
+              ) : (
+                answer(step)
+              )}
+            </div>
             {error && (
-              <p role="alert" id="onboarding-error" className="mt-4 text-sm font-medium text-amber-200">
+              <p
+                role="alert"
+                id="onboarding-error"
+                className="mt-4 text-sm font-medium text-danger"
+              >
                 {error}
               </p>
             )}
@@ -129,36 +193,62 @@ export function OnboardingFlow({
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             {index > 0 ? (
-              <button type="button" onClick={() => { setReturnToReview(false); go(steps[index - 1]!); }} className="rounded-full px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+              <Button
+                type="button"
+                onClick={() => {
+                  setReturnToReview(false);
+                  go(steps[index - 1]!);
+                }}
+                variant="quiet"
+              >
                 <span aria-hidden="true">←</span> Back
-              </button>
+              </Button>
             ) : (
               <span />
             )}
             <div className="flex flex-wrap items-center gap-2">
               {skip && (
-                <button type="button" onClick={() => confirm(step as QuestionStep, skip)} className="rounded-full px-4 py-2 text-sm font-medium text-white/90 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+                <Button
+                  type="button"
+                  onClick={() => confirm(step as QuestionStep, skip)}
+                  variant="quiet"
+                >
                   Skip
-                </button>
+                </Button>
               )}
               {step === "review" ? (
-                <ReviewActions profile={profile} formHref={formHref} nextHref={nextHref} onFix={go} />
+                <ReviewActions
+                  profile={profile}
+                  formHref={formHref}
+                  nextHref={nextHref}
+                  onFix={go}
+                />
               ) : (
-                <button type="submit" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] hover:bg-white/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+                <Button type="submit" variant="primary">
                   Continue <span aria-hidden="true">→</span>
-                </button>
+                </Button>
               )}
             </div>
           </div>
         </form>
-      </section>
-      <p className="mt-4 text-center text-xs text-white/80">
+      </Glass>
+      <p className="mt-4 text-center text-xs text-muted">
         {shownCity} photo:{" "}
-        <a className="underline" href={credit.source} target="_blank" rel="noreferrer">
+        <a
+          className={cn("underline", focusRing)}
+          href={credit.source}
+          target="_blank"
+          rel="noreferrer"
+        >
           {credit.author}
         </a>
         ,{" "}
-        <a className="underline" href={credit.licenseUrl} target="_blank" rel="noreferrer">
+        <a
+          className={cn("underline", focusRing)}
+          href={credit.licenseUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
           {credit.license}
         </a>
       </p>
@@ -168,35 +258,75 @@ export function OnboardingFlow({
   function answer(key: QuestionStep): ReactNode {
     const value = valueOf(key);
     const describedBy = error ? "onboarding-error" : undefined;
-    const field = "w-full rounded-2xl border border-white/25 bg-white/10 px-4 py-3 text-base text-white placeholder:text-white/60 focus:border-white/70 focus:outline-none";
-    const choice = (pressed: boolean) =>
-      `flex items-center justify-center gap-2 rounded-2xl border px-4 py-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-white ${pressed ? "border-white bg-white text-[#10131b]" : "border-white/25 bg-white/5 text-white hover:bg-white/10"}`;
-    const text = (options: { textarea?: boolean; maxLength: number; placeholder: string }) =>
+    const text = (options: {
+      textarea?: boolean;
+      maxLength: number;
+      placeholder: string;
+    }) =>
       options.textarea ? (
-        <textarea aria-labelledby="onboarding-title" aria-describedby={describedBy} className={`${field} min-h-28 resize-y`} maxLength={options.maxLength} placeholder={options.placeholder} value={value} onChange={(event) => setDraft(key, event.target.value)} />
+        <Textarea
+          aria-labelledby="onboarding-title"
+          aria-describedby={describedBy}
+          className="min-h-28 resize-y text-base"
+          maxLength={options.maxLength}
+          placeholder={options.placeholder}
+          value={value}
+          onChange={(event) => setDraft(key, event.target.value)}
+        />
       ) : (
-        <input aria-labelledby="onboarding-title" aria-describedby={describedBy} className={field} maxLength={options.maxLength} placeholder={options.placeholder} value={value} onChange={(event) => setDraft(key, event.target.value)} />
+        <Input
+          aria-labelledby="onboarding-title"
+          aria-describedby={describedBy}
+          className="h-auto py-3 text-base"
+          maxLength={options.maxLength}
+          placeholder={options.placeholder}
+          value={value}
+          onChange={(event) => setDraft(key, event.target.value)}
+        />
       );
 
     switch (key) {
       case "category":
         return (
-          <div role="group" aria-labelledby="onboarding-title" className="grid grid-cols-2 gap-3">
+          <div
+            role="group"
+            aria-labelledby="onboarding-title"
+            className="grid grid-cols-2 gap-3"
+          >
             {categoryChoices.map((option) => (
-              <button key={option.value} type="button" aria-pressed={value === option.value} className={choice(value === option.value)} onClick={() => setDraft(key, option.value)}>
+              <Button
+                key={option.value}
+                type="button"
+                variant={value === option.value ? "primary" : "glass"}
+                aria-pressed={value === option.value}
+                className="h-auto min-h-12 justify-center rounded-control px-4 py-4 font-medium"
+                onClick={() => setDraft(key, option.value)}
+              >
                 {option.label}
-              </button>
+              </Button>
             ))}
-            <button type="button" disabled className="col-span-2 flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.02] px-4 py-4 text-sm font-medium text-white/50">
-              Other{" "}
-              <span className="rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-normal">Coming soon</span>
-            </button>
+            <Button
+              type="button"
+              variant="glass"
+              disabled
+              className="col-span-2 h-auto min-h-12 justify-center px-4 py-4 font-medium"
+            >
+              Other <Pill className="text-[10px] font-normal">Coming soon</Pill>
+            </Button>
           </div>
         );
       case "concept":
-        return text({ textarea: true, maxLength: 400, placeholder: "A neighborhood coffee shop with room to work and meet…" });
+        return text({
+          textarea: true,
+          maxLength: 400,
+          placeholder: "A neighborhood coffee shop with room to work and meet…",
+        });
       case "customers":
-        return text({ textarea: true, maxLength: 250, placeholder: "Residents, commuters, students…" });
+        return text({
+          textarea: true,
+          maxLength: 250,
+          placeholder: "Residents, commuters, students…",
+        });
       case "hours":
         return (
           <ClockDial
@@ -207,40 +337,80 @@ export function OnboardingFlow({
           />
         );
       case "requirements":
-        return text({ textarea: true, maxLength: 300, placeholder: "Street frontage, parking, ground floor…" });
+        return text({
+          textarea: true,
+          maxLength: 300,
+          placeholder: "Street frontage, parking, ground floor…",
+        });
       case "city":
         return (
           <>
-            <div role="group" aria-labelledby="onboarding-title" className="grid grid-cols-2 gap-3">
+            <div
+              role="group"
+              aria-labelledby="onboarding-title"
+              className="grid grid-cols-2 gap-3"
+            >
               {cityChoices.map((option) => (
-                <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => setDraft(key, option.value)} className={`overflow-hidden rounded-2xl border text-left focus-visible:outline-2 focus-visible:outline-white ${value === option.value ? "border-white ring-2 ring-white" : "border-white/25"}`}>
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={value === option.value ? "primary" : "glass"}
+                  aria-pressed={value === option.value}
+                  onClick={() => setDraft(key, option.value)}
+                  className="h-auto flex-col items-stretch gap-0 overflow-hidden rounded-control p-0 text-left"
+                >
                   <span className="relative block aspect-video">
-                    <Image src={option.photo} alt={option.alt} fill sizes="(max-width: 640px) 45vw, 260px" className="object-cover" />
+                    <Image
+                      src={option.photo}
+                      alt={option.alt}
+                      fill
+                      sizes="(max-width: 640px) 45vw, 260px"
+                      className="object-cover"
+                    />
                   </span>
-                  <span className="flex items-center justify-between bg-black/40 px-3 py-2 text-sm font-medium">
+                  <span className="flex items-center justify-between bg-canvas px-3 py-2 text-sm font-medium text-ink">
                     {option.value}
-                    <span aria-hidden="true" className={`h-3 w-3 rounded-full border ${value === option.value ? "border-white bg-white" : "border-white/70"}`} />
+                    <span
+                      aria-hidden="true"
+                      className={`h-3 w-3 rounded-full border ${value === option.value ? "border-accent bg-accent" : "border-glass-edge"}`}
+                    />
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
-            <div role="group" aria-label="Coming soon cities" className="mt-3 grid grid-cols-3 gap-2">
+            <div
+              role="group"
+              aria-label="Coming soon cities"
+              className="mt-3 grid grid-cols-3 gap-2"
+            >
               {comingSoonCities.map((name) => (
-                <button key={name} type="button" disabled className="cursor-not-allowed rounded-xl border border-white/15 px-2 py-2 text-xs text-white/50">
+                <Button
+                  key={name}
+                  type="button"
+                  variant="glass"
+                  disabled
+                  className="h-auto flex-col gap-0 rounded-control px-2 py-2 text-xs"
+                >
                   <strong className="block font-medium">{name}</strong>{" "}
                   <span className="text-[10px]">Coming soon</span>
-                </button>
+                </Button>
               ))}
             </div>
           </>
         );
       case "areas":
-        return text({ textarea: true, maxLength: 250, placeholder: "Type your preferences…" });
+        return text({
+          textarea: true,
+          maxLength: 250,
+          placeholder: "Type your preferences…",
+        });
       case "rent":
       case "buildout":
       case "staff": {
         const ruler = rulers[key];
-        const amount = /^\d+$/.test(value.trim()) ? Number(value.trim()) : Number.NaN;
+        const amount = /^\d+$/.test(value.trim())
+          ? Number(value.trim())
+          : Number.NaN;
         const bounds = rulerBounds(key, amount);
         return (
           <div>
@@ -252,24 +422,43 @@ export function OnboardingFlow({
                 aria-invalid={error !== undefined}
                 inputMode="numeric"
                 autoComplete="off"
-                className="w-[7ch] min-w-0 border-b border-white/30 bg-transparent text-center tabular-nums focus:border-white focus:outline-none"
+                className={`w-[7ch] min-w-0 border-b border-glass-edge bg-transparent text-center tabular-nums ${focusRing}`}
                 value={value}
                 onChange={(event) => setDraft(key, event.target.value)}
               />
             </div>
             <div className="mt-6">
-              <CurvedRuler value={amount} min={bounds.min} max={bounds.max} step={ruler.step} currency={ruler.currency} label={`Adjust ${ruler.label.toLowerCase()}`} onChange={(next) => setDraft(key, String(next))} />
+              <CurvedRuler
+                value={amount}
+                min={bounds.min}
+                max={bounds.max}
+                step={ruler.step}
+                currency={ruler.currency}
+                label={`Adjust ${ruler.label.toLowerCase()}`}
+                onChange={(next) => setDraft(key, String(next))}
+              />
             </div>
           </div>
         );
       }
       case "price":
         return (
-          <div role="group" aria-labelledby="onboarding-title" className="grid grid-cols-3 gap-3">
+          <div
+            role="group"
+            aria-labelledby="onboarding-title"
+            className="grid grid-cols-3 gap-3"
+          >
             {priceChoices.map((option) => (
-              <button key={option.value} type="button" aria-pressed={value === option.value} className={choice(value === option.value)} onClick={() => setDraft(key, option.value)}>
+              <Button
+                key={option.value}
+                type="button"
+                variant={value === option.value ? "primary" : "glass"}
+                aria-pressed={value === option.value}
+                className="h-auto min-h-12 justify-center rounded-control px-4 py-4 font-medium"
+                onClick={() => setDraft(key, option.value)}
+              >
                 {option.label}
-              </button>
+              </Button>
             ))}
           </div>
         );
@@ -277,19 +466,38 @@ export function OnboardingFlow({
   }
 }
 
-function Review({ profile, onEdit }: { profile: Profile; onEdit: (key: QuestionStep) => void }) {
+function Review({
+  profile,
+  onEdit,
+}: {
+  profile: Profile;
+  onEdit: (key: QuestionStep) => void;
+}) {
   return (
-    <dl className="divide-y divide-white/15 text-sm">
+    <dl className="divide-y divide-line text-sm">
       {questionSteps.map((key) => {
         const value = profile[key]?.value ?? "";
         return (
           <div key={key} className="flex items-start gap-3 py-2.5">
-            <dt className="w-28 shrink-0 text-white/75">{reviewLabels[key]}</dt>
-            <dd className="min-w-0 flex-1 break-words">{value ? reviewValue(key, value) : <span className="text-amber-200">Not answered</span>}</dd>
+            <dt className="w-28 shrink-0 text-muted">{reviewLabels[key]}</dt>
+            <dd className="min-w-0 flex-1 break-words">
+              {value ? (
+                reviewValue(key, value)
+              ) : (
+                <span className="text-danger">Not answered</span>
+              )}
+            </dd>
             <dd className="shrink-0">
-              <button type="button" aria-label={`Edit ${reviewLabels[key].toLowerCase()}`} onClick={() => onEdit(key)} className="rounded-full px-2 py-0.5 text-xs font-medium text-white underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-white">
+              <Button
+                type="button"
+                aria-label={`Edit ${reviewLabels[key].toLowerCase()}`}
+                onClick={() => onEdit(key)}
+                variant="quiet"
+                size="sm"
+                className="text-xs underline-offset-2 hover:underline"
+              >
                 Edit
-              </button>
+              </Button>
             </dd>
           </div>
         );
@@ -298,19 +506,50 @@ function Review({ profile, onEdit }: { profile: Profile; onEdit: (key: QuestionS
   );
 }
 
-function ReviewActions({ profile, formHref, nextHref, onFix }: { profile: Profile; formHref: string; nextHref: string; onFix: (step: Step) => void }) {
-  const invalid = questionSteps.find((key) => stepError(key, profile[key]?.value ?? "") !== undefined);
+function ReviewActions({
+  profile,
+  formHref,
+  nextHref,
+  onFix,
+}: {
+  profile: Profile;
+  formHref: string;
+  nextHref: string;
+  onFix: (step: Step) => void;
+}) {
+  const invalid = questionSteps.find(
+    (key) => stepError(key, profile[key]?.value ?? "") !== undefined,
+  );
   return (
     <>
-      <Link href={formHref} className="rounded-full px-4 py-2 text-sm font-medium text-white/90 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-white">
+      <Link
+        href={formHref}
+        className={cn(
+          "inline-flex items-center justify-center rounded-control underline-offset-2 hover:underline",
+          buttonVariants.quiet,
+          buttonSizes.md,
+          focusRing,
+          pressable,
+        )}
+      >
         Edit all fields
       </Link>
       {invalid ? (
-        <button type="button" onClick={() => onFix(invalid)} className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-          Finish {reviewLabels[invalid].toLowerCase()} <span aria-hidden="true">→</span>
-        </button>
+        <Button type="button" onClick={() => onFix(invalid)} variant="primary">
+          Finish {reviewLabels[invalid].toLowerCase()}{" "}
+          <span aria-hidden="true">→</span>
+        </Button>
       ) : (
-        <Link href={nextHref} className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+        <Link
+          href={nextHref}
+          className={cn(
+            "inline-flex items-center justify-center gap-2 rounded-control",
+            buttonVariants.primary,
+            buttonSizes.md,
+            focusRing,
+            pressable,
+          )}
+        >
           Open workspace <span aria-hidden="true">→</span>
         </Link>
       )}

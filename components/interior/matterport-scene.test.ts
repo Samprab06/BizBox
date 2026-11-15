@@ -1,3 +1,4 @@
+import { fixtureRenderPalette } from "../simulator/render-palette.fixture";
 import { expect, it, vi } from "vitest";
 import * as Three from "three";
 import { makeDemo } from "../simulator/fixture";
@@ -325,3 +326,8 @@ it("renders 0.8m spheres resting on the floor independently of placement scale",
     session.dispose();
   }
 });
+
+vi.mock("../simulator/render-palette", async (original) => ({
+  ...(await original<typeof import("../simulator/render-palette")>()),
+  readRenderPalette: () => fixtureRenderPalette(),
+}));

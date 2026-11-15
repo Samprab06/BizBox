@@ -25,7 +25,7 @@ for the static prototype.
 
 ## Tokens and surfaces
 
-`app/workspace.css` is the sole application foundation. Its `@theme` namespaces
+`app/workspace.css` is the sole application foundation. Its `@theme static` namespaces
 produce Tailwind utilities; examples include `bg-canvas`, `bg-glass-fill`,
 `border-glass-edge`, `text-ink`, `bg-accent`, `text-on-accent`, `rounded-panel`,
 `backdrop-blur-glass`, `shadow-glass`, `duration-question` and `ease-question`.
@@ -63,7 +63,7 @@ is 16 px; the panel shadow is `0 18px 48px -24px #0009, inset 0 1px 1px #ffffff8
 The existing card padding stays 20 px. Motion comes from the existing
 [question transition](design-prototypes/bizbox-onboarding/simple-motion.js):
 120 ms, ease-out, content opacity only. Reduced motion changes that duration to
-0 ms. Keep glass fill/blur stable; no unrelated continuous or ornamental motion.
+0 ms. The shared `animate-question-in` utility supplies this opacity keyframe for incoming onboarding questions. Keep glass fill/blur stable; no unrelated continuous or ornamental motion.
 
 ### Typography
 
@@ -91,6 +91,15 @@ neutral colors never substitute for the words. Place labels beside their values.
 The fixed **Baseline** and **Alternative** names remain visible. Their primitive
 labels also use solid and dashed leading borders to distinguish them in monochrome.
 Charts must keep names/legends and existing non-color cues when adopting these tokens.
+
+Simulated-person marks retain the existing customer blue (`agent-customer`, `#60a5fa`)
+and employee violet (`agent-employee`, `#c084fc`) as role identities, with labels and
+existing shape cues. These are renderer/chart marks, never primary controls or surface
+accents. Both become dark ink in print. Renderer adapters resolve canonical CSS colors
+into concrete values at mount; CSS `var()` strings must not be passed to Three, Cesium
+or MapLibre. The static theme retains renderer-only variables in production CSS
+even without matching DOM utility classes. World atmosphere (day/night/twilight) and source photography remain scene
+content rather than application palette values.
 
 All old utility names remain aliases until DS-8–DS-10 migrate their consumers:
 

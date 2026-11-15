@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -21,7 +22,7 @@ const names: Record<StationExperimentConfigurationId, string> = {
   "plus-two": "+2 stations and staff",
 };
 const button =
-  "rounded border border-[var(--sw-baseline)] px-3 py-2 text-sm font-semibold disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)]";
+  "rounded border border-[var(--sw-baseline)] px-3 py-2 text-sm font-semibold disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring";
 type Props = {
   projectId: string;
   comparisonId: string;
@@ -327,7 +328,8 @@ function StationController({
       )}
       <div className="flex flex-wrap gap-2">
         {visible?.nextConfigurationId && visible.status !== "unavailable" && (
-          <button
+          <Button
+            variant="quiet"
             type="button"
             className={button}
             disabled={loading || writing || needsRead || !!error}
@@ -342,9 +344,10 @@ function StationController({
                   : founderLabels
                     ? "Compare setups"
                     : "Run planned station configurations"}
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           disabled={loading || writing}
@@ -355,7 +358,7 @@ function StationController({
           }}
         >
           {visible ? "Refresh station progress" : "Retry station plan"}
-        </button>
+        </Button>
       </div>
     </section>
   );
