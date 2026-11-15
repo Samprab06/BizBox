@@ -171,6 +171,9 @@ export function createComparisonsHandler({
           ...(assembled.jevCompetitorSet
             ? { jevCompetitorSet: assembled.jevCompetitorSet }
             : {}),
+          ...(assembled.jevPersonaSet
+            ? { jevPersonaSet: assembled.jevPersonaSet }
+            : {}),
         };
       } else evaluationRequest = EvaluationRequestSchema.parse(body);
       const run = evaluateSites(evaluationRequest);

@@ -194,6 +194,9 @@ export function createScenarioRunner({
             ...(assembled.jevCompetitorSet
               ? { jevCompetitorSet: assembled.jevCompetitorSet }
               : {}),
+            ...(assembled.jevPersonaSet
+              ? { jevPersonaSet: assembled.jevPersonaSet }
+              : {}),
             ...(assembled.scenario ? { scenario: assembled.scenario } : {}),
           },
         });

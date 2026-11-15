@@ -22,6 +22,7 @@ import type {
   CatchmentInput,
   Competitor,
   CandidateSite,
+  PersonaSet,
 } from "@/lib/panel/contracts";
 import { buildPersonas } from "@/lib/panel/personas";
 import { runPanelForSites, type RunPanelOptions } from "@/lib/panel/panel";
@@ -85,6 +86,19 @@ export type JevCompetitorSet = {
   /** Per candidate site ID: the competitor IDs Jev was shown, in prompt order. */
   sites: Record<string, { competitorIds: string[]; capped: boolean }>;
 };
+/**
+ * HAC-159: version of the rule that builds each site's Jev personas: `buildPersonas` over that
+ * site's own catchment (its block groups and workplaces, its own locations, its storefront as
+ * the fallback location), seeded and named by that site's catchment ID. Never the shared study
+ * area, so other candidates cannot change a site's personas. Bump it when the rule changes
+ * (persona IDs, prompts and cache keys change).
+ */
+export const JEV_PERSONA_SET_VERSION = "hac159-site-catchment-v1";
+export type JevPersonaSetProvenance = {
+  version: typeof JEV_PERSONA_SET_VERSION;
+  /** Per candidate site ID: the catchment that seeded its personas, and how many there are. */
+  sites: Record<string, { catchmentId: string; personaCount: number }>;
+};
 export type AssemblyMetadata = {
   /** Immutable scenario and optional layout snapshot used by HAC-81. */
   scenario?: {
@@ -100,6 +114,8 @@ export type AssemblyMetadata = {
   >;
   /** Provenance of the per-site Jev competitor sets, when Jev was asked (HAC-156). */
   jevCompetitorSet?: JevCompetitorSet;
+  /** Provenance of the per-site Jev persona sets, when Jev was asked (HAC-159). */
+  jevPersonaSet?: JevPersonaSetProvenance;
 };
 export type AssembledEvaluation = AssemblyMetadata & {
   request: EvaluationRequest;
@@ -151,6 +167,7 @@ export type AssemblyCatchment = {
     competitors?: Record<string, LatLng & { origin: "costar" | "public" }>;
   };
 };
+type Picked<T> = { row: T; bundle: AssemblyCatchment };
 export type AssemblyDependencies = {
   searchSites(
     profile: BusinessProfile,
@@ -476,12 +493,13 @@ export async function assembleEvaluation(
     a.response.catchment.id.localeCompare(b.response.catchment.id),
   );
   const largest = <T>(
+    bundles: AssemblyCatchment[],
     pick: (bundle: AssemblyCatchment) => T[],
     key: (row: T) => string,
     size: (row: T) => number | null,
   ) => {
-    const chosen = new Map<string, { row: T; bundle: AssemblyCatchment }>();
-    for (const bundle of ordered)
+    const chosen = new Map<string, Picked<T>>();
+    for (const bundle of bundles)
       for (const row of pick(bundle)) {
         const prev = chosen.get(key(row));
         if (!prev || (size(row) ?? -1) > (size(prev.row) ?? -1))
@@ -491,16 +509,20 @@ export async function assembleEvaluation(
       key(a.row).localeCompare(key(b.row)),
     );
   };
-  const studyBlockGroups = largest(
-    (b) => b.response.residents.blockGroups,
-    (bg) => bg.geoid,
-    (bg) => bg.allocatedPopulation.value,
-  );
-  const studyWorkplaces = largest(
-    (b) => b.response.workers.blocks,
-    (w) => w.geoid,
-    (w) => w.jobs.value,
-  );
+  const blockGroupsOf = (bundles: AssemblyCatchment[]) =>
+    largest(
+      bundles,
+      (b) => b.response.residents.blockGroups,
+      (bg) => bg.geoid,
+      (bg) => bg.allocatedPopulation.value,
+    );
+  const workplacesOf = (bundles: AssemblyCatchment[]) =>
+    largest(
+      bundles,
+      (b) => b.response.workers.blocks,
+      (w) => w.geoid,
+      (w) => w.jobs.value,
+    );
   const studyAreaId = `study:${createHash("sha256")
     .update(ordered.map((b) => b.response.catchment.id).join("|"))
     .digest("hex")
@@ -542,113 +564,147 @@ export async function assembleEvaluation(
     commuteBike: 0.04,
   }))
     number(`personas.defaults.${key}`, defaultMetric(value));
-  const inputCatchment: CatchmentInput = {
+  // Same values as `number`, without recording assumptions or findings: used for the per-site
+  // Jev personas (HAC-159), whose inputs are already recorded through the shared study area.
+  const quiet = (path: string, metric: AssumedValue, fallback?: number) => {
+    const value = metric.value ?? fallback;
+    if (value === undefined || value === null)
+      throw new AssemblyError(`Required input is unknown: ${path}`, findings);
+    return value;
+  };
+  /**
+   * Persona-builder input over `bundles`. With `record`, every input is recorded as an
+   * assumption with its findings (the shared study area); without, nothing is recorded.
+   */
+  const personaInput = (args: {
+    catchmentId: string;
+    site: CandidateSite;
+    bundles: AssemblyCatchment[];
+    center: LatLng;
+    record: boolean;
+  }): CatchmentInput => {
+    const { bundles, center, record } = args;
+    const num = record ? number : quiet;
+    const note = record ? finding : () => {};
+    return {
+      catchmentId: args.catchmentId,
+      site: args.site,
+      blockGroups: blockGroupsOf(bundles).flatMap(({ row: bg, bundle }) => {
+        if (
+          bg.allocatedPopulation.value === null ||
+          bg.allocatedPopulation.value <= 0
+        ) {
+          note(
+            "POPULATION_UNKNOWN",
+            `Block group ${bg.geoid} has no usable allocated population.`,
+          );
+          return [];
+        }
+        const location =
+          bundle.locations?.blockGroups?.[bg.geoid] ??
+          bundles
+            .map((b) => b.locations?.blockGroups?.[bg.geoid])
+            .find(Boolean);
+        if (!location)
+          note(
+            "DEFAULT_RESIDENT_LOCATION",
+            `Block group ${bg.geoid} uses the catchment center as a location proxy, origin default.`,
+          );
+        const income = num(
+          `personas.${bg.geoid}.medianIncome`,
+          bg.medianHouseholdIncome,
+          60000,
+        );
+        num(`personas.${bg.geoid}.population`, bg.allocatedPopulation);
+        num(`personas.${bg.geoid}.households`, bg.allocatedHouseholds, 0);
+        for (const [key, value] of Object.entries(location ?? center))
+          num(`personas.${bg.geoid}.${key}`, {
+            value,
+            origin: location ? "public" : "default",
+            unit: "degrees",
+            evidenceIds: bg.areaFraction.evidenceIds,
+          });
+        return [
+          {
+            geoid: bg.geoid,
+            lat: location?.lat ?? center.lat,
+            lng: location?.lng ?? center.lng,
+            population: Math.round(bg.allocatedPopulation.value),
+            households: Math.round(bg.allocatedHouseholds.value ?? 0),
+            medianHouseholdIncomeUsd: income,
+            medianAge: 40,
+            shareHouseholdsWithKids: 0.35,
+            commuteShares: {
+              drive: 0.78,
+              walk: 0.1,
+              transit: 0.08,
+              bike: 0.04,
+            },
+          },
+        ];
+      }),
+      workplaces: workplacesOf(bundles).flatMap(({ row: w, bundle }) => {
+        if (w.jobs.value === null || w.jobs.value <= 0) {
+          note("JOBS_UNKNOWN", `Workplace ${w.geoid} has no usable job count.`);
+          return [];
+        }
+        const location =
+          bundle.locations?.workers?.[w.geoid] ??
+          bundles.map((b) => b.locations?.workers?.[w.geoid]).find(Boolean);
+        num(`personas.workers.${w.geoid}.jobs`, w.jobs);
+        const earnings = location?.earnings ?? { low: 1, mid: 1, high: 1 };
+        const ages = location?.ages ?? { under30: 1, age30to54: 1, over55: 1 };
+        for (const [key, value] of Object.entries(earnings))
+          num(`personas.workers.${w.geoid}.earnings.${key}`, {
+            value,
+            origin: location?.earnings ? "public" : "default",
+            unit: "weight",
+            evidenceIds: w.jobs.evidenceIds,
+          });
+        for (const [key, value] of Object.entries(ages))
+          num(`personas.workers.${w.geoid}.ages.${key}`, {
+            value,
+            origin: location?.ages ? "public" : "default",
+            unit: "weight",
+            evidenceIds: w.jobs.evidenceIds,
+          });
+        for (const [key, value] of Object.entries({
+          lat: location?.lat ?? center.lat,
+          lng: location?.lng ?? center.lng,
+        }))
+          num(`personas.workers.${w.geoid}.${key}`, {
+            value,
+            origin: location ? "public" : "default",
+            unit: "degrees",
+            evidenceIds: w.jobs.evidenceIds,
+          });
+        if (!location)
+          note(
+            "DEFAULT_WORKER_LOCATION",
+            `Workplace ${w.geoid} uses the catchment center as location proxy, origin default.`,
+          );
+        return [
+          {
+            geoid: w.geoid,
+            lat: location?.lat ?? center.lat,
+            lng: location?.lng ?? center.lng,
+            jobs: Math.round(w.jobs.value),
+            earnings,
+            ages,
+          },
+        ];
+      }),
+      passBy: [],
+      competitors: [],
+    };
+  };
+  const inputCatchment = personaInput({
     catchmentId: studyAreaId,
     site: studySite,
-    blockGroups: studyBlockGroups.flatMap(({ row: bg, bundle }) => {
-      if (
-        bg.allocatedPopulation.value === null ||
-        bg.allocatedPopulation.value <= 0
-      ) {
-        finding(
-          "POPULATION_UNKNOWN",
-          `Block group ${bg.geoid} has no usable allocated population.`,
-        );
-        return [];
-      }
-      const location =
-        bundle.locations?.blockGroups?.[bg.geoid] ??
-        ordered.map((b) => b.locations?.blockGroups?.[bg.geoid]).find(Boolean);
-      if (!location)
-        finding(
-          "DEFAULT_RESIDENT_LOCATION",
-          `Block group ${bg.geoid} uses the catchment center as a location proxy, origin default.`,
-        );
-      const income = number(
-        `personas.${bg.geoid}.medianIncome`,
-        bg.medianHouseholdIncome,
-        60000,
-      );
-      number(`personas.${bg.geoid}.population`, bg.allocatedPopulation);
-      number(`personas.${bg.geoid}.households`, bg.allocatedHouseholds, 0);
-      for (const [key, value] of Object.entries(location ?? center))
-        number(`personas.${bg.geoid}.${key}`, {
-          value,
-          origin: location ? "public" : "default",
-          unit: "degrees",
-          evidenceIds: bg.areaFraction.evidenceIds,
-        });
-      return [
-        {
-          geoid: bg.geoid,
-          lat: location?.lat ?? center.lat,
-          lng: location?.lng ?? center.lng,
-          population: Math.round(bg.allocatedPopulation.value),
-          households: Math.round(bg.allocatedHouseholds.value ?? 0),
-          medianHouseholdIncomeUsd: income,
-          medianAge: 40,
-          shareHouseholdsWithKids: 0.35,
-          commuteShares: { drive: 0.78, walk: 0.1, transit: 0.08, bike: 0.04 },
-        },
-      ];
-    }),
-    workplaces: studyWorkplaces.flatMap(({ row: w, bundle }) => {
-      if (w.jobs.value === null || w.jobs.value <= 0) {
-        finding(
-          "JOBS_UNKNOWN",
-          `Workplace ${w.geoid} has no usable job count.`,
-        );
-        return [];
-      }
-      const location =
-        bundle.locations?.workers?.[w.geoid] ??
-        ordered.map((b) => b.locations?.workers?.[w.geoid]).find(Boolean);
-      number(`personas.workers.${w.geoid}.jobs`, w.jobs);
-      const earnings = location?.earnings ?? { low: 1, mid: 1, high: 1 };
-      const ages = location?.ages ?? { under30: 1, age30to54: 1, over55: 1 };
-      for (const [key, value] of Object.entries(earnings))
-        number(`personas.workers.${w.geoid}.earnings.${key}`, {
-          value,
-          origin: location?.earnings ? "public" : "default",
-          unit: "weight",
-          evidenceIds: w.jobs.evidenceIds,
-        });
-      for (const [key, value] of Object.entries(ages))
-        number(`personas.workers.${w.geoid}.ages.${key}`, {
-          value,
-          origin: location?.ages ? "public" : "default",
-          unit: "weight",
-          evidenceIds: w.jobs.evidenceIds,
-        });
-      for (const [key, value] of Object.entries({
-        lat: location?.lat ?? center.lat,
-        lng: location?.lng ?? center.lng,
-      }))
-        number(`personas.workers.${w.geoid}.${key}`, {
-          value,
-          origin: location ? "public" : "default",
-          unit: "degrees",
-          evidenceIds: w.jobs.evidenceIds,
-        });
-      if (!location)
-        finding(
-          "DEFAULT_WORKER_LOCATION",
-          `Workplace ${w.geoid} uses the catchment center as location proxy, origin default.`,
-        );
-      return [
-        {
-          geoid: w.geoid,
-          lat: location?.lat ?? center.lat,
-          lng: location?.lng ?? center.lng,
-          jobs: Math.round(w.jobs.value),
-          earnings,
-          ages,
-        },
-      ];
-    }),
-    passBy: [],
-    competitors: [],
-  };
+    bundles: ordered,
+    center,
+    record: true,
+  });
   const personaSet = buildPersonas(inputCatchment);
   if (!personaSet.personas.length)
     throw new AssemblyError(
@@ -716,6 +772,7 @@ export async function assembleEvaluation(
     "Competitor size/frontage/position/anchors, price and independent brand class are uncalibrated defaults; only location/category come from source records.",
   );
   let jevCompetitorSet: JevCompetitorSet | undefined;
+  let jevPersonaSet: JevPersonaSetProvenance | undefined;
   if (input.demandSource === "jev" && deps.jev && price > 0) {
     // HAC-156: the union study area above stays for the population and Huff, but each site's
     // Jev competitors come from its own catchment only, so adding or removing other candidates
@@ -751,8 +808,37 @@ export async function assembleEvaluation(
       "JEV_COMPETITOR_SET",
       `Jev competitor options come from each site's own catchment (${JEV_COMPETITOR_SET_VERSION}); the shared study area is used for population and Huff only.`,
     );
+    // HAC-159: the same for the personas. Each site's Jev personas are built from its own
+    // catchment and seeded by its own catchment ID, so a site's full Jev request set (personas
+    // and competitors) is identical alone or with any other candidates. The shared study-area
+    // personas above stay the population for Huff.
+    const personasBySite = new Map<string, PersonaSet>();
+    jevPersonaSet = { version: JEV_PERSONA_SET_VERSION, sites: {} };
+    for (const site of sites) {
+      const bundle = siteCatchments.get(site.siteId)!;
+      const panelSite = panelSites.find((p) => p.id === optionId(site.siteId))!;
+      const set = buildPersonas(
+        personaInput({
+          catchmentId: bundle.response.catchment.id,
+          site: panelSite,
+          bundles: [bundle],
+          center: site.storefront.location,
+          record: false,
+        }),
+      );
+      personasBySite.set(panelSite.id, set);
+      jevPersonaSet.sites[site.siteId] = {
+        catchmentId: set.catchmentId,
+        personaCount: set.personas.length,
+      };
+    }
+    finding(
+      "JEV_PERSONA_SET",
+      `Jev personas come from each site's own catchment, seeded by its catchment ID (${JEV_PERSONA_SET_VERSION}); the shared study-area personas are used for Huff only.`,
+    );
     const { tables, progress } = await runPanelForSites({
       personaSet,
+      personaSetForSite: (site) => personasBySite.get(site.id) ?? personaSet,
       sites: panelSites,
       competitors: [],
       competitorsForSite: (site) => perSite.get(site.id) ?? [],
@@ -776,7 +862,8 @@ export async function assembleEvaluation(
     ]);
     for (const site of sites) {
       const table = tables.find((t) => t.siteId === optionId(site.siteId));
-      const personaCount = personaSet.personas.length;
+      const sitePersonas = personasBySite.get(optionId(site.siteId))!;
+      const personaCount = sitePersonas.personas.length;
       // Personas still unanswered after the panel's own retry; a missing table counts them all.
       const failedPersonaCount = table
         ? Math.max(
@@ -785,7 +872,7 @@ export async function assembleEvaluation(
           )
         : personaCount;
       site.jevPanel = { personaCount, failedPersonaCount };
-      if (!table || failedPersonaCount > 0) {
+      if (!table || failedPersonaCount > 0 || personaCount === 0) {
         finding(
           "JEV_INCOMPLETE",
           `Jev failed for ${failedPersonaCount} of ${personaCount} personas after one retry; all-site Huff fallback will be used.`,
@@ -806,6 +893,7 @@ export async function assembleEvaluation(
           ),
         })),
       };
+      site.jevPersonaSet = sitePersonas;
       site.behaviorTableId = `assembled:${createHash("sha256").update(JSON.stringify(site.behaviorTable)).digest("hex")}`;
     }
   } else if (input.demandSource === "jev")
@@ -834,6 +922,7 @@ export async function assembleEvaluation(
     findings,
     assumptions,
     ...(jevCompetitorSet ? { jevCompetitorSet } : {}),
+    ...(jevPersonaSet ? { jevPersonaSet } : {}),
   };
 }
 
