@@ -64,6 +64,13 @@
       "when": 1794696092619,
       "tag": "0008_copilot_threads",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794700017150,
+      "tag": "0009_matterport-public-scans",
+      "breakpoints": true
     }
   ]
 }

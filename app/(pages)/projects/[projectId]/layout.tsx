@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { CopilotDock } from "@/components/copilot/copilot-dock";
+import { CopilotProvider } from "@/components/copilot/copilot-provider";
 import { ProjectContextProvider } from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
@@ -26,7 +28,11 @@ export default async function ProjectLayout({
       <main className="mx-auto max-w-5xl px-5 py-7 sm:px-8">
         {project ? (
           <ProjectContextProvider project={project}>
-            {children}
+            {/* HAC-84: the layout stays mounted across navigation, so the dock does too. */}
+            <CopilotProvider projectId={project.id}>
+              {children}
+              <CopilotDock />
+            </CopilotProvider>
           </ProjectContextProvider>
         ) : (
           children

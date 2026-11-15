@@ -15,6 +15,7 @@ import {
   patchFromForm,
   type IntakeResponse,
 } from "@/components/intake/live";
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import {
   initialSession,
   intakeSessionSchema,
@@ -41,11 +42,17 @@ export function parseIntakeSession(raw: string | null): IntakeSession | null {
  * The body both surfaces send: round-tripped state, pending form edits and the message. The
  * message is omitted for a form-only sync of committed edits.
  */
-export function intakeRequestBody(session: IntakeSession, text?: string) {
+export function intakeRequestBody(
+  session: IntakeSession,
+  text?: string,
+  /** HAC-144: what the founder is looking at, so the consultant's UI tools can act on it. */
+  view?: AgentViewContext,
+) {
   return {
     state: session.live?.state,
     patch: patchFromForm(session.profile, session.pending ?? []),
     message: text,
+    ...(view ? { view } : {}),
   };
 }
 
@@ -59,6 +66,7 @@ export function withFounderMessage(
   };
 }
 
+/** A successful outcome's `result.actions` carries the reply's UI actions (HAC-144). */
 export type IntakeOutcome =
   | { ok: true; result: IntakeResponse }
   | { ok: false; message: string; retryable: boolean };
