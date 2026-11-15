@@ -149,13 +149,26 @@ const number = (v: number) =>
 export function formatFact(fact: PlanFact): string {
   const { low, high } = fact.range;
   const money = /usd|\$|dollar/i.test(fact.unit);
-  const fmt = (v: number) => (money ? `$${number(v)}` : number(v));
+  const share = /^(fraction|share|ratio)$/i.test(fact.unit.trim());
+  const minutes = /^min(ute)?s?$/i.test(fact.unit.trim());
+  const fmt = (v: number) =>
+    money
+      ? `$${number(v)}`
+      : share
+        ? `${Math.round(v * 100)}%`
+        : minutes
+          ? (Math.round(v * 10) / 10).toLocaleString("en-US")
+          : number(v);
   const unit = money
     ? fact.unit
         .replace(/usd/i, "")
         .replace(/^[_\s]+/, "")
         .replaceAll("_", " ")
-    : fact.unit.replaceAll("_", " ");
+    : share
+      ? ""
+      : minutes
+        ? "min"
+        : fact.unit.replaceAll("_", " ");
   const value = low === high ? fmt(low) : `${fmt(low)} – ${fmt(high)}`;
   const label =
     fact.kind === "input" && low === high
@@ -231,7 +244,11 @@ export function preparePlanExport(input: {
     {
       id: "comparison",
       title: "Why this site",
-      notes: plan.why.map((w) => `${site(w.siteId)}: ${say(w.explanation)}`),
+      notes: [
+        ...new Set(
+          plan.why.map((w) => `${site(w.siteId)}: ${say(w.explanation)}`),
+        ),
+      ],
       rows: plan.why.flatMap((w) =>
         w.facts.map((f) =>
           factRow(`${site(w.siteId)} — ${metricLabel(f.reference.metric)}`, f),
@@ -242,7 +259,7 @@ export function preparePlanExport(input: {
       id: "conditions",
       title: "Conditions that change the choice",
       notes: [
-        ...plan.plan.conditions.map(say),
+        ...new Set(plan.plan.conditions.map(say)),
         `Customer demand model: ${plan.demand.actual === "jev" ? "Jev customer panel" : "Huff gravity model"}${plan.demand.requested !== plan.demand.actual ? ` (the ${plan.demand.requested === "jev" ? "Jev customer panel" : "Huff gravity model"} was requested)` : ""}${plan.demand.fallbackReason ? `. ${say(plan.demand.fallbackReason)}` : ""}. Cross-check with the simpler Huff model: ${plan.demand.huffAgreement.replaceAll("_", " ")}.`,
       ],
       rows: plan.sensitivity.flatMap((s) => [

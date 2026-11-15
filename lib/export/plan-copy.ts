@@ -103,6 +103,10 @@ const METRIC_LABELS: Record<string, string> = {
   visit_frequency: "Visit frequency",
   ticket_size: "Ticket size",
   price: "Menu price",
+  weekdayAbandonmentRate: "Weekday walk-away rate",
+  weekendAbandonmentRate: "Weekend walk-away rate",
+  weekdayUtilization: "Weekday counter busy time",
+  weekendUtilization: "Weekend counter busy time",
 };
 
 /** A plain name for a metric/assumption path such as `sites.<id>.monthlyContributionUsd`. */

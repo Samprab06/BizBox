@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  useContextIntake,
-  useWorkspaceReport,
-} from "@/lib/client/use-workspace-context";
+import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import { intakeStorageKey } from "@/components/workspace-screen/intake-conversation";
 import { useProjectComparisonId } from "@/lib/client/project-store";
 import {
   planContextSource,
   type WorkspaceObservation,
 } from "@/lib/client/workspace-context";
 import { flowStepHref } from "@/lib/client/flow-steps";
+import {
+  realCandidates,
+  unitAddress,
+} from "@/components/workspace-screen/client-model";
 import { readFlowState } from "@/lib/client/flow-progress";
 import {
   loadSiteSearch,
@@ -76,7 +78,6 @@ export function PlanExport({
     [contextState, contextOwner, comparisonId],
   );
   useWorkspaceReport(projectId, context);
-  const brief = searchBriefSnapshot(useContextIntake(projectId));
 
   useEffect(() => {
     if (!comparisonId) return;
@@ -105,16 +106,23 @@ export function PlanExport({
         source = planContextSource(comparison, projectId, comparisonId);
         const siteLabels = knownAddresses(projectId, comparisonId);
         try {
+          // Read the saved brief once here rather than depending on it: it is reported
+          // asynchronously, and refetching on every report looped the plan requests.
+          const brief = searchBriefSnapshot(
+            localStorage.getItem(intakeStorageKey(projectId)),
+          );
           const search = await loadSiteSearch(
             JSON.parse(brief),
             projectId,
             fetch,
             controller.signal,
           );
-          if (search.mode === "live")
-            for (const { candidate } of search.result.candidates)
-              if (!candidate.synthetic)
-                siteLabels[candidate.id] ??= candidate.address;
+          if (search.mode === "live") {
+            // "<address> · Unit N" keeps two units in one building apart.
+            const listed = realCandidates(search.result.candidates);
+            for (const entry of listed)
+              siteLabels[entry.candidate.id] = unitAddress(entry, listed);
+          }
         } catch {
           /* No listing search available; unknown sites read "Site N". */
         }
@@ -159,7 +167,7 @@ export function PlanExport({
       }
     })();
     return () => controller.abort();
-  }, [projectId, comparisonId, investigationId, contextOwner, brief]);
+  }, [projectId, comparisonId, investigationId, contextOwner]);
 
   const comparisonLink = flowStepHref(projectId, "compare");
   if (resolved === undefined) return <p role="status">Preparing the plan…</p>;
