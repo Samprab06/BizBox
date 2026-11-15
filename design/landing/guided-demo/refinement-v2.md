@@ -73,3 +73,9 @@ The Heights now uses the same property-facts component as Montrose: example rent
 Direct interactive phone preview: `http://127.0.0.1:4195/landing-demo/mobile`; iframe renders actual landing route at390×844. Desktop review route is noindex and has no simulation logic. TapSandbox to test counters; scroll through location stage and tapTheHeights for details. Chat GIFs remain noninteractive recordings.
 
 Final verification of this follow-up: lint/typecheck/production build/environment-file/client-bundle checks pass. Full suite with two workers:1304passed/40skipped;29focused tests pass. Production phone-preview iframe is exactly390×844 with no horizontal overflow. Real clicks selected Heights and rendered$3,400/month,1,350sqft,TheHeights and explicit Montrose continuation; One/Two clicks switched physical wall-only/island artwork and1/2station positions with corresponding55/80served,20.2/6.8min wait and$72/$144labor. Screenshots of complete preview saved in task visualization directory. No push/PR/merge/deployment.
+
+## PR #139 readiness integration
+
+Integrated main `926ab86` into the published PR checkpoint in an isolated checkout. The newer unpublished landing commit in the authoring worktree is deliberately untouched and excluded. Main brings the existing HAC-157 comparison overflow/table-selector fixes. Adopted the two stale scenario-heading assertions from PR #147 / HAC-158: the statistics card displays “One staffed counter” and “Two staffed counters”; simulation and shared-clock assertions are unchanged.
+
+Integrated local validation: lint, typecheck, production build and 1,901 unit tests passed (51 existing skips). All nine previously failing browser cases passed across Chromium, WebKit and mobile Chrome. GitHub CI is the final readiness gate; no merge into main is authorized or performed.
