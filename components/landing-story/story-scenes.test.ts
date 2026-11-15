@@ -83,7 +83,11 @@ describe("prepared location-story presentation", () => {
     expect(typed).toContain("higher rent");
     expect(typed).toContain('data-interior-preview="true"');
     expect(typed).toContain("See inside");
-    expect(typed.match(/cafe-interior-v1.png/g)?.length).toBeGreaterThan(0);
+    expect(
+      typed.match(
+        /alt="Generated example café with green tile and walnut furniture"/g,
+      ),
+    ).toHaveLength(1);
     expect(initial).toContain("Example consultant recommendation");
     const reduced = renderToStaticMarkup(
       h(ConsultantScene, { data, elapsed: 0, reduced: true }),

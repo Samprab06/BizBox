@@ -11,6 +11,8 @@ import {
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { cameraAt, type MacbookFrame } from "../landing-demo/camera";
 import { StoryOnboarding } from "./story-onboarding";
+import { StoryBackdrop } from "./story-backdrop";
+import { STORY_ASSETS } from "./asset-paths";
 import {
   Glass,
   WordHeading,
@@ -339,6 +341,9 @@ export function LandingStory({
     heroCenterY: 0.65,
   });
   const { card, screen } = camera;
+  // The backdrop initially occupies only the laptop aperture. The browser keeps
+  // that decoded candidate visible while upgrading as the screen expands.
+  const stageSizes = `${Math.ceil(Math.max(screen.width, (screen.height * STORY_ASSETS.stage.width) / STORY_ASSETS.stage.height))}px`;
   const onboardingStyle = {
     left: card.left - screen.left,
     top: card.top - screen.top,
@@ -394,7 +399,7 @@ export function LandingStory({
       }
     >
       <Refraction />
-      <div className={base.world} />
+      <StoryBackdrop variant="world" fetchPriority="auto" />
       <Glass className={`${base.navbar} ${styles.navbar}`}>
         <button
           className={base.brand}
@@ -430,17 +435,25 @@ export function LandingStory({
         />
       </div>
       {!failedFrame && (
-        <Image
-          className={base.macbook}
-          src={macbook.image}
-          style={camera.hardware}
-          width={macbook.width}
-          height={macbook.height}
-          sizes="(max-width:700px) 96vw,1000px"
-          priority
-          alt="MacBook displaying BizBox"
-          onError={() => setFailedFrame(true)}
-        />
+        <picture>
+          <source
+            type="image/webp"
+            srcSet={STORY_ASSETS.macbook.imageSrcSet}
+            sizes={STORY_ASSETS.macbook.sizes}
+          />
+          <Image
+            className={base.macbook}
+            src={macbook.image}
+            style={camera.hardware}
+            width={macbook.width}
+            height={macbook.height}
+            unoptimized
+            loading="eager"
+            fetchPriority="high"
+            alt="MacBook displaying BizBox"
+            onError={() => setFailedFrame(true)}
+          />
+        </picture>
       )}
       <div
         className={`${base.screen} ${styles.screen}`}
@@ -452,7 +465,12 @@ export function LandingStory({
         data-device-view={frame.entry < 0.72 ? "laptop" : "fullscreen"}
         data-screen-scene={frame.chapter}
       >
-        <div className={base.screenBase} />
+        <StoryBackdrop
+          variant="stage"
+          sizes={stageSizes}
+          priority
+          fetchPriority="low"
+        />
         {(frame.chapter === "hero" || frame.chapter === "onboarding") && (
           <StoryOnboarding
             ready={frame.onboardingReady}
@@ -481,7 +499,7 @@ export function LandingStory({
             }}
             inert={desiredSpace !== "question"}
           >
-            <div className={base.screenBase} />
+            <StoryBackdrop variant="stage" />
             <LocationQuestion
               elapsed={
                 frame.chapter === "question" ? chapterMs : heldQuestionMs
@@ -540,7 +558,7 @@ export function LandingStory({
             }}
             inert={desiredSpace !== "analytics"}
           >
-            <div className={base.screenBase} />
+            <StoryBackdrop variant="stage" />
             <LocationAnalytics data={data} />
           </div>
         )}
@@ -623,7 +641,12 @@ export function LandingStory({
         }}
       >
         <WordHeading text="Test your business idea." />
-        <Link className={base.primary} href={entryHref} style={glassBlur}>
+        <Link
+          className={base.primary}
+          href={entryHref}
+          prefetch={false}
+          style={glassBlur}
+        >
           Open BizBox <Icon name="arrow" />
         </Link>
       </div>
@@ -652,7 +675,9 @@ export function LandingStory({
             BizBox helps compare business decisions. Enable JavaScript to play
             the prepared story.
           </p>
-          <Link href={entryHref}>Open BizBox</Link>
+          <Link href={entryHref} prefetch={false}>
+            Open BizBox
+          </Link>
         </aside>
       </noscript>
     </div>

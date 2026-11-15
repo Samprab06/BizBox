@@ -1,0 +1,189 @@
+{
+  "encoder": "sharp 0.35.5",
+  "transform": "sRGB conversion, proportional resize only, WebP; no crops or compositing",
+  "assets": [
+    {
+      "key": "hero",
+      "source": "landing-assets/macbook/houston-sunset.jpg",
+      "originalBytes": 482991,
+      "originalWidth": 1672,
+      "originalHeight": 941,
+      "alpha": false,
+      "quality": 80,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/houston-sunset-640.0a68d62b99.webp",
+          "width": 640,
+          "height": 360,
+          "bytes": 31148,
+          "alpha": false,
+          "sha256": "0a68d62b99e766b147dbfd5e6311dd9db46ffac44e29ba62d21f96ac3475dc82"
+        },
+        {
+          "src": "/landing-assets/optimized/houston-sunset-1280.30dd8c11c8.webp",
+          "width": 1280,
+          "height": 720,
+          "bytes": 103662,
+          "alpha": false,
+          "sha256": "30dd8c11c885095bc3517ac1c3856ccf74a3931010b0f5a8c795f405fd925428"
+        },
+        {
+          "src": "/landing-assets/optimized/houston-sunset-1672.932a1f548b.webp",
+          "width": 1672,
+          "height": 941,
+          "bytes": 156138,
+          "alpha": false,
+          "sha256": "932a1f548b36a2b3b38da7a5cacead0f706111d5e634fe2431eb48d7b22fd2f3"
+        }
+      ],
+      "originalSha256": "7bb2ea80e512f4375533b9f37b73e1786f0a61f9ec2ec6ea0c4ba1f8c53c2443"
+    },
+    {
+      "key": "stage",
+      "source": "onboarding/houston-real.jpg",
+      "originalBytes": 1529435,
+      "originalWidth": 3840,
+      "originalHeight": 2086,
+      "alpha": false,
+      "quality": 80,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/houston-screen-640.5f439d9eef.webp",
+          "width": 640,
+          "height": 347,
+          "bytes": 34100,
+          "alpha": false,
+          "sha256": "5f439d9eefcbfe9540b7a311c209816935dfe0d5c2480bc0b07dd3ebea8ed75d"
+        },
+        {
+          "src": "/landing-assets/optimized/houston-screen-1280.941c665f69.webp",
+          "width": 1280,
+          "height": 695,
+          "bytes": 115074,
+          "alpha": false,
+          "sha256": "941c665f69af35aa76c900a09f66b33d95e1433321646ae9421f60b7552b282d"
+        },
+        {
+          "src": "/landing-assets/optimized/houston-screen-1920.80898df1ba.webp",
+          "width": 1920,
+          "height": 1043,
+          "bytes": 236848,
+          "alpha": false,
+          "sha256": "80898df1baec186c07e6af0cf3146c46aafa63820cff384f08a2b20d557ffc35"
+        }
+      ],
+      "originalSha256": "f0d0f4e19710996999ed7e32ac6be1da16a712ad7d39b73a53b60cd9f110abf9"
+    },
+    {
+      "key": "macbook",
+      "source": "landing-assets/guided-demo/macbook-gpt-v3.png",
+      "originalBytes": 1145884,
+      "originalWidth": 1513,
+      "originalHeight": 1040,
+      "alpha": true,
+      "quality": 90,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/macbook-gpt-v3-640.7a6d071016.webp",
+          "width": 640,
+          "height": 440,
+          "bytes": 18926,
+          "alpha": true,
+          "sha256": "7a6d0710162d3cb6eabdfd163a76280c35b87d5a1c57605a42d3f38ee7ce5dd2",
+          "quality": 80
+        },
+        {
+          "src": "/landing-assets/optimized/macbook-gpt-v3-1080.6cdd2dc305.webp",
+          "width": 1080,
+          "height": 742,
+          "bytes": 43934,
+          "alpha": true,
+          "sha256": "6cdd2dc30511de2d086f5747d2d6afd6a7039dffe86ed19cb59e8c72d7962e82",
+          "quality": 80
+        },
+        {
+          "src": "/landing-assets/optimized/macbook-gpt-v3-1513.1a2a69f93c.webp",
+          "width": 1513,
+          "height": 1040,
+          "bytes": 88316,
+          "alpha": true,
+          "sha256": "1a2a69f93c8334709a3273c50e6493776432e9263028eab81b729e219d62dfd4",
+          "quality": 90
+        }
+      ],
+      "originalSha256": "7b72e43f5d632b96bad9bbfe09c08051298f842efd63b22eb2348e3ac6452967"
+    },
+    {
+      "key": "interior",
+      "source": "landing-assets/guided-demo/cafe-interior-v1.png",
+      "originalBytes": 2791888,
+      "originalWidth": 1586,
+      "originalHeight": 992,
+      "alpha": false,
+      "quality": 84,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/cafe-interior-v1.9ae3d6d7c0.webp",
+          "width": 1586,
+          "height": 992,
+          "bytes": 273418,
+          "alpha": false,
+          "sha256": "9ae3d6d7c06d9ad389eba98e952055a27899466768000d36b325412d97961856"
+        }
+      ],
+      "originalSha256": "854f141f3a7ab5bb946539d827c895663d6da034b53ec35d3180db4641da4c9b"
+    },
+    {
+      "key": "oneCounter",
+      "source": "landing-assets/guided-demo/cafe-overhead-one-counter-v2.png",
+      "originalBytes": 2229394,
+      "originalWidth": 1585,
+      "originalHeight": 992,
+      "alpha": false,
+      "quality": 84,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/cafe-overhead-one-counter-v2.8ddbce5068.webp",
+          "width": 1585,
+          "height": 992,
+          "bytes": 152424,
+          "alpha": false,
+          "sha256": "8ddbce50684a5e6547f5d674bf0ece7a19878f628bc701fcde56c442329ddb8f"
+        }
+      ],
+      "originalSha256": "f01f9849ec19c527dc5ec98df93c056c4d36245328212aa9a25005664ef5b3a2"
+    },
+    {
+      "key": "twoCounters",
+      "source": "landing-assets/guided-demo/cafe-overhead-two-counters-v3.png",
+      "originalBytes": 2190260,
+      "originalWidth": 1586,
+      "originalHeight": 992,
+      "alpha": false,
+      "quality": 84,
+      "alphaQuality": 100,
+      "effort": 6,
+      "variants": [
+        {
+          "src": "/landing-assets/optimized/cafe-overhead-two-counters-v3.dd62c7073c.webp",
+          "width": 1586,
+          "height": 992,
+          "bytes": 146270,
+          "alpha": false,
+          "sha256": "dd62c7073c5ac56368af5c8dbba513bc5c61652f81df7e65aef5c7283c3c7db6"
+        }
+      ],
+      "originalSha256": "9b24cb98e07e090a5fdb83cac721167675e159de2169343da50cda5f5600e9f1"
+    }
+  ]
+}
