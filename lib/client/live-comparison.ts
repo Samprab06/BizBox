@@ -345,6 +345,21 @@ export async function requestLiveComparison(
   };
 }
 
+/**
+ * Scene 1: a stored live comparison is for exactly these units and these tweaks (the same
+ * rule as the workspace's `comparisonMatchesSelection`).
+ */
+export function payloadMatches(
+  payload: LiveComparisonPayload,
+  ids: readonly string[],
+  tweaksKey: string,
+) {
+  if (payload.outdated || payload.comparison?.synthetic !== false) return false;
+  if ((payload.tweaksKey ?? "") !== tweaksKey) return false;
+  const actual = payload.result.sites.map((site) => site.siteId).sort();
+  return JSON.stringify(actual) === JSON.stringify([...ids].sort());
+}
+
 /** Scene 1: which quarter of the Jev panel has answered (0-4); 4 is every persona. */
 export function progressBand({
   completedPersonas,
@@ -355,24 +370,37 @@ export function progressBand({
   return Math.floor(share * 4);
 }
 
+/** Scene 1: a slow panel is still reported after this long without a new band. */
+export const PROGRESS_REPORT_INTERVAL_MS = 20_000;
+
+/** What the consultant last heard about a run's panel. */
+export type ProgressReported = { band: number; at: number; completed: number };
+export const initialProgressReported = (now: number): ProgressReported => ({
+  band: 0,
+  at: now,
+  completed: 0,
+});
+
 /**
  * Scene 1: the `comparison_progress` event to post for this poll, or null. The consultant
- * hears about a run at most once per 25% band (25, 50, 75, 100%), never on every poll.
+ * hears about a run when it enters a new 25% band (25, 50, 75, 100%), or when personas
+ * kept answering for PROGRESS_REPORT_INTERVAL_MS since the last report; never every poll.
  */
 export function progressReport(
-  lastBand: number,
+  last: ProgressReported,
   progress: PanelProgressCount,
-): { band: number; event: FlowEvent | null } {
+  now: number,
+): { reported: ProgressReported; event: FlowEvent | null } {
+  const total = progress.totalPersonas;
+  const completed = Math.min(progress.completedPersonas, Math.max(total, 0));
   const band = progressBand(progress);
-  if (band <= lastBand || progress.totalPersonas <= 0)
-    return { band: Math.max(band, lastBand), event: null };
+  const due =
+    band > last.band ||
+    (now - last.at >= PROGRESS_REPORT_INTERVAL_MS && completed > last.completed);
+  if (!due || total <= 0) return { reported: last, event: null };
   return {
-    band,
-    event: {
-      kind: "comparison_progress",
-      completed: Math.min(progress.completedPersonas, progress.totalPersonas),
-      total: progress.totalPersonas,
-    },
+    reported: { band: Math.max(band, last.band), at: now, completed },
+    event: { kind: "comparison_progress", completed, total },
   };
 }
 
@@ -804,7 +832,7 @@ export function useLiveComparison(
     });
     if (ids.length <= MAX_COMPARE_UNITS)
       emit({ kind: "comparison_started", siteIds: ids, demandSource });
-    let band = 0;
+    let reported = initialProgressReported(Date.now());
     try {
       const response = await requestLiveComparison(
         search.state.profile,
@@ -816,8 +844,8 @@ export function useLiveComparison(
           onProgress: (progress) => {
             if (!mounted.current || operation.current !== controller) return;
             setPanelProgress(progress);
-            const report = progressReport(band, progress);
-            band = report.band;
+            const report = progressReport(reported, progress, Date.now());
+            reported = report.reported;
             if (report.event) emit(report.event);
           },
           // Read at run time: an agent's tweak may land in the same reply as the run.
@@ -916,6 +944,7 @@ export function useLiveComparison(
           capability === null
         ? "loading"
         : "ready";
+  const currentTweaksKey = siteTweaksKey(selectedIds, siteTweaks);
   const context = useMemo<WorkspaceObservation>(
     () => ({
       kind: "comparison",
@@ -927,7 +956,14 @@ export function useLiveComparison(
       siteIds: stored.payload?.result.ranking ?? [],
       candidates: candidates.map(contextListing),
       ...(options.manualSelection
-        ? { shortlistIds: selectedIds.slice(0, MAX_COMPARE_UNITS) }
+        ? {
+            shortlistIds: selectedIds.slice(0, MAX_COMPARE_UNITS),
+            ...(phase === "ready" &&
+            stored.payload &&
+            payloadMatches(stored.payload, selectedIds, currentTweaksKey)
+              ? { currentComparisonId: stored.payload.comparisonId }
+              : {}),
+          }
         : {}),
     }),
     [
@@ -937,6 +973,7 @@ export function useLiveComparison(
       candidates,
       selectedIds,
       options.manualSelection,
+      currentTweaksKey,
     ],
   );
   useWorkspaceReport(projectId, context);
@@ -949,7 +986,7 @@ export function useLiveComparison(
     payload: stored.payload,
     panelProgress: running ? panelProgress : null,
     activeRun: running ? activeRun : null,
-    tweaksKey: siteTweaksKey(selectedIds, siteTweaks),
+    tweaksKey: currentTweaksKey,
     runError: failure,
     message:
       failure ||

@@ -118,13 +118,14 @@ export function agentViewForRoute(
 
 /**
  * Scene 1: the listing facts for the displayed candidates (in `candidateIds` order, which is
- * the search's ranking) and the comparison shortlist, from the workspace's comparison report.
+ * the search's ranking), the comparison shortlist and the matching comparison, from the
+ * workspace's comparison report.
  * Facts the listing lacks are left out, never guessed.
  */
 export function workspaceFlowView(
   observations: readonly WorkspaceObservation[],
   candidateIds: readonly string[] | undefined,
-): Pick<AgentViewContext, "candidates" | "shortlistIds"> {
+): Pick<AgentViewContext, "candidates" | "shortlistIds" | "comparisonId"> {
   const comparison = observations.find((entry) => entry.kind === "comparison");
   if (!comparison || comparison.kind !== "comparison" || !candidateIds?.length)
     return {};
@@ -157,6 +158,10 @@ export function workspaceFlowView(
       ? { candidates: candidates.slice(0, MAX_VIEW_CANDIDATES) }
       : {}),
     ...(comparison.shortlistIds ? { shortlistIds } : {}),
+    // The comparison on screen, only when it is for exactly the shortlist and its tweaks.
+    ...(comparison.currentComparisonId
+      ? { comparisonId: comparison.currentComparisonId }
+      : {}),
   };
 }
 

@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { UiAction } from "@/lib/contracts/agent";
 import { planWorkspaceActions } from "./agent-jobs";
 import { initialFlowState, reachStep, type FlowState } from "./flow-progress";
-import { progressBand, progressReport } from "./live-comparison";
+import {
+  initialProgressReported,
+  progressBand,
+  progressReport,
+  PROGRESS_REPORT_INTERVAL_MS,
+} from "./live-comparison";
 import { pickSiteTweaks, siteTweaksKey } from "./project-store";
 
 let n = 0;
@@ -149,10 +154,11 @@ describe("progress throttling", () => {
   });
 
   it("reports at most once per 25% band, never on every poll", () => {
-    let band = 0;
-    const events = [0, 3, 10, 12, 19, 21, 22, 35, 40, 40].flatMap((done) => {
-      const report = progressReport(band, p(done));
-      band = report.band;
+    let reported = initialProgressReported(0);
+    // One poll a second: band changes only.
+    const events = [0, 3, 10, 12, 19, 21, 22, 35, 40, 40].flatMap((done, i) => {
+      const report = progressReport(reported, p(done), i * 1000);
+      reported = report.reported;
       return report.event ? [report.event] : [];
     });
     expect(events).toEqual([
@@ -162,12 +168,24 @@ describe("progress throttling", () => {
       { kind: "comparison_progress", completed: 40, total: 40 },
     ]);
     // A jump straight to the end is a single report.
-    expect(progressReport(0, p(40)).event).toEqual({
+    expect(
+      progressReport(initialProgressReported(0), p(40), 1).event,
+    ).toEqual({ kind: "comparison_progress", completed: 40, total: 40 });
+    expect(
+      progressReport({ band: 2, at: 0, completed: 0 }, p(40, 0), 1).event,
+    ).toBeNull();
+  });
+
+  it("still reports a slow panel every 20 seconds while personas keep answering", () => {
+    const last = { band: 1, at: 0, completed: 10 };
+    expect(progressReport(last, p(12), 19_999).event).toBeNull();
+    expect(progressReport(last, p(12), PROGRESS_REPORT_INTERVAL_MS).event).toEqual({
       kind: "comparison_progress",
-      completed: 40,
+      completed: 12,
       total: 40,
     });
-    expect(progressReport(2, p(40, 0)).event).toBeNull();
+    // A stalled panel (no new personas) is not re-reported.
+    expect(progressReport(last, p(10), 60_000).event).toBeNull();
   });
 });
 

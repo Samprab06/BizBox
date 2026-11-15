@@ -39,6 +39,11 @@ export type WorkspaceObservation =
       candidates: ContextListing[];
       /** Scene 1: the units in the comparison shortlist (workspace only). */
       shortlistIds?: string[];
+      /**
+       * Scene 1: the finished live comparison of exactly the shortlist and its tweaks
+       * (workspace only); absent when none matches.
+       */
+      currentComparisonId?: string;
     }
   | {
       kind: "plan";

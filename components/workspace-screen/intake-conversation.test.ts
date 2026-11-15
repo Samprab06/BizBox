@@ -7,6 +7,7 @@ import {
 import { patchFromForm, type IntakeResponse } from "@/components/intake/live";
 import {
   applyIntakeReply,
+  flowEventRequestBody,
   intakeRequestBody,
   intakeStorageKey,
   parseIntakeSession,
@@ -491,5 +492,39 @@ describe("HAC-168 founder requirements survive flags-only replies", () => {
     );
     expect(next.profile.requirements).toEqual(newer);
     expect(next.pending).toContain("requirements");
+  });
+});
+
+describe("Scene 1 request history and flow events", () => {
+  const many: IntakeSession = {
+    ...session,
+    messages: Array.from({ length: 15 }, (_, i) => ({
+      role: i % 2 ? ("founder" as const) : ("agent" as const),
+      text: `turn ${i}`,
+    })),
+  };
+  it("sends the most recent turns, oldest first, never the current message", () => {
+    const body = intakeRequestBody(many, "compare them");
+    expect(body.history).toHaveLength(12);
+    expect(body.history?.[0].text).toBe("turn 3");
+    expect(body.history?.at(-1)?.text).toBe("turn 14");
+    expect(body.history?.some((entry) => entry.text === "compare them")).toBe(
+      false,
+    );
+    expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
+    expect(
+      intakeRequestBody({ ...session, messages: [] }, "hi"),
+    ).not.toHaveProperty("history");
+  });
+  it("posts an event without a founder message, with the view and history", () => {
+    const body = flowEventRequestBody(
+      many,
+      { kind: "arrived_workspace" },
+      { stage: "workspace", step: "locations" },
+    );
+    expect(body).not.toHaveProperty("message");
+    expect(body.event).toEqual({ kind: "arrived_workspace" });
+    expect(body.history).toHaveLength(12);
+    expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
   });
 });

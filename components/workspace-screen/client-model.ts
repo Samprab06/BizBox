@@ -1,5 +1,8 @@
 import type { SiteSearchResult } from "@/lib/contracts/sites";
-import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
+import {
+  payloadMatches,
+  type LiveComparisonPayload,
+} from "@/lib/client/live-comparison";
 import type { InteriorResponse } from "@/lib/contracts/interior";
 import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import {
@@ -77,11 +80,7 @@ export function comparisonMatchesSelection(
   ids: readonly string[],
   tweaksKey = "",
 ) {
-  if (!payload || payload.outdated || payload.comparison?.synthetic !== false)
-    return false;
-  if ((payload.tweaksKey ?? "") !== tweaksKey) return false;
-  const actual = payload.result.sites.map((site) => site.siteId).sort();
-  return JSON.stringify(actual) === JSON.stringify([...ids].sort());
+  return payload ? payloadMatches(payload, ids, tweaksKey) : false;
 }
 
 export function scannedInterior(value: InteriorResponse | null) {
