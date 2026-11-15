@@ -679,3 +679,199 @@ describe("microphone readiness", () => {
     expect(f.track.stopped).toBe(true);
   });
 });
+
+describe("spoken reply delivery", () => {
+  it("keeps the agent reply audible when only the microphone is muted", async () => {
+    let resolve!: (text: string) => void;
+    const f = fixture({
+      submitTranscript: () =>
+        new Promise<string>((done) => {
+          resolve = done;
+        }),
+    });
+    try {
+      await f.client.start();
+      f.complete("A", "Compare these locations");
+      await flush();
+      f.client.setMuted(true);
+      resolve("Here is the comparison.");
+      await flush();
+      expect(
+        f.channel.sent.filter((e) => e.type === "response.create"),
+      ).toHaveLength(1);
+      const request = f.channel.sent.find(
+        (e) => e.type === "response.create",
+      ) as { response: { metadata: unknown } };
+      f.event(
+        JSON.stringify({
+          type: "response.created",
+          response: { id: "audio", metadata: request.response.metadata },
+        }),
+      );
+      expect(f.track.enabled).toBe(false);
+      expect(f.audio.muted).toBe(false);
+      expect(
+        f.channel.sent.filter((e) => e.type === "response.cancel"),
+      ).toHaveLength(0);
+    } finally {
+      f.client.stop();
+    }
+  });
+  it("does not discard a pending agent reply for an unconfirmed VAD start", async () => {
+    let resolve!: (text: string) => void;
+    const f = fixture({
+      submitTranscript: () =>
+        new Promise<string>((done) => {
+          resolve = done;
+        }),
+    });
+    try {
+      await f.client.start();
+      f.complete("A", "What is the rent?");
+      await flush();
+      f.event(
+        JSON.stringify({
+          type: "input_audio_buffer.speech_started",
+          item_id: "noise",
+        }),
+      );
+      f.event(
+        JSON.stringify({
+          type: "input_audio_buffer.speech_stopped",
+          item_id: "noise",
+        }),
+      );
+      resolve("The asking rent is listed in the comparison.");
+      await flush();
+      expect(
+        f.channel.sent.filter((e) => e.type === "response.create"),
+      ).toHaveLength(1);
+    } finally {
+      f.client.stop();
+    }
+  });
+  it("reports failed speech output while retaining the working conversation and microphone", async () => {
+    const f = fixture();
+    try {
+      await f.client.start();
+      f.complete("A", "Hello");
+      await flush();
+      const request = f.channel.sent.find(
+        (e) => e.type === "response.create",
+      ) as { response: { metadata: unknown } };
+      f.event(
+        JSON.stringify({
+          type: "response.created",
+          response: { id: "failed-audio", metadata: request.response.metadata },
+        }),
+      );
+      f.event(
+        JSON.stringify({
+          type: "response.done",
+          response: {
+            id: "failed-audio",
+            status: "failed",
+            status_details: { error: { message: "Private provider details" } },
+          },
+        }),
+      );
+      await flush();
+      expect(f.client.snapshot.message).toMatch(/audio.*failed/i);
+      expect(f.client.snapshot.message).not.toContain(
+        "Private provider details",
+      );
+      expect(f.track.stopped).toBe(false);
+    } finally {
+      f.client.stop();
+    }
+  });
+  it("speaks a bounded excerpt instead of dropping a long text-agent reply", async () => {
+    const reply = "The location comparison is ready. ".repeat(180);
+    const f = fixture({ submitTranscript: async () => reply });
+    try {
+      await f.client.start();
+      f.complete("A", "Explain the comparison");
+      await flush();
+      const requests = f.channel.sent.filter(
+        (e) => e.type === "response.create",
+      );
+      expect(requests).toHaveLength(1);
+      expect(JSON.stringify(requests[0])).not.toContain(reply);
+      expect(JSON.stringify(requests[0])).toContain(
+        "The location comparison is ready.",
+      );
+    } finally {
+      f.client.stop();
+    }
+  });
+});
+
+it("keeps chat input when only replay time or loading phase changes", async () => {
+  let minute = 10;
+  let phase: "ready" | "running" = "ready";
+  const f = fixture({
+    readContext: () => ({
+      projectId: "houston-coffee",
+      mode: "chat",
+      view: {
+        stage: "replay",
+        siteId: "site-a",
+        comparisonId: "same",
+        minute,
+        phase,
+      },
+    }),
+  });
+  try {
+    await f.client.start();
+    f.event(
+      JSON.stringify({
+        type: "input_audio_buffer.speech_started",
+        item_id: "A",
+      }),
+    );
+    minute = 11;
+    phase = "running";
+    f.complete("A", "What causes this queue?");
+    await flush();
+    expect(f.submit).toHaveBeenCalledExactlyOnceWith("What causes this queue?");
+  } finally {
+    f.client.stop();
+  }
+});
+
+it("does not cancel pending speech output for an unconfirmed VAD start", async () => {
+  const f = fixture();
+  try {
+    await f.client.start();
+    f.complete("A", "Hello");
+    await flush();
+    const request = f.channel.sent.find(
+      (e) => e.type === "response.create",
+    ) as { response: { metadata: unknown } };
+    f.event(
+      JSON.stringify({
+        type: "input_audio_buffer.speech_started",
+        item_id: "noise",
+      }),
+    );
+    f.event(
+      JSON.stringify({
+        type: "input_audio_buffer.speech_stopped",
+        item_id: "noise",
+      }),
+    );
+    f.event(
+      JSON.stringify({
+        type: "response.created",
+        response: { id: "reply", metadata: request.response.metadata },
+      }),
+    );
+    expect(
+      f.channel.sent.filter((e) => e.type === "response.cancel"),
+    ).toHaveLength(0);
+    expect(f.audio.muted).toBe(false);
+  } finally {
+    f.client.stop();
+  }
+});

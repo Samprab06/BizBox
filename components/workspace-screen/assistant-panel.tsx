@@ -378,6 +378,7 @@ export function AssistantPanel({
                 title="Talk to BizBox"
                 label="Voice assistant"
                 tone="dark"
+                compact
               />
             </div>
             <details

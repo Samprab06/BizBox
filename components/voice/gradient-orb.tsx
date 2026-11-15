@@ -32,7 +32,7 @@ interface GradientOrbProps {
 }
 
 const defaults: Required<GradientOrbConfig> = {
-  background: "#050608",
+  background: "transparent",
   hue: 0,
   rotationSpeed: 0.23,
   noiseScale: 0.65,
@@ -307,7 +307,7 @@ export function GradientOrb({
     try {
       gl =
         canvas.getContext("webgl", {
-          alpha: false,
+          alpha: true,
           antialias: true,
           premultipliedAlpha: true,
         }) ?? undefined;
@@ -387,10 +387,10 @@ export function GradientOrb({
       context.uniform1f(hue, config.hue);
       context.uniform1f(noiseScale, config.noiseScale);
       context.uniform1f(innerRadius, config.innerRadius);
-      context.clearColor(5 / 255, 6 / 255, 8 / 255, 1);
+      context.clearColor(0, 0, 0, 0);
       context.enable(context.BLEND);
       context.blendFuncSeparate(
-        context.SRC_ALPHA,
+        context.ONE,
         context.ONE_MINUS_SRC_ALPHA,
         context.ONE,
         context.ONE_MINUS_SRC_ALPHA,
@@ -473,8 +473,7 @@ export function GradientOrb({
           className="absolute inset-[18%] rounded-full"
           style={{
             background:
-              "radial-gradient(circle at 35% 30%, #ff9d5c 0%, #9d4bea 30%, #4c6cff 58%, #050608 76%)",
-            boxShadow: "inset 0 0 18px #050608",
+              "radial-gradient(circle, transparent 48%, #a77bff 55%, #ec9ccf 59%, #745cce88 63%, transparent 70%)",
           }}
         />
       )}

@@ -163,3 +163,28 @@ Compact and full VoicePanel consumers retain the same lifecycle and orb meters.
 Unit and browser tests use fake tracks/peers and intercepted session responses for
 pending permission, denial, missing/unreadable/unsupported microphones, setup,
 ready, disconnect and cancellation. They do not record audio or call a provider.
+
+## Reply playback and workspace controls (2026-11-15)
+
+Workspace voice uses the same conversation submission and action dispatcher as
+text, including comparison tools and navigation. The compact panel shows the
+transparent orb before activation, with status and controls underneath; it does
+not introduce a separate glass card or change onboarding styles.
+
+Mute microphone affects input only: a submitted turn can finish and speak while
+the microphone is muted. Stop speaking cancels output; Stop voice closes the
+session. Unconfirmed voice activity cannot cancel an agent reply still being
+computed or waiting for its audio response ID. A completed new transcript or
+speech detected during started output still interrupts the previous reply.
+
+Context checks retain project, page, selection, comparison, scenario and prompt
+identity while ignoring changing replay time and progress. Long replies speak a
+bounded excerpt and retain the full written response. Empty replies, failed
+output and playback timeouts show short recovery statuses without exposing
+provider errors. Existing session, transcript and output limits are unchanged.
+
+Regression tests cover pending replies, muted input, noisy activity, long replies,
+failed output and replay progress. Workspace browser tests cover the idle orb and
+a spoken comparison command through the text-agent route and comparison action
+to Results, followed by output while muted and explicit cancellation. These use
+mocked transport and do not establish live microphone/provider playback success.
