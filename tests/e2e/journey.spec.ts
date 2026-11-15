@@ -366,7 +366,7 @@ test.describe("founder journey @journey", () => {
           await expect(field).toHaveValue(value);
         }
         await expect(
-          page.getByText("All required fields are filled."),
+          page.getByText(/^Form fields are filled\./),
         ).toBeVisible();
       },
     );
