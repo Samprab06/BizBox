@@ -575,7 +575,7 @@ export function SimulatorDemo({
         <div className="flex flex-wrap gap-2">
           <Timeline
             label="Shared playback"
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-[1_1_20rem]"
             minute={shopMinute}
             min={openMin}
             max={closeMin}
