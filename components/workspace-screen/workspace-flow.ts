@@ -1,7 +1,8 @@
 /**
  * Scene 1: pure rules for the guided flow inside the workspace (`/workspace?step=`): which
- * step to show, the running comparison's stages, tweak chip wording, the top locations and
- * the stored final-plan summary. The screen (workspace-screen.tsx) wires them to React.
+ * step to show, the running comparison's stages, tweak chip wording and the top locations.
+ * The screen (workspace-screen.tsx) wires them to React; the final plan is built by
+ * lib/client/final-plan.ts.
  */
 import type { FlowStep } from "@/lib/contracts/agent";
 import {
@@ -10,11 +11,6 @@ import {
   type DemandSource,
   type SiteTweaks,
 } from "@/lib/contracts/evaluation";
-import {
-  FinalPlanSummarySchema,
-  type FinalPlanSummary,
-} from "@/lib/contracts/plan";
-import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { PanelProgressCount } from "@/lib/panel/progress";
 
 /** The workspace's own steps (the questionnaire is a separate page). */
@@ -168,74 +164,6 @@ export function withoutTweak(
   const next = { ...tweaks };
   delete next[field];
   return Object.keys(next).length ? next : null;
-}
-
-const range = (value: { mean: number; low: number; high: number }) => ({
-  mean: value.mean,
-  low: Math.min(value.low, value.high),
-  high: Math.max(value.low, value.high),
-});
-
-/**
- * The finalized plan, from the comparison on screen and the consultant's `finalize_plan`.
- * TODO(integrator): Scene 1 workstream F's `lib/client/final-plan.ts` builder (which also
- * reads the comparison's /plan for risks and next steps) should replace this minimal one.
- */
-export function minimalFinalPlan({
-  projectId,
-  payload,
-  chosenSiteId,
-  rationale,
-  addressOf,
-  tweaks,
-  now = new Date(),
-}: {
-  projectId: string;
-  payload: LiveComparisonPayload;
-  chosenSiteId: string;
-  rationale: string;
-  addressOf: (siteId: string) => string | undefined;
-  tweaks?: SiteTweaks;
-  now?: Date;
-}): FinalPlanSummary | null {
-  const sites = payload.result.sites;
-  const chosen = sites.find((site) => site.siteId === chosenSiteId);
-  if (!chosen) return null;
-  const runnerUpId = payload.result.ranking.find((id) => id !== chosenSiteId);
-  const runnerUp = sites.find((site) => site.siteId === runnerUpId);
-  const summary = {
-    projectId,
-    comparisonId: payload.comparisonId,
-    chosenSiteId,
-    chosenAddress: addressOf(chosenSiteId) ?? "Chosen location",
-    rationale: rationale.slice(0, 2000),
-    finalizedAt: now.toISOString(),
-    demandSource: payload.result.demandSource,
-    metrics: {
-      monthlyServedCustomers: range(chosen.monthlyServedCustomers),
-      monthlyContributionUsd: range(chosen.monthlyContributionUsd),
-      weekdayMeanWaitMin: range(chosen.weekdayMeanWaitMin),
-    },
-    ...(tweaks && Object.keys(tweaks).length ? { tweaks } : {}),
-    runnerUp: runnerUp
-      ? {
-          siteId: runnerUp.siteId,
-          address: addressOf(runnerUp.siteId) ?? "Runner-up location",
-          monthlyContributionUsd: range(runnerUp.monthlyContributionUsd),
-        }
-      : null,
-    risks: (payload.assembly?.findings ?? [])
-      .map((finding) => finding.message.slice(0, 500))
-      .filter(Boolean)
-      .slice(0, 8),
-    nextSteps: [
-      "Tour the space and confirm the listing facts with the broker.",
-      "Negotiate the lease against the modeled monthly contribution.",
-      "Recheck the plan with your own costs before signing.",
-    ],
-  };
-  const parsed = FinalPlanSummarySchema.safeParse(summary);
-  return parsed.success ? parsed.data : null;
 }
 
 // ---------------------------------------------------------------------------

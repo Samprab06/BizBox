@@ -640,6 +640,7 @@ export function useLiveComparison(
   const search = useSiteSearch(projectId, attempt);
   const stored = useStoredComparison(projectId, initialComparisonId);
   const [selectedIds, setSelectedIdsState] = useState<string[]>([]);
+  const [failure, setFailure] = useState("");
   const selectedRef = useRef(selectedIds);
   // HAC-135: the shortlist is saved per project, so it survives navigation.
   const setSelectedIds = useCallback(
@@ -682,7 +683,6 @@ export function useLiveComparison(
   const [panelProgress, setPanelProgress] = useState<PanelProgressCount | null>(
     null,
   );
-  const [failure, setFailure] = useState("");
   const [sensitivity, setSensitivity] = useState<
     LiveComparisonController["sensitivity"] & { comparisonId: string | null }
   >({ loading: false, result: null, error: null, comparisonId: null });

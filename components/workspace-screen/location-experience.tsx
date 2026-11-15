@@ -18,7 +18,7 @@ import {
 } from "./client-model";
 import { ComparisonTray, ResultsStep, UnitComparison } from "./unit-comparison";
 import { TopSites } from "./top-sites";
-import { PlanSummarySlot } from "./plan-summary-slot";
+import { PlanSummary } from "./plan-summary";
 import type { WorkspaceStep } from "./workspace-flow";
 import styles from "./workspace-glass.module.css";
 import { SearchFilterSummary } from "./property-details";
@@ -58,7 +58,6 @@ export function LocationExperience({
   presented,
   onViewResults,
   onRerun,
-  finalComparisonId,
 }: {
   projectId: string;
   controller: LiveComparisonController;
@@ -82,7 +81,6 @@ export function LocationExperience({
   presented: boolean;
   onViewResults: () => void;
   onRerun: () => void;
-  finalComparisonId: string | null;
 }) {
   const markers = candidateMarkers(candidates);
   const resultForSite = matching?.result.sites.find(
@@ -164,11 +162,10 @@ export function LocationExperience({
           onRemoveTweak={onRemoveTweak}
         />
       )}
-      {step === "finalize" && finalComparisonId && (
-        <PlanSummarySlot
-          projectId={projectId}
-          comparisonId={finalComparisonId}
-        />
+      {step === "finalize" && (
+        <div className={styles.unitComparison}>
+          <PlanSummary projectId={projectId} />
+        </div>
       )}
       {map && candidates.length > 0 && selectedUnits.length === 0 && (
         <div className="pointer-events-auto mx-3 flex items-center justify-between gap-3">

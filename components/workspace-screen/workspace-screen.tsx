@@ -28,6 +28,10 @@ import {
   useFlowProgress,
 } from "@/lib/client/flow-progress";
 import {
+  buildFinalPlanSummary,
+  fetchGroundedPlan,
+} from "@/lib/client/final-plan";
+import {
   planWorkspaceActions,
   type WorkspaceEffect,
 } from "@/lib/client/agent-jobs";
@@ -53,7 +57,6 @@ import type { ListingCameraRequest } from "@/components/city/listing-markers";
 import { PropertyDetails, ListingList } from "./property-details";
 import {
   greetedKey,
-  minimalFinalPlan,
   readFlag,
   readIds,
   resolveWorkspaceStep,
@@ -374,26 +377,44 @@ export function WorkspaceScreen({
         bumpCamera("overview");
         if (step !== "locations") goStep("locations");
         return;
-      case "finalize": {
-        const payload = controller.payload;
-        if (!payload) return;
-        // TODO(integrator): use workstream F's lib/client/final-plan.ts builder here.
-        const plan = minimalFinalPlan({
-          projectId,
-          payload,
-          chosenSiteId: effect.chosenSiteId,
-          rationale: effect.rationale,
-          addressOf: (id) =>
-            candidates.find((entry) => entry.candidate.id === id)?.candidate
-              .address,
-          tweaks: readFlowState(projectId).siteTweaks[effect.chosenSiteId],
-        });
-        if (!plan) return;
-        flow.setFinalPlan(plan);
-        goStep("finalize");
+      case "finalize":
+        void finalize(effect);
         return;
-      }
     }
+  }
+  /** Builds the final plan from the comparison on screen (and its grounded /plan, if any). */
+  async function finalize(effect: Extract<WorkspaceEffect, { kind: "finalize" }>) {
+    const payload = controller.payload;
+    if (
+      !payload ||
+      !payload.result.sites.some((site) => site.siteId === effect.chosenSiteId)
+    )
+      return;
+    const addresses = Object.fromEntries(
+      candidates.map((entry) => [entry.candidate.id, entry.candidate.address]),
+    );
+    // The grounded plan only enriches the summary, so a slow /plan never holds it up.
+    const plan = await fetchGroundedPlan(payload.comparisonId, {
+      projectId,
+      signal: AbortSignal.timeout(8_000),
+    });
+    let summary;
+    try {
+      summary = buildFinalPlanSummary({
+        projectId,
+        comparisonId: payload.comparisonId,
+        chosenSiteId: effect.chosenSiteId,
+        rationale: effect.rationale,
+        result: payload.result,
+        addresses,
+        tweaks: readFlowState(projectId).siteTweaks,
+        plan,
+      });
+    } catch {
+      return;
+    }
+    flow.setFinalPlan(summary);
+    goStep("finalize");
   }
   useConsultantActions((actions: UiAction[]) => {
     const effects = planWorkspaceActions(actions, {
@@ -548,9 +569,6 @@ export function WorkspaceScreen({
           goStep("compare");
           void controller.run();
         }}
-        finalComparisonId={
-          flow.state.finalPlan?.comparisonId ?? matching?.comparisonId ?? null
-        }
       />
     </WorkspaceShell>
   );

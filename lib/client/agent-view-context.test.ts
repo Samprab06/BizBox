@@ -33,15 +33,57 @@ describe("agent view from workspace registry", () => {
       agentViewForRoute(projectId, pathname, "site=site-1", reports),
     ).toEqual({
       stage: "workspace",
+      step: "locations",
       phase: "live",
       siteId: "site-1",
       candidateIds: ["site-1"],
     });
   });
+  it("Scene 1: adds the step, the visible listings' facts and the shortlist", () => {
+    const view = agentViewForRoute(projectId, pathname, "step=compare&site=site-1", {
+      search: {
+        projectId,
+        routeKey: `${pathname}?step=compare&site=site-1`,
+        observation: {
+          kind: "search",
+          phase: "live",
+          candidates: [listing, { ...listing, id: "site-2" }],
+        },
+      },
+      comparison: {
+        projectId,
+        routeKey: `${pathname}?step=compare&site=site-1`,
+        observation: {
+          kind: "comparison",
+          phase: "ready",
+          siteIds: [],
+          shortlistIds: ["site-2", "elsewhere"],
+          candidates: [
+            { ...listing, address: "1 Main St", monthlyRentUsd: 4200, sqft: 1200, score: 71 },
+            { ...listing, id: "site-2", address: "2 Main St", sqft: Number.NaN },
+          ],
+        },
+      },
+    });
+    expect(view).toMatchObject({
+      step: "compare",
+      candidateIds: ["site-1", "site-2"],
+      candidates: [
+        { id: "site-1", address: "1 Main St", monthlyRentUsd: 4200, sqft: 1200, score: 71 },
+        { id: "site-2", address: "2 Main St" },
+      ],
+      shortlistIds: ["site-2"],
+    });
+    expect(view.candidates?.[1]).not.toHaveProperty("sqft");
+    expect(agentViewForRoute(projectId, "/projects/p/intake", "", {})).toEqual({
+      stage: "intake",
+      step: "questions",
+    });
+  });
   it("omits URL-only and example IDs", () => {
     expect(
       agentViewForRoute(projectId, pathname, "site=spoofed", reports),
-    ).toEqual({ stage: "workspace" });
+    ).toEqual({ stage: "workspace", step: "locations" });
     expect(
       agentViewForRoute(projectId, pathname, "site=site-1", {
         ...reports,
@@ -54,7 +96,7 @@ describe("agent view from workspace registry", () => {
           },
         },
       }),
-    ).toEqual({ stage: "workspace", phase: "example" });
+    ).toEqual({ stage: "workspace", step: "locations", phase: "example" });
   });
   it("caps candidates and uses the displayed workspace default for an ambiguous URL", () => {
     const observation = {
