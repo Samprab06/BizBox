@@ -56,7 +56,7 @@ export function LocationExperience({
   projectId: string;
   controller: LiveComparisonController;
   candidates: WorkspaceCandidate[];
-  /** Locations shown on the map and list (top picks plus chosen). */
+  /** All available location-list entries. */
   shownCount?: number;
   selected?: WorkspaceCandidate;
   onSelect: (id: string) => void;

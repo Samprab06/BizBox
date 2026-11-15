@@ -7,6 +7,11 @@ const rectangle = {
   brush: "avoid" as const,
 };
 describe("saved area selection boundary", () => {
+  it("names the saved and current cities when selections no longer match", () => {
+    const raw = writeAreaMap([], "Los Angeles", "", [rectangle]);
+    expect(areaPreferencesFromAnswer(raw, "Houston").error).toContain("Los Angeles");
+    expect(areaPreferencesFromAnswer(raw, "Houston").error).toContain("Houston");
+  });
   it("keeps all drawn bounds and brushes without geocoding free text", () => {
     const raw = writeAreaMap([], "Houston", "near offices", [rectangle]);
     expect(areaPreferencesFromAnswer(raw, "Houston")).toEqual({

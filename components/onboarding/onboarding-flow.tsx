@@ -9,7 +9,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import type { Profile } from "@/components/intake/profile";
+import { missingFields, type Profile } from "@/components/intake/profile";
 import { AreaMap } from "./area-map";
 import { ClockDial } from "./clock-dial";
 import {
@@ -76,7 +76,9 @@ export function OnboardingFlow({
     {},
   );
   const [error, setError] = useState<string | undefined>();
-  const [returnToReview, setReturnToReview] = useState(false);
+  const [returnToReview, setReturnToReview] = useState(
+    () => !missingFields(profile).length && resumeStep(profile) !== "review",
+  );
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
 
@@ -105,7 +107,7 @@ export function OnboardingFlow({
   }
 
   function confirm(key: QuestionStep, value: string) {
-    const message = stepError(key, value);
+    const message = stepError(key, value, city);
     if (message) {
       setError(message);
       return;
@@ -138,6 +140,9 @@ export function OnboardingFlow({
   const credit = photoCredits[shownCity];
   const index = steps.indexOf(step);
   const skip = step !== "review" ? skipValues[step] : undefined;
+  const savedAreaError = profile.areas?.value
+    ? stepError("areas", profile.areas.value, city)
+    : undefined;
 
   return (
     <div
@@ -174,6 +179,11 @@ export function OnboardingFlow({
               {titles[step]}
             </h2>
             <div className="mt-6">
+              {step === "areas" && savedAreaError && (
+                <p role="alert" className="mb-4 text-sm text-danger">
+                  {savedAreaError}
+                </p>
+              )}
               {step === "review" ? (
                 <Review
                   profile={profile}
@@ -502,6 +512,7 @@ function Review({
     <dl className="divide-y divide-line text-sm">
       {questionSteps.map((key) => {
         const value = profile[key]?.value ?? "";
+        const issue = stepError(key, value, profile.city?.value);
         return (
           <div key={key} className="flex items-start gap-3 py-2.5">
             <dt className="w-28 shrink-0 text-muted">{reviewLabels[key]}</dt>
@@ -511,6 +522,7 @@ function Review({
               ) : (
                 <span className="text-danger">Not answered</span>
               )}
+              {value && issue && <p className="mt-1 text-danger">{issue}</p>}
             </dd>
             <dd className="shrink-0">
               <Button
@@ -545,7 +557,7 @@ function ReviewActions({
   onFix: (step: Step) => void;
 }) {
   const invalid = questionSteps.find(
-    (key) => stepError(key, profile[key]?.value ?? "") !== undefined,
+    (key) => stepError(key, profile[key]?.value ?? "", profile.city?.value) !== undefined,
   );
   return (
     <>

@@ -77,8 +77,26 @@ Geographic rectangle bounds use compact coordinate arrays in the existing intake
 Legacy brush marks remain visible and erasable. Review shows a readable summary;
 changing city clears selections from the previous city. There is no silent truncation.
 Very large answers remain subject to existing downstream intake message limits;
-this UI does not add spatial filtering or ranking enforcement to the backend.
+saved rectangles feed the eligibility and ranking rules documented in
+[Site search](../lib/data/sites.md).
 
 The existing OpenFreeMap/OpenStreetMap vector provider requires internet and WebGL.
 No imagery or terrain is loaded. Attribution is available from the small info button
 in the map corner. If loading fails, the existing skip action remains available.
+
+### Search continuity and demo recovery (2026-11-15)
+
+The location list and map expose every returned search result (up to the existing
+eight-result cap). The top-three summary retains eligible consultant picks and
+fills missing or duplicate positions from the latest search ranking. Older saved
+recommendations cannot reduce a new search to the one overlapping location.
+Any returned unit can be explicitly selected for comparison, including units
+outside the top-three summary. Search filters and inventory eligibility are unchanged.
+
+Guided onboarding checks the saved area's geographic payload against the selected
+city at resume, Continue and Review. A malformed, legacy or different-city map
+opens the Areas question with a repair message. Completing a repair returns a
+previously completed brief directly to Review and preserves the other answers.
+Clearing or redrawing remains an explicit founder action. Both Houston and Los
+Angeles are covered by mocked browser journeys, including exact city/geometry
+submission, recovery and comparison of an option outside the top three.
