@@ -15,6 +15,7 @@ import { CustomerFlow } from "../landing-demo/customer-flow";
 import { smooth } from "../landing-demo/timeline";
 import { chatAt } from "./timeline";
 import styles from "./landing-story.module.css";
+import { STORY_ASSETS } from "./asset-paths";
 export function LocationDetails({ data }: { data: LocationStoryData }) {
   return (
     <details className={styles.details}>
@@ -386,7 +387,7 @@ export function ConsultantScene({
         }
       >
         <Image
-          src="/landing-assets/guided-demo/cafe-interior-v1.png"
+          src={STORY_ASSETS.interior.src}
           alt="Generated example café with green tile and walnut furniture"
           style={{
             transform: `scale(${1 + 0.04 * pan}) translateX(${-pan * 0.6}%)`,
@@ -502,8 +503,8 @@ export function CounterComparison({
                 <Image
                   src={
                     proposed
-                      ? "/landing-assets/guided-demo/cafe-overhead-two-counters-v3.png"
-                      : "/landing-assets/guided-demo/cafe-overhead-one-counter-v2.png"
+                      ? STORY_ASSETS.twoCounters.src
+                      : STORY_ASSETS.oneCounter.src
                   }
                   alt={
                     proposed
