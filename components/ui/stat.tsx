@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import { cn } from "./cn";
 
 const scenarioNames = {
   baseline: "Baseline",
@@ -16,18 +17,18 @@ export function Stat({
   value,
   qualifier,
   scenario,
-  className = "",
+  className,
   ...props
 }: StatProps) {
   return (
-    <dl {...props} className={`sw-stat ${className}`}>
+    <dl {...props} className={cn("sw-stat text-ink", className)}>
       {scenario && (
         <dt className={`sw-scenario sw-scenario-${scenario}`}>
           {scenarioNames[scenario]}
         </dt>
       )}
       <dt>{label}</dt>
-      <dd className="sw-stat-value">{value}</dd>
+      <dd className="sw-stat-value tabular-nums">{value}</dd>
       {qualifier != null && <dd className="sw-stat-qualifier">{qualifier}</dd>}
     </dl>
   );
