@@ -59,6 +59,20 @@ describe("compact workspace counter setup", () => {
     expect(html).toContain("Detailed size and station fit diagnostic");
     expect(html).toContain(plan.source.comparisonId);
   });
+  it("identifies the selected setup beside its revenue and contribution deltas", () => {
+    const plan = stationPlan(3);
+    const selected =
+      plan.result?.status === "available" ? plan.result.selected : null;
+    expect(selected).not.toBeNull();
+    const main = renderToStaticMarkup(
+      createElement(CompactStationPlan, props({ plan })),
+    ).split("<details")[0];
+    expect(main).toContain(
+      `Selected setup: ${selected!.change.toEffectiveStations} counters · ${selected!.change.toStaffHeadcount} staff`,
+    );
+    expect(main).toContain("Added revenue / month");
+    expect(main).toContain("Contribution change / month");
+  });
   it("forwards Refresh to the controller's existing refresh callback", () => {
     const onRefresh = vi.fn();
     const tree = CompactStationPlan(

@@ -89,6 +89,12 @@ export function CompactStationPlan({
         </p>
       )}
       {selected && (
+        <p>
+          Selected setup: {selected.change.toEffectiveStations} counters ·{" "}
+          {selected.change.toStaffHeadcount} staff
+        </p>
+      )}
+      {selected && (
         <dl className={styles.metrics}>
           <div>
             <dt>Added revenue / month</dt>
