@@ -144,6 +144,26 @@ function sourceLabels(tool: string, result: unknown): CopilotSourceLabel[] {
         evidenceIds: [],
       },
     ];
+  if (tool === "diagnose" && "demandSource" in result)
+    return [
+      {
+        kind: "modeled",
+        label:
+          "Bottleneck diagnosis of saved representative runs with fixed thresholds; experiments are proposals, not forecasts",
+        evidenceIds: [],
+      },
+      result.demandSource === "jev"
+        ? {
+            kind: "jev",
+            label: "Demand from cached Jev customer-panel answers",
+            evidenceIds: [],
+          }
+        : {
+            kind: "fallback",
+            label: "Demand from the Huff fallback model, not Jev panel answers",
+            evidenceIds: [],
+          },
+    ];
   if (tool === "find_sites")
     return [
       {
@@ -484,9 +504,18 @@ export function createCopilotRuntime({
         yield emitted.event;
         return;
       }
+      // A read of the approved child (the post-run diagnosis) is scoped to that child.
+      const diagnosedScenarioId =
+        call.name === "diagnose" &&
+        data.runConfirmed &&
+        data.approvedScenarioId &&
+        (call.input as { scenario_id?: string }).scenario_id ===
+          data.approvedScenarioId
+          ? data.approvedScenarioId
+          : undefined;
       const result = await tools.execute(call.name, call.input, {
         projectId: context.projectId,
-        scenarioId: runScenarioId ?? context.scenarioId,
+        scenarioId: runScenarioId ?? diagnosedScenarioId ?? context.scenarioId,
         profileVersion: context.profileVersion,
         signal,
         evidenceId: `copilot:${turn.id}:${call.id}`,
@@ -524,6 +553,36 @@ export function createCopilotRuntime({
       );
       state = emitted.state;
       yield emitted.event;
+      // HAC-89: every succeeded run is diagnosed next. The diagnosis is a read of the
+      // saved comparison; it proposes experiments but never starts another run.
+      if (
+        call.name === "run_scenario" &&
+        runScenarioId &&
+        result &&
+        typeof result === "object" &&
+        "status" in result &&
+        result.status === "succeeded" &&
+        tools.definitions.some((definition) => definition.name === "diagnose")
+      ) {
+        const diagnosis: StoredToolCall = {
+          id: `${call.id}:diagnose`,
+          turnId: turn.id,
+          name: "diagnose",
+          input: { scenario_id: runScenarioId },
+          status: "pending",
+        };
+        emitted = await emit(
+          state,
+          turn.id,
+          context,
+          { type: "tool_started", callId: diagnosis.id, tool: diagnosis.name },
+          `${turn.id}:tool-start:${diagnosis.id}`,
+          { toolCalls: [diagnosis], checkpoint: data },
+        );
+        state = emitted.state;
+        yield emitted.event;
+        continue;
+      }
       if (
         result &&
         typeof result === "object" &&
