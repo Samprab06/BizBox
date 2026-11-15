@@ -2,9 +2,18 @@ import type { Metadata } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./workspace.css";
 
-export const metadata: Metadata = { title: "BizBox", description: "Explore locations for your service business." };
+export const metadata: Metadata = {
+  title: "BizBox",
+  description: "Explore locations for your service business.",
+  icons: {
+    icon: "/landing-preview/assets/bizbox-logo.png",
+    apple: "/landing-preview/assets/bizbox-logo.png",
+  },
+};
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>

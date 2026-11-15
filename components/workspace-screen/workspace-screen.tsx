@@ -208,6 +208,15 @@ export function WorkspaceScreen({
               onSelect={select}
               onClose={closeDetails}
               onInterior={() => setView("interior")}
+              onCompare={() => {
+                setView("results");
+                void controller.run();
+              }}
+              compareDisabled={
+                controller.phase === "loading" ||
+                controller.phase === "running" ||
+                controller.selectedIds.length < 2
+              }
             />
           )}
           {pane === "list" && (

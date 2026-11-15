@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { Brand } from "@/components/brand/brand";
 import Link from "next/link";
 import { useId, type ReactNode } from "react";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -16,6 +17,7 @@ export function WorkspaceShell({
   backdrop,
   children,
   assistant,
+  editBriefHref,
 }: {
   header: WorkspaceHeader;
   projectId: string;
@@ -24,6 +26,7 @@ export function WorkspaceShell({
   backdrop?: ReactNode;
   children: ReactNode;
   assistant: ReactNode;
+  editBriefHref?: string | null;
 }) {
   const headingId = useId();
   const photo = cityPhotoFor(header.city);
@@ -52,7 +55,7 @@ export function WorkspaceShell({
       </h1>
       <header className={styles.header}>
         <div className={styles.identity}>
-          <span className={styles.brand}>BizBox.</span>
+          <Brand />
           <div className={styles.project}>
             <span>{header.business}</span>
             <span className={styles.projectDivider} aria-hidden="true">
@@ -63,16 +66,21 @@ export function WorkspaceShell({
         </div>
         <div className={styles.headerActions}>
           {navigation && <div className={styles.navigation}>{navigation}</div>}
-          <Link
-            href={workspaceHref(projectId, "intake", selectedSiteId)}
-            prefetch={false}
-            className={styles.editBrief}
-          >
-            Edit brief
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="m12 4 4 4M3 17l4-1L17 6l-3-3L4 13l-1 4Z" />
-            </svg>
-          </Link>
+          {editBriefHref !== null && (
+            <Link
+              href={
+                editBriefHref ??
+                workspaceHref(projectId, "intake", selectedSiteId)
+              }
+              prefetch={false}
+              className={styles.editBrief}
+            >
+              Edit brief
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="m12 4 4 4M3 17l4-1L17 6l-3-3L4 13l-1 4Z" />
+              </svg>
+            </Link>
+          )}
         </div>
       </header>
       <div className={styles.workspace}>

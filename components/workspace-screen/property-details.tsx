@@ -69,6 +69,9 @@ export function PropertyDetails({
   onSelect,
   onClose,
   onInterior,
+  onCompare,
+  compareDisabled,
+  fullDetailsHref,
 }: {
   selected: WorkspaceCandidate;
   candidates: WorkspaceCandidate[];
@@ -77,12 +80,17 @@ export function PropertyDetails({
   onSelect: (id: string) => void;
   onClose: () => void;
   onInterior: () => void;
+  onCompare?: () => void;
+  compareDisabled?: boolean;
+  fullDetailsHref?: string | null;
 }) {
   const group = candidateMarkers(candidates).find((marker) =>
     marker.members.some((member) => member.siteId === selected.candidate.id),
   );
   const members = candidates.filter((entry) =>
-    group?.members.some((member) => member.siteId === entry.candidate.id),
+    group
+      ? group.members.some((member) => member.siteId === entry.candidate.id)
+      : entry.propertyId === selected.propertyId,
   );
   const facts = Object.entries(selected.candidate.features)
     .filter(([, fact]) => fact.value === true && fact.origin === "costar")
@@ -147,15 +155,29 @@ export function PropertyDetails({
         </section>
       )}
       <div className="mt-5 flex flex-wrap gap-2">
+        {onCompare && (
+          <button
+            className={styles.primary}
+            disabled={compareDisabled}
+            onClick={onCompare}
+          >
+            Compare locations
+          </button>
+        )}
         <button className={styles.secondary} onClick={onInterior}>
           View interior
         </button>
-        <Link
-          className={styles.secondary}
-          href={workspaceHref(projectId, "site", selected.candidate.id)}
-        >
-          Full details
-        </Link>
+        {fullDetailsHref !== null && (
+          <Link
+            className={styles.secondary}
+            href={
+              fullDetailsHref ??
+              workspaceHref(projectId, "site", selected.candidate.id)
+            }
+          >
+            Full details
+          </Link>
+        )}
       </div>
       <details className="mt-5 text-xs">
         <summary>Details</summary>

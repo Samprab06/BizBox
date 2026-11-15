@@ -4,6 +4,7 @@ import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { WorkspaceCandidate } from "./client-model";
 import { siteDemandLabel } from "@/lib/evaluation/demand-label";
 import styles from "./workspace-glass.module.css";
+import { ComparisonChart } from "./comparison-chart";
 
 const count = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -30,6 +31,36 @@ export function LocationResults({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2>Location comparison</h2>
+      </div>
+      <div className="my-6 grid gap-7 xl:grid-cols-2">
+        {["monthlyServedCustomers", "monthlyContributionUsd"].map((metric) => (
+          <ComparisonChart
+            key={metric}
+            title={
+              metric === "monthlyServedCustomers"
+                ? "Est. customers / month"
+                : "Est. operating contribution / month"
+            }
+            currency={metric === "monthlyContributionUsd"}
+            points={payload.result.ranking.flatMap((id) => {
+              const site = payload.result.sites.find(
+                (entry) => entry.siteId === id,
+              );
+              if (!site) return [];
+              return [
+                {
+                  id,
+                  label:
+                    candidates.find((entry) => entry.candidate.id === id)
+                      ?.candidate.address ?? "Saved location",
+                  ...(metric === "monthlyServedCustomers"
+                    ? site.monthlyServedCustomers
+                    : site.monthlyContributionUsd),
+                },
+              ];
+            })}
+          />
+        ))}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
