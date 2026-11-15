@@ -12,7 +12,11 @@ import {
   SensitivityResultSchema,
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
-import { useSiteSearch, type SiteSearchReadiness } from "./use-site-search";
+import {
+  useSiteSearch,
+  type NeedsBrief,
+  type SiteSearchReadiness,
+} from "./use-site-search";
 import { INTAKE_UPDATED_EVENT } from "./intake-events";
 import {
   activeComparisonId,
@@ -87,6 +91,7 @@ export type StoredComparisonState = {
   message: string;
   retry: () => void;
   failed: boolean;
+  readiness?: NeedsBrief;
 };
 
 const PayloadSchema = z.object({
@@ -419,12 +424,14 @@ export function useStoredComparison(
     async function load() {
       const intake = readIntake(projectId);
       if (!intake.profile) {
+        const message =
+          intake.reason ?? "Complete your intake to compare live sites.";
         update({
           phase: "example",
           payload: null,
-          message:
-            intake.reason ?? "Complete your intake to compare live sites.",
+          message,
           failed: false,
+          readiness: { status: "needs_brief", message },
         });
         return;
       }
@@ -505,6 +512,7 @@ export function useStoredComparison(
     () => ({
       kind: "stored",
       phase: state.phase,
+      needsBrief: state.readiness?.status === "needs_brief",
       comparisonId: state.payload?.comparisonId,
       synthetic: state.payload?.comparison?.synthetic,
       outdated: state.payload?.outdated,
@@ -750,13 +758,14 @@ export function useLiveComparison(
     () => ({
       kind: "comparison",
       phase,
+      needsBrief: search.readiness.status === "needs_brief",
       comparisonId: stored.payload?.comparisonId,
       synthetic: stored.payload?.comparison?.synthetic,
       outdated: stored.payload?.outdated,
       siteIds: stored.payload?.result.ranking ?? [],
       candidates: candidates.map((entry) => entry.candidate),
     }),
-    [phase, stored.payload, candidates],
+    [phase, search.readiness.status, stored.payload, candidates],
   );
   useWorkspaceReport(projectId, context);
   return {

@@ -24,6 +24,7 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
           dayType={day === "weekend" ? "weekend" : "weekday"}
           example={
             <>
+              <p className="mb-4 text-xs text-muted">Example data</p>
               <ReplayScreen
                 project={project}
                 visits={comparisonScenario(visits)}
@@ -33,7 +34,6 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
                     : undefined
                 }
               />
-              <p className="mt-6 text-xs text-muted">Example data</p>
             </>
           }
         />

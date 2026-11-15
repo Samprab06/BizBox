@@ -11,6 +11,7 @@ import { useSearchParams } from "next/navigation";
 import { ComparisonDecisionScene } from "@/components/decision/comparison-decision-scene";
 import { DecisionHeader } from "@/components/decision/decision-header";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
+import { FinishBriefNotice } from "@/components/shell/finish-brief-notice";
 import Link from "next/link";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import type {
@@ -83,6 +84,16 @@ export function LiveComparisonScreen({
       .address ?? siteId;
   if (phase === "loading")
     return <p role="status">Loading comparison and candidate sites…</p>;
+  if (controller.search?.status === "needs_brief")
+    return (
+      <div className="min-w-0 space-y-6">
+        <FinishBriefNotice
+          projectId={project.id}
+          message={controller.search.message}
+        />
+        {project.sites.length > 0 && example}
+      </div>
+    );
   if (phase === "example")
     return (
       <div className="min-w-0 space-y-6">
