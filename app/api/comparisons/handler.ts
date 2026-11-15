@@ -65,6 +65,17 @@ type Dependencies = {
 /** Leaves about 25 s of the 60 s function for evaluation, sweeps and the save. */
 export const COMPARISON_PANEL_BUDGET_MS = 35_000;
 
+/**
+ * Optional work after the evaluation (the Huff check and the robustness sweeps) is skipped when
+ * it is expected to run past this many ms after the request started, so the save and the reply
+ * still fit in the 60 s function. Skipped work leaves `robustness` / `demandSourceCheck` empty
+ * (the stored comparison and the UI already treat both as optional).
+ */
+export const COMPARISON_OPTIONAL_WORK_LIMIT_MS = 48_000;
+/** Expected cost of each optional stage as a multiple of one evaluation, with margin. */
+const HUFF_CHECK_COST = 1.25;
+const SWEEPS_COST = 1.75;
+
 /** A body meant as the assembly shortcut (validated by that schema alone, for clear errors). */
 const isShortcut = (body: unknown) =>
   typeof body === "object" &&
@@ -95,7 +106,8 @@ export function createComparisonsHandler({
   now = Date.now,
 }: Dependencies) {
   return async function POST(request: Request) {
-    const deadlineAt = now() + panelBudgetMs;
+    const startedAt = now();
+    const deadlineAt = startedAt + panelBudgetMs;
     let body: z.infer<typeof CreateSchema>;
     try {
       const raw = await readJsonBody(request);
@@ -207,26 +219,36 @@ export function createComparisonsHandler({
           ...(assembled.siteTweaks ? { siteTweaks: assembled.siteTweaks } : {}),
         };
       } else evaluationRequest = EvaluationRequestSchema.parse(body);
+      const evalStartedAt = now();
       const run = evaluateSites(evaluationRequest);
+      const evalMs = Math.max(0, now() - evalStartedAt);
+      // The evaluation is synchronous and cannot be interrupted, so each optional stage after
+      // it starts only if its expected cost (a multiple of the evaluation just timed) still
+      // fits before the limit; otherwise the comparison is saved without it.
+      const fits = (cost: number) =>
+        now() + evalMs * cost <= startedAt + COMPARISON_OPTIONAL_WORK_LIMIT_MS;
       const id = newId();
       let record = buildStoredComparison(id, evaluationRequest, run);
       if (assembly) record.evaluation.assembly = assembly;
       const check =
-        run.result.demandSource === "jev"
-          ? demandSourceCheck(evaluationRequest)
+        run.result.demandSource === "jev" && fits(HUFF_CHECK_COST)
+          ? demandSourceCheck(evaluationRequest, run.result)
           : null;
       // HAC-62: automatic sweeps feed the robustness headline and are stored as sensitivity.
-      const sweeps = autoSensitivities(evaluationRequest);
-      for (const sweep of sweeps) record = withSensitivity(record, sweep);
-      record.evaluation.robustness = robustnessSummary({
-        request: evaluationRequest,
-        result: record.evaluation.result,
-        sensitivities: sweeps,
-        demandSourceCheck: check,
-        ...(assembly
-          ? { findings: assembly.findings, assumptions: assembly.assumptions }
-          : {}),
-      });
+      // Without them there is no honest headline, so robustness is left out as a whole.
+      if (fits(SWEEPS_COST)) {
+        const sweeps = autoSensitivities(evaluationRequest);
+        for (const sweep of sweeps) record = withSensitivity(record, sweep);
+        record.evaluation.robustness = robustnessSummary({
+          request: evaluationRequest,
+          result: record.evaluation.result,
+          sensitivities: sweeps,
+          demandSourceCheck: check,
+          ...(assembly
+            ? { findings: assembly.findings, assumptions: assembly.assumptions }
+            : {}),
+        });
+      }
       await store.save(record);
       return json(
         {

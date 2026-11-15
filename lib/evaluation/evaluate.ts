@@ -666,15 +666,21 @@ export function runSensitivity(
   };
 }
 
-/** Reruns the request with Huff-only demand and reports whether the ranking matches. */
-export function demandSourceCheck(input: EvaluationRequestInput): {
+/**
+ * Reruns the request with Huff-only demand and reports whether the ranking matches. Pass
+ * `primaryResult` (the already-evaluated result of this same input) to skip evaluating it again.
+ */
+export function demandSourceCheck(
+  input: EvaluationRequestInput,
+  primaryResult?: EvaluationResult,
+): {
   primary: DemandSource;
   primaryRanking: string[];
   huffRanking: string[];
   rankingMatches: boolean;
   topMatches: boolean;
 } {
-  const primary = evaluateSites(input).result;
+  const primary = primaryResult ?? evaluateSites(input).result;
   const huff = evaluateSites({
     ...EvaluationRequestSchema.parse(input),
     demandSource: "huff",

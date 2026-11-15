@@ -298,6 +298,7 @@ async function postComparison(
   sleep: (ms: number, signal?: AbortSignal) => Promise<void> = wait,
 ) {
   const backoff = createPanelResendBackoff();
+  let gatewayTimeouts = 0;
   for (;;) {
     const response = await send(
       "/api/comparisons",
@@ -305,6 +306,12 @@ async function postComparison(
       90_000,
       fetcher,
     );
+    // 504: the function hit its time limit after the panel's answers were cached, so resending
+    // the same body resumes from the cache instead of asking Jev again.
+    if (!response.ok && response.status === 504 && gatewayTimeouts++ < 2) {
+      await sleep(1_000, signal);
+      continue;
+    }
     if (!response.ok) throw new Error("Service unavailable");
     if (response.status !== 202) return PayloadSchema.parse(response.body);
     const progress = PanelInProgressBodySchema.parse(response.body);
