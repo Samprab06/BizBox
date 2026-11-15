@@ -1,7 +1,12 @@
 import type { Page } from "@playwright/test";
 import { buildLocationPlan } from "../../lib/agent/plan";
 import { fixture } from "../../lib/agent/__fixtures__/plan";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
 // HAC-26: printable location plan, with the comparison and plan APIs mocked.
 
@@ -86,6 +91,8 @@ test.describe("location plan export", () => {
     await expect(
       page.getByRole("button", { name: "Print or save as PDF" }),
     ).toBeVisible();
+    // The narrow-screen dock starts collapsed; open it before testing print hiding.
+    await openConsultant(page);
     const assistant = page.getByRole("complementary", {
       name: "Assistant",
       exact: true,

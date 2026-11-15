@@ -34,6 +34,28 @@ async function touchscreen(page: Page) {
   };
 }
 
+/**
+ * A screenshot of the canvas once it has been sized by the renderer and has stopped
+ * changing. A canvas starts as the 300x150 browser default; a baseline taken before
+ * React Three Fiber resizes it never matches later screenshots (HAC-158).
+ */
+async function settledScreenshot(canvas: Locator) {
+  let previous: Buffer | undefined;
+  await expect
+    .poll(async () => {
+      const sized = await canvas.evaluate(
+        (element: HTMLCanvasElement) =>
+          element.width !== 300 || element.height !== 150,
+      );
+      const current = await canvas.screenshot();
+      const settled = sized && !!previous?.equals(current);
+      previous = current;
+      return settled;
+    })
+    .toBe(true);
+  return previous!;
+}
+
 // HAC-124: on a phone, a swipe that starts on the canvas scrolls the page; the camera
 // moves only after "Move camera" is switched on.
 test("replay canvas lets a phone scroll, and moves the camera only on request", async ({
@@ -56,7 +78,7 @@ test("replay canvas lets a phone scroll, and moves the camera only on request", 
   await canvas.evaluate((element) =>
     element.scrollIntoView({ block: "center" }),
   );
-  const baseline = await canvas.screenshot();
+  const baseline = await settledScreenshot(canvas);
 
   const box = (await canvas.boundingBox())!;
   const x = box.x + box.width / 2;
@@ -66,6 +88,16 @@ test("replay canvas lets a phone scroll, and moves the camera only on request", 
   await expect
     .poll(() => page.evaluate(() => scrollY))
     .toBeGreaterThan(before + 40);
+  // Let the swipe's fling finish so scrolling back is not overridden by momentum.
+  let last = -1;
+  await expect
+    .poll(async () => {
+      const now = await page.evaluate(() => scrollY);
+      const stable = now === last;
+      last = now;
+      return stable;
+    })
+    .toBe(true);
   // The swipe scrolled the page, not the camera: back in place, the view is unchanged.
   await page.evaluate((top) => scrollTo(0, top), before);
   await expect
