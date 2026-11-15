@@ -111,9 +111,10 @@ async function completeOnboarding(page: Page) {
   await proceed(page).click();
   await page.getByRole("button", { name: "Mid-range" }).click();
   await proceed(page).click();
-  await page
-    .getByRole("textbox", { name: "When will you be open?" })
-    .fill("11am – 11pm");
+  // HAC-154: the hours dial starts at 9:00 AM – 5:00 PM; Continue confirms it.
+  await expect(
+    page.getByRole("slider", { name: "Opening time" }),
+  ).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
   await proceed(page).click();
   await proceed(page).click();
   await page.getByRole("button", { name: "Skip" }).click();

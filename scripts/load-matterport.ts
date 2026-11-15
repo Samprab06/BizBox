@@ -34,6 +34,7 @@ export function normalizeMatterportManifest(input: unknown) {
       dimensionsRecordedAt: model.dimensionsRecordedAt
         ? new Date(model.dimensionsRecordedAt)
         : null,
+      placement: model.placement ?? null,
     };
     const prior = mappings.get(id);
     if (prior && JSON.stringify(prior) !== JSON.stringify(row))
@@ -82,6 +83,8 @@ export async function loadMatterport(path: string, databaseUrl?: string) {
                     dimensionsRecordedAt: row.dimensionsRecordedAt,
                   }
                 : {}),
+              // HAC-138: a supplied placement recalibrates; absent preserves.
+              ...(row.placement ? { placement: row.placement } : {}),
             },
           });
       }

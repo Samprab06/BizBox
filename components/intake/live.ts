@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { IntakeState } from "@/lib/contracts/intake";
 import { IntakeStateSchema } from "@/lib/contracts/intake";
+import { UiActionListSchema } from "@/lib/contracts/agent";
 import { mustHaves, operatingHours } from "@/lib/client/intake-business-profile";
 import type { IntakeSession, Profile } from "./profile";
 
@@ -41,6 +42,11 @@ export const IntakeResponseSchema = z.object({
   findings: z.array(z.string()),
   nextQuestion: z.object({ question: z.string() }).passthrough().nullable(),
   assistantMessage: z.string(),
+  /**
+   * HAC-144: UI actions the consultant asked for (at most 3). A list this client cannot read
+   * (e.g. a newer action type) is dropped rather than failing the reply. Not dispatched yet.
+   */
+  actions: UiActionListSchema.optional().catch(undefined),
 });
 export type IntakeResponse = z.infer<typeof IntakeResponseSchema>;
 

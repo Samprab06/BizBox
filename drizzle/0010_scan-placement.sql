@@ -1,0 +1,1 @@
+ALTER TABLE "matterport_models" ADD COLUMN "placement" jsonb;

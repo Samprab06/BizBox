@@ -1,9 +1,27 @@
+import { z } from "zod";
 import {
+  MatterportModelIdSchema,
+  ScanPlacementSchema,
   InteriorResponseSchema,
   type InteriorResponse,
   type InteriorProvenance,
 } from "../contracts/interior";
 import publicDemo from "./__fixtures__/public-demo.json";
+import publicCafe from "./__fixtures__/public-cafe.json";
+
+/**
+ * HAC-138: registry row for the public café scan. Its placement was
+ * hand-calibrated against the scan's floor intersections; it places a proposed
+ * service-area overlay and is not a measured business layout.
+ */
+export const publicCafeScan = z
+  .object({
+    modelId: MatterportModelIdSchema,
+    description: z.string().trim().min(1),
+    placement: ScanPlacementSchema,
+  })
+  .strict()
+  .parse(publicCafe);
 
 export const interiorFixtureIds = [
   "interior-public-demo",
