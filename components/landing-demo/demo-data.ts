@@ -49,6 +49,14 @@ export function createLandingDemo() {
       size: demoPlan.area,
       note: "Example space · generated interior, not a real listing or Matterport scan",
     },
+    shortlist: {
+      heights: {
+        name: "The Heights café",
+        area: "The Heights, Houston",
+        rent: 3400,
+        size: 1350,
+      },
+    },
     experiment: {
       current: setup(0),
       proposed: setup(1),

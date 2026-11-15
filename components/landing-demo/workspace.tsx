@@ -50,6 +50,8 @@ export function Workspace({
       ? "Test this location."
       : "Compare locations.";
   const setup = demo.experiment[choice];
+  const heights = !focused && area === "heights";
+  const property = heights ? demo.shortlist.heights : demo.property;
   return (
     <div
       className={styles.workspace}
@@ -96,7 +98,7 @@ export function Workspace({
                 ? [
                     demo.property.area,
                     "Within budget",
-                    `${number(demo.property.size)} sq ft`,
+                    `${number(property.size)} sq ft`,
                   ]
                 : ["Montrose", "The Heights"]
             ).map((finding, i) => (
@@ -145,9 +147,7 @@ export function Workspace({
             <span>{focused ? demo.property.name : "Houston shortlist"}</span>
             <span>
               {experiment
-                ? choice === "current"
-                  ? "Current setup"
-                  : "Proposed change"
+                ? `${setup.stations} staffed counter${setup.stations === 1 ? "" : "s"}`
                 : frame.scene === "interior"
                   ? "Current setup"
                   : "Illustrative view"}
@@ -187,8 +187,8 @@ export function Workspace({
               contain
             />
             <SceneImage
-              file="cafe-overhead-v1.png"
-              alt="Illustrative overhead café with two staffed checkouts"
+              file="cafe-overhead-two-counters-v3.png"
+              alt="Illustrative café with the original service bar and a separate second counter island"
               opacity={choice === "proposed" ? frame.overheadOpacity : 0}
               contain
             />
@@ -207,6 +207,7 @@ export function Workspace({
                 <button
                   className={styles.selectedMarker}
                   type="button"
+                  aria-pressed={area === "montrose"}
                   onClick={onProperty}
                 >
                   <Icon name="pin" />
@@ -215,6 +216,7 @@ export function Workspace({
                 <button
                   className={styles.otherMarker}
                   type="button"
+                  aria-pressed={area === "heights"}
                   onClick={onArea}
                 >
                   The Heights
@@ -319,53 +321,43 @@ export function Workspace({
               <span className={styles.railLabel}>
                 {focused ? "Starting assumptions" : "Your shortlist"}
               </span>
-              <h3>
-                {!focused && area === "heights"
-                  ? "The Heights"
-                  : demo.property.name}
-              </h3>
-              {!focused && area === "heights" ? (
-                <p className={styles.inspectorNote}>
-                  Context candidate · Montrose is the prepared example.
-                </p>
-              ) : (
-                <dl className={styles.propertyFacts}>
-                  <div className={styles.rentFact}>
-                    <dt>Rent assumption</dt>
-                    <dd>
-                      <RentValue
-                        key={focused ? "selected" : "shortlist"}
-                        target={demo.property.rent}
-                        animate={focused}
-                        reduced={reduced}
-                      />
-                      <small>/ month</small>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Floor area</dt>
-                    <dd>
-                      {number(demo.property.size)} <small>sq ft</small>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Area</dt>
-                    <dd>{demo.business.area}</dd>
-                  </div>
-                  {frame.scene === "interior" && (
-                    <>
-                      <div>
-                        <dt>Current counters</dt>
-                        <dd>{demo.experiment.current.stations}</dd>
-                      </div>
-                      <div>
-                        <dt>Current staff</dt>
-                        <dd>{demo.experiment.current.staff}</dd>
-                      </div>
-                    </>
-                  )}
-                </dl>
-              )}
+              <h3>{property.name}</h3>
+              <dl className={styles.propertyFacts}>
+                <div className={styles.rentFact}>
+                  <dt>Rent assumption</dt>
+                  <dd>
+                    <RentValue
+                      key={focused ? "selected" : area}
+                      target={property.rent}
+                      animate={focused}
+                      reduced={reduced}
+                    />
+                    <small>/ month</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Floor area</dt>
+                  <dd>
+                    {number(property.size)} <small>sq ft</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Area</dt>
+                  <dd>{property.area.split(",")[0]}</dd>
+                </div>
+                {frame.scene === "interior" && (
+                  <>
+                    <div>
+                      <dt>Current counters</dt>
+                      <dd>{demo.experiment.current.stations}</dd>
+                    </div>
+                    <div>
+                      <dt>Current staff</dt>
+                      <dd>{demo.experiment.current.staff}</dd>
+                    </div>
+                  </>
+                )}
+              </dl>
               <div className={styles.inspectorAction}>
                 <button
                   className={styles.primary}
@@ -382,7 +374,9 @@ export function Workspace({
                     ? "Test a change"
                     : focused
                       ? "Use as starting setup"
-                      : "Test this location"}
+                      : heights
+                        ? "Continue with Montrose"
+                        : "Test this location"}
                   <Icon name="arrow" />
                 </button>
               </div>

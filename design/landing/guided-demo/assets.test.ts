@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import manifest from "../../../public/landing-assets/guided-demo/macbook-frame-v2.json";
 import provenance from "./assets.json";
 import mobileRevision from "./assets-v3.json";
+import islandRevision from "./assets-v4.json";
 import { createHash } from "node:crypto";
 
 const root = resolve(import.meta.dirname, "../../..");
@@ -12,13 +13,22 @@ describe("one-checkout artwork", () => {
     const prompts = JSON.parse(
       readFileSync(resolve(import.meta.dirname, "prompts-v3.json"), "utf8"),
     );
-    for (const asset of mobileRevision.assets) {
+    for (const asset of [...mobileRevision.assets, ...islandRevision.assets]) {
       const png = readFileSync(resolve(root, asset.asset));
       expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual(
         asset.dimensions,
       );
       expect(createHash("sha256").update(png).digest("hex")).toBe(asset.sha256);
-      expect(prompts[asset.prompt.split("#")[1]]).toBeTruthy();
+      expect(
+        (asset.prompt.includes("v4.json")
+          ? JSON.parse(
+              readFileSync(
+                resolve(import.meta.dirname, "prompts-v4.json"),
+                "utf8",
+              ),
+            )
+          : prompts)[asset.prompt.split("#")[1]],
+      ).toBeTruthy();
       expect(
         readFileSync(resolve(root, asset.editTarget)).length,
       ).toBeGreaterThan(0);

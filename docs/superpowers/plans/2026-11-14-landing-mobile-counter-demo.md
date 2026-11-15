@@ -14,3 +14,7 @@ Plan:
 - [x] Run lint/typecheck/tests/build and env/client-bundle checks; record handoff/ticket and local commit only.
 
 Verification: lint/typecheck/build/env/client-bundle checks pass. Full suite with two workers: 1303 passed, 40 skipped. Chromium phone emulation at 390×844 and375×667, 844×390 landscape and1440×900 desktop. Every customer changes position in natural-time samples; pause holds SVG clock exactly and reduced-motion stops it. One/two checkout art and1/2staff/station markers agree with selection; selected proposed80served/6.8min/$144 survives closing.375phone local scroll reaches all results. Production recording and screenshots saved to the task visualization directory; no physical-device/Safari claim.
+
+## Physical layout clarification
+
+Akshar clarified that metrics change but the scene still reads as two counters. The former1/2terminal variant did not communicate the intended physical layout. Preserve the one-counter wall bar; derive a new proposed view with a clearly separate additional counter island. Move the second staff/station marker and customer route to that actual island. Preserve all prior assets. Provide `/landing-demo/mobile` as an interactive390×844 preview, since the chat GIF cannot accept taps. Verify real pointer switching in the iframe and record the changed physical layouts.

@@ -11,11 +11,11 @@ describe("counter artwork selection", () => {
     {
       choice: "current" as const,
       file: "cafe-overhead-one-counter-v2.png",
-      hidden: "cafe-overhead-v1.png",
+      hidden: "cafe-overhead-two-counters-v3.png",
     },
     {
       choice: "proposed" as const,
-      file: "cafe-overhead-v1.png",
+      file: "cafe-overhead-two-counters-v3.png",
       hidden: "cafe-overhead-one-counter-v2.png",
     },
   ])(
@@ -55,4 +55,34 @@ describe("counter artwork selection", () => {
       }
     },
   );
+});
+
+describe("shortlist property facts", () => {
+  it("shows the same rent, size and area fields for The Heights", () => {
+    const html = renderToStaticMarkup(
+      h(Workspace, {
+        demo: DEMO,
+        frame: chapterAt(0.4),
+        choice: "current",
+        reduced: false,
+        area: "heights",
+        mini: false,
+        running: false,
+        flowPaused: false,
+        onArea: noop,
+        onProperty: noop,
+        onInterior: noop,
+        onExperiment: noop,
+        onChoice: noop,
+        onFlow: noop,
+        onReplay: noop,
+      }),
+    );
+    expect(html).toContain("$3,400");
+    expect(html).toContain("1,350");
+    expect(html).toContain("Rent assumption");
+    expect(html).toContain("Floor area");
+    expect(html).toContain("Continue with Montrose");
+    expect(html).not.toContain("Context candidate");
+  });
 });

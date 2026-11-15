@@ -19,12 +19,11 @@ export const CustomerFlow = memo(function CustomerFlow({
   // Each path includes entrance, queue, service and exit. No permanently
   // positioned customer dots: congestion is slower progress through the queue.
   const first = "M335 880 Q600 820 800 730 L980 665 L1040 650 Q900 815 350 900";
-  const second =
-    "M335 880 Q600 700 800 575 L950 510 L1010 485 Q800 800 350 900";
+  const second = "M335 880 Q570 820 615 680 L665 590 L710 540 Q650 760 350 900";
   const counters = proposed
     ? [
         { x: 1076, y: 622, staffX: 1170, staffY: 630 },
-        { x: 1027, y: 483, staffX: 1110, staffY: 465 },
+        { x: 758, y: 490, staffX: 825, staffY: 465 },
       ]
     : [{ x: 1076, y: 622, staffX: 1170, staffY: 630 }];
   const duration = proposed ? 12 : 20;

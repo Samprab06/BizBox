@@ -55,3 +55,21 @@ The authoring browser's animation-frame throttling is not a device FPS benchmark
 ## Integration and review
 
 Local branch `codex/hac-115-macbook-assets`. Prepared asset checkpoint `e0fa769`; subsequent presentation commit contains this completed refinement. `/story` on the local authoring server redirects to the current normal Next route at `http://127.0.0.1:4195/landing-demo`; `/story/v1` preserves the previous live camera prototype. Homepage/general product APIs and stores are unchanged. Reconcile newer main's canonical `/start` entry/session behavior during future integration. No new push, remote PR, merge or deployment performed.
+
+## Direct interactive mobile preview
+
+The explicit preview entry is `/landing-demo/mobile`. On a desktop it renders the live `/landing-demo` route in a390×844 same-origin iframe. Scroll inside the phone and tap Sandbox, then One counter or Two counters. The chat GIF is a recording and has no interactive buttons. The old `/story/v1` remains historical.
+
+Follow-up browser verification reproduced real pointer clicks in the live page and in the phone iframe: Two→One→Two selected proposed/current/proposed, changed2/1/2active checkout markers and corresponding artwork, and showed80/55served,6.8/20.2min P90 and$144/$72labor. Akshar then clarified that numbers switch but the physical room still reads as two counters; the following visual correction addresses that distinction. The phone preview iframe is confined to this review route; the landing experience itself still uses no iframe/provider embed.
+
+## Physical counter layout and Heights details
+
+Akshar clarified that changing only checkout terminals was insufficient. The proposed view now adds a separate freestanding green-tile counter island in the open floor, while current keeps only the original continuous wall-side service counter. Original artwork is preserved. Second staff, station marker and customer path move to the actual island. Scene header states1/2staffed counters; seeded comparison and costs are unchanged. The extra island is illustrative scenario geometry, not an engineered fit-out or real property alteration.
+
+New generated asset: `public/landing-assets/guided-demo/cafe-overhead-two-counters-v3.png`. Built-in GPT Image precise-object edit; exact prompt [prompts-v4.json](prompts-v4.json), dimensions/hash/provenance [assets-v4.json](assets-v4.json). Replaces prior two-terminal artwork only in current demo selection; no assets deleted.
+
+The Heights now uses the same property-facts component as Montrose: example rent$3,400/month,1,350sqft andTheHeights area. These are explicitly illustrative assumptions, not researched listing data. The prepared simulation remains Montrose($3,000/month,1,200sqft); the Heights continuation says“Continue with Montrose” rather than silently running a different property's numbers. The selected map pin receives a visible highlight.
+
+Direct interactive phone preview: `http://127.0.0.1:4195/landing-demo/mobile`; iframe renders actual landing route at390×844. Desktop review route is noindex and has no simulation logic. TapSandbox to test counters; scroll through location stage and tapTheHeights for details. Chat GIFs remain noninteractive recordings.
+
+Final verification of this follow-up: lint/typecheck/production build/environment-file/client-bundle checks pass. Full suite with two workers:1304passed/40skipped;29focused tests pass. Production phone-preview iframe is exactly390×844 with no horizontal overflow. Real clicks selected Heights and rendered$3,400/month,1,350sqft,TheHeights and explicit Montrose continuation; One/Two clicks switched physical wall-only/island artwork and1/2station positions with corresponding55/80served,20.2/6.8min wait and$72/$144labor. Screenshots of complete preview saved in task visualization directory. No push/PR/merge/deployment.

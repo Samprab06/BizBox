@@ -2160,3 +2160,8 @@
     min-height: 220px;
   }
 }
+
+.mapMarkers button[aria-pressed="true"] {
+  background: rgb(54 125 116 / 0.8);
+  box-shadow: 0 0 0 1px rgb(224 255 247 / 0.7);
+}
