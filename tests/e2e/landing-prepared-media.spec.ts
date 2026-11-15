@@ -48,6 +48,24 @@ test("landing uses recorded media without loading a live map", async ({
       video.evaluate((node) => (node as HTMLVideoElement).currentTime),
     )
     .toBeGreaterThan(0.1);
+  const overlayCoversPin = await map.evaluate((root) => {
+    const stats = root
+      .querySelector("[data-recorded-stats]")!
+      .getBoundingClientRect();
+    return [...root.querySelectorAll("[data-site-pin]")].some((pin) => {
+      const box = pin.getBoundingClientRect();
+      return (
+        box.left < stats.right &&
+        box.right > stats.left &&
+        box.top < stats.bottom &&
+        box.bottom > stats.top
+      );
+    });
+  });
+  expect(
+    overlayCoversPin,
+    "morning results must leave both neighborhood flows visible",
+  ).toBe(false);
   const source = await video.evaluate(
     (node) => (node as HTMLVideoElement).currentSrc,
   );
