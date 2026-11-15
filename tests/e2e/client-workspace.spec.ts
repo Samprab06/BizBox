@@ -17,6 +17,14 @@ import {
 // Invented API test responses exercise the production source branches. These are not
 // vendor data or evidence that live inventory, imagery, scans or Jev were verified.
 async function services(page: Page) {
+  const appOrigin = new URL("/", test.info().project.use.baseURL).origin;
+  // This conversation/facts fixture does not verify provider imagery. Keep real
+  // context-tile downloads and decoding out of its native interaction timings.
+  // A later explicit provider fixture (such as Matterport below) takes precedence.
+  await page.route(
+    (url) => /^https?:$/.test(url.protocol) && url.origin !== appOrigin,
+    (route) => route.abort("blockedbyclient"),
+  );
   await mockLiveComparison(page);
   const search = structuredClone(liveComparisonSearch);
   for (const entry of search.candidates) entry.candidate.synthetic = false;
