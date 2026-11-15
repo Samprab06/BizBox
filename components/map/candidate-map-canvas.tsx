@@ -11,6 +11,8 @@ import Map, {
   type MarkerInstance,
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { StyleSpecification } from "maplibre-gl";
+import { candidateMapStyleUrl, prepareCandidateMapStyle } from "./map-style";
 import {
   catchmentRadiusMiles,
   competitors,
@@ -116,6 +118,7 @@ export default function CandidateMapCanvas({
     () => restored ?? { ...initialView, ...center },
   );
   const loaded = useRef(false);
+  const [mapStyle, setMapStyle] = useState<StyleSpecification>();
   const selected =
     example && selectedId ? getSiteFixture(selectedId) : undefined;
 
@@ -123,12 +126,34 @@ export default function CandidateMapCanvas({
     onMounted();
   }, [onMounted]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(candidateMapStyleUrl, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(`Map style request failed: ${response.status}`);
+        return prepareCandidateMapStyle(
+          await response.json(),
+          response.url || candidateMapStyleUrl,
+        );
+      })
+      .then((style) => {
+        if (!controller.signal.aborted) setMapStyle(style);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) onFailed();
+      });
+    return () => controller.abort();
+  }, [onFailed]);
+
+  if (!mapStyle) return null;
+
   return (
     <>
       <Map
         {...view}
         style={{ width: "100%", height: "100%" }}
-        mapStyle="https://tiles.openfreemap.org/styles/liberty"
+        mapStyle={mapStyle}
         onMove={({ viewState }) => setView(viewState)}
         onMoveEnd={({ viewState }) => {
           try {
@@ -137,6 +162,10 @@ export default function CandidateMapCanvas({
         }}
         onLoad={(event) => {
           loaded.current = true;
+          // The shell can reveal a zero-width mount before MapLibre's first
+          // ResizeObserver delivery, which MapLibre intentionally skips. Reconcile
+          // that initial fallback size once; its own observer handles later changes.
+          event.target.resize();
           if (!example && !restored && located.length)
             event.target.fitBounds(
               [
