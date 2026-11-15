@@ -382,13 +382,18 @@ export function createInvestigationPlanner({
       return {
         tool: name,
         inputHash,
-        execute: async ({ signal: executionSignal, idempotencyKey }) => {
+        execute: async ({
+          signal: executionSignal,
+          idempotencyKey,
+          deadlineAt,
+        }) => {
           executionSignal.throwIfAborted();
           const result = await tools.execute(name, args, {
             job,
             milestones,
             signal: executionSignal,
             idempotencyKey,
+            ...(deadlineAt === undefined ? {} : { deadlineAt }),
           });
           executionSignal.throwIfAborted();
           return {

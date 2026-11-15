@@ -24,7 +24,9 @@ export function createInteriorGetter(
       {
         // Deliberately closed. Neither query parameters, imported manifests nor the
         // presence of a token approve licensed display. HAC-14 must activate this in
-        // a reviewed change after access and terms are established.
+        // a reviewed change after access and terms are established. Even then the
+        // resolver serves a scan only when it is public/unlisted (HAC-137 check)
+        // and display-approved; everything else gets the modeled fallback.
         allowLicensedAssets: options.allowLicensedAssets === true,
         sdkKey: options.sdkKey,
         dimensionsProvider: options.modelClient

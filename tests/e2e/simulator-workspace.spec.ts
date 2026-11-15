@@ -61,6 +61,38 @@ test("legacy simulator links retain replay state inside the workspace", async ({
   ).toBeVisible();
 });
 
+test("live statistics use the selected scenario and shared replay clock", async ({
+  page,
+}) => {
+  await page.goto("/projects/houston-coffee/simulator");
+  const stats = page.getByRole("region", { name: "Modeled day statistics" });
+  const seek = stats.getByRole("slider", { name: "Seek local time" });
+  const scenario = page.getByRole("combobox", {
+    name: "Decision replay scenario",
+  });
+
+  await expect(stats.getByRole("heading")).toContainText("Baseline");
+  await seek.press("End");
+  const baseline = await stats.getByRole("img").getAttribute("aria-label");
+  await expect(
+    page.getByRole("slider", { name: "Decision operating replay time" }),
+  ).toHaveAttribute("aria-valuetext", "12:00 PM");
+  await seek.press("Home");
+  await expect(stats.getByRole("img")).toHaveAccessibleName(
+    "0 cumulative purchases by 08:00",
+  );
+  await seek.press("End");
+  await expect(stats.getByRole("img")).toHaveAccessibleName(baseline!);
+
+  await scenario.selectOption("1");
+  await expect(stats.getByRole("heading")).toContainText("Alternative");
+  await seek.press("End");
+  await expect(stats.getByRole("img")).not.toHaveAccessibleName(baseline!);
+  await expect(
+    stats.getByRole("button", { name: "Area overview" }),
+  ).toBeDisabled();
+});
+
 test("simulator fits phone, tablet and desktop and expands with the keyboard", async ({
   page,
   browserName,

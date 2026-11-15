@@ -1,6 +1,6 @@
 {
-  "id": "c8d7479e-2581-43cd-ba47-653a611039c8",
-  "prevId": "61823717-a0a5-4484-b7ae-acc972ea844d",
+  "id": "fe56bc21-c8d8-4451-adc7-58d9f984cd7a",
+  "prevId": "3844aac5-98bd-4660-8c44-bfc88d1503cc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1139,6 +1139,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "is_public": {
+          "name": "is_public",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "placement": {
           "name": "placement",
           "type": "jsonb",
@@ -1203,6 +1215,10 @@
         "matterport_models_dimensions_pair": {
           "name": "matterport_models_dimensions_pair",
           "value": "(\"matterport_models\".\"dimensions\" IS NULL) = (\"matterport_models\".\"dimensions_recorded_at\" IS NULL)"
+        },
+        "matterport_models_public_check_pair": {
+          "name": "matterport_models_public_check_pair",
+          "value": "(\"matterport_models\".\"is_public\" IS NULL) = (\"matterport_models\".\"checked_at\" IS NULL)"
         }
       },
       "isRLSEnabled": false
