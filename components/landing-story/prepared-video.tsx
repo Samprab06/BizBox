@@ -106,6 +106,11 @@ export function PreparedVideo({
   useEffect(() => {
     const element = video.current;
     if (!mounted || !element) return;
+    if (position.current > 0) {
+      // Restoring a paused/end frame needs metadata even without calling play.
+      element.preload = "metadata";
+      element.load();
+    }
     return () => {
       position.current = element.currentTime || position.current;
       element.pause();
@@ -133,6 +138,8 @@ export function PreparedVideo({
       return;
     }
     let closed = false;
+    // WebKit can leave dynamically mounted sources idle with preload="none".
+    if (element.readyState === HTMLMediaElement.HAVE_NOTHING) element.load();
     void element.play().catch(() => {
       if (!closed) setBlocked(true);
     });
