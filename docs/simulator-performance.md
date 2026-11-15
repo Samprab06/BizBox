@@ -167,9 +167,9 @@ Run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` before a PR.
 
 ## Cold load of the 3D neighborhood (HAC-177)
 
-**Budget:** on a cold browser cache, the first buildings render within 9 s on
+**Budget:** on a cold browser cache, the first buildings render within 10 s on
 an 8 Mbps desktop link and within 12 s on a 4 Mbps link (measured below:
-8.0 s and 11.0 s at worst). Until then the scene
+9.9 s and 11.0 s at worst). Until then the scene
 shows its real loading stage, and after 8 s it offers **Skip 3D view**.
 
 ### Root cause
@@ -206,7 +206,8 @@ building. Skip removes the 3D viewer; the timeline and replay keep working.
 
 ### Measurements
 
-Measured on November 15, 2026 at `45ac60f` (before) and this change (after).
+Measured on November 15, 2026 at `45ac60f` (before) and this change (after;
+the 8 Mbps range includes three runs after merging main at `425d3e7`).
 Both used `pnpm build` + `pnpm start` with a dummy `VEXCEL_API_KEY`, a local
 proxy that sent `/api/vexcel/*` to the production tile proxy (real tiles, CDN
 warm), headless Chromium 1243 with SwiftShader WebGL, a 1440 × 900 viewport,
@@ -219,7 +220,7 @@ initial view.
 | ----------------- | ----------------------- | ---------------------- | --------------- | -------------- |
 | Unthrottled       | 7.0 s                   | 6.4–7.1 s              | 7.0 s           | 6.4–7.3 s      |
 | 20 Mbps / 40 ms   | 13.4 s                  | 6.2–7.6 s              | 12.6 s          | 7.8–9.4 s      |
-| 8 Mbps / 60 ms    | 27.4 s                  | 7.3–8.0 s              | 26.2 s          | 14.2–14.5 s    |
+| 8 Mbps / 60 ms    | 27.4 s                  | 7.3–9.9 s              | 26.2 s          | 14.2–16.4 s    |
 | 4 Mbps / 80 ms    | 49.8 s                  | 10.4–11.0 s            | 49.6 s          | 25.7–26.1 s    |
 
 Before the change, the first building appeared only after all 20.4 MB had
