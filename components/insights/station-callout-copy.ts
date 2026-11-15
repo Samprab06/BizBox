@@ -3,7 +3,7 @@ import type { StationExperimentConfigurationId } from "@/lib/contracts/station-e
 /** Plain-language copy and formatting for the founder-facing counters panel. */
 
 export const FOUNDER_INTRO =
-  "See how adding a counter (and the person to run it) changes customers served, wait time and monthly contribution. Modeled estimates.";
+  "See how adding a counter (and the person to run it) changes monthly contribution, revenue and customers lost to long lines. Modeled estimates.";
 
 export function founderSourceLine(demandSource: "huff" | "jev"): string {
   return `Based on your latest comparison · ${demandSource === "jev" ? "Jev customer panel" : "Huff estimate"}`;
