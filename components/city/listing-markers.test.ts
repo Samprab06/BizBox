@@ -89,6 +89,95 @@ describe("real shortlist marker model", () => {
             rect.bottom <= point.y - 16,
         ).toBe(true);
   });
+  it("lays out full address tags against actual tag dimensions and tall anchored pin areas", () => {
+    const points = [
+      {
+        id: "one",
+        x: 318,
+        y: 192,
+        width: 210,
+        height: 54,
+        pinWidth: 60,
+        pinHeight: 74,
+      },
+      {
+        id: "two",
+        x: 319,
+        y: 225,
+        width: 195,
+        height: 35,
+        pinWidth: 54,
+        pinHeight: 66,
+      },
+    ];
+    const offsets = listingLabelOffsets(points, {
+      left: 40,
+      top: 100,
+      width: 800,
+      height: 260,
+    });
+    const rects = points.map((point) => {
+      const offset = offsets.get(point.id)!;
+      return {
+        left: point.x + offset.x - point.width / 2,
+        right: point.x + offset.x + point.width / 2,
+        top: point.y + offset.y - point.height / 2,
+        bottom: point.y + offset.y + point.height / 2,
+      };
+    });
+    const intersects = (a: (typeof rects)[number], b: (typeof rects)[number]) =>
+      a.left < b.right &&
+      a.right > b.left &&
+      a.top < b.bottom &&
+      a.bottom > b.top;
+    expect(intersects(rects[0], rects[1])).toBe(false);
+    for (const rect of rects)
+      for (const point of points)
+        expect(
+          intersects(rect, {
+            left: point.x - point.pinWidth / 2,
+            right: point.x + point.pinWidth / 2,
+            top: point.y - point.pinHeight,
+            bottom: point.y + 4,
+          }),
+        ).toBe(false);
+  });
+  it("keeps four overview address tags inside the free pane, including two nearby properties", () => {
+    const viewport = { left: 40, top: 150, width: 900, height: 200 };
+    const points = [
+      { id: "one", x: 318, y: 192, width: 225, height: 64 },
+      { id: "two", x: 319, y: 225, width: 215, height: 45 },
+      { id: "three", x: 700, y: 320, width: 230, height: 45 },
+      { id: "four", x: 438, y: 225, width: 240, height: 45 },
+    ];
+    const offsets = listingLabelOffsets(points, viewport);
+    const rects = points.map((point) => {
+      const offset = offsets.get(point.id)!;
+      return {
+        left: point.x + offset.x - point.width / 2,
+        right: point.x + offset.x + point.width / 2,
+        top: point.y + offset.y - point.height / 2,
+        bottom: point.y + offset.y + point.height / 2,
+      };
+    });
+    for (const rect of rects) {
+      expect(rect.left).toBeGreaterThanOrEqual(viewport.left);
+      expect(rect.right).toBeLessThanOrEqual(viewport.left + viewport.width);
+      expect(rect.top).toBeGreaterThanOrEqual(viewport.top);
+      expect(rect.bottom).toBeLessThanOrEqual(viewport.top + viewport.height);
+    }
+    for (let i = 0; i < rects.length; i++)
+      for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i],
+          b = rects[j];
+        expect(
+          a.left >= b.right ||
+            b.left >= a.right ||
+            a.top >= b.bottom ||
+            b.top >= a.bottom,
+        ).toBe(true);
+      }
+  });
   it("keeps exact coincident units together, their source IDs and stable shortlist order", () => {
     const groups = groupListingMarkers([
       point("a"),

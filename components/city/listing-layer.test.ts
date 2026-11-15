@@ -61,6 +61,8 @@ function fixture(reduced = false) {
     },
     Color: { WHITE: "white", fromCssColorString: (v: string) => v },
     HeightReference: { RELATIVE_TO_GROUND: 3 },
+    VerticalOrigin: { BOTTOM: 1, CENTER: 0 },
+    HorizontalOrigin: { CENTER: 0 },
     ConstantProperty: Value,
   } as unknown as typeof import("cesium");
   const options: ListingLayerOptions = {
@@ -99,6 +101,51 @@ function fixture(reduced = false) {
   };
 }
 describe("existing Cesium viewer shortlist attachment", () => {
+  it("maps pin/address selection to exact WGS84 coordinates and the corresponding listing IDs", () => {
+    const f = fixture();
+    const options = {
+      ...f.options,
+      markers: groupListingMarkers([
+        ...f.options.markers[0].members,
+        {
+          siteId: "east-space",
+          propertyId: "east-property",
+          address: "202 Invented Road",
+          longitude: -95.1401026,
+          latitude: 29.5920144,
+        },
+      ]),
+    };
+    const layer = createListingLayer(f.viewer, f.sdk, options);
+    const entities = f.entities.add.mock.results.map((entry) => entry.value);
+    expect(entities[0].position).toEqual([-95.6, 29.7, 2]);
+    expect(entities[1].position).toEqual([-95.1401026, 29.5920144, 2]);
+    expect(entities[0].label.text).toBe("1 · Fixture\n2 spaces");
+    expect(entities[1].label.text).toBe("2 · 202 Invented Road");
+    expect(
+      entities[0].label.backgroundPadding.y * 2 + 19,
+    ).toBeGreaterThanOrEqual(44);
+    expect(
+      entities[1].label.backgroundPadding.y * 2 + 19,
+    ).toBeGreaterThanOrEqual(44);
+    expect(entities[0].billboard.width.value).toBe(26);
+    expect(entities[1].billboard.width.value).toBe(26);
+    expect(entities[0].billboard.image.value).not.toBe(
+      entities[1].billboard.image.value,
+    );
+    f.scene.pick.mockReturnValue({ id: entities[1] });
+    f.input.callback!({ position: { x: 99, y: 88 } });
+    expect(options.onSelectSite).toHaveBeenLastCalledWith("east-space");
+    layer.update({
+      ...options,
+      selectedSiteId: "east-space",
+      cameraRequest: { kind: "selection", revision: 1 },
+    });
+    expect(f.entities.add).toHaveBeenCalledTimes(2);
+    expect(entities[1].position).toEqual([-95.1401026, 29.5920144, 2]);
+    expect(entities[1].billboard.width.value).toBe(26);
+    layer.destroy();
+  });
   it("keeps selected unit on grouped picking, changes camera without rebuilding entities and disposes everything", () => {
     const f = fixture();
     const layer = createListingLayer(f.viewer, f.sdk, f.options);

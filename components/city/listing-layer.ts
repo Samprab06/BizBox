@@ -2,6 +2,8 @@ import type { Viewer, Entity } from "cesium";
 import {
   markerSiteId,
   listingLabelOffsets,
+  listingAddressLabel,
+  listingPinImage,
   overheadFrame,
   type ListingCameraRequest,
   type ListingMarker,
@@ -33,21 +35,67 @@ export function createListingLayer(
   const canvas = viewer.scene.canvas;
   const handler = new sdk.ScreenSpaceEventHandler(canvas);
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const measure =
+    typeof document !== "undefined"
+      ? document.createElement("canvas").getContext("2d")
+      : null;
+  if (measure) measure.font = "600 15px sans-serif";
+  const leaders =
+    typeof document !== "undefined"
+      ? document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      : null;
+  if (leaders) {
+    leaders.setAttribute("aria-hidden", "true");
+    Object.assign(leaders.style, {
+      position: "absolute",
+      inset: "0",
+      width: "100%",
+      height: "100%",
+      pointerEvents: "none",
+      overflow: "hidden",
+    });
+    canvas.parentElement?.appendChild(leaders);
+  }
+  const labelDimensions = (marker: ListingMarker) => {
+    const lines = listingAddressLabel(marker).split("\n");
+    return {
+      width:
+        Math.ceil(
+          Math.max(
+            ...lines.map(
+              (line) => measure?.measureText(line).width ?? line.length * 9,
+            ),
+          ),
+        ) + 24,
+      height: lines.length * 19 + 26,
+    };
+  };
   let labelLayout = "";
   const stopLabels = viewer.scene.postRender.addEventListener(() => {
     if (disposed || !entities.length) return;
+    const viewport = options.viewport?.(canvas) ?? {
+      left: 0,
+      top: 0,
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+    };
     const points = entities.flatMap((entity) => {
       const marker = entityGroups.get(entity)!;
       const position = entity.position?.getValue(viewer.clock.currentTime);
       const pixel =
         position && viewer.scene.cartesianToCanvasCoordinates(position);
-      return pixel
+      return pixel &&
+        pixel.x >= viewport.left - 20 &&
+        pixel.x <= viewport.left + viewport.width + 20 &&
+        pixel.y >= viewport.top - 20 &&
+        pixel.y <= viewport.top + viewport.height + 20
         ? [
             {
               id: marker.id,
               x: Math.round(pixel.x),
               y: Math.round(pixel.y),
-              width: marker.members.length > 1 ? 112 : 34,
+              ...labelDimensions(marker),
+              pinWidth: 30,
             },
           ]
         : [];
@@ -55,15 +103,53 @@ export function createListingLayer(
     const signature = JSON.stringify(points);
     if (signature === labelLayout) return;
     labelLayout = signature;
-    const viewport = options.viewport?.(canvas) ?? {
-      left: 0,
-      top: 0,
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
-    };
     const offsets = listingLabelOffsets(points, viewport);
+    leaders?.replaceChildren();
+    if (leaders)
+      for (const point of points) {
+        const offset = offsets.get(point.id)!;
+        const center = { x: point.x + offset.x, y: point.y + offset.y };
+        const end = {
+          x: Math.max(
+            center.x - point.width / 2,
+            Math.min(center.x + point.width / 2, point.x),
+          ),
+          y: Math.max(
+            center.y - point.height / 2,
+            Math.min(center.y + point.height / 2, point.y),
+          ),
+        };
+        const length = Math.hypot(end.x - point.x, end.y - point.y);
+        const start =
+          length > 14
+            ? {
+                x: point.x + ((end.x - point.x) * 14) / length,
+                y: point.y + ((end.y - point.y) * 14) / length,
+              }
+            : point;
+        for (const [stroke, width] of [
+          ["#101115", 4],
+          ["#ffffff", 1.5],
+        ] as const) {
+          const line = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line",
+          );
+          for (const [name, value] of Object.entries({
+            x1: start.x,
+            y1: start.y,
+            x2: end.x,
+            y2: end.y,
+            stroke,
+            "stroke-width": width,
+          }))
+            line.setAttribute(name, String(value));
+          leaders.appendChild(line);
+        }
+      }
     for (const entity of entities) {
       const offset = offsets.get(entityGroups.get(entity)!.id);
+      entity.label!.show = new sdk.ConstantProperty(Boolean(offset));
       if (offset)
         entity.label!.pixelOffset = new sdk.ConstantProperty(
           new sdk.Cartesian2(offset.x, offset.y),
@@ -135,22 +221,25 @@ export function createListingLayer(
             marker.latitude,
             2,
           ),
-          point: {
-            pixelSize: 16,
-            color: sdk.Color.WHITE,
-            outlineColor: sdk.Color.fromCssColorString("#17181d"),
-            outlineWidth: 3,
+          billboard: {
+            image: listingPinImage(marker.index, false),
+            width: 26,
+            height: 26,
+            verticalOrigin: sdk.VerticalOrigin.CENTER,
+            horizontalOrigin: sdk.HorizontalOrigin.CENTER,
             heightReference: sdk.HeightReference.RELATIVE_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
           label: {
-            text: `${marker.index}${marker.members.length > 1 ? ` · ${marker.members.length} spaces` : ""}`,
-            font: "600 14px sans-serif",
+            text: listingAddressLabel(marker),
+            font: "600 15px sans-serif",
             fillColor: sdk.Color.WHITE,
             showBackground: true,
             backgroundColor: sdk.Color.fromCssColorString("#17181deb"),
-            backgroundPadding: new sdk.Cartesian2(9, 6),
-            pixelOffset: new sdk.Cartesian2(0, -31),
+            backgroundPadding: new sdk.Cartesian2(12, 13),
+            pixelOffset: new sdk.Cartesian2(0, -96),
+            horizontalOrigin: sdk.HorizontalOrigin.CENTER,
+            verticalOrigin: sdk.VerticalOrigin.CENTER,
             heightReference: sdk.HeightReference.RELATIVE_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
@@ -166,9 +255,19 @@ export function createListingLayer(
         const selected = marker.members.some(
           (member) => member.siteId === next.selectedSiteId,
         );
-        entity.point!.pixelSize = new sdk.ConstantProperty(selected ? 22 : 15);
-        entity.point!.outlineWidth = new sdk.ConstantProperty(selected ? 5 : 3);
-        entity.label!.scale = new sdk.ConstantProperty(selected ? 1.12 : 1);
+        entity.billboard!.image = new sdk.ConstantProperty(
+          listingPinImage(marker.index, selected),
+        );
+        entity.billboard!.width = new sdk.ConstantProperty(26);
+        entity.billboard!.height = new sdk.ConstantProperty(26);
+        entity.label!.fillColor = new sdk.ConstantProperty(
+          selected ? sdk.Color.fromCssColorString("#17181d") : sdk.Color.WHITE,
+        );
+        entity.label!.backgroundColor = new sdk.ConstantProperty(
+          selected
+            ? sdk.Color.WHITE
+            : sdk.Color.fromCssColorString("#17181df5"),
+        );
       }
       viewer.scene.requestRender();
     }
@@ -193,6 +292,7 @@ export function createListingLayer(
       disposed = true;
       observer.disconnect();
       stopLabels();
+      leaders?.remove();
       for (const event of ["pointerdown", "wheel", "touchstart"])
         canvas.removeEventListener(event, cancel);
       handler.destroy();

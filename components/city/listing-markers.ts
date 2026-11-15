@@ -97,9 +97,31 @@ export function markerSiteId(
   );
 }
 
+export function listingAddressLabel(marker: ListingMarker) {
+  return (
+    `${marker.index} · ${marker.members[0].address}` +
+    (marker.members.length > 1 ? `\n${marker.members.length} spaces` : "")
+  );
+}
+
+/** Local screen artwork; the disc center remains the exact entity coordinate. */
+export function listingPinImage(index: number, selected: boolean) {
+  const fill = selected ? "#ffffff" : "#17181d";
+  const ink = selected ? "#17181d" : "#ffffff";
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="11.5" fill="${fill}" stroke="${ink}" stroke-width="2"/><text x="13" y="18" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="14" fill="${ink}">${index}</text></svg>`)}`;
+}
+
 /** Move only screen labels, never geographic pins. Labels avoid every pin and one another. */
 export function listingLabelOffsets(
-  points: readonly { id: string; x: number; y: number; width: number }[],
+  points: readonly {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height?: number;
+    pinWidth?: number;
+    pinHeight?: number;
+  }[],
   viewport: MapViewport,
 ) {
   type Rect = { left: number; top: number; right: number; bottom: number };
@@ -110,27 +132,45 @@ export function listingLabelOffsets(
     a.top < b.bottom &&
     a.bottom > b.top;
   const pinRects = points.map((point) => ({
-    left: point.x - 16,
-    top: point.y - 16,
-    right: point.x + 16,
-    bottom: point.y + 16,
+    left: point.x - (point.pinWidth ?? 32) / 2,
+    top: point.y - (point.pinHeight ?? 16),
+    right: point.x + (point.pinWidth ?? 32) / 2,
+    bottom: point.y + (point.pinHeight ? 4 : 16),
   }));
   const offsets = new Map<string, { x: number; y: number }>();
   for (const point of points) {
     let chosen = { x: 0, y: -34 };
     let best = Infinity;
-    for (const radius of [34, 58, 90, 125]) {
+    for (const radius of [34, 58, 90, 125, 170, 220]) {
       for (const angle of [-90, 0, 180, 90, -45, -135, 45, 135]) {
-        const x = Math.round(
+        const proposedX = Math.round(
           Math.cos((angle * Math.PI) / 180) *
             (radius + (angle % 180 === 0 ? point.width / 2 : 0)),
         );
-        const y = Math.round(Math.sin((angle * Math.PI) / 180) * radius);
+        const proposedY = Math.round(
+          Math.sin((angle * Math.PI) / 180) * radius,
+        );
+        const x =
+          Math.max(
+            viewport.left + point.width / 2,
+            Math.min(
+              viewport.left + viewport.width - point.width / 2,
+              point.x + proposedX,
+            ),
+          ) - point.x;
+        const y =
+          Math.max(
+            viewport.top + (point.height ?? 30) / 2,
+            Math.min(
+              viewport.top + viewport.height - (point.height ?? 30) / 2,
+              point.y + proposedY,
+            ),
+          ) - point.y;
         const rect = {
           left: point.x + x - point.width / 2,
           right: point.x + x + point.width / 2,
-          top: point.y + y - 15,
-          bottom: point.y + y + 15,
+          top: point.y + y - (point.height ?? 30) / 2,
+          bottom: point.y + y + (point.height ?? 30) / 2,
         };
         const overlaps = [...pinRects, ...placed].filter((other) =>
           intersects(rect, other),
@@ -150,8 +190,8 @@ export function listingLabelOffsets(
     placed.push({
       left: point.x + chosen.x - point.width / 2,
       right: point.x + chosen.x + point.width / 2,
-      top: point.y + chosen.y - 15,
-      bottom: point.y + chosen.y + 15,
+      top: point.y + chosen.y - (point.height ?? 30) / 2,
+      bottom: point.y + chosen.y + (point.height ?? 30) / 2,
     });
     offsets.set(point.id, chosen);
   }

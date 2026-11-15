@@ -56,3 +56,10 @@ Akshar requested the real returned locations in Cesium, specifically from above.
 - [x] Preserve the single existing Viewer during selection; leave broad mesh picking/runtime to HAC-77.
 - [x] Diagnose actual wide-view disappearance: empty-root Vexcel tileset stops traversal at normal screen error. Retain globe-free rendering for negative source elevations; use a bounded listing-only quality adaptation.
 - [x] Complete actual-provider overview/card/pin verification, exact-source four checks and affected desktop regressions. Final source: lint/typecheck/build pass, 1,413 unit tests pass /43 existing skips, 69 desktop Chromium pass /2 existing skips. Actual scene settled with zero pending/processing tiles at about326MiB; manager approved listing-only256+128MiB budget and desired-LOD policy, retaining other consumers’ budgets. Pin/card selections retained the same canvas and selected URL/details; All locations restored overhead framing. No publication authorized.
+
+## Address-tag visibility and coordinate follow-up
+
+- [x] Replace small dots with centered26px numbered anchors and large clickable address tags, measured/collision-separated inside the visible map pane; screen-space leaders preserve geographic meaning. No source coordinate, camera, budget or provider changes.
+- [x] Audit all four captured real CoStar coordinates against Cesium entity round-trips (error below1e-10degrees), identity tileset matrix and overhead orientation. Fresh live browser tag selection confirms expected site/URL/details and stable canvas.
+- [x] Diagnose transient same-host Vercel edge reset read-only. Restore owned4201 preview via temporary process-local DNS preference, normal TLS retained. No repository transport workaround or cached-data fallback.
+- [x] Final exact-source checks passed: lint/typecheck/build, 1,416 unit tests /43 existing skips, 11 affected desktop Chromium regressions. Actual live address-tag selection and overview checked; coordinate audit documented. Local commit only; no publication authorized.
