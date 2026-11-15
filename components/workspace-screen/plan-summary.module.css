@@ -144,11 +144,13 @@
 }
 
 .metricValue {
-  font-size: 28px;
+  /* Scales down in narrow cards instead of breaking a number across lines. */
+  font-size: clamp(20px, 2.2vw, 28px);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   letter-spacing: -0.6px;
   line-height: 1.1;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .metricRange {
