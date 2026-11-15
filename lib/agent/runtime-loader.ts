@@ -14,6 +14,8 @@ export type IntakeRunner = (input: {
   message: string;
   /** Scene 1: a browser event to react to instead of a founder message. */
   event?: FlowEvent;
+  /** Scene 1: earlier turns, oldest first, excluding `message`. Untrusted browser text. */
+  history?: readonly { role: "founder" | "agent"; text: string }[];
   signal: AbortSignal;
   /** Bounded line assembled only after server scope validation. */
   viewContextLine?: string;
