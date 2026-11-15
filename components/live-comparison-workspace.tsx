@@ -11,6 +11,7 @@ import { workspaceHref } from "@/lib/client/workspace-routes";
 import { LiveComparisonScreen } from "@/components/comparison/live-comparison-screen";
 import { LiveReplayScreen } from "@/components/replay/live-replay-screen";
 import { ConsultantPanel } from "@/components/ConsultantPanel";
+import { FinishBriefNotice } from "@/components/shell/finish-brief-notice";
 
 export function ComparisonWorkspace({
   project,
@@ -68,6 +69,16 @@ export function ReplayWorkspace({
   const stored = useStoredComparison(project.id, comparisonId);
   if (stored.phase === "loading")
     return <p role="status">Loading stored comparison…</p>;
+  if (stored.readiness?.status === "needs_brief")
+    return (
+      <div className="min-w-0 space-y-5">
+        <FinishBriefNotice
+          projectId={project.id}
+          message={stored.readiness.message}
+        />
+        {project.sites.length > 0 && example}
+      </div>
+    );
   if (stored.phase === "example" || !stored.payload)
     return (
       <div className="min-w-0 space-y-5">

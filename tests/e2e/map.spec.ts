@@ -401,11 +401,11 @@ test.describe("live map boundaries", () => {
     await page.evaluate(() =>
       localStorage.setItem("sitework:intake:v1:houston-coffee", "{broken"),
     );
-    await page.getByRole("button", { name: "Retry search" }).click();
+    await page.reload();
     await expect(
       page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
-    await page.evaluate(() => {
+    await page.addInitScript(() => {
       Object.defineProperty(window, "localStorage", {
         get() {
           throw new DOMException("Denied", "SecurityError");
@@ -413,7 +413,7 @@ test.describe("live map boundaries", () => {
         configurable: true,
       });
     });
-    await page.getByRole("button", { name: "Retry search" }).click();
+    await page.reload();
     await expect(
       page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
