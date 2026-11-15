@@ -173,7 +173,7 @@ async function mockServices(page: Page) {
 
 async function type(page: Page, text: string, turn: number, posts: unknown[]) {
   await composer(page).fill(text);
-  // Recording the previous POST can precede its reply and the composer becoming ready.
+  // A received request precedes its rendered reply; wait until the next turn can send.
   await expect(
     assistant(page).getByRole("button", { name: "Send message", exact: true }),
   ).toBeEnabled();
@@ -219,19 +219,27 @@ async function answerBrief(
 }
 
 async function openFromLanding(page: Page) {
+  await page.route("**/api/vexcel/**", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { message: "Provider disabled in entry test" },
+    }),
+  );
+  await page.route("https://tiles.openfreemap.org/**", (route) =>
+    route.abort(),
+  );
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Test business decisions before committing.",
+      name: "Test your business before you commit.",
     }),
-  ).toBeAttached();
-  await page.waitForFunction(
-    () =>
-      (window as unknown as { bizboxReady?: boolean }).bizboxReady === true ||
-      document.body.classList.contains("ready"),
-  );
-  await page.locator(".nav-cta").click();
+  ).toBeVisible();
+  await page.keyboard.press("End");
+  const action = page.getByRole("link", { name: "Open BizBox", exact: true });
+  await expect(action).toBeVisible();
+  await expect(action).toHaveAttribute("href", "/start");
+  await action.click();
   await expect(page).toHaveURL(ENTRY);
 }
 

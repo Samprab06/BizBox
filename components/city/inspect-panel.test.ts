@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { makeDemo } from "@/components/simulator/fixture";
-import { InspectPanel, type InspectPanelProps } from "./inspect-panel";
+import { clock, InspectPanel, type InspectPanelProps } from "./inspect-panel";
 
 const run = makeDemo()[0].run;
 const done = run.events.find((e) => e.type === "completion")!;
@@ -22,6 +22,26 @@ const render = (props: Partial<InspectPanelProps>) =>
   );
 
 describe("InspectPanel", () => {
+  it("shows the same departure at later playheads and keeps readable option labels keyed by ID", () => {
+    const first = render({ minute: done.timeMin });
+    const later = render({ minute: run.metrics.closeMin });
+    for (const html of [first, later]) {
+      expect(html).toContain(`Served, left at ${clock(done.timeMin)}`);
+      expect(html).not.toContain(
+        `Served, left at ${clock(run.metrics.closeMin)}`,
+      );
+    }
+    const events = run.events.map((event) => ({
+      ...event,
+      customerId:
+        event.customerId === id ? "persona-commuter#2367" : event.customerId,
+    }));
+    const html = render({ events, selectedId: "persona-commuter#2367" });
+    expect(html).toContain(
+      'value="persona-commuter#2367" selected="">Commuter 2367</option>',
+    );
+    expect(html).toContain('class="font-semibold">Commuter 2367</span>');
+  });
   it("labels its search, list and follow control for keyboard and screen readers", () => {
     const html = render({ onFollowChange() {}, following: true });
     expect(html).toContain('aria-label="Inspect customers"');

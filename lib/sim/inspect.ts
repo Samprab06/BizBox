@@ -97,6 +97,8 @@ export type InspectCard = {
     durationMin: number | null;
   } | null;
   outcome: Outcome | null;
+  /** Observed completion, abandonment, or leave-on-arrival event; never the playhead. */
+  departureMin: number | null;
   answers: InspectPersona["answers"] | null;
   why: string;
   history: HistoryEntry[];
@@ -112,6 +114,22 @@ const EMPTY_PERSONA: InspectCard["persona"] = {
 };
 
 const BAD_INPUT = "Inspection requires a finite minute and a customer ID";
+
+/** Readable model-cohort labels; the original IDs remain selection keys. */
+export function customerDisplayName(
+  customerId: string,
+  personaLabel?: string | null,
+) {
+  const numbered =
+    /^(.*?)#(\d+)$/.exec(customerId) ??
+    /^(customer)[-_]?(\d+)$/i.exec(customerId);
+  const stem = numbered?.[1] ?? customerId;
+  const words = stem.replace(/^persona[-_]/i, "").replace(/[-_]+/g, " ");
+  const label =
+    personaLabel?.trim() ||
+    words.replace(/(^|\s)\S/g, (part) => part.toUpperCase());
+  return numbered ? `${label} ${numbered[2]}` : label;
+}
 
 export function incomeBand(incomeUsd: number | undefined): string | null {
   if (incomeUsd === undefined || !Number.isFinite(incomeUsd) || incomeUsd < 0)
@@ -393,6 +411,10 @@ export function inspectCustomer(input: InspectInput): InspectCard {
         }
       : null,
     outcome,
+    departureMin:
+      completion?.timeMin ??
+      abandonment?.timeMin ??
+      (arrivalEvent?.decision === "leave" ? arrivalEvent.timeMin : null),
     answers: arrivalEvent ? (persona?.answers ?? null) : null,
   };
   return { ...base, why: why(base, source), history };

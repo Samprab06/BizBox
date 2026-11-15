@@ -36,6 +36,7 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
               </p>
             ) : (
               <>
+                <p className="mb-4 text-xs text-muted">Example data</p>
                 <ComparisonScreen
                   project={project}
                   visits={comparisonScenario(visits)}
@@ -43,7 +44,6 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
                     typeof comparison === "string" ? comparison : undefined
                   }
                 />
-                <p className="mt-6 text-xs text-muted">Example data</p>
               </>
             )
           }

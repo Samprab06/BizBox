@@ -419,6 +419,7 @@ export function OnboardingFlow({
               <input
                 aria-label={`${ruler.label}${ruler.currency ? " in dollars" : ""}, exact amount`}
                 aria-describedby={describedBy}
+                aria-invalid={error !== undefined}
                 inputMode="numeric"
                 autoComplete="off"
                 className={`w-[7ch] min-w-0 border-b border-glass-edge bg-transparent text-center tabular-nums ${focusRing}`}
