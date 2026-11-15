@@ -84,6 +84,8 @@ export const IntakeStateSchema = z
     assumptions: IntakeAssumptionsSchema,
   })
   .strict();
+/** Scene 1: at most this many earlier turns ride on an intake request. */
+export const MAX_INTAKE_HISTORY = 12;
 export const IntakeRequestSchema = z
   .object({
     state: IntakeStateSchema.optional(),
@@ -93,6 +95,21 @@ export const IntakeRequestSchema = z
     view: AgentViewContextSchema.optional(),
     /** Scene 1: a browser event for the consultant to react to (sent without `message`). */
     event: FlowEventSchema.optional(),
+    /**
+     * Scene 1: the most recent turns of the conversation (oldest first), so a reply such as
+     * "yes, compare them" has context. Excludes the current `message`. Untrusted founder text.
+     */
+    history: z
+      .array(
+        z
+          .object({
+            role: z.enum(["founder", "agent"]),
+            text: z.string().trim().min(1).max(2000),
+          })
+          .strict(),
+      )
+      .max(MAX_INTAKE_HISTORY)
+      .optional(),
   })
   .strict()
   .refine((body) => !(body.message && body.event), {
