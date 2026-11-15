@@ -3,6 +3,8 @@ import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
 import { liveComparisonPayload } from "@/tests/e2e/live-comparison-fixtures";
 import {
   comparisonStorageKey,
+  intakeFingerprint,
+  payloadMatches,
   readSavedComparison,
   requestLiveComparison,
 } from "./live-comparison";
@@ -43,7 +45,9 @@ describe("live comparison requests", () => {
       candidateIds: ids,
       demandSource: "huff",
     });
-    expect(response.saved.intakeFingerprint).toBe(JSON.stringify(profile));
+    expect(response.saved.intakeFingerprint).toBe(intakeFingerprint(profile));
+    expect(response.saved.requestedIds).toEqual(ids);
+    expect(response.payload.requestedIds).toEqual(ids);
     expect(response.saved.profileId).toBe(snapshot.id);
   });
 
@@ -216,5 +220,57 @@ describe("saved comparison identity", () => {
         "p1",
       ),
     ).toBeNull();
+  });
+});
+
+describe("payloadMatches with units the server did not model", () => {
+  const base = {
+    ...liveComparisonPayload,
+    outdated: false,
+    comparison: { synthetic: false },
+    tweaksKey: "",
+  } as unknown as Parameters<typeof payloadMatches>[0];
+  const modeled = base.result.sites.map((site) => site.siteId);
+
+  it("matches the requested selection when a unit was dropped", () => {
+    const requested = [...modeled, "9:9"];
+    const payload = { ...base, requestedIds: requested };
+    expect(payloadMatches(payload, [...requested].reverse(), "")).toBe(true);
+  });
+  it("does not match after the selection changed", () => {
+    const payload = { ...base, requestedIds: [...modeled, "9:9"] };
+    expect(payloadMatches(payload, modeled, "")).toBe(false);
+    expect(payloadMatches(payload, [...modeled, "8:8"], "")).toBe(false);
+  });
+  it("falls back to the modeled sites for comparisons saved without requestedIds", () => {
+    expect(payloadMatches(base, modeled, "")).toBe(true);
+    expect(payloadMatches(base, [...modeled, "9:9"], "")).toBe(false);
+  });
+  it("rejects a result containing a site that was not selected", () => {
+    const payload = { ...base, requestedIds: modeled.slice(1) };
+    expect(payloadMatches(payload, modeled.slice(1), "")).toBe(false);
+  });
+});
+
+describe("intakeFingerprint", () => {
+  it("ignores descriptive text but not answers the evaluation uses", () => {
+    const text = {
+      ...profile,
+      concept: "Something else entirely",
+      businessName: "Other",
+      targetCustomers: ["Tourists"],
+      objective: "Different words",
+      preferredAreas: ["Montrose"],
+    };
+    expect(intakeFingerprint(text)).toBe(intakeFingerprint(profile));
+    expect(
+      intakeFingerprint({
+        ...profile,
+        operatingHours: { openMinute: 360, closeMinute: 1080 },
+      }),
+    ).not.toBe(intakeFingerprint(profile));
+    expect(intakeFingerprint({ ...profile, city: "Los Angeles" })).not.toBe(
+      intakeFingerprint(profile),
+    );
   });
 });

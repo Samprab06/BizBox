@@ -10,8 +10,10 @@ import {
   type WorkspaceCandidate,
   unitLabel,
   unitAddress,
+  rentText,
+  areaText,
+  listingNotes,
 } from "./client-model";
-import { metricText } from "./model";
 import styles from "./workspace-glass.module.css";
 
 export function SearchFilterSummary({
@@ -54,14 +56,8 @@ export function SearchFilterSummary({
   );
 }
 
-const rent = (entry: WorkspaceCandidate) =>
-  entry.baseRentCents.value === null
-    ? "Rent unknown"
-    : metricText(entry.baseRentCents) + "/mo";
-const area = (entry: WorkspaceCandidate) =>
-  entry.candidate.floorAreaSqFt.value === null
-    ? "Size unknown"
-    : metricText(entry.candidate.floorAreaSqFt) + " sq ft";
+const rent = rentText;
+const area = areaText;
 
 export function PropertyDetails({
   selected,
@@ -207,12 +203,15 @@ export function PropertyDetails({
         <p>
           Unit numbers label this shortlist; they are not broker suite numbers.
         </p>
-        <p>Rent source: {selected.baseRentCents.origin}</p>
-        <p>
-          Property {selected.propertyId} · Listing {selected.listingId}
-        </p>
-        {selected.flags.map((flag) => (
-          <p key={flag}>{flag}</p>
+        {selected.baseRentCents.value !== null && (
+          <p>
+            {selected.baseRentCents.origin === "costar"
+              ? "Rent from the listing"
+              : "Rent estimated"}
+          </p>
+        )}
+        {listingNotes(selected).map((note) => (
+          <p key={note}>{note}</p>
         ))}
         {search && <SearchFilterSummary search={search} />}
       </details>

@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   candidateCoordinates,
   comparisonMatchesSelection,
+  comparisonStaleness,
+  listingNotes,
+  notModeledUnits,
   scannedInterior,
 } from "./client-model";
 import type { WorkspaceCandidate } from "./client-model";
@@ -142,5 +145,81 @@ describe("listing explanations and readiness actions", () => {
       searchPresentation({ status: "loading", message: "" }, true).action,
     ).toBeNull();
     expect(searchFilterLabel("rentCeiling")).toBe("Rent limit");
+  });
+});
+
+describe("listingNotes", () => {
+  const entry = (flags: string[]) => ({ flags }) as WorkspaceCandidate;
+  it("maps known flags to plain text, drops noise and unknown flags, and de-duplicates", () => {
+    expect(
+      listingNotes(
+        entry([
+          "size_unknown",
+          "rent_unknown",
+          "anchor_cotenants_unknown",
+          "position_unknown",
+          "endcap_position",
+          "endcap_position",
+          "frontage_building_level",
+          "nnn_opex_estimated",
+          "nnn_opex_override",
+          "opex_unknown",
+          "opex_assumed_included",
+          "something_new",
+        ]),
+      ),
+    ).toEqual([
+      "End-cap unit",
+      "Frontage is for the whole building, not just this unit",
+      "Triple-net lease: taxes, insurance and upkeep are extra (estimated)",
+      "Using your estimate for extra lease costs",
+      "Extra operating costs aren't listed",
+      "Operating costs assumed included in rent",
+    ]);
+    expect(listingNotes(entry(["size_unknown"]))).toEqual([]);
+  });
+});
+
+describe("unmodeled units and stale results", () => {
+  const payload = {
+    comparison: { synthetic: false },
+    outdated: false,
+    requestedIds: ["1:2", "3:4", "5:6"],
+    result: { sites: [{ siteId: "1:2" }, { siteId: "3:4" }] },
+    assembly: {
+      findings: [
+        { code: "DEFAULT_ASSUMPTION", message: "x" },
+        { code: "INSUFFICIENT_AREA", message: "y", siteId: "5:6" },
+      ],
+      assumptions: {},
+    },
+  } as unknown as LiveComparisonPayload;
+  it("explains why a requested unit is missing", () => {
+    expect(notModeledUnits(payload, [])).toEqual([
+      {
+        id: "5:6",
+        address: "Saved unit",
+        reason: "the space is too small for your setup",
+      },
+    ]);
+    expect(
+      notModeledUnits(
+        {
+          ...payload,
+          assembly: { findings: [], assumptions: {} },
+        } as LiveComparisonPayload,
+        [],
+      )[0].reason,
+    ).toBe("it couldn't be modeled");
+  });
+  it("tells a changed selection from changed answers, and keeps matching runs clean", () => {
+    const all = ["1:2", "3:4", "5:6"];
+    expect(comparisonStaleness(payload, all)).toBeNull();
+    expect(comparisonStaleness(payload, ["1:2", "3:4"])).toBe("selection");
+    expect(comparisonStaleness(payload, all, "other")).toBe("selection");
+    expect(comparisonStaleness({ ...payload, outdated: true }, all)).toBe(
+      "answers",
+    );
+    expect(comparisonStaleness(null, all)).toBeNull();
   });
 });

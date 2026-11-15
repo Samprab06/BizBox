@@ -10,7 +10,10 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useLiveComparison } from "@/lib/client/live-comparison";
+import {
+  useLiveComparison,
+  type FlowEventInfo,
+} from "@/lib/client/live-comparison";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import {
   useConsultant,
@@ -26,10 +29,7 @@ import {
   readFlowState,
   useFlowProgress,
 } from "@/lib/client/flow-progress";
-import {
-  buildFinalPlanSummary,
-  fetchGroundedPlan,
-} from "@/lib/client/final-plan";
+import { finalizeChosenSite } from "@/lib/client/finalize";
 import {
   planWorkspaceActions,
   type WorkspaceEffect,
@@ -48,6 +48,7 @@ import { parseIntakeSession } from "./intake-conversation";
 import {
   realCandidates,
   comparisonMatchesSelection,
+  finishedComparison,
   toggleComparisonUnit,
 } from "./client-model";
 import { LocationExperience } from "./location-experience";
@@ -134,8 +135,10 @@ export function WorkspaceScreen({
   );
   const sendEvent = consultant?.conversation.sendEvent;
   const onFlowEvent = useCallback(
-    (event: FlowEvent) => {
-      if (event.kind === "comparison_finished") {
+    (event: FlowEvent, info?: FlowEventInfo) => {
+      // Open results only for a run that matches the choices still on screen; otherwise
+      // the compare step shows the run with a "changed since" note and a rerun.
+      if (event.kind === "comparison_finished" && info?.matches !== false) {
         flow.reach("results");
         goStep("results");
       }
@@ -391,43 +394,30 @@ export function WorkspaceScreen({
         if (step !== "locations") goStep("locations");
         return;
       case "finalize":
-        void finalize(effect);
+        void finalize(effect.chosenSiteId, effect.rationale);
         return;
     }
   }
-  /** Builds the final plan from the comparison on screen (and its grounded /plan, if any). */
-  async function finalize(
-    effect: Extract<WorkspaceEffect, { kind: "finalize" }>,
-  ) {
-    const payload = controller.payload;
-    if (
-      !payload ||
-      !payload.result.sites.some((site) => site.siteId === effect.chosenSiteId)
-    )
-      return;
-    const addresses = Object.fromEntries(
-      candidates.map((entry) => [entry.candidate.id, entry.candidate.address]),
-    );
-    // The grounded plan only enriches the summary, so a slow /plan never holds it up.
-    const plan = await fetchGroundedPlan(payload.comparisonId, {
+  /**
+   * Builds the final plan from the latest finished comparison (even when the selection has
+   * changed since) and opens the final step. Shared by the consultant's `finalize_plan`
+   * action and the "Choose this location" button.
+   */
+  async function finalize(chosenSiteId: string, rationale?: string) {
+    const summary = await finalizeChosenSite({
       projectId,
-      signal: AbortSignal.timeout(8_000),
+      payload: finishedComparison(controller.payload),
+      chosenSiteId,
+      rationale,
+      addresses: Object.fromEntries(
+        candidates.map((entry) => [
+          entry.candidate.id,
+          entry.candidate.address,
+        ]),
+      ),
+      tweaks: readFlowState(projectId).siteTweaks,
     });
-    let summary;
-    try {
-      summary = buildFinalPlanSummary({
-        projectId,
-        comparisonId: payload.comparisonId,
-        chosenSiteId: effect.chosenSiteId,
-        rationale: effect.rationale,
-        result: payload.result,
-        addresses,
-        tweaks: readFlowState(projectId).siteTweaks,
-        plan,
-      });
-    } catch {
-      return;
-    }
+    if (!summary) return;
     flow.setFinalPlan(summary);
     goStep("finalize");
   }
@@ -573,7 +563,11 @@ export function WorkspaceScreen({
         onRemoveTweak={removeTweak}
         topIds={topIds}
         presented={Boolean(presented?.some((id) => candidateIds.includes(id)))}
-        onViewResults={() => goStep("results")}
+        onViewResults={() => {
+          flow.reach("results");
+          goStep("results");
+        }}
+        onChooseSite={(id) => void finalize(id)}
         onRerun={() => {
           goStep("compare");
           void controller.run();
