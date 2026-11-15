@@ -164,3 +164,73 @@ drawing-buffer size, city-rendered FPS and simulated minutes advanced. Record th
 The seeded totals remain 55 served / 52 left for one station and 80 served /
 28 left for two stations, with the same modeled monthly contribution change.
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` before a PR.
+
+## Cold load of the 3D neighborhood (HAC-177)
+
+**Budget:** on a cold browser cache, the first buildings render within 9 s on
+an 8 Mbps desktop link and within 12 s on a 4 Mbps link (measured below:
+8.0 s and 11.0 s at worst). Until then the scene
+shows its real loading stage, and after 8 s it offers **Skip 3D view**.
+
+### Root cause
+
+Two things made a cold load wait for the whole initial view:
+
+1. **Decoders loaded last.** Vexcel tiles are Draco-compressed with KTX2
+   textures. Cesium starts its Draco and KTX2 worker scripts and wasm binaries
+   only when the first tile arrives. By then it has queued about 18 tile
+   downloads, and the decoder files waited behind them. Measured at 8 Mbps,
+   `decodeDraco.js` and `transcodeKTX2.js` were requested at 5.5 s and arrived
+   at 14 s, when the last tile finished. No tile could be decoded before that,
+   so nothing rendered until the whole view had downloaded.
+2. **Every ancestor was downloaded.** Replacement refinement without
+   `skipLevelOfDetail` loads zoom 13 through 18 for each visible area:
+   127 Vexcel requests and 20.4 MB for the initial street view.
+
+`components/simulator/tile-decoders.ts` now starts Cesium's own Draco and KTX2
+singletons right after the SDK import, while the tileset document loads, and
+waits for them (at most 10 s) before tile content can stream. The street view
+also uses `skipLevelOfDetail`, as regional shortlists already did. The initial
+view now needs 63 requests and 9.1 MB. The final detail is unchanged
+(the same screen-space error); intermediate levels are skipped.
+
+### Progress
+
+`components/simulator/city-loading.ts` derives the overlay from real events
+only: the 3D engine, the two tile decoders, the Vexcel tileset document, then
+Cesium's own counts of tiles ready, downloading and decoding. Cesium discovers
+the number of tiles in a view while it traverses, so no percentage is shown.
+After the first buildings render, a small status line reports refinement
+until the view's tiles have all loaded. Elapsed seconds stop at the first
+building. Skip removes the 3D viewer; the timeline and replay keep working.
+
+### Measurements
+
+Measured on November 15, 2026 at `45ac60f` (before) and this change (after).
+Both used `pnpm build` + `pnpm start` with a dummy `VEXCEL_API_KEY`, a local
+proxy that sent `/api/vexcel/*` to the production tile proxy (real tiles, CDN
+warm), headless Chromium 1243 with SwiftShader WebGL, a 1440 × 900 viewport,
+Balanced graphics, a fresh browser profile for each run, and Chrome's network
+throttling. "First buildings" is navigation to the loading overlay clearing
+(Cesium's first `tileVisible`). "Settled" is the last Vexcel response for the
+initial view.
+
+| Link (down / RTT) | First buildings, before | First buildings, after | Settled, before | Settled, after |
+| ----------------- | ----------------------- | ---------------------- | --------------- | -------------- |
+| Unthrottled       | 7.0 s                   | 6.4–7.1 s              | 7.0 s           | 6.4–7.3 s      |
+| 20 Mbps / 40 ms   | 13.4 s                  | 6.2–7.6 s              | 12.6 s          | 7.8–9.4 s      |
+| 8 Mbps / 60 ms    | 27.4 s                  | 7.3–8.0 s              | 26.2 s          | 14.2–14.5 s    |
+| 4 Mbps / 80 ms    | 49.8 s                  | 10.4–11.0 s            | 49.6 s          | 25.7–26.1 s    |
+
+Before the change, the first building appeared only after all 20.4 MB had
+arrived. After it, the first building needed 0.4–1.9 MB on throttled links.
+The 4 Mbps baseline matches the 50–60 s QA report. Unthrottled loads in this
+container are bound by JS download and SwiftShader rendering, so they barely
+change. A real GPU and a desktop browser will differ; repeat on the QA machine
+to confirm the budget there.
+
+Production (`usebizbox.app`, unthrottled, same container) took 7.2 s to the
+first building on a CDN-cold load and 6.6 s CDN-warm. Every Vexcel response on
+the first load was an `x-vercel-cache: MISS`; Vercel clears its CDN cache on each
+new deployment, and production redeploys often. On a CDN-cold load each tile goes to Vexcel. That
+adds latency but does not explain a 50 s load by itself.
