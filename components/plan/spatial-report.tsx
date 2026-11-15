@@ -1,3 +1,4 @@
+import { buildControlledExperimentFinding } from "@/lib/interior/controlled-experiment";
 import type { FinalPlanSummary } from "@/lib/contracts/plan";
 import { runSpatialExperiment } from "@/lib/spatial";
 import { InteriorAffordabilityCard } from "@/components/interior/interior-affordability-card";
@@ -32,6 +33,8 @@ export function SpatialReport({
         rerun.
       </p>
     );
+  let finding:ReturnType<typeof buildControlledExperimentFinding>|undefined;
+  if(interior.experimentQuestion){try{finding=buildControlledExperimentFinding({question:interior.experimentQuestion,baseline:interior.baseline,variant:interior.draft,result});}catch{/* Do not present an uncontrolled edit as one furniture effect. */}}
   const fmt = (n: number | null) =>
     n === null
       ? "Unavailable"
@@ -43,7 +46,7 @@ export function SpatialReport({
     >
       <h2 className="text-lg font-semibold">Interior experiment</h2>
       {interior.experimentQuestion && <p className="font-medium">{interior.experimentQuestion}</p>}
-      {interior.finding && <p className="text-sm">{interior.finding.change.name}: {interior.baseline.items.length} → {interior.draft.items.length}. Same workload, staff, service and pricing.</p>}
+      {finding && <p className="text-sm">{finding.change.name}: {interior.baseline.items.length} → {interior.draft.items.length}. Same workload, staff, service and pricing.</p>}
       <p className="text-sm">
         {interior.draft.city === "houston" ? "Houston" : "Los Angeles"} ·{" "}
         {interior.draft.category.replaceAll("_", " ")} ·{" "}
@@ -115,10 +118,10 @@ export function SpatialReport({
                 }
               </th>
               <td className="text-center">
-                {fmt(result.baseline.metrics[key].mean)}
+                {fmt(result.baseline.metrics[key].mean)} ({fmt(result.baseline.metrics[key].p5)}–{fmt(result.baseline.metrics[key].p95)})
               </td>
               <td className="text-center">
-                {fmt(result.variant.metrics[key].mean)}
+                {fmt(result.variant.metrics[key].mean)} ({fmt(result.variant.metrics[key].p5)}–{fmt(result.variant.metrics[key].p95)})
               </td>
               <td className="text-center">
                 {fmt(result.delta[key].mean)} ({fmt(result.delta[key].p5)}–
@@ -129,7 +132,7 @@ export function SpatialReport({
         </tbody>
       </table>
       <ul className="list-disc pl-5 text-sm">
-        {[...result.findings, ...result.limitations].map((s, i) => (
+        {[...new Set([...(finding?.findings ?? result.findings), ...(finding?.limitations ?? result.limitations)])].map((s, i) => (
           <li key={i}>{s}</li>
         ))}
       </ul>

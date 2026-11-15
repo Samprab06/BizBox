@@ -97,10 +97,8 @@ export async function finalizeChosenSite({
     }
   }
   // The grounded plan only enriches the summary, so a slow /plan never holds it up.
-  const plan = await fetchPlan(payload.comparisonId, {
-    projectId,
-    signal: AbortSignal.timeout(8_000),
-  });
+  let plan = null;
+  try { plan = await fetchPlan(payload.comparisonId, {projectId,signal:AbortSignal.timeout(8_000)}); } catch { /* Optional narrative cannot block the verified report. */ }
   try {
     const summary = buildFinalPlanSummary({
       projectId,

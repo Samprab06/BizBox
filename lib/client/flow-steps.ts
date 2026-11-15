@@ -206,6 +206,7 @@ export function withInterior(
   interior: InteriorFlowState,
 ): FlowState {
   const parsed = InteriorFlowSchema.parse(interior);
+  if (JSON.stringify(state.interior) === JSON.stringify(parsed)) return state;
   const reset = resetAfter(state, "interior");
   return reachStep({ ...reset, interior: parsed, finalPlan: null }, "interior");
 }

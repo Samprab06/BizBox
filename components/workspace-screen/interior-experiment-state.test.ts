@@ -281,3 +281,14 @@ it("canonicalizes the new question before native-load handoff fingerprinting", (
   expect(JSON.stringify(stored)).toBe(JSON.stringify(queued));
   expect(stored.experimentQuestion).toBe(raw.experimentQuestion);
 });
+
+it('preserves review and findings when public discovery refreshes for the same scan',()=>{
+ const source:InteriorResponse={kind:'scan',modelId:'Abc12345678',provenance:{origin:'costar',provider:'matterport',mode:'live',scope:'property',description:'Canonical property attachment',limitations:['Suite unverified']},discovery:{models:[{modelId:'Abc12345678',scope:'property',sourceField:'attachments.0.videoKey',displayApproved:false,reason:'Verified public',publicStatus:'public',viewingEligible:true}],truncated:false,limitations:[]}};
+ const current={...interior,source};
+ const refreshed:InteriorResponse={...source,discovery:{...source.discovery!,models:source.discovery!.models.map(m=>({...m,reason:'Source found',publicStatus:undefined,viewingEligible:undefined}))}};
+ expect(prepareInteriorFlow(current,refreshed)).toBe(current);
+});
+it('an identical late interior callback does not discard an existing final report',()=>{
+ const state={...initialFlowState(),interior,reached:['questions','interior','finalize'] as const,finalPlan:{id:'retained-report'}} as unknown as ReturnType<typeof initialFlowState>;
+ expect(withInterior(state,structuredClone(interior))).toBe(state);
+});

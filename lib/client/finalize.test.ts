@@ -192,3 +192,8 @@ it("requires a server-verified receipt before exporting Jev-backed evidence", as
   expect(summary?.interior?.policies).toEqual(policies);
   expect(summary?.interior?.policyReceipt).toEqual(receipt);
 });
+
+it('still opens the verified summary when optional plan enrichment rejects',async()=>{
+ const summary=await finalizeChosenSite({...base,fetchPlan:async()=>{throw new Error('offline narrative')}});
+ expect(summary?.chosenSiteId).toBe(chosen);
+});

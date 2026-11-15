@@ -898,6 +898,8 @@ export function WorkspaceScreen({
       openInterior(chosenSiteId, rationale);
       return;
     }
+    setInteriorError(null);
+    try {
     const summary = await finalizeWhileCurrent(
       current,
       () =>
@@ -918,9 +920,10 @@ export function WorkspaceScreen({
       () => readFlowState(projectId).interior,
       () => currentComparisonId.current,
     );
-    if (!summary) return;
+    if (!summary) {setInteriorError("The report could not be verified, or the experiment changed while preparing it. Your result is preserved; keep the current result and try again.");return;}
     flow.setFinalPlan(summary);
     goStep("finalize");
+    } catch {setInteriorError("Report verification is temporarily unavailable. Your kept experiment is preserved; try Continue to report again.");}
   }
   useConsultantActions((actions: UiAction[]) => {
     const effects = planWorkspaceActions(actions, {

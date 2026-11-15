@@ -352,3 +352,12 @@ A bounded four-model title check for selected site `18263192:15256242` found thr
 bed/bath dwelling tours and one Screening Room amenity, rather than a verified
 selected commercial-space scan. It must not automatically open those as the
 founder's business interior; the modeled response explains that source gap.
+
+Reviewed report persistence: a refresh of public-discovery status/reason or viewer
+SDK configuration does not invalidate an unchanged model/geometry experiment.
+Identical late interior callbacks preserve the final report and unlocked final
+step. Real source/model/geometry or draft edits still invalidate review. Optional
+grounded narrative failure cannot block the verified result summary; verification
+failures surface a retry message and preserve the kept experiment. The shared
+screen/print interior report recomputes controlled findings from its saved pair,
+including the current question, before/after seed ranges and causal limitations.

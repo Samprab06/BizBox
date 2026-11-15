@@ -8,7 +8,7 @@ import { prepareSpatialDraft } from "@/lib/interior/prepare-spatial";
 /** Retrieval timestamps are evidence metadata, not a change to layout/source semantics. */
 function sourceFingerprint(source: InteriorResponse | undefined): string {
   return JSON.stringify(source, (key, value) =>
-    key === "retrievedAt" || key === "checkedAt" ? undefined : value,
+    ["retrievedAt", "checkedAt", "discovery", "showcaseParams"].includes(key) ? undefined : value,
   );
 }
 
