@@ -6,6 +6,8 @@ import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { WorkspaceCandidate } from "./client-model";
 import { siteDemandLabel } from "@/lib/evaluation/demand-label";
 import styles from "./workspace-glass.module.css";
+import { ComparisonChart } from "./comparison-chart";
+import { unitAddress } from "./client-model";
 
 const count = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -20,18 +22,53 @@ export function LocationResults({
   payload,
   candidates,
   onSelect,
+  framed = true,
 }: {
   payload: LiveComparisonPayload;
   candidates: readonly WorkspaceCandidate[];
   onSelect: (id: string) => void;
+  framed?: boolean;
 }) {
   return (
     <section
-      className={styles.comparison}
+      className={framed ? styles.comparison : undefined}
       aria-label="Location comparison results"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2>Location comparison</h2>
+      </div>
+      <div className="my-6 grid gap-7 xl:grid-cols-2">
+        {["monthlyServedCustomers", "monthlyContributionUsd"].map((metric) => (
+          <ComparisonChart
+            key={metric}
+            title={
+              metric === "monthlyServedCustomers"
+                ? "Est. customers / month"
+                : "Est. operating contribution / month"
+            }
+            currency={metric === "monthlyContributionUsd"}
+            points={payload.result.ranking.flatMap((id) => {
+              const site = payload.result.sites.find(
+                (entry) => entry.siteId === id,
+              );
+              if (!site) return [];
+              return [
+                {
+                  id,
+                  label: candidates.find((entry) => entry.candidate.id === id)
+                    ? unitAddress(
+                        candidates.find((entry) => entry.candidate.id === id)!,
+                        candidates,
+                      )
+                    : "Saved unit",
+                  ...(metric === "monthlyServedCustomers"
+                    ? site.monthlyServedCustomers
+                    : site.monthlyContributionUsd),
+                },
+              ];
+            })}
+          />
+        ))}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -50,9 +87,7 @@ export function LocationResults({
             {payload.result.ranking.map((id) => {
               const result = payload.result.sites.find((s) => s.siteId === id);
               if (!result) return null;
-              const candidate = candidates.find(
-                (s) => s.candidate.id === id,
-              )?.candidate;
+              const candidate = candidates.find((s) => s.candidate.id === id);
               return (
                 <tr key={id}>
                   <th scope="row">
@@ -64,7 +99,9 @@ export function LocationResults({
                       )}
                       onClick={() => onSelect(id)}
                     >
-                      {candidate?.address ?? "Saved location"}
+                      {candidate
+                        ? unitAddress(candidate, candidates)
+                        : "Saved unit"}
                     </button>
                   </th>
                   <td>

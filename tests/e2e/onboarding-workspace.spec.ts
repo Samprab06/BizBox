@@ -212,15 +212,18 @@ for (const viewport of VIEWPORTS) {
       });
 
       // Invented real-listing API fixtures exercise identity continuity; no preview property is substituted.
+      // HAC-162: nothing is preselected; the founder opens the list and picks a unit.
       const location = page.getByRole("region", { name: "Selected location" });
+      await expect(location).toHaveCount(0);
+      await closeConsultant(page);
+      await page.getByRole("button", { name: /^Show list/ }).click();
+      const matching = page.getByRole("group", { name: "Matching locations" });
+      await expect(matching).toBeVisible();
+      await matching.getByRole("button", { name: /^View 101 Invented St/ }).click();
       await expect(location).toContainText("101 Invented St");
-      await expect(
-        location.getByText("Unknown", { exact: true }),
-      ).toBeVisible();
+      await expect(location).toContainText("Rent unknown");
       await expect(location).toContainText("1,250 sq ft");
-      await expect(
-        page.getByRole("group", { name: "Matching locations" }),
-      ).toBeVisible();
+      await openConsultant(page);
       await expect(location.getByText("Example", { exact: true })).toHaveCount(
         0,
       );

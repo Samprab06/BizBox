@@ -56,6 +56,56 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     ).toBe(true);
   });
 
+  it("carries saved offline onboarding answers into the first chat request without pending edits", () => {
+    const offline: IntakeSession = {
+      profile: {
+        concept: { value: "Neighborhood coffee shop", origin: "founder" },
+        category: { value: "Coffee shop", origin: "founder" },
+        city: { value: "Houston", origin: "founder" },
+        rent: { value: "4500", origin: "founder" },
+        staff: { value: "2", origin: "founder" },
+      },
+      messages: initialSession.messages,
+    };
+    const body = intakeRequestBody(
+      offline,
+      "What do you know about my business?",
+    );
+    expect(body.patch).toMatchObject({
+      concept: "Neighborhood coffee shop",
+      category: "coffee",
+      city: "Houston",
+      economics: {
+        monthlyRentCeilingCents: { value: 450000, origin: "founder" },
+      },
+      capacity: { servers: { value: 2, origin: "founder" } },
+    });
+    expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
+    expect(offline).not.toHaveProperty("pending");
+  });
+
+  it("sends current founder answers over a stale live draft after offline edits", () => {
+    const offlineEdit: IntakeSession = {
+      ...session,
+      profile: { rent: { value: "3000", origin: "founder" } },
+      pending: [],
+      live: {
+        state: { draft: reply.draft, assumptions: {} },
+        missingRequiredFields: [],
+        findings: [],
+      },
+    };
+    const body = intakeRequestBody(offlineEdit, "Use my current rent limit");
+    expect(body.patch).toMatchObject({
+      economics: {
+        monthlyRentCeilingCents: { value: 300000, origin: "founder" },
+      },
+    });
+    expect(body.message).toBe("Use my current rent limit");
+    expect(body.state).toEqual({ draft: reply.draft, assumptions: {} });
+    expect(intakeRequestBody(offlineEdit).patch).toBeUndefined();
+  });
+
   it("posts to /api/projects/[projectId]/intake and returns the real reply", async () => {
     const fetchImpl = vi.fn(async () => Response.json(reply));
     const outcome = await postIntakeMessage(

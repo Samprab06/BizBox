@@ -49,11 +49,11 @@ export function WorkspaceBackdrop({
       />
     );
   // The current proxy's collection is Houston-only. HAC77 owns verified LA collection selection.
-  if (tilesetUrl && coords && city === "Houston")
+  if (coords && city === "Houston")
     return (
       <Neighborhood
         {...coords}
-        tilesetUrl={tilesetUrl}
+        tilesetUrl={tilesetUrl ?? ""}
         minute={720}
         quality="balanced"
         locationLabel={

@@ -19,6 +19,7 @@ import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
 import { useAssistantDraft } from "./use-assistant-draft";
 import type { IntakeConversation } from "./use-intake-conversation";
+import { assistantPresentation } from "./assistant-presentation";
 
 const MODE_LABEL: Record<AssistantMode, string> = {
   text: "Text",
@@ -61,15 +62,18 @@ function MicIcon() {
 }
 
 function Conversation({
-  conversation,
+  messages,
+  emptyContext,
+  pending = false,
   id,
 }: {
-  conversation: IntakeConversation;
+  messages: IntakeConversation["messages"];
+  emptyContext?: string | null;
+  pending?: boolean;
   id: string;
 }) {
   const log = useRef<HTMLDivElement>(null);
-  const count = conversation.messages.length;
-  const pending = conversation.busy;
+  const count = messages.length;
   useEffect(() => {
     const element = log.current;
     if (element) element.scrollTop = element.scrollHeight;
@@ -84,13 +88,19 @@ function Conversation({
       className={`min-h-0 flex-1 overflow-y-auto px-5 py-4 text-sm ${focusRing}`}
     >
       {count === 0 ? (
-        <p className="text-muted">
-          Ask BizBox about this space or your brief. Replies come from the
-          BizBox intake assistant.
-        </p>
+        emptyContext ? (
+          <p role="note" aria-label="Saved brief" className="text-xs text-muted">
+            {emptyContext}
+          </p>
+        ) : (
+          <p className="text-muted">
+            Ask BizBox about this space or your brief. Replies come from the
+            BizBox intake assistant.
+          </p>
+        )
       ) : (
         <ol className="space-y-3">
-          {conversation.messages.map((entry, index) => (
+          {messages.map((entry, index) => (
             <li key={index}>
               <ChatBubble
                 role={entry.role === "founder" ? "user" : "assistant"}
@@ -172,6 +182,10 @@ export function AssistantPanel({
   const panelId = (value: AssistantMode) => `${base}-panel-${value}`;
   const { availability, busy } = conversation;
   const offline = availability === "offline";
+  const presentation = assistantPresentation(
+    conversation.session,
+    conversation.messages,
+  );
 
   const failure =
     conversation.failure?.source === "assistant" ? conversation.failure : null;
@@ -288,7 +302,12 @@ export function AssistantPanel({
       >
         {mode === "text" && (
           <>
-            <Conversation conversation={conversation} id={`${base}-log-text`} />
+            <Conversation
+              messages={presentation.messages}
+              emptyContext={presentation.context}
+              pending={busy}
+              id={`${base}-log-text`}
+            />
             {inline}
             <form
               className="border-t border-line p-4"
@@ -306,7 +325,7 @@ export function AssistantPanel({
                   ref={field}
                   rows={1}
                   aria-label="Message the BizBox assistant"
-                  placeholder="Ask about this space…"
+                  placeholder={presentation.placeholder}
                   maxLength={VOICE_LIMITS.transcriptChars}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -390,7 +409,9 @@ export function AssistantPanel({
               </summary>
               <div className="flex max-h-72 min-h-0 flex-col">
                 <Conversation
-                  conversation={conversation}
+                  messages={presentation.messages}
+                  emptyContext={presentation.context}
+                  pending={busy}
                   id={`${base}-log-voice`}
                 />
               </div>

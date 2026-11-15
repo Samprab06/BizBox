@@ -132,14 +132,11 @@ for (const viewport of VIEWPORTS) {
         page.getByText("City preview · photo, not a map", { exact: true }),
       ).toHaveCount(0);
       await expect(
-        location.getByRole("button", {
-          name: "Compare locations",
-          exact: true,
-        }),
-      ).toBeDisabled();
+        location.getByRole("button", { name: "Compare 2 units", exact: true }),
+      ).toHaveCount(0);
       await expect(
-        location.getByRole("button", { name: "Interior", exact: true }),
-      ).toBeDisabled();
+        location.getByRole("button", { name: "View interior", exact: true }),
+      ).toHaveCount(0);
       await openConsultant(page);
       await expect(
         assistant(page).getByText("Live", { exact: true }),

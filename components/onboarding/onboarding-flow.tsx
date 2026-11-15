@@ -21,6 +21,7 @@ import {
   categoryChoices,
   cityChoices,
   comingSoonCities,
+  comingSoonCityPhotos,
   initialValue,
   isRulerStep,
   photoCredits,
@@ -389,10 +390,21 @@ export function OnboardingFlow({
                   type="button"
                   variant="glass"
                   disabled
-                  className="h-auto flex-col gap-0 rounded-control px-2 py-2 text-xs"
+                  className="h-auto flex-col items-stretch gap-0 overflow-hidden rounded-control p-0 text-left text-xs"
                 >
-                  <strong className="block font-medium">{name}</strong>{" "}
-                  <span className="text-[10px]">Coming soon</span>
+                  <span className="relative block aspect-[4/3]">
+                    <Image
+                      src={comingSoonCityPhotos[name]}
+                      alt=""
+                      fill
+                      sizes="(max-width: 640px) 28vw, 180px"
+                      className="object-cover"
+                    />
+                    <span className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/15 to-transparent p-2 text-white sm:p-3">
+                      <strong className="block font-medium">{name}</strong>{" "}
+                      <span className="mt-0.5 text-[10px] text-white/85">Coming soon</span>
+                    </span>
+                  </span>
                 </Button>
               ))}
             </div>

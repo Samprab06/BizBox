@@ -22,6 +22,7 @@ import {
   type IntakeResponse,
 } from "@/components/intake/live";
 import {
+  fields,
   initialSession,
   intakeSessionSchema,
   type IntakeSession,
@@ -97,12 +98,20 @@ export function intakeRequestBody(
   view?: AgentViewContext,
   projectId?: string,
 ) {
+  // Offline onboarding saves the profile without creating pending API edits.
+  // Every message carries the latest founder answers so an absent or older
+  // live draft cannot make the assistant ask for those answers again.
+  // Form-only sync retains the existing pending-edit protocol.
+  const keys =
+    text === undefined
+      ? (session.pending ?? [])
+      : fields.map((field) => field.key);
   return {
     state:
       text && projectId && (view?.siteId || view?.candidateIds?.length)
         ? currentViewState(session, projectId)
         : session.live?.state,
-    patch: patchFromForm(session.profile, session.pending ?? []),
+    patch: patchFromForm(session.profile, keys),
     message: text,
     ...(view ? { view } : {}),
   };
