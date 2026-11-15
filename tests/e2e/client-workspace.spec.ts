@@ -399,9 +399,11 @@ test("unit labels, explicit pair selection and failed comparison retain exactly 
   const comparison = page.getByRole("region", { name: "Unit comparison" });
   await expect(comparison).toContainText("101 Invented St · Unit 2");
   await expect(comparison).toContainText("303 Other St · Unit 1");
+  await openConsultant(page);
   await expect(
     page.getByRole("textbox", { name: "Message the BizBox assistant" }),
   ).toBeVisible();
+  await closeConsultant(page);
   expect(attempts).toEqual([]);
   await page
     .getByRole("button", { name: "Run comparison", exact: true })
