@@ -1,51 +1,51 @@
 "use client";
 
-import { useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import {
   DAY,
+  MINUTES_PER_DEGREE,
   STEP,
-  angleToMinute,
-  arcPath,
-  dialDelta,
   formatSpan,
   formatTime,
   handleLimits,
   handleToLimit,
   hourLabel,
-  labelHours,
-  moveHandle,
-  parseTime,
-  pointAt,
   pointToAngle,
   presets,
-  shiftRange,
+  rubberBand,
+  settle,
   stepHandle,
-  typedRangeError,
+  turnBetween,
+  wheelAngle,
+  wheelLabelStyle,
   type Handle,
   type HoursRange,
 } from "./clock-dial-math";
-import styles from "./clock-dial.module.css";
 
-// The SVG is drawn in a 320×320 box and scales with the dial's width.
-const SIZE = 320;
-const C = SIZE / 2;
-const ARC_R = 100;
-const LABEL_R = 130;
-const TICK_OUTER = 152;
+// The wheel is drawn in a 360×196 box: a circle centred on the bottom edge, top half shown.
+const WIDTH = 360;
+const HEIGHT = 196;
+const CX = WIDTH / 2;
+const CY = HEIGHT;
+const RIM = 176;
+const TICK_OUTER = 168;
+const LABEL_R = 134;
+const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
+const QUARTERS = Array.from({ length: DAY / STEP }, (_, index) => index * STEP);
 
-const names: Record<Handle, { short: string; label: string; verb: string }> = {
-  open: { short: "Open", label: "Opening time", verb: "Opens" },
-  close: { short: "Close", label: "Closing time", verb: "Closes" },
+const names: Record<Handle, { label: string; verb: string; tab: string }> = {
+  open: { label: "Opening time", verb: "Opens", tab: "Opens" },
+  close: { label: "Closing time", verb: "Closes", tab: "Closes" },
 };
 
-type Drag = { id: number; target: Handle | "arc"; startMinute: number; startRange: HoursRange };
+const reducedMotion = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 /**
- * HAC-154: the business-hours question as a flat 24-hour glass clock dial. Midnight is at
- * the top and one turn is one day. Two `role="slider"` handles set the opening and closing
- * time (pointer drag snaps to 15 minutes; arrows step 15 minutes, Shift+arrows 1 hour,
- * Home/End jump to the limits). The arc between them drags both together. The centre
- * readout opens exact typed entry. The parent owns the value; this only reports changes.
+ * HAC-160: the business-hours question as a rotating half-wheel. The numbered face turns
+ * under a fixed marker at the top, like an iOS time picker bent into a dial; labels grow
+ * at the marker and sink behind the glass panel below. The founder picks the opening time
+ * first, then the closing time. A fling keeps spinning and springs to the nearest 15
+ * minutes. The parent owns the value; this only reports snapped changes.
  */
 export function ClockDial({
   value,
@@ -58,249 +58,290 @@ export function ClockDial({
   labelledBy?: string;
   describedBy?: string;
 }) {
-  const face = useRef<HTMLDivElement>(null);
-  const openInput = useRef<HTMLInputElement>(null);
-  const [drag, setDrag] = useState<Drag | null>(null);
-  const [typed, setTyped] = useState<{ open: string; close: string } | null>(null);
-  const [typedError, setTypedError] = useState<string | undefined>();
+  const [phase, setPhase] = useState<Handle>("open");
+  const target = value[phase];
+  const { min, max } = handleLimits(value, phase);
 
-  const emit = (next: HoursRange) => {
-    if (next.open !== value.open || next.close !== value.close) onChange(next);
+  // The wheel's live position (minutes at the marker). Kept in a ref and mirrored to state
+  // once per frame, so a drag or spin never waits on React.
+  const position = useRef(target);
+  const [shown, setShown] = useState(target);
+  const frame = useRef<number | null>(null);
+  const held = useRef<{ id: number; angle: number; raw: number; time: number; velocity: number } | null>(null);
+  const coasting = useRef(false);
+  const wheel = useRef<HTMLDivElement>(null);
+  const latest = useRef({ value, phase, onChange });
+  useEffect(() => {
+    latest.current = { value, phase, onChange };
+  });
+
+  const paint = (next: number) => {
+    position.current = next;
+    setShown(next);
   };
 
-  function dialMinute(event: PointerEvent): number {
-    const box = face.current!.getBoundingClientRect();
-    return angleToMinute(pointToAngle(event.clientX - (box.left + box.width / 2), event.clientY - (box.top + box.height / 2)));
+  const stop = () => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    coasting.current = false;
+  };
+
+  /** Eases the wheel to a time (a spring without overshoot), or jumps under reduced motion. */
+  const glide = (to: number) => {
+    stop();
+    if (reducedMotion()) return paint(to);
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const next = position.current + (to - position.current) * (1 - Math.exp(-dt * 11));
+      if (Math.abs(to - next) < 0.05) {
+        paint(to);
+        frame.current = null;
+        return;
+      }
+      paint(next);
+      frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+  };
+
+  const emit = (minute: number) => {
+    const { value: current, phase: end, onChange: report } = latest.current;
+    if (current[end] !== minute) report({ ...current, [end]: minute });
+  };
+
+  // Follow outside changes (keyboard, presets, switching phase) unless a hand is on the wheel.
+  useEffect(() => {
+    if (held.current || coasting.current) return;
+    if (Math.abs(position.current - target) > 0.01) glide(target);
+    // glide only reads refs; re-running on its identity would restart the spring every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, phase]);
+
+  useEffect(() => stop, []);
+
+  function pointerAngle(event: PointerEvent) {
+    const box = wheel.current!.getBoundingClientRect();
+    const scale = box.width / WIDTH;
+    return pointToAngle(event.clientX - (box.left + CX * scale), event.clientY - (box.top + CY * scale));
   }
 
-  function startDrag(target: Handle | "arc", event: PointerEvent<HTMLElement | SVGElement>) {
+  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
+    stop();
+    event.currentTarget.focus({ preventScroll: true });
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
-      // A pointer the browser no longer tracks cannot be captured; the drag still works on the target.
+      // Synthetic pointers can't be captured; the drag still works while over the wheel.
     }
-    if (target !== "arc") (event.currentTarget as HTMLElement).focus({ preventScroll: true });
-    setDrag({ id: event.pointerId, target, startMinute: dialMinute(event), startRange: value });
+    held.current = { id: event.pointerId, angle: pointerAngle(event), raw: position.current, time: event.timeStamp, velocity: 0 };
   }
 
-  function moveDrag(event: PointerEvent) {
-    if (!drag || drag.id !== event.pointerId) return;
-    const minute = dialMinute(event);
-    if (drag.target === "arc") emit(shiftRange(drag.startRange, dialDelta(drag.startMinute, minute)));
-    else emit(moveHandle(value, drag.target, minute));
+  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
+    const hold = held.current;
+    if (!hold || hold.id !== event.pointerId) return;
+    const angle = pointerAngle(event);
+    // Turning the face clockwise brings earlier times under the marker.
+    const delta = -turnBetween(hold.angle, angle) * MINUTES_PER_DEGREE;
+    const dt = Math.max(1, event.timeStamp - hold.time);
+    hold.velocity = hold.velocity * 0.6 + (delta / dt) * 0.4;
+    hold.angle = angle;
+    hold.time = event.timeStamp;
+    hold.raw += delta;
+    paint(rubberBand(hold.raw, min, max));
+    emit(settle(hold.raw, min, max));
   }
 
-  function endDrag(event: PointerEvent<HTMLElement | SVGElement>) {
-    if (!drag || drag.id !== event.pointerId) return;
+  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const hold = held.current;
+    if (!hold || hold.id !== event.pointerId) return;
+    held.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    setDrag(null);
+    const fling = event.timeStamp - hold.time < 80 ? hold.velocity : 0; // minutes per ms
+    if (reducedMotion() || Math.abs(fling) < 0.05) {
+      const end = settle(hold.raw, min, max);
+      emit(end);
+      return glide(end);
+    }
+    // Momentum: coast with friction, stop at a limit, then spring to the nearest 15 minutes.
+    let velocity = fling * 1000;
+    let raw = Math.min(max, Math.max(min, hold.raw));
+    let last = performance.now();
+    const coast = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      raw += velocity * dt;
+      velocity *= Math.exp(-dt * 3.2);
+      const out = raw < min || raw > max;
+      if (out || Math.abs(velocity) < 25) {
+        const end = settle(raw, min, max);
+        frame.current = null;
+        coasting.current = false;
+        emit(end);
+        return glide(end);
+      }
+      paint(raw);
+      emit(settle(raw, min, max));
+      frame.current = requestAnimationFrame(coast);
+    };
+    coasting.current = true;
+    frame.current = requestAnimationFrame(coast);
   }
 
-  function onHandleKey(handle: Handle, event: KeyboardEvent<HTMLDivElement>) {
-    const hour = event.shiftKey ? 60 / STEP : 1;
-    const steps: Record<string, number> = {
-      ArrowRight: hour,
-      ArrowUp: hour,
-      ArrowLeft: -hour,
-      ArrowDown: -hour,
-      PageUp: 60 / STEP,
-      PageDown: -60 / STEP,
-    };
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const hour = event.shiftKey ? 4 : 1;
+    const steps: Record<string, number> = { ArrowRight: hour, ArrowUp: hour, ArrowLeft: -hour, ArrowDown: -hour, PageUp: 4, PageDown: -4 };
     let next: HoursRange | undefined;
-    if (event.key === "Home") next = handleToLimit(value, handle, "min");
-    else if (event.key === "End") next = handleToLimit(value, handle, "max");
-    else if (steps[event.key] !== undefined) next = stepHandle(value, handle, steps[event.key]!);
+    if (event.key === "Home") next = handleToLimit(value, phase, "min");
+    else if (event.key === "End") next = handleToLimit(value, phase, "max");
+    else if (steps[event.key] !== undefined) next = stepHandle(value, phase, steps[event.key]!);
     if (!next) return;
     event.preventDefault();
-    emit(next);
+    if (next[phase] !== value[phase]) onChange(next);
   }
 
-  function openTyped() {
-    setTypedError(undefined);
-    setTyped({ open: formatTime(value.open), close: formatTime(value.close) });
-    requestAnimationFrame(() => openInput.current?.select());
-  }
-
-  /** Applies the typed times; returns false and shows why when they are not a valid range. */
-  function applyTyped(): boolean {
-    if (!typed) return true;
-    const range = { open: parseTime(typed.open, "open"), close: parseTime(typed.close, "close") };
-    const message = typedRangeError(range);
-    if (message) {
-      setTypedError(message);
-      return false;
-    }
-    emit({ open: range.open!, close: range.close! });
-    setTyped(null);
-    setTypedError(undefined);
-    return true;
-  }
-
-  function onTypedKey(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      // Enter applies the typed times instead of submitting the question.
-      event.preventDefault();
-      applyTyped();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      setTyped(null);
-      setTypedError(undefined);
-    }
-  }
-
-  function onTypedBlur(event: FocusEvent<HTMLDivElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) applyTyped();
-  }
-
-  const spanText = formatSpan(value);
-  const ticks = Array.from({ length: DAY / STEP }, (_, i) => i * STEP);
-  const hit = arcPath(value, ARC_R, C, C);
+  const full = value.close - value.open >= DAY;
+  const timeText = (end: Handle, minute: number) => (end === "close" && minute === DAY ? "Midnight" : formatTime(minute));
 
   return (
-    <div className="flex flex-col items-center">
-      <div ref={face} role="group" aria-labelledby={labelledBy} className={`${styles.face} w-full max-w-[22rem] backdrop-blur-[12px]`} data-testid="clock-dial">
-        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="absolute inset-0 h-full w-full" aria-hidden="true">
-          {ticks.map((minute) => {
-            const hourTick = minute % 60 === 0;
-            const major = minute % 180 === 0;
-            const inner = TICK_OUTER - (major ? 10 : hourTick ? 7 : 3);
-            const a = pointAt(minute, TICK_OUTER, C, C);
-            const b = pointAt(minute, inner, C, C);
-            return (
-              <line
-                key={minute}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke="#f7f7fa"
-                strokeOpacity={major ? 0.8 : hourTick ? 0.45 : 0.16}
-                strokeWidth={hourTick ? 1.5 : 1}
-                strokeLinecap="round"
-              />
-            );
-          })}
-          {labelHours.map((hour) => {
-            const p = pointAt(hour * 60, LABEL_R, C, C);
-            return (
-              <text key={hour} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="central" className={styles.label}>
-                {hourLabel(hour)}
-              </text>
-            );
-          })}
-          <circle cx={C} cy={C} r={ARC_R} fill="none" stroke="#f7f7fa" strokeOpacity={0.1} strokeWidth={12} />
-          <path d={hit} fill="none" stroke="#f3f3f6" strokeOpacity={drag ? 0.22 : 0.14} strokeWidth={26} strokeLinecap="round" className={styles.glow} />
-          <path d={hit} fill="none" stroke="#f3f3f6" strokeOpacity={0.55} strokeWidth={12} strokeLinecap="round" data-testid="clock-arc" />
-        </svg>
-        {/* The arc's drag target sits above the drawing but under the handles. */}
-        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-          <path
-            d={hit}
-            fill="none"
-            stroke="transparent"
-            strokeWidth={30}
-            className={`${styles.arcHit} pointer-events-auto`}
-            data-testid="clock-arc-hit"
-            onPointerDown={(event) => startDrag("arc", event)}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          />
-        </svg>
-
-        {(["open", "close"] as const).map((handle) => {
-          const p = pointAt(value[handle], ARC_R, C, C);
-          const limits = handleLimits(value, handle);
-          return (
-            <div
-              key={handle}
-              role="slider"
-              tabIndex={0}
-              aria-label={names[handle].label}
-              aria-describedby={describedBy}
-              aria-valuemin={limits.min}
-              aria-valuemax={limits.max}
-              aria-valuenow={value[handle]}
-              aria-valuetext={`${names[handle].verb} at ${formatTime(value[handle])}`}
-              data-dragging={drag?.target === handle}
-              className={styles.handle}
-              style={{ left: `${(p.x / SIZE) * 100}%`, top: `${(p.y / SIZE) * 100}%` }}
-              onKeyDown={(event) => onHandleKey(handle, event)}
-              onPointerDown={(event) => startDrag(handle, event)}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-            >
-              <span aria-hidden="true">{names[handle].short}</span>
-            </div>
-          );
-        })}
-
-        <div className="absolute left-1/2 top-1/2 flex w-[52%] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
-          {typed ? (
-            <div className="flex w-full flex-col items-stretch gap-1.5" onBlur={onTypedBlur}>
-              {(["open", "close"] as const).map((handle) => (
-                <label key={handle} className="flex items-center justify-between gap-2 text-xs text-white/80">
-                  {names[handle].verb}
-                  <input
-                    ref={handle === "open" ? openInput : undefined}
-                    value={typed[handle]}
-                    onChange={(event) => {
-                      setTypedError(undefined);
-                      setTyped({ ...typed, [handle]: event.target.value });
-                    }}
-                    onKeyDown={onTypedKey}
-                    aria-invalid={typedError ? true : undefined}
-                    aria-describedby={typedError ? "clock-dial-error" : undefined}
-                    autoComplete="off"
-                    maxLength={12}
-                    className="w-[6.5rem] min-w-0 rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-sm tabular-nums text-white focus:border-white focus:outline-none"
+    <div className="select-none">
+      <div className="relative mx-auto w-full max-w-[400px]">
+        <div
+          ref={wheel}
+          role="slider"
+          tabIndex={0}
+          aria-label={names[phase].label}
+          aria-describedby={[labelledBy, describedBy].filter(Boolean).join(" ") || undefined}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={target}
+          aria-valuetext={`${names[phase].verb} at ${timeText(phase, target)}`}
+          onKeyDown={onKeyDown}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          data-testid="clock-dial"
+          className="relative cursor-grab touch-none rounded-t-full outline-none focus-visible:ring-2 focus-visible:ring-white/80 active:cursor-grabbing"
+        >
+          <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} aria-hidden="true" className="block h-auto w-full overflow-visible">
+            <defs>
+              <radialGradient id="wheel-face" cx="50%" cy="100%" r="100%">
+                <stop offset="0" stopColor="rgb(255 255 255 / 0.02)" />
+                <stop offset="0.85" stopColor="rgb(255 255 255 / 0.07)" />
+                <stop offset="1" stopColor="rgb(255 255 255 / 0.12)" />
+              </radialGradient>
+              <clipPath id="wheel-top-half">
+                <rect x="-20" y="-20" width={WIDTH + 40} height={CY + 20} />
+              </clipPath>
+              <linearGradient id="wheel-marker" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#ffffff" />
+                <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={`M ${CX - RIM} ${CY} A ${RIM} ${RIM} 0 0 1 ${CX + RIM} ${CY} Z`} fill="url(#wheel-face)" stroke="rgb(255 255 255 / 0.22)" />
+            <g clipPath="url(#wheel-top-half)">
+            <g transform={`rotate(${-shown / MINUTES_PER_DEGREE} ${CX} ${CY})`}>
+              {QUARTERS.map((minute) => {
+                const hourMark = minute % 60 === 0;
+                const major = minute % 180 === 0;
+                const length = major ? 13 : hourMark ? 9 : 4;
+                const angle = wheelAngle(minute, shown);
+                if (Math.abs(angle) > 92) return null;
+                const fade = wheelLabelStyle(angle).opacity;
+                return (
+                  <line
+                    key={minute}
+                    x1={CX}
+                    y1={CY - TICK_OUTER}
+                    x2={CX}
+                    y2={CY - TICK_OUTER + length}
+                    transform={`rotate(${minute / MINUTES_PER_DEGREE} ${CX} ${CY})`}
+                    stroke="#edf3fc"
+                    strokeOpacity={(hourMark ? 0.75 : 0.35) * Math.max(0.15, fade)}
+                    strokeWidth={major ? 2 : hourMark ? 1.4 : 1}
+                    strokeLinecap="round"
                   />
-                </label>
-              ))}
-              <button type="button" onClick={applyTyped} className="mt-0.5 self-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-                Set hours
+                );
+              })}
+              {HOURS.map((hour) => {
+                const minute = hour * 60;
+                const angle = wheelAngle(minute, shown);
+                if (Math.abs(angle) > 92) return null;
+                const style = wheelLabelStyle(angle);
+                return (
+                  <g key={hour} transform={`rotate(${minute / MINUTES_PER_DEGREE} ${CX} ${CY}) translate(${CX} ${CY - LABEL_R}) scale(${style.scale})`} opacity={style.opacity}>
+                    <text textAnchor="middle" dominantBaseline="central" fontSize="15" fontWeight={Math.abs(angle) < 8 ? 700 : 500} fill="#f2f4f8" className="tabular-nums">
+                      {hourLabel(hour)}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+            </g>
+            {/* The fixed marker: a notch on the rim and a soft lens behind the chosen label. */}
+            <rect x={CX - 33} y={CY - LABEL_R - 19} width="66" height="38" rx="14" fill="rgb(255 255 255 / 0.07)" stroke="rgb(255 255 255 / 0.2)" />
+            <path d={`M ${CX - 7} ${CY - RIM - 3} L ${CX + 7} ${CY - RIM - 3} L ${CX} ${CY - RIM + 8} Z`} fill="#ffffff" />
+            <rect x={CX - 1} y={CY - RIM + 8} width="2" height={RIM - LABEL_R - 26} rx="1" fill="url(#wheel-marker)" />
+          </svg>
+        </div>
+
+        {/* The glass panel the wheel sinks behind. */}
+        <div className="relative z-10 -mt-[9%] rounded-[26px] border border-white/20 bg-[#10131b]/55 p-3 shadow-[0_18px_48px_-24px_rgb(0_0_0/0.6),inset_0_1px_0_rgb(255_255_255/0.15)] backdrop-blur-[12px] sm:p-4">
+          <div role="group" aria-label="Choose which time to set" className="grid grid-cols-2 gap-2">
+            {(["open", "close"] as const).map((end) => {
+              const on = phase === end;
+              return (
+                <button
+                  key={end}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setPhase(end)}
+                  className={`rounded-2xl px-3 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-white ${on ? "bg-white text-[#10131b]" : "bg-white/5 text-white hover:bg-white/10"}`}
+                >
+                  <span className={`block text-[11px] font-semibold uppercase tracking-[0.14em] ${on ? "text-[#10131b]/65" : "text-white/60"}`}>{names[end].tab}</span>
+                  <span className="block text-xl font-semibold tabular-nums sm:text-2xl">{full && end === "close" ? "Midnight" : timeText(end, value[end])}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3 px-1 text-sm">
+            <span className="text-white/70 tabular-nums">{full ? "Open 24 hours" : `${formatSpan(value)} open`}</span>
+            {phase === "open" ? (
+              <button type="button" onClick={() => setPhase("close")} className="rounded-full border border-white/30 px-3 py-1 font-medium text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+                Set closing time <span aria-hidden="true">→</span>
               </button>
-            </div>
-          ) : (
-            <button type="button" onClick={openTyped} className="rounded-2xl px-2 py-1 focus-visible:outline-2 focus-visible:outline-white" data-testid="clock-readout">
-              <span className="block text-lg font-semibold leading-tight tabular-nums sm:text-xl">
-                {formatTime(value.open)} –<br />
-                {formatTime(value.close)}
-              </span>
-              <span className="mt-1 block text-sm text-white/80">{spanText}</span>
-              <span className="mt-1 block text-[10px] uppercase tracking-wide text-white/60">Type exact times</span>
-            </button>
-          )}
+            ) : (
+              <button type="button" onClick={() => setPhase("open")} className="rounded-full px-3 py-1 font-medium text-white/80 hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+                <span aria-hidden="true">←</span> Opening time
+              </button>
+            )}
+          </div>
         </div>
       </div>
-      {typedError && (
-        <p id="clock-dial-error" role="alert" className="mt-3 text-sm font-medium text-amber-200">
-          {typedError}
-        </p>
-      )}
+
       <div role="group" aria-label="Common hours" className="mt-4 flex flex-wrap justify-center gap-2">
         {presets.map((preset) => {
-          const on = preset.range.open === value.open && preset.range.close === value.close;
+          const on = value.open === preset.range.open && value.close === preset.range.close;
           return (
             <button
               key={preset.label}
               type="button"
               aria-pressed={on}
-              onClick={() => {
-                setTyped(null);
-                setTypedError(undefined);
-                emit(preset.range);
-              }}
-              className={`rounded-full border px-3 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-white ${on ? "border-white bg-white text-[#10131b]" : "border-white/30 text-white hover:bg-white/10"}`}
+              onClick={() => onChange(preset.range)}
+              className={`rounded-full border px-3 py-1.5 text-sm tabular-nums focus-visible:outline-2 focus-visible:outline-white ${on ? "border-white bg-white text-[#10131b]" : "border-white/30 text-white hover:bg-white/10"}`}
             >
               {preset.label}
             </button>
           );
         })}
       </div>
+      <p className="sr-only" aria-live="polite">
+        {full ? "Open 24 hours" : `${formatTime(value.open)} to ${timeText("close", value.close)}, ${formatSpan(value)}`}
+      </p>
     </div>
   );
 }

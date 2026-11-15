@@ -24,6 +24,11 @@ import {
   snap,
   stepHandle,
   typedRangeError,
+  rubberBand,
+  settle,
+  turnBetween,
+  wheelAngle,
+  wheelLabelStyle,
 } from "./clock-dial-math";
 
 describe("dial angles", () => {
@@ -182,5 +187,42 @@ describe("intake value", () => {
     expect(arcPath(DEFAULT_RANGE, 100, 0, 0)).toContain(" 0 0 1 ");
     expect(arcPath({ open: 300, close: 1200 }, 100, 0, 0)).toContain(" 0 1 1 ");
     expect(arcPath({ open: 0, close: DAY }, 100, 0, 0).match(/A /g)).toHaveLength(2);
+  });
+});
+
+describe("rotating wheel (HAC-160)", () => {
+  it("places times relative to the marker at the top, wrapping around the day", () => {
+    expect(wheelAngle(540, 540)).toBe(0);
+    expect(wheelAngle(600, 540)).toBe(15);
+    expect(wheelAngle(480, 540)).toBe(-15);
+    expect(wheelAngle(0, 1380)).toBe(15);
+    expect(wheelAngle(1380, 0)).toBe(-15);
+    expect(wheelAngle(1260, 540)).toBe(180);
+  });
+
+  it("makes labels largest and brightest at the marker and gone at the horizon", () => {
+    const centre = wheelLabelStyle(0);
+    const near = wheelLabelStyle(15);
+    const edge = wheelLabelStyle(90);
+    expect(centre.scale).toBeGreaterThan(near.scale);
+    expect(near.scale).toBeGreaterThan(edge.scale);
+    expect(centre.opacity).toBeGreaterThan(near.opacity);
+    expect(edge.opacity).toBe(0);
+    expect(wheelLabelStyle(-15)).toEqual(near);
+  });
+
+  it("measures pointer turns the short way round", () => {
+    expect(turnBetween(350, 10)).toBe(20);
+    expect(turnBetween(10, 350)).toBe(-20);
+    expect(turnBetween(90, 270)).toBe(180);
+  });
+
+  it("gives way past a limit and settles on 15 minutes inside it", () => {
+    expect(rubberBand(500, 540, 990)).toBe(528);
+    expect(rubberBand(1100, 540, 990)).toBe(1023);
+    expect(rubberBand(700, 540, 990)).toBe(700);
+    expect(settle(707, 0, 990)).toBe(705);
+    expect(settle(1100, 0, 990)).toBe(990);
+    expect(settle(-40, 0, 990)).toBe(0);
   });
 });

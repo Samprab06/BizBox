@@ -130,14 +130,18 @@ for (const viewport of [
       await page.getByRole("button", { name: "Mid-range" }).click();
       await proceed(page).click();
 
-      // Hours: the HAC-154 clock dial (covered in onboarding-hours.spec.ts); exact typed times here.
+      // Hours (HAC-160): the rotating wheel sets the opening time, then the closing time.
       await expect(title(page)).toHaveText("When will you be open?");
-      await expect(page.getByRole("slider", { name: "Opening time" })).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
-      await page.getByTestId("clock-readout").click();
-      await page.getByRole("textbox", { name: "Opens" }).fill("11am");
-      await page.getByRole("textbox", { name: "Closes" }).fill("11pm");
-      await page.getByRole("textbox", { name: "Closes" }).press("Enter");
-      await expect(page.getByRole("slider", { name: "Closing time" })).toHaveAttribute("aria-valuetext", "Closes at 11:00 PM");
+      const wheel = page.getByRole("slider", { name: "Opening time" });
+      await expect(wheel).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
+      await wheel.focus();
+      for (let i = 0; i < 2; i++) await page.keyboard.press("Shift+ArrowRight");
+      await expect(wheel).toHaveAttribute("aria-valuetext", "Opens at 11:00 AM");
+      await page.getByRole("button", { name: /Set closing time/ }).click();
+      const closing = page.getByRole("slider", { name: "Closing time" });
+      await closing.focus();
+      for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowRight");
+      await expect(closing).toHaveAttribute("aria-valuetext", "Closes at 11:00 PM");
       await expectNoOverflow(page);
       await proceed(page).click();
 

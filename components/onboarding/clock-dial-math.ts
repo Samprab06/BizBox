@@ -205,3 +205,53 @@ export function arcPath(range: HoursRange, radius: number, cx: number, cy: numbe
   const large = span > DAY / 2 ? 1 : 0;
   return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${large} 1 ${end.x} ${end.y}`;
 }
+
+/* HAC-160: the rotating half-wheel. The face turns under a fixed marker at the top, so the
+   selected time is always at 12 o'clock; only the top half of the wheel is visible. */
+
+/** Dial minutes per degree of rotation (one turn is one day). */
+export const MINUTES_PER_DEGREE = DAY / 360;
+
+/**
+ * Where a time on the face sits relative to the marker when the wheel shows `position` at
+ * the top: degrees clockwise from the marker, in (-180, 180].
+ */
+export function wheelAngle(minute: number, position: number): number {
+  let angle = ((minute - position) / MINUTES_PER_DEGREE) % 360;
+  if (angle > 180) angle -= 360;
+  if (angle <= -180) angle += 360;
+  return angle;
+}
+
+/**
+ * How a label at `angle` from the marker looks, like an iOS picker bent into a wheel: full
+ * size and bright at the marker, smaller and fainter toward the edges, gone at the horizon.
+ */
+export function wheelLabelStyle(angle: number): { opacity: number; scale: number } {
+  const off = Math.min(90, Math.abs(angle));
+  const fall = Math.cos((off * Math.PI) / 180);
+  return {
+    opacity: Number((Math.pow(fall, 1.6) * 0.92 + (off < 4 ? 0.08 : 0)).toFixed(3)),
+    scale: Number((0.72 + 0.58 * Math.exp(-Math.pow(off / 16, 2))).toFixed(3)),
+  };
+}
+
+/** The signed shortest turn from one angle to another, in degrees (-180, 180]. */
+export function turnBetween(from: number, to: number): number {
+  let delta = (to - from) % 360;
+  if (delta > 180) delta -= 360;
+  if (delta <= -180) delta += 360;
+  return delta;
+}
+
+/** Past a limit, the wheel gives way with resistance instead of stopping dead. */
+export function rubberBand(raw: number, min: number, max: number, give = 0.3): number {
+  if (raw < min) return min - (min - raw) * give;
+  if (raw > max) return max + (raw - max) * give;
+  return raw;
+}
+
+/** The value a free-spinning wheel settles on: snapped to 15 minutes, inside the limits. */
+export function settle(raw: number, min: number, max: number): number {
+  return clamp(snap(raw), min, max);
+}
