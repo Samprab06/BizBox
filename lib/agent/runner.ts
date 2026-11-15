@@ -7,6 +7,7 @@ import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { z } from "zod";
 import { IntakePatchSchema } from "@/lib/contracts/intake";
 import { INTAKE_QUESTIONS } from "./intake";
+import { createUiToolExecutor, UI_TOOL_NAMES, UI_TOOL_SPECS } from "./ui-tools";
 import {
   intakeBrief,
   stripUnsupportedUnknowns,
@@ -23,8 +24,11 @@ export function modelConfiguration(env: Record<string, string | undefined>) {
     ...(baseURL ? { baseURL } : {}),
   };
 }
-/** Graph step budget for one intake turn. A normal turn is one save and a reply (about 4 steps). */
-export const INTAKE_RECURSION_LIMIT = 12;
+/**
+ * Graph step budget for one intake turn. A normal turn is one save and a reply (about 4
+ * steps); HAC-144 adds room for up to three UI actions, which usually share one model step.
+ */
+export const INTAKE_RECURSION_LIMIT = 16;
 /** One save_profile call per turn is normal; a second covers a rejected or corrected patch. */
 export const INTAKE_MAX_SAVES = 2;
 import type { IntakeRunner } from "./runtime-loader";
@@ -39,6 +43,9 @@ Never invent names, objectives, cities, staff, hours, customers, budgets or must
 Entries are {value,unit,unknownReason?}; origin is added for you. Money is USD cents; times are integer minutes since midnight, closing after opening the same day. Supported categories: coffee, quick_food, salon_barber, fitness; save any other category verbatim.
 Category defaults (service, travel, patience, visits, peak hours, wage, COGS, floor area) are illustrative assumptions, not calibrated observations or forecasts: call them defaults and invite review. Founder statements override any default; service time goes under capacity, wage/COGS/travel/patience under derivedDefaults, visits/peak/area under assumptions.
 If only average ticket or price tier is known, ask about the other. Do not change origins, research sources, access files, delegate, or call other services.`;
+
+/** HAC-144: added only when the UI tools are bound; they are the one exception to the rule above. */
+const uiInstructions = `UI tools (${UI_TOOL_NAMES.join(", ")}) move the founder's screen. They are the only other service you may call. Use them when the founder asks to see something, or show_step map once the profile is complete. At most 3 per turn, usually in the same step as save_profile. Use only site, comparison and investigation IDs from the founder's screen context or tool results; never invent IDs. If one is rejected, say so instead of retrying.`;
 
 /** Model-facing tool schema: the contract's JSON schema without server-owned provenance. */
 function slimPatchSchema(): Record<string, unknown> {
@@ -106,7 +113,7 @@ function logTurn(fields: Record<string, unknown>) {
 export function createDeepIntakeRunner(
   model: NonNullable<CreateDeepAgentParams["model"]>,
 ): IntakeRunner {
-  return async ({ session, message, signal }) => {
+  return async ({ session, message, signal, ui }) => {
     let saves = 0;
     let saved = 0;
     let rejectedUnknowns = 0;
@@ -165,10 +172,24 @@ export function createDeepIntakeRunner(
         schema: PATCH_JSON_SCHEMA,
       },
     );
+    const runUiTool = ui
+      ? createUiToolExecutor(ui, () => session.snapshot().draft.city)
+      : undefined;
+    const uiTools = runUiTool
+      ? UI_TOOL_SPECS.map((spec) =>
+          tool(
+            (args) => {
+              signal.throwIfAborted();
+              return runUiTool(spec.name, args);
+            },
+            spec,
+          ),
+        )
+      : [];
     const agent = createDeepAgent({
       model,
-      tools: [saveProfile],
-      systemPrompt: instructions,
+      tools: [saveProfile, ...uiTools],
+      systemPrompt: ui ? `${instructions}\n${uiInstructions}` : instructions,
       // Override default tool-bearing middleware. No file or delegation capabilities
       // are needed for intake, and no checkpointer/store is configured.
       middleware: [
@@ -179,7 +200,14 @@ export function createDeepIntakeRunner(
     });
     const tally = new UsageTally();
     const finish = (outcome: string) =>
-      logTurn({ outcome, saves, saved, rejectedUnknowns, ...tally.usage });
+      logTurn({
+        outcome,
+        saves,
+        saved,
+        rejectedUnknowns,
+        ...(ui ? { uiActions: ui.actions.length } : {}),
+        ...tally.usage,
+      });
     let result;
     try {
       result = await agent.invoke(
@@ -187,15 +215,16 @@ export function createDeepIntakeRunner(
           messages: [
             {
               role: "user",
-              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}\n\nFounder says:\n${message}`,
+              content: `Current validated draft:\n${JSON.stringify(intakeBrief(session.snapshot()))}\n\n${ui?.view ? `Founder's screen:\n${JSON.stringify(ui.view)}\n\n` : ""}Founder says:\n${message}`,
             },
           ],
         },
         { recursionLimit: INTAKE_RECURSION_LIMIT, signal, callbacks: [tally] },
       );
     } catch (error) {
-      // The draft keeps every save that succeeded. When the step budget runs out, say what
-      // happened and ask the next question rather than failing the turn.
+      // The draft keeps every save that succeeded, and `ui.actions` every queued UI action.
+      // When the step budget runs out, say what happened and ask the next question rather
+      // than failing the turn.
       if (error instanceof Error && error.name === "GraphRecursionError") {
         finish("tool_limit");
         return saved > 0

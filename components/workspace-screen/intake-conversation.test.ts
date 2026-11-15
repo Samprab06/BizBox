@@ -73,6 +73,35 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(JSON.parse(String(init.body)).message).toBe("Hi");
   });
 
+  it("HAC-144: passes the reply's UI actions through and drops a list it cannot read", async () => {
+    const actions = [{ id: "ui_1", type: "navigate", stage: "map" }];
+    const post = (body: unknown) =>
+      postIntakeMessage(
+        (async () => Response.json(body)) as unknown as typeof fetch,
+        "p",
+        intakeRequestBody(session, "Show me spaces", {
+          stage: "workspace",
+          candidateIds: ["L-1:S-1"],
+        }),
+      );
+    expect(await post({ ...reply, actions })).toEqual({
+      ok: true,
+      result: { ...reply, actions },
+    });
+    const newer = await post({
+      ...reply,
+      actions: [{ id: "x", type: "teleport" }],
+    });
+    expect(newer.ok && newer.result.actions).toBeUndefined();
+    expect(newer.ok && newer.result.assistantMessage).toBe(
+      reply.assistantMessage,
+    );
+    // The view rides on the request and the API contract accepts it.
+    const body = intakeRequestBody(session, "Hi", { stage: "map" });
+    expect(IntakeRequestSchema.parse(body).view).toEqual({ stage: "map" });
+    expect("view" in intakeRequestBody(session, "Hi")).toBe(false);
+  });
+
   it("reports failures; only server errors and network failures are retryable", async () => {
     const fail = (status: number, body: unknown) =>
       postIntakeMessage(
