@@ -182,14 +182,21 @@ export {
 } from "./project-store";
 const intakeKey = (projectId: string) => `sitework:intake:v1:${projectId}`;
 /**
- * Only the answers that change a comparison. Free text (concept, areas, requirements, customers)
+ * Only the answers that change a comparison. Free text (concept, requirements, customers)
  * is descriptive: the evaluation ignores it, so editing it never makes a result outdated.
  */
 export function intakeFingerprint(profile: BusinessProfile): string {
   return JSON.stringify({
     category: profile.category,
     city: profile.city.trim().toLowerCase(),
-    hours: [profile.operatingHours.openMinute, profile.operatingHours.closeMinute],
+    areas: [...(profile.areaPreferences?.rectangles ?? [])]
+      .map((r) => [r.brush, ...r.bounds])
+      .map((r) => JSON.stringify(r))
+      .sort(),
+    hours: [
+      profile.operatingHours.openMinute,
+      profile.operatingHours.closeMinute,
+    ],
     servers: profile.capacity.servers.value,
     rentCeilingCents: profile.economics.monthlyRentCeilingCents.value,
     buildoutCents: profile.economics.buildoutBudgetCents.value,
@@ -437,7 +444,8 @@ export function progressReport(
   const band = progressBand(progress);
   const due =
     band > last.band ||
-    (now - last.at >= PROGRESS_REPORT_INTERVAL_MS && completed > last.completed);
+    (now - last.at >= PROGRESS_REPORT_INTERVAL_MS &&
+      completed > last.completed);
   if (!due || total <= 0) return { reported: last, event: null };
   return {
     reported: { band: Math.max(band, last.band), at: now, completed },

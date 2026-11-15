@@ -1,3 +1,4 @@
+import { writeAreaMap } from "@/components/onboarding/area-map-data";
 import { describe, expect, it, vi } from "vitest";
 import { liveComparisonSearch } from "@/tests/e2e/live-comparison-fixtures";
 import { fields } from "@/components/intake/profile";
@@ -69,6 +70,25 @@ describe("listing readiness from actual saved criteria", () => {
     expect(siteSearchReadiness(state).status).toBe("ready");
   });
 
+  it("sends rectangles to the full inventory search rather than filtering a capped response", async () => {
+    const session = brief();
+    const rectangles = [
+      {
+        bounds: [-95.5, 29.6, -95.3, 29.8] as [number, number, number, number],
+        brush: "avoid" as const,
+      },
+    ];
+    session.profile.areas!.value = writeAreaMap([], "Houston", "", rectangles);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json(inventory()));
+    await loadSiteSearch(session, "houston-coffee", fetcher);
+    const body = JSON.parse(String(fetcher.mock.calls[0]![1]!.body));
+    expect(body.profile.areaPreferences).toEqual({
+      city: "Houston",
+      rectangles,
+    });
+  });
   it("distinguishes a service or identity failure from a real empty inventory response", async () => {
     const wrongProject = inventory();
     wrongProject.candidates[0]!.candidate.projectId = "another-project";

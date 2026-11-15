@@ -1,3 +1,4 @@
+import { areaPreferencesFromAnswer } from "./area-preferences";
 import {
   intakeSessionSchema,
   missingFields,
@@ -134,6 +135,11 @@ export function profileFromIntake(
     );
   if (!defaults)
     return unavailable("This service category is not supported yet.");
+  const areaSelection = areaPreferencesFromAnswer(
+    answers.areas?.value,
+    answers.city!.value as "Houston" | "Los Angeles",
+  );
+  if (areaSelection.error) return unavailable(areaSelection.error);
   const numeric = (
     value: number,
     unit: string,
@@ -162,6 +168,9 @@ export function profileFromIntake(
     concept: answers.concept!.value.trim(),
     category,
     city: answers.city!.value,
+    ...(areaSelection.mapped
+      ? { areaPreferences: areaSelection.preferences }
+      : {}),
     preferredAreas: [],
     avoidedAreas: [],
     targetCustomers: [answers.customers!.value.trim()],

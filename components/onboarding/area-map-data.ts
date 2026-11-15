@@ -20,7 +20,15 @@ export function readAreaMap(
   city: City,
 ): { marks: Mark[]; rectangles: Rectangle[]; previous: string } {
   const [previous, encoded] = value.split(mapMarker);
-  if (!encoded) return { previous: value, marks: [], rectangles: [] };
+  if (!encoded) {
+    // A damaged/older marker must not survive Reset or get nested into a new map.
+    const start = value.indexOf("[BizBox area map");
+    return {
+      previous: start < 0 ? value : value.slice(0, start).trimEnd(),
+      marks: [],
+      rectangles: [],
+    };
+  }
   try {
     const data = JSON.parse(encoded);
     if (data.city !== city || !Array.isArray(data.marks))
@@ -59,7 +67,7 @@ export function readAreaMap(
         : [],
     };
   } catch {
-    return { previous: value, marks: [], rectangles: [] };
+    return { previous, marks: [], rectangles: [] };
   }
 }
 

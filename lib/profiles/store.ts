@@ -26,5 +26,8 @@ export function profileContentKey(profile: BusinessProfile): string {
   const content: Partial<BusinessProfile> = { ...profile };
   delete content.id;
   delete content.version;
+  // Both representations mean no geographic rules; avoid spurious profile versions.
+  if (content.areaPreferences?.rectangles.length === 0)
+    delete content.areaPreferences;
   return JSON.stringify(canonical(content));
 }

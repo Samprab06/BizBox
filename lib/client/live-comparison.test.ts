@@ -253,6 +253,33 @@ describe("payloadMatches with units the server did not model", () => {
 });
 
 describe("intakeFingerprint", () => {
+  it("invalidates comparisons for changed map geometry, with order-independent identity", () => {
+    const favor = {
+      bounds: [-95.5, 29.6, -95.3, 29.8] as [number, number, number, number],
+      brush: "favor" as const,
+    };
+    const avoid = {
+      bounds: [-95.6, 29.5, -95.4, 29.7] as [number, number, number, number],
+      brush: "avoid" as const,
+    };
+    const mapped = {
+      ...profile,
+      areaPreferences: { city: "Houston" as const, rectangles: [favor, avoid] },
+    };
+    expect(intakeFingerprint(mapped)).not.toBe(intakeFingerprint(profile));
+    expect(
+      intakeFingerprint({
+        ...mapped,
+        areaPreferences: { city: "Houston", rectangles: [avoid, favor] },
+      }),
+    ).toBe(intakeFingerprint(mapped));
+    expect(
+      intakeFingerprint({
+        ...mapped,
+        areaPreferences: { city: "Houston", rectangles: [favor] },
+      }),
+    ).not.toBe(intakeFingerprint(mapped));
+  });
   it("ignores descriptive text but not answers the evaluation uses", () => {
     const text = {
       ...profile,

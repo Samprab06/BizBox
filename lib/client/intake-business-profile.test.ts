@@ -1,3 +1,4 @@
+import { writeAreaMap } from "@/components/onboarding/area-map-data";
 import { describe, expect, it } from "vitest";
 import { fields } from "@/components/intake/profile";
 import { BusinessProfileSchema } from "@/lib/contracts";
@@ -43,6 +44,24 @@ describe("browser intake to canonical profile", () => {
     expect(profile.mustHaves.frontage.value).toBeNull();
     expect(profile.objective).toContain(values.areas);
     expect(profile.businessName).toBe(values.concept);
+  });
+  it("carries exact saved map selections into the search profile and blocks corrupt geometry", () => {
+    const session = complete();
+    const rectangles = [
+      {
+        bounds: [-95.5, 29.6, -95.3, 29.8] as [number, number, number, number],
+        brush: "avoid" as const,
+      },
+    ];
+    session.profile.areas!.value = writeAreaMap([], "Houston", "", rectangles);
+    expect(
+      profileFromIntake(session, "houston-coffee").profile?.areaPreferences,
+    ).toEqual({ city: "Houston", rectangles });
+    session.profile.areas!.value += "invalid";
+    expect(profileFromIntake(session, "houston-coffee")).toMatchObject({
+      profile: null,
+      reason: expect.stringContaining("redraw"),
+    });
   });
   it("rejects incomplete/corrupt forms and unsafe money without a fixture substitution", () => {
     for (const raw of [

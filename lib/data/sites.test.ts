@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { syntheticHoustonFixture } from "../../fixtures/houston-coffee";
 import { CandidateSchema } from "../contracts";
+import type { AreaPreferences } from "../contracts/area-preferences";
 import {
   SiteInventorySchema,
   SiteSearchRequestSchema,
@@ -93,6 +94,199 @@ function space(
 function inventory(spaces = [space(10, 1)], properties = [property(1)]) {
   return { spaces, properties, tenancies: [], synthetic: true };
 }
+
+const rectangle = (
+  brush: "favor" | "avoid",
+  bounds: [number, number, number, number],
+) => ({ brush, bounds });
+const at = (
+  id: number,
+  longitude: number | null,
+  latitude: number | null = 29.7,
+) => ({
+  ...property(id),
+  longitude,
+  latitude,
+});
+function withAreas(rectangles: AreaPreferences["rectangles"]) {
+  return {
+    ...profile(),
+    areaPreferences: { city: "Houston" as const, rectangles },
+  };
+}
+
+describe("map-constrained site search", () => {
+  it("keeps omitted and explicitly cleared preferences equivalent to the original search", () => {
+    expect(searchSites({ profile: withAreas([]) }, inventory())).toEqual(
+      searchSites({ profile: profile() }, inventory()),
+    );
+  });
+
+  it("prefers the union of green rectangles before rent completeness and score, retaining outside sites", () => {
+    const data = inventory(
+      [
+        space(10, 1, { spacePosition: 5 }),
+        space(11, 2, { rateLow: null, rateHigh: null }),
+        space(12, 3),
+      ],
+      [at(1, -95.4), at(2, -95.6), at(3, -95.2)],
+    );
+    const baseline = searchSites({ profile: profile() }, data);
+    const result = searchSites(
+      {
+        profile: withAreas([
+          rectangle("favor", [-95.65, 29.6, -95.55, 29.8]),
+          rectangle("favor", [-95.25, 29.6, -95.15, 29.8]),
+        ]),
+      },
+      data,
+    );
+    expect(result.candidates.map((row) => row.candidate.id)).toEqual([
+      "12:1",
+      "11:1",
+      "10:1",
+    ]);
+    expect(result.totalMatched).toBe(3);
+    for (const row of result.candidates) {
+      expect(row.score).toBe(
+        baseline.candidates.find(
+          (other) => other.candidate.id === row.candidate.id,
+        )!.score,
+      );
+      if (row.candidate.id !== "10:1")
+        expect(row.flags).toContain("preferred_area");
+      expect(row.evidenceIds).toContain("founder-area-preferences-v1");
+    }
+    expect(
+      result.evidence.find(
+        (entry) => entry.id === "founder-area-preferences-v1",
+      ),
+    ).toMatchObject({ origin: "founder", sources: [] });
+  });
+
+  it("red wins overlaps and includes all rectangle edges and corners", () => {
+    const points = [
+      [-95.5, 29.7],
+      [-95.3, 29.7],
+      [-95.4, 29.6],
+      [-95.4, 29.8],
+      [-95.5, 29.6],
+      [-95.3, 29.8],
+      [-95.4, 29.7],
+      [-95.2, 29.7],
+    ];
+    const data = inventory(
+      points.map((_, i) => space(10 + i, i + 1)),
+      points.map(([lng, lat], i) => at(i + 1, lng, lat)),
+    );
+    const result = searchSites(
+      {
+        profile: withAreas([
+          rectangle("favor", [-95.7, 29.5, -95.1, 29.9]),
+          rectangle("avoid", [-95.5, 29.6, -95.3, 29.8]),
+        ]),
+      },
+      data,
+    );
+    expect(result.candidates.map((row) => row.candidate.id)).toEqual(["17:1"]);
+    expect(
+      result.filters.find((entry) => entry.name === "avoidedAreas"),
+    ).toMatchObject({ removed: 7, after: 1 });
+  });
+
+  it("excludes the union of disjoint red rectangles without requiring any green match", () => {
+    const result = searchSites(
+      {
+        profile: withAreas([
+          rectangle("avoid", [-95.65, 29.6, -95.55, 29.8]),
+          rectangle("avoid", [-95.25, 29.6, -95.15, 29.8]),
+        ]),
+      },
+      inventory(
+        [space(10, 1), space(11, 2), space(12, 3)],
+        [at(1, -95.6), at(2, -95.4), at(3, -95.2)],
+      ),
+    );
+    expect(result.candidates.map((row) => row.candidate.id)).toEqual(["11:1"]);
+  });
+
+  it("excludes unknown coordinates only when red constraints require proving eligibility", () => {
+    const data = inventory(
+      [space(10, 1), space(11, 2), space(12, 3), space(13, 4)],
+      [at(1, null), at(2, -95.4, null), at(3, null, null), at(4, -95.4)],
+    );
+    const green = rectangle("favor", [-95.5, 29.6, -95.3, 29.8]);
+    const greenOnly = searchSites({ profile: withAreas([green]) }, data);
+    expect(greenOnly.totalMatched).toBe(4);
+    expect(greenOnly.candidates[0].candidate.id).toBe("13:1");
+    expect(greenOnly.candidates[1].flags).toContain("area_location_unknown");
+    const red = searchSites(
+      {
+        profile: withAreas([
+          green,
+          rectangle("avoid", [-96, 29.6, -95.8, 29.8]),
+        ]),
+      },
+      data,
+    );
+    expect(red.candidates.map((row) => row.candidate.id)).toEqual(["13:1"]);
+    expect(
+      red.filters.find((entry) => entry.name === "areaLocationKnown"),
+    ).toMatchObject({ removed: 3 });
+  });
+
+  it("filters and ranks the complete inventory before the eight-result cap", () => {
+    const data = inventory(
+      Array.from({ length: 12 }, (_, i) => space(10 + i, i + 1)),
+      Array.from({ length: 12 }, (_, i) =>
+        at(i + 1, i < 8 ? -95.4 : i === 11 ? -95.2 : -95.6),
+      ),
+    );
+    const result = searchSites(
+      {
+        profile: withAreas([
+          rectangle("avoid", [-95.5, 29.6, -95.3, 29.8]),
+          rectangle("favor", [-95.25, 29.6, -95.15, 29.8]),
+        ]),
+      },
+      data,
+    );
+    expect(result.candidates.map((row) => row.candidate.id)).toEqual([
+      "21:1",
+      "18:1",
+      "19:1",
+      "20:1",
+    ]);
+    expect(result.totalMatched).toBe(4);
+    const preferenceOnly = searchSites(
+      {
+        profile: withAreas([rectangle("favor", [-95.25, 29.6, -95.15, 29.8])]),
+      },
+      data,
+    );
+    expect(preferenceOnly.candidates[0].candidate.id).toBe("21:1");
+    expect(preferenceOnly.candidates).toHaveLength(8);
+    expect(preferenceOnly.totalMatched).toBe(12);
+  });
+
+  it("does not let green preference bypass rent or required listing features", () => {
+    const result = searchSites(
+      { profile: withAreas([rectangle("favor", [-95.5, 29.6, -95.3, 29.8])]) },
+      inventory([
+        space(10, 1, { rateHigh: 100 }),
+        space(11, 1, { floorName: 2 }),
+      ]),
+    );
+    expect(result.candidates).toEqual([]);
+    expect(
+      result.filters.find((entry) => entry.name === "rentCeiling")?.removed,
+    ).toBe(1);
+    expect(
+      result.filters.find((entry) => entry.name === "mustHave.groundFloor")
+        ?.removed,
+    ).toBe(1);
+  });
+});
 
 describe("site search", () => {
   it("ranks a synthetic shortlist with transparent sequential filter counts", () => {

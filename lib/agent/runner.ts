@@ -5,7 +5,7 @@ import type { LLMResult } from "@langchain/core/outputs";
 import { tool } from "@langchain/core/tools";
 import { createDeepAgent, type CreateDeepAgentParams } from "deepagents";
 import { z } from "zod";
-import { IntakePatchSchema } from "@/lib/contracts/intake";
+import { ModelIntakePatchSchema } from "@/lib/contracts/intake";
 import { INTAKE_QUESTIONS } from "./intake";
 import {
   createJobToolExecutor,
@@ -102,7 +102,7 @@ function slimPatchSchema(): Record<string, unknown> {
     return entry;
   };
   return prune(
-    z.toJSONSchema(IntakePatchSchema, { unrepresentable: "any" }),
+    z.toJSONSchema(ModelIntakePatchSchema, { unrepresentable: "any" }),
   ) as Record<string, unknown>;
 }
 export const PATCH_JSON_SCHEMA = slimPatchSchema();
@@ -196,7 +196,12 @@ export function createDeepIntakeRunner(
             error: note ?? "Nothing to save.",
           });
         try {
-          const result = session.saveProfile(withFounderProvenance(patch));
+          // The advertised JSON schema is permissive for provider compatibility;
+          // enforce the model boundary at runtime before accepting any map edits.
+          const modelPatch = ModelIntakePatchSchema.parse(
+            withFounderProvenance(patch),
+          );
+          const result = session.saveProfile(modelPatch);
           saved += 1;
           return JSON.stringify({
             saved: true,

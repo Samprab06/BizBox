@@ -1,3 +1,5 @@
+import { areaPreferencesFromAnswer } from "@/lib/client/area-preferences";
+import { writeAreaMap } from "@/components/onboarding/area-map-data";
 /**
  * HAC-66: maps between the intake screen's form fields and the intake API's draft state.
  * Pure, so it is unit-tested without a browser. The form stays the shape the map and
@@ -7,7 +9,10 @@ import { z } from "zod";
 import type { IntakeState } from "@/lib/contracts/intake";
 import { IntakeStateSchema } from "@/lib/contracts/intake";
 import { UiActionListSchema } from "@/lib/contracts/agent";
-import { mustHaves, operatingHours } from "@/lib/client/intake-business-profile";
+import {
+  mustHaves,
+  operatingHours,
+} from "@/lib/client/intake-business-profile";
 import type { IntakeSession, Profile } from "./profile";
 
 type Key = keyof Profile;
@@ -67,7 +72,11 @@ export function formFromDraft(
   draft: IntakeState["draft"],
 ): Partial<Record<Key, { value: string; origin: Origin }>> {
   const out: Partial<Record<Key, { value: string; origin: Origin }>> = {};
-  const set = (key: Key, value: string | undefined, origin: Origin = "founder") => {
+  const set = (
+    key: Key,
+    value: string | undefined,
+    origin: Origin = "founder",
+  ) => {
     if (value !== undefined && value.trim()) out[key] = { value, origin };
   };
   set("concept", draft.concept);
@@ -77,26 +86,61 @@ export function formFromDraft(
     ...(draft.preferredAreas ?? []).map((a) => `Favor ${a}`),
     ...(draft.avoidedAreas ?? []).map((a) => `Avoid ${a}`),
   ];
-  if (areas.length) set("areas", areas.join("; "));
+  if (draft.areaPreferences?.rectangles.length) {
+    set(
+      "areas",
+      writeAreaMap(
+        [],
+        draft.areaPreferences.city,
+        areas.join("; "),
+        draft.areaPreferences.rectangles,
+      ),
+    );
+  } else if (areas.length) set("areas", areas.join("; "));
   const economics = draft.economics ?? {};
   const rent = economics.monthlyRentCeilingCents;
-  if (rent) set("rent", dollars(rent.value), rent.origin === "default" ? "default" : "founder");
+  if (rent)
+    set(
+      "rent",
+      dollars(rent.value),
+      rent.origin === "default" ? "default" : "founder",
+    );
   const buildout = economics.buildoutBudgetCents;
   if (buildout)
-    set("buildout", dollars(buildout.value), buildout.origin === "default" ? "default" : "founder");
+    set(
+      "buildout",
+      dollars(buildout.value),
+      buildout.origin === "default" ? "default" : "founder",
+    );
   const tier = economics.priceTier;
   if (tier?.value)
-    set("price", TIER_LABEL[tier.value], tier.origin === "default" ? "default" : "founder");
-  if (draft.targetCustomers?.length) set("customers", draft.targetCustomers.join(", "));
+    set(
+      "price",
+      TIER_LABEL[tier.value],
+      tier.origin === "default" ? "default" : "founder",
+    );
+  if (draft.targetCustomers?.length)
+    set("customers", draft.targetCustomers.join(", "));
   const hours = draft.operatingHours;
   if (hours?.openMinute !== undefined && hours.closeMinute !== undefined)
     set("hours", `${clock(hours.openMinute)}–${clock(hours.closeMinute)}`);
   const servers = draft.capacity?.servers;
-  if (servers && servers.value !== null && Number.isInteger(servers.value) && servers.value >= 1)
-    set("staff", String(servers.value), servers.origin === "default" ? "default" : "founder");
+  if (
+    servers &&
+    servers.value !== null &&
+    Number.isInteger(servers.value) &&
+    servers.value >= 1
+  )
+    set(
+      "staff",
+      String(servers.value),
+      servers.origin === "default" ? "default" : "founder",
+    );
   const flags = draft.mustHaves;
   if (flags && Object.keys(FEATURE_LABEL).every((k) => k in flags)) {
-    const wanted = (Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[])
+    const wanted = (
+      Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[]
+    )
       .filter((k) => flags[k]?.value === true)
       .map((k) => FEATURE_LABEL[k]);
     const allFalse = Object.values(flags).every((f) => f?.value === false);
@@ -110,10 +154,23 @@ export function formFromDraft(
 export function patchFromForm(profile: Profile, keys: readonly Key[]) {
   const patch: Record<string, unknown> = {};
   const economics: Record<string, unknown> = {};
+  // Area and city edits carry an explicit empty selection when the map is cleared.
+  if (keys.includes("areas") || (keys.includes("city") && profile.areas)) {
+    const city = profile.city?.value;
+    if (city === "Houston" || city === "Los Angeles") {
+      const area = areaPreferencesFromAnswer(profile.areas?.value, city);
+      if (!area.error) patch.areaPreferences = area.preferences;
+    }
+  }
   const money = (key: "rent" | "buildout", unit: string) => {
     const n = Number(profile[key]?.value);
     return Number.isSafeInteger(n * 100) && n >= 0
-      ? { value: n * 100, unit, origin: "founder", evidenceIds: [`browser-intake-${key}`] }
+      ? {
+          value: n * 100,
+          unit,
+          origin: "founder",
+          evidenceIds: [`browser-intake-${key}`],
+        }
       : undefined;
   };
   for (const key of new Set(keys)) {
@@ -124,7 +181,8 @@ export function patchFromForm(profile: Profile, keys: readonly Key[]) {
     if (key === "concept") patch.concept = text;
     else if (key === "category" && text in CATEGORY)
       patch.category = CATEGORY[text as keyof typeof CATEGORY];
-    else if (key === "city" && (text === "Houston" || text === "Los Angeles")) patch.city = text;
+    else if (key === "city" && (text === "Houston" || text === "Los Angeles"))
+      patch.city = text;
     else if (key === "rent") {
       const v = money("rent", "USD cents/month");
       if (v) economics.monthlyRentCeilingCents = v;
@@ -146,10 +204,15 @@ export function patchFromForm(profile: Profile, keys: readonly Key[]) {
       const n = Number(text);
       if (Number.isSafeInteger(n) && n >= 1)
         patch.capacity = {
-          servers: { value: n, unit: "servers", origin: "founder", evidenceIds: ["browser-intake-staff"] },
+          servers: {
+            value: n,
+            unit: "servers",
+            origin: "founder",
+            evidenceIds: ["browser-intake-staff"],
+          },
         };
     } else if (key === "requirements") patch.mustHaves = mustHaves(answer);
-    // "areas" is free text ("favor X, avoid Y"); the agent reads it from the conversation.
+    // Named preferences remain text; drawn selections use areaPreferences above.
   }
   if (Object.keys(economics).length) patch.economics = economics;
   return Object.keys(patch).length ? patch : undefined;
@@ -162,7 +225,8 @@ export function assumptionRows(assumptions: IntakeState["assumptions"]) {
     squareFeetPerStation: "Square feet per station",
     minimumFrontOfHouseSqFt: "Minimum front of house (sq ft)",
   } as const;
-  const rows: { key: string; label: string; value: string; origin: string }[] = [];
+  const rows: { key: string; label: string; value: string; origin: string }[] =
+    [];
   for (const key of Object.keys(label) as (keyof typeof label)[]) {
     const text = label[key];
     const entry = assumptions[key];
@@ -209,7 +273,10 @@ const areaSet = (text: string) =>
       .map((part) => {
         const avoid = /^(?:avoid|not|no|away from)\s+/.test(part);
         const name = part
-          .replace(/^(?:(?:avoid|not|no|away from|favor|favour|prefer|near)\s+)+/, "")
+          .replace(
+            /^(?:(?:avoid|not|no|away from|favor|favour|prefer|near)\s+)+/,
+            "",
+          )
           .trim();
         return `${avoid ? "avoid" : "favor"}:${name}`;
       }),
@@ -222,7 +289,11 @@ const sameSet = (a: Set<string>, b: Set<string>) =>
  * (same hours, numbers, requirement flags, areas or customers), so a chat reply that merely
  * restates it leaves the saved wording and origin alone.
  */
-export function sameAnswer(key: Key, existing: string, incoming: string): boolean {
+export function sameAnswer(
+  key: Key,
+  existing: string,
+  incoming: string,
+): boolean {
   if (plain(existing) === plain(incoming)) return true;
   switch (key) {
     case "rent":
@@ -234,7 +305,12 @@ export function sameAnswer(key: Key, existing: string, incoming: string): boolea
     case "hours": {
       const a = operatingHours(existing);
       const b = operatingHours(incoming);
-      return Boolean(a && b && a.openMinute === b.openMinute && a.closeMinute === b.closeMinute);
+      return Boolean(
+        a &&
+        b &&
+        a.openMinute === b.openMinute &&
+        a.closeMinute === b.closeMinute,
+      );
     }
     case "requirements": {
       const a = mustHaves({ value: existing, origin: "founder" });
@@ -247,7 +323,12 @@ export function sameAnswer(key: Key, existing: string, incoming: string): boolea
       return sameSet(areaSet(existing), areaSet(incoming));
     case "customers": {
       const list = (t: string) =>
-        new Set(t.split(/[;,\n]+|\band\b/).map(plain).filter(Boolean));
+        new Set(
+          t
+            .split(/[;,\n]+|\band\b/)
+            .map(plain)
+            .filter(Boolean),
+        );
       return sameSet(list(existing), list(incoming));
     }
     default:

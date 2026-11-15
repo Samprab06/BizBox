@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  AreaPreferencesSchema,
+  areaPreferencesMatchCity,
+} from "./area-preferences";
 
 const Id = z.string().min(1);
 export const OriginSchema = z.enum(["costar", "public", "founder", "default"]);
@@ -107,6 +111,7 @@ export const BusinessProfileSchema = z
     city: z.enum(["Houston", "Los Angeles"]),
     preferredAreas: z.array(z.string().min(1)),
     avoidedAreas: z.array(z.string().min(1)),
+    areaPreferences: AreaPreferencesSchema.optional(),
     targetCustomers: z.array(z.string().min(1)).nullable(),
     mustHaves: Features,
     objective: z.string().min(1),
@@ -139,6 +144,10 @@ export const BusinessProfileSchema = z
     }),
   })
   .strict()
+  .refine(areaPreferencesMatchCity, {
+    path: ["areaPreferences", "city"],
+    message: "Map preferences must match the profile city",
+  })
   .refine(
     (v) => v.category !== "unsupported" || !!v.unsupportedCategory,
     "Describe the unsupported category",

@@ -85,6 +85,31 @@ describe("POST site search", () => {
     expect(body.filters.length).toBeGreaterThan(0);
   });
 
+  it("enforces founder map exclusions instead of silently dropping structured preferences", async () => {
+    const handler = createSitesHandler({
+      loadInventory: async () => inventory(),
+    });
+    const response = await handler(
+      request({
+        profile: {
+          ...syntheticHoustonFixture.profile,
+          areaPreferences: {
+            city: "Houston",
+            rectangles: [
+              { bounds: [-95.4, 29.7, -95.3, 29.8], brush: "avoid" },
+            ],
+          },
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.candidates).toEqual([]);
+    expect(body.totalMatched).toBe(0);
+    expect(body.mostRestrictiveFilter).toBe("avoidedAreas");
+    expect(body.emptyReason).toContain("avoidedAreas");
+  });
+
   it.each([
     {},
     { profile: { ...syntheticHoustonFixture.profile, city: "Boston" } },
@@ -95,6 +120,21 @@ describe("POST site search", () => {
       maxSizeSqFt: 1000,
     },
     { profile: syntheticHoustonFixture.profile, sql: "anything" },
+    {
+      profile: {
+        ...syntheticHoustonFixture.profile,
+        areaPreferences: { city: "Los Angeles", rectangles: [] },
+      },
+    },
+    {
+      profile: {
+        ...syntheticHoustonFixture.profile,
+        areaPreferences: {
+          city: "Houston",
+          rectangles: [{ bounds: [-95, 29, -96, 30], brush: "avoid" }],
+        },
+      },
+    },
   ])(
     "rejects invalid requests before querying the database: %j",
     async (body) => {

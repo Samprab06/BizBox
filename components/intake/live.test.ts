@@ -1,3 +1,5 @@
+import { writeAreaMap } from "@/components/onboarding/area-map-data";
+import { editIntakeField } from "./profile";
 import { describe, expect, it } from "vitest";
 import { assumptionRows, formFromDraft, patchFromForm } from "./live";
 import { intakeSessionSchema } from "./profile";
@@ -20,12 +22,20 @@ describe("HAC-66 intake form ↔ API draft", () => {
       requirements: founder("Parking nearby"),
       areas: founder("Favor Montrose"),
     };
-    const patch = patchFromForm(profile, Object.keys(profile) as (keyof typeof profile)[]);
+    const patch = patchFromForm(
+      profile,
+      Object.keys(profile) as (keyof typeof profile)[],
+    );
     const snapshot = createIntakeSession("houston-coffee").saveProfile(patch);
     expect(snapshot.draft.category).toBe("coffee");
-    expect(snapshot.draft.economics?.monthlyRentCeilingCents?.value).toBe(450000);
+    expect(snapshot.draft.economics?.monthlyRentCeilingCents?.value).toBe(
+      450000,
+    );
     expect(snapshot.draft.economics?.priceTier?.value).toBe("mid");
-    expect(snapshot.draft.operatingHours).toEqual({ openMinute: 420, closeMinute: 1020 });
+    expect(snapshot.draft.operatingHours).toEqual({
+      openMinute: 420,
+      closeMinute: 1020,
+    });
     expect(snapshot.draft.capacity?.servers?.origin).toBe("founder");
     expect(snapshot.draft.mustHaves?.parking?.value).toBe(true);
 
@@ -45,13 +55,21 @@ describe("HAC-66 intake form ↔ API draft", () => {
 
   it("only patches edited founder fields and skips defaults", () => {
     expect(
-      patchFromForm({ category: { value: "Coffee shop", origin: "default" } }, ["category"]),
+      patchFromForm({ category: { value: "Coffee shop", origin: "default" } }, [
+        "category",
+      ]),
     ).toBeUndefined();
-    expect(patchFromForm({ city: founder("Houston"), concept: founder("x") }, ["city"])).toEqual({ city: "Houston" });
+    expect(
+      patchFromForm({ city: founder("Houston"), concept: founder("x") }, [
+        "city",
+      ]),
+    ).toEqual({ city: "Houston" });
   });
 
   it("reports assumption origins, including category defaults", () => {
-    const snapshot = createIntakeSession("houston-coffee").saveProfile({ category: "coffee" });
+    const snapshot = createIntakeSession("houston-coffee").saveProfile({
+      category: "coffee",
+    });
     const rows = assumptionRows(snapshot.assumptions);
     expect(rows.map((r) => r.key)).toContain("visitsPerMonth");
     expect(rows.every((r) => r.origin === "default")).toBe(true);
@@ -65,5 +83,58 @@ describe("HAC-66 intake form ↔ API draft", () => {
     });
     expect(parsed.profile.concept?.value).toBe("x");
     expect(parsed.live).toBeUndefined();
+  });
+});
+
+describe("mapped area preferences survive intake", () => {
+  const rectangles = [
+    {
+      bounds: [-95.5, 29.6, -95.3, 29.8] as [number, number, number, number],
+      brush: "avoid" as const,
+    },
+  ];
+  it("patches geometry and an explicit clear, and round-trips bounds through the draft", () => {
+    const areas = writeAreaMap([], "Houston", "", rectangles);
+    const profile = { city: founder("Houston"), areas: founder(areas) };
+    const patch = patchFromForm(profile, ["areas"]);
+    expect(patch?.areaPreferences).toEqual({ city: "Houston", rectangles });
+    const draft =
+      createIntakeSession("houston-coffee").saveProfile(patch).draft;
+    expect(
+      patchFromForm(
+        { city: founder("Houston"), areas: formFromDraft(draft).areas! },
+        ["areas"],
+      )?.areaPreferences,
+    ).toEqual({ city: "Houston", rectangles });
+    expect(
+      patchFromForm({ ...profile, areas: founder("") }, ["areas"])
+        ?.areaPreferences,
+    ).toEqual({ city: "Houston", rectangles: [] });
+  });
+  it("clears previous-city map selections and syncs that clear", () => {
+    const session = {
+      profile: {
+        city: founder("Houston"),
+        areas: founder(writeAreaMap([], "Houston", "", rectangles)),
+      },
+      messages: [],
+      live: {
+        state: {
+          draft: {
+            city: "Houston" as const,
+            areaPreferences: { city: "Houston" as const, rectangles },
+          },
+          assumptions: {},
+        },
+        findings: [],
+        missingRequiredFields: [],
+      },
+    };
+    const changed = editIntakeField(session, "city", "Los Angeles");
+    expect(changed.profile.areas?.value).toBe("No preference");
+    expect(changed.pending).toContain("areas");
+    expect(
+      patchFromForm(changed.profile, changed.pending!)?.areaPreferences,
+    ).toEqual({ city: "Los Angeles", rectangles: [] });
   });
 });

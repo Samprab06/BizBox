@@ -251,6 +251,43 @@ function setup(configured = false) {
 }
 
 describe("investigation tools over existing scoped services", () => {
+  it("preserves saved founder rectangles across model profile edits and subsequent discovery", async () => {
+    const f = setup();
+    f.profile.areaPreferences = {
+      city: "Houston",
+      rectangles: [
+        { bounds: [-95.38, 29.7605, -95.36, 29.762], brush: "avoid" },
+      ],
+    };
+    const saved = await f.execute("save_profile", {
+      patch: { businessName: "Updated name" },
+    });
+    const savedId = (saved.summary as { profileId: string }).profileId;
+    expect(f.profiles.get(savedId)?.areaPreferences).toEqual(
+      f.profile.areaPreferences,
+    );
+    const result = await createInvestigationTools(f.deps).execute(
+      "search_sites",
+      {},
+      f.context,
+    );
+    expect(result.summary).toHaveProperty("siteIds", ["101:1"]);
+  });
+
+  it("rejects geometry in investigation model patches", async () => {
+    const f = setup();
+    await expect(
+      f.registry.execute(
+        "save_profile",
+        {
+          patch: { areaPreferences: { city: "Houston", rectangles: [] } },
+        },
+        f.context,
+      ),
+    ).rejects.toThrow();
+    expect(f.profiles.size).toBe(1);
+  });
+
   it("exposes exactly eight bounded Zod tools and rejects untrusted scope fields", () => {
     const f = setup();
     expect(f.registry.definitions).toHaveLength(8);

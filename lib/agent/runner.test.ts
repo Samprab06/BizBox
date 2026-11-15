@@ -50,6 +50,40 @@ const TICKET_MESSAGE =
 
 // Exercises the real compiled deepagents graph, not a mocked createDeepAgent.
 describe("deepagents intake binding", () => {
+  it("rejects model-authored map rectangles while preserving founder geometry", async () => {
+    const founderGeometry = {
+      city: "Houston" as const,
+      rectangles: [
+        {
+          bounds: [-95.5, 29.6, -95.3, 29.8] as [
+            number,
+            number,
+            number,
+            number,
+          ],
+          brush: "avoid" as const,
+        },
+      ],
+    };
+    const session = createIntakeSession("project-1", {
+      draft: { city: "Houston", areaPreferences: founderGeometry },
+      assumptions: {},
+    });
+    const model = new ScriptedModel([
+      saveCall("invent-geometry", {
+        areaPreferences: { city: "Houston", rectangles: [] },
+      }),
+      new AIMessage("Please edit your map to change those areas."),
+    ]);
+    await createDeepIntakeRunner(model)({
+      session,
+      message: "Help me review my areas",
+      signal: new AbortController().signal,
+    });
+    expect(session.snapshot().draft.areaPreferences).toEqual(founderGeometry);
+    expect(lastToolResult(model)).toMatchObject({ saved: false });
+  });
+
   it("executes a model tool call against the validated session without a provider", async () => {
     const model = new ScriptedModel([
       saveCall("save-1", {

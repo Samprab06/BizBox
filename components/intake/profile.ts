@@ -67,13 +67,32 @@ export function updateProfile(profile: Profile, key: Key, value: string): Profil
 }
 
 /** Track edits against an existing agent result even while its model is offline. */
-export function editIntakeField(session: IntakeSession, key: Key, value: string, agentAvailable = false): IntakeSession {
+export function editIntakeField(
+  session: IntakeSession,
+  key: Key,
+  value: string,
+  agentAvailable = false,
+): IntakeSession {
+  const clearMappedAreas =
+    key === "city" &&
+    value !== session.profile.city?.value &&
+    session.profile.areas?.value.includes("[BizBox area map");
+  const profile = updateProfile(session.profile, key, value);
+  if (clearMappedAreas)
+    profile.areas = { value: "No preference", origin: "founder" };
   return {
     ...session,
-    profile: updateProfile(session.profile, key, value),
-    pending: agentAvailable || session.live
-      ? [...new Set([...(session.pending ?? []), key])]
-      : session.pending,
+    profile,
+    pending:
+      agentAvailable || session.live
+        ? [
+            ...new Set([
+              ...(session.pending ?? []),
+              key,
+              ...(clearMappedAreas ? ["areas" as const] : []),
+            ]),
+          ]
+        : session.pending,
   };
 }
 
