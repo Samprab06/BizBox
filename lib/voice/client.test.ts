@@ -529,3 +529,30 @@ describe("capture intent stays bound to its original context", () => {
     f.client.stop();
   });
 });
+
+it("HAC-149 fingerprints comparison changes during an utterance", async () => {
+  let comparisonId = "first";
+  const f = fixture({
+    readContext: () => ({
+      projectId: "houston-coffee",
+      mode: "chat",
+      view: { stage: "comparison", comparisonId },
+    }),
+  });
+  await f.client.start();
+  f.event(
+    JSON.stringify({ type: "input_audio_buffer.speech_started", item_id: "A" }),
+  );
+  comparisonId = "second";
+  f.event(
+    JSON.stringify({
+      type: "input_audio_buffer.committed",
+      item_id: "A",
+      previous_item_id: null,
+    }),
+  );
+  f.event(completed("A", "Compare this one"));
+  await flush();
+  expect(f.submit).not.toHaveBeenCalled();
+  f.client.stop();
+});

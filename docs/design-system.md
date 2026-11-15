@@ -1,85 +1,149 @@
-# Sitework design system
+# BizBox design system
 
-A clear, spatial, inspectable and practical decision workspace. Extend the existing
-identity; the simulator is a dark canvas inside the warm application shell.
+BizBox uses neutral smoked glass, readable light text and white controls. Glass is
+the primary material for the consultant workspace and onboarding; there is no green
+in the application token palette. Keep the project header minimal and let the
+visualization and persistent consultant lead the workspace.
 
-| Element     | Rule                                                                                                           |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| Application | Warm paper, dark ink, restrained pine primary actions                                                          |
-| 3D viewport | Contained dark canvas; full screen only on demand                                                              |
-| Typography  | DM Sans first in the existing sans stack; consistent headings, tabular money/numbers                           |
-| Cards       | Solid surfaces; one 1 px border, 20 px padding, 12 px radius                                                   |
-| Glass       | Only controls floating over a map or 3D view                                                                   |
-| Scenarios   | Always **Baseline** (pine) and **Alternative** (blue); keep those names and hues in charts, replay and exports |
-| Warnings    | Amber for uncertainty; red for errors or bad outcomes                                                          |
-| Evidence    | Visible **Source-backed**, **Your input**, **Assumption**, **Simulation** next to the value                    |
-| Motion      | Explain selection, movement, congestion or change; no unrelated continuous effects; respect reduced motion     |
+## Authority and source values
 
-## Tokens
+Akshar explicitly confirmed **“Neutral smoked glass and white controls”** for
+HAC-133 on November 14, 2026. This supersedes the historical periwinkle language
+in [HAC-133](https://linear.app/hackprinceton/issue/HAC-133/ds-6-stage-2-design-tokens-and-design-doc-rewrite)
+and the [HAC-130 layout direction](https://linear.app/hackprinceton/issue/HAC-130/client-workspace-approved-glass-ui-over-real-map-interior-and).
+The palette decision is resolved; do not reintroduce the rejected blue dashboard.
 
-Tokens live in `app/workspace.css` under `@theme`, giving Tailwind utilities such as
-`bg-surface`, `text-ink`, `text-warn` and `border-line`. Existing page tokens retain
-their values. No font request or dependency is added; DM Sans uses the existing stack.
+Exact material values come from the [HAC-130 handoff](https://linear.app/hackprinceton/issue/HAC-130/client-workspace-approved-glass-ui-over-real-map-interior-and),
+the [onboarding neutral-smoke CSS](design-prototypes/bizbox-onboarding/dark-glass.css)
+and the local production handoff `components/workspace-screen/workspace-glass.module.css`
+at HAC-130 revision `fe31a1e` (November 14, 23:18 UTC). That module is on HAC-130's
+branch, not introduced by this token change. The earlier CSS comment “not a brand
+lock” describes the study's historical status; Akshar's later confirmation governs
+this foundation. See the [onboarding handoff](design-prototypes/bizbox-onboarding/HANDOFF.md)
+for integration seams and the [reference README](design-prototypes/bizbox-onboarding/README.md)
+for the static prototype.
 
-| Token (`--color-`) | Paper     | Viewport (`--color-viewport-`) |
-| ------------------ | --------- | ------------------------------ |
-| `paper` / `canvas` | `#f6f5ef` | `#101b16`                      |
-| `surface`          | `#ffffff` | `#172720`                      |
-| `ink`              | `#1c3028` | `#f1f3eb`                      |
-| `muted`            | `#50655a` | `#bac7be`                      |
-| `line`             | `#d9dfd5` | `#46594c`                      |
-| `baseline`         | `#1b4937` | `#a7d5b7`                      |
-| `alternative`      | `#315b83` | `#a8c9ec`                      |
-| `warn`             | `#754900` | `#ffe3a2`                      |
-| `danger`           | `#a02828` | `#ffb4b4`                      |
+## Tokens and surfaces
 
-Primary actions use `pine` (`#1b4937`) with `on-pine` (`#ffffff`); `mint`
-(`#e2efdf`) remains a supporting surface. Scenario hues express identity, not
-success or failure. Viewport tints preserve identity while remaining readable.
-`--radius-card` is `0.75rem`; `--spacing-card` is `1.25rem`.
+`app/workspace.css` is the sole application foundation. Its `@theme` namespaces
+produce Tailwind utilities; examples include `bg-canvas`, `bg-glass-fill`,
+`border-glass-edge`, `text-ink`, `bg-accent`, `text-on-accent`, `rounded-panel`,
+`backdrop-blur-glass`, `shadow-glass`, `duration-question` and `ease-question`.
+`app/layout.tsx` imports it and marks the body `data-bizbox-theme="smoke"`.
+The unused `app/globals.css` is removed. The static landing CSS is a separate surface
+and is not rewritten by this foundation.
 
-Badges use opaque `evidence-{source,input,assumption,simulation}-{ink,surface}`
-token pairs. The separate viewport pairs have the `viewport-` prefix. Never apply
-opacity to a badge or substitute its background independently of its text.
-`components/ui/contrast.test.ts` checks all body/status/scenario text and badge
-pairs against WCAG AA normal-text contrast (at least 4.5:1), including glass over
-black and white underlays. Line tokens are decorative separators, not control
-boundaries or text colors.
+| Token (`--color-`)         | Screen value            | Use                                                                     |
+| -------------------------- | ----------------------- | ----------------------------------------------------------------------- |
+| `canvas`                   | `#101115`               | Base page or spatial fallback                                           |
+| `glass-fill`               | `rgba(15,16,21,.4)`     | Translucent material over the dark canvas                               |
+| `glass-edge`               | `rgba(255,255,255,.48)` | Visible control/panel boundaries                                        |
+| `panel-raised`             | `#18191f`               | Opaque analysis/readability backing; the fallback's exact base hue      |
+| `glass-fallback`           | `#18191fee`             | Backed floating controls over arbitrary imagery or without blur support |
+| `field`                    | `rgba(12,13,18,.38)`    | Inputs over a raised/dark surface                                       |
+| `ink`                      | `#f7f7fa`               | Primary text                                                            |
+| `muted`                    | `#dedee5`               | Secondary text; preserve its contrast                                   |
+| `line`                     | `rgba(255,255,255,.19)` | Decorative separators, not required control boundaries                  |
+| `accent` / `accent-hover`  | `#f3f3f6` / `#ffffff`   | White primary controls and text links                                   |
+| `on-accent`                | `#17181d`               | Dark text on white primary controls                                     |
+| `focus-ring`               | Alias of `accent`       | One keyboard-focus color                                                |
+| `warn` / `danger`          | `#f0d7af` / `#ffbfbf`   | Uncertainty and errors                                                  |
+| `baseline` / `alternative` | `#f3f3f6` / `#dedee5`   | Explicitly named scenario identities                                    |
 
-## Primitives and surface contexts
+The 40% glass fill requires a controlled dark underlay. It is not a readability
+guarantee over arbitrary bright map/photo crops. Floating `GlassControl` uses a
+94% raised-surface backing and the source-backed `glass-fallback` without blur;
+both ink and muted text are tested over black and white imagery. Use the raised
+panel for dense analysis, long evidence and errors. Keep the field within a dark
+surface. Use the subtle line for table separators and `glass-edge` for required
+control boundaries. Do not lighten a backing or lower text opacity independently.
 
-- `Card` is a solid analysis container and accepts normal div attributes. Set
-  `surface="viewport"` for a standalone dark card, `surface="paper"` to reset a
-  nested context, or omit it to inherit.
-- `Stat` renders a description list with `label`, a tabular `value`, and optional
-  adjacent `qualifier`. Optional `scenario="baseline" | "alternative"` renders
-  the fixed scenario name in its identity color. Use the qualifier for units,
-  uncertainty, time basis and/or an `EvidenceBadge`.
-- `EvidenceBadge` takes `kind: EvidenceKind`. It renders visible text without
-  relying on a tooltip, color alone or live announcements. Place it next to its
-  value, never only in a footer.
-- `GlassControl` requires `over="map" | "viewport"` and an `aria-label`; it is a
-  labelled group for real buttons/inputs/links. It has a 94% surface fill and 12 px
-  backdrop blur. It is not an analysis card, dialog, or page background. Keep
-  spatial imagery behind it; supply a positioned wrapper at the call site.
+Control, panel and sheet radii are 14 px, 32 px and 36 px, from HAC-130. Glass blur
+is 16 px; the panel shadow is `0 18px 48px -24px #0009, inset 0 1px 1px #ffffff85`.
+The existing card padding stays 20 px. Motion comes from the existing
+[question transition](design-prototypes/bizbox-onboarding/simple-motion.js):
+120 ms, ease-out, content opacity only. Reduced motion changes that duration to
+0 ms. Keep glass fill/blur stable; no unrelated continuous or ornamental motion.
 
-For a contained dark canvas use `className="sw-viewport" data-surface="viewport"`
-on the viewport wrapper. Child primitives inherit its local colors; page tokens
-and the body remain warm. `GlassControl` selects its own context from `over`.
-Do not add a global dark-body override. On narrow screens let cards shrink and
-labels wrap; never remove evidence qualifiers to save space. These primitives
-add no animation, loading states, or client JavaScript of their own.
+### Typography
 
-```tsx
-<Card>
-  <Stat
-    scenario="baseline"
-    label="Modeled monthly contribution"
-    value="$2,400–$3,100"
-    qualifier={<EvidenceBadge kind={evidenceFor(result.derivation.output)} />}
-  />
-</Card>
-```
+DM Sans, the family named in HAC-133, is bundled through `next/font/local` in
+`app/layout.tsx`. Akshar explicitly requested completion of this requirement on
+November 14, 2026. The unmodified variable font supports normal weights 100–1000
+and optical sizes 9–40. `display: swap` keeps text visible during loading, and
+Next.js supplies a metric-adjusted fallback. The existing Avenir/Segoe UI/system
+stack remains available if the local font cannot load. Use tabular numbers for
+money, timing and metrics.
+
+The asset and SIL Open Font License are checked in under `app/fonts/dm-sans`;
+[font provenance](../app/fonts/dm-sans/README.md) records the pinned upstream
+revision and checksum. Next.js preloads and serves it from the application's own
+`/_next/static/media/` path. Neither the build nor the browser requests a font
+from Google or another hosted font service. The shared Tailwind `font-sans` token
+reads the generated root variable, including in print. The static landing document
+retains its own typography until its separate integration ticket.
+
+### Evidence, scenarios and legacy compatibility
+
+Evidence pairs use `ink` over white at 9%, as in HAC-130. The visible labels
+**Source-backed**, **Your input**, **Assumption** and **Simulation** carry meaning;
+neutral colors never substitute for the words. Place labels beside their values.
+The fixed **Baseline** and **Alternative** names remain visible. Their primitive
+labels also use solid and dashed leading borders to distinguish them in monochrome.
+Charts must keep names/legends and existing non-color cues when adopting these tokens.
+
+All old utility names remain aliases until DS-8–DS-10 migrate their consumers:
+
+| Legacy name        | Canonical value                                           |
+| ------------------ | --------------------------------------------------------- |
+| `paper`            | `canvas`                                                  |
+| `surface`          | `panel-raised`                                            |
+| `pine` / `on-pine` | `accent` / `on-accent`                                    |
+| `mint`             | `field`                                                   |
+| `viewport-*`       | Corresponding shared text/surface/scenario/evidence token |
+| `radius-card`      | `radius-panel`                                            |
+| `spacing-card`     | Existing 20 px padding                                    |
+
+`[data-surface="paper"]` and `[data-surface="viewport"]` keep their public names
+and now share the same neutral system. The `--sw-*` local variables continue to
+support `Card`, `Stat`, `EvidenceBadge` and `GlassControl`; no component API changes.
+`Card` retains an opaque analysis backing. `GlassControl` remains a labeled control
+group over a map/viewport; the broader shell may use glass without abusing this
+primitive as a dialog or page wrapper.
+
+A narrow compatibility rule maps legacy white `header`, `section`, `input`,
+`select` and `textarea` backgrounds, plus `button.border-line.bg-white`, to the
+raised surface. Legacy input/select/textarea `border-line` boundaries use
+`glass-edge` for 3:1 control contrast. It leaves onboarding's white action buttons and marks intact.
+Legacy `.bg-pine.text-white` actions (including the existing aria-current page
+variant) use `on-accent`. Remove these bridges as DS-8–DS-10 replace hard-coded
+white backgrounds/text with semantic tokens; do not expand into a blanket white
+utility override. The compact decision replay and comparison chart literals now
+use semantic text/station/baseline tokens, and detailed intake validation uses
+`danger`; these narrowly scoped fixes keep existing content readable after the
+surface change. Chart data, series dash patterns, labels and behaviors are unchanged.
+
+### Print and contrast verification
+
+`@media print` switches both application and viewport aliases to white canvas/panels,
+solid light-gray fields/evidence, dark `#17181d` text, dark primary actions and white
+action text. Warning/error text keeps the old proven dark amber/red print values.
+Glass loses transparency, blur and shadows. Scenario names, solid/dashed cues and
+evidence labels remain visible on paper. Screen and print tokens are tested separately.
+The persistent consultant is hidden in print, and its grid becomes a full-width page.
+Printing restores the plan even when the consultant is expanded to focus mode.
+
+`components/ui/contrast.test.ts` resolves aliases, solid/alpha hex and RGB/RGBA,
+then composites supported surfaces against explicit underlays. It checks every
+normal text/status/scenario pair and all evidence pairs at **4.5:1**, accent/hover
+action text at **4.5:1**, focus/boundaries at **3:1**, the backed glass extremes,
+the light print palette and Tailwind generation for every foundation token.
+Malformed/missing/circular/unsupported colors fail tests instead of silently
+skipping a pair. Parser fixtures are test data, not new palette approvals.
+
+The current project-workspace QA directive is desktop-only. Landing responsiveness
+is separate work. These tokens do not add loading/error behavior or change data,
+provenance, persistence or consultant state.
 
 ## Evidence mapping and HAC-61
 
@@ -107,9 +171,9 @@ instead of silently gaining an evidence label. Adding a new origin requires an
 explicit mapping and test review. `matterport` is anticipated only by this adapter;
 it is not newly accepted by any stored origin schema.
 
-Existing screens are unchanged by this foundation. Adopt these primitives in the
-later shell, comparison, replay and simulator tickets without changing the names,
-colors or provenance meaning.
+Existing screens inherit the neutral foundation through compatibility aliases.
+Later shell, comparison, replay and simulator tickets migrate those aliases and
+component styling without changing scenario names or provenance meaning.
 
 ## Decision-first composition (HAC-71, comparison portion)
 

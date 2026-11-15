@@ -2,7 +2,7 @@ import { hourLabel, type SiteHours } from "./hourly-overlay";
 
 /** One color and dash pattern per shortlisted site, so lines differ without relying on color. */
 const series = [
-  { color: "#1b4937", dash: undefined },
+  { color: "var(--color-baseline)", dash: undefined },
   { color: "#b5653a", dash: "6 4" },
   { color: "#4f6fa8", dash: "2 3" },
   { color: "#8a5a9e", dash: "8 3 2 3" },
@@ -51,7 +51,11 @@ export function PeakSparkline({ data }: { data: SiteHours }) {
             width={Math.max(1, step - 2)}
             height={height - y(h.arrivals)}
             rx={1}
-            fill={h.hour === peakHour ? "#1b4937" : "#9fb3a6"}
+            fill={
+              h.hour === peakHour
+                ? "var(--color-baseline)"
+                : "var(--color-muted)"
+            }
           />
         ))}
         {capacity && (
@@ -135,14 +139,14 @@ export function WaitOverlayChart({
               x2={width - pad.right}
               y1={y(tick)}
               y2={y(tick)}
-              stroke="#d9dfd5"
+              stroke="var(--color-line)"
             />
             <text
               x={pad.left - 8}
               y={y(tick) + 4}
               textAnchor="end"
               fontSize={11}
-              fill="#50655a"
+              fill="var(--color-muted)"
             >
               {tick}m
             </text>
@@ -155,7 +159,7 @@ export function WaitOverlayChart({
             y={height - 8}
             textAnchor="middle"
             fontSize={11}
-            fill="#50655a"
+            fill="var(--color-muted)"
           >
             {hourLabel(hour)}
           </text>
