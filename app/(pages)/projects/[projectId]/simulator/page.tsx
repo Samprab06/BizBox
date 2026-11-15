@@ -4,11 +4,14 @@ import { getPreviewProject } from "@/lib/workspace-preview";
 import { WorkspaceView } from "@/components/workspace-view";
 import { SimulatorDemo } from "@/components/simulator/demo";
 import { demoPlan, makeDemo } from "@/components/simulator/fixture";
-import { storedSimulator } from "@/components/simulator/stored";
+import {
+  loadStoredSimulator,
+  simulatorSearchValue,
+} from "@/components/simulator/load-stored";
+import { SimulatorRecovery } from "@/components/simulator/recovery";
+import { workspaceHref } from "@/lib/client/workspace-routes";
 import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
-import { parseStoredInsights } from "@/components/insights/stored-insights";
-import type { SiteInsights } from "@/lib/contracts/insights";
 import { RestoreSavedComparison } from "@/lib/client/project-store";
 import { publicCafeScan } from "@/lib/interior/fixtures";
 
@@ -20,77 +23,7 @@ const cafeViewpoint = cafeSweep?.rotation
 export const dynamic = "force-dynamic";
 
 type Search = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) =>
-  typeof v === "string" && v.length <= 300 ? v : undefined;
-
-/**
- * HAC-63: ?comparison=<id>[&site=<siteId>][&project=<projectId>] opens a stored run; otherwise the labelled example.
- * HAC-135: this server page can't read the browser's saved comparison, so without
- * ?comparison= it renders `RestoreSavedComparison`, which adds the saved id to the URL
- * on the client and the page reloads the stored run.
- */
-async function loadStored(projectId: string, search: Search) {
-  const comparisonId = one(search.comparison);
-  if (!comparisonId) return null;
-  try {
-    const store = createPostgresComparisonStore();
-    const stored = await store.load(projectId, comparisonId);
-    if (!stored) return null;
-    const currentProfileVersion = await store
-      .currentProfileVersion(projectId)
-      .catch(() => null);
-    const simulator = storedSimulator({
-      comparisonId: stored.id,
-      request: stored.evaluation.request,
-      result: stored.evaluation.result,
-      runs: stored.runs,
-      ...(stored.evaluation.assembly
-        ? { assembly: stored.evaluation.assembly }
-        : {}),
-      ...(one(search.site) ? { siteId: one(search.site) } : {}),
-    });
-    let insights: SiteInsights | undefined;
-    let insightsUnavailableReason: string | undefined;
-    if (simulator) {
-      try {
-        insights = parseStoredInsights(
-          {
-            comparisonId: stored.id,
-            outdated: false,
-            result: stored.evaluation.result,
-            comparison: stored.comparison,
-          },
-          {
-            projectId,
-            comparisonId: stored.id,
-            siteId: simulator.data[0].run.siteId,
-          },
-        ).site.insights;
-      } catch {
-        // An insights mismatch must not replace an otherwise valid recorded scene.
-        insightsUnavailableReason =
-          "Retained insights could not be verified for this selected saved site and scenario.";
-      }
-    }
-    return simulator
-      ? {
-          ...simulator,
-          synthetic: stored.comparison.synthetic,
-          robustness: stored.evaluation.robustness ?? null,
-          insights,
-          insightsUnavailableReason,
-          profileVersion: stored.evaluation.result.profileVersion,
-          profileVersionUnknown: currentProfileVersion === null,
-          outdated:
-            currentProfileVersion !== null &&
-            currentProfileVersion !== stored.evaluation.result.profileVersion,
-        }
-      : null;
-  } catch {
-    // Database unavailable or stored record invalid: fall back to the labelled example.
-    return null;
-  }
-}
+const one = simulatorSearchValue;
 
 export default async function Page({
   searchParams,
@@ -108,11 +41,40 @@ export default async function Page({
   // cafe scan is a demonstration reference, never a stored candidate site, so it
   // is passed to the labelled example only.
   const sdkKey = process.env.MATTERPORT_SDK_KEY?.trim();
-  const stored = await loadStored(projectId, search);
-  const restore = one(search.comparison) ? null : (
-    <RestoreSavedComparison projectId={projectId} />
+  const loaded = await loadStoredSimulator(
+    { projectId, comparison: search.comparison, siteId: search.site },
+    { createStore: createPostgresComparisonStore },
   );
-  if (!stored && !getPreviewProject(projectId) && !one(search.comparison))
+  if (loaded.kind === "not_found" || loaded.kind === "error") {
+    const retryQuery = new URLSearchParams();
+    const comparisonId = one(search.comparison);
+    const siteId = one(search.site);
+    if (comparisonId !== undefined) retryQuery.set("comparison", comparisonId);
+    if (siteId) retryQuery.set("site", siteId);
+    return (
+      <WorkspaceView
+        projectId={projectId}
+        view="simulator"
+        decisionLayout
+        title="Simulator"
+        allowUnknownProject
+      >
+        <SimulatorRecovery
+          kind={loaded.kind}
+          workspaceHref={workspaceHref(projectId, "workspace")}
+          exampleHref={`${workspaceHref(getPreviewProject(projectId) ? projectId : "houston-coffee", "simulator")}?example=1`}
+          retryHref={`${workspaceHref(projectId, "simulator")}?${retryQuery}`}
+        />
+      </WorkspaceView>
+    );
+  }
+  const stored = loaded.kind === "stored" ? loaded.value : null;
+  // Explicit example recovery must not immediately restore the failed browser reference.
+  const restore =
+    loaded.kind !== "example" || search.example === "1" ? null : (
+      <RestoreSavedComparison projectId={projectId} />
+    );
+  if (loaded.kind === "example" && !getPreviewProject(projectId))
     return (
       <>
         {restore}
@@ -135,7 +97,8 @@ export default async function Page({
             context={{
               kind: "simulator",
               phase: "ready",
-              comparisonId: one(search.comparison),
+              comparisonId:
+                loaded.kind === "stored" ? loaded.comparisonId : undefined,
               siteId: stored.data[0].run.siteId,
               synthetic: stored.synthetic,
             }}

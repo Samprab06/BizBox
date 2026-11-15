@@ -30,8 +30,29 @@ an adjacent native one-tap disclosure for **22 weekdays · ingredients, labor, r
 buildout amortization**, with excluded costs stated there.
 
 Known synthetic stored records retain Example provenance; nonsynthetic stored
-records do not. Missing/failed stored records fall back to the labelled example.
-No data persistence, API contracts, simulation inputs, or dependencies change.
+records do not. HAC-164 replaces the former missing/failed-record example fallback:
+a supplied `comparison` parameter now produces a `stored`, `not_found` or `error`
+result. Missing records and explicit invalid/empty/repeated IDs show comparison
+recovery; failed reads or unusable stored replay data show temporary recovery with
+Retry. Neither recovery mounts the seeded simulator or publishes Example context.
+Only an absent comparison parameter selects the `example` result. No data persistence,
+API contracts, simulation inputs, or dependencies change.
+
+Recovery offers **Back to workspace** and **Open the example**. The example link
+uses `?example=1` without a comparison ID and suppresses browser saved-comparison
+restoration, so a failed saved reference cannot immediately trap the founder again.
+Any supplied comparison parameter takes precedence over this opt-in. No-ID default
+behavior otherwise stays unchanged, including automatic restoration of a saved ID.
+Retry reloads the same bounded comparison/site selection and performs no model calls.
+
+A recovery component reveals the main view once through the existing consultant
+`setLayout("docked")` API, including its existing session preference update. Successful
+stored/example renders leave layout preference unchanged. Recovery does not remount or
+reset the consultant, conversation or playback; a later explicit focus choice is kept.
+Server diagnostics contain only `simulator_load_issue` and one fixed stage (`read`,
+`stored_data`, `freshness`, `insights`), never exception text, IDs, URLs, credentials or
+stored payloads. Optional insights/freshness failures still retain a valid saved scene
+and its existing unavailable/unknown qualification.
 
 ## Decision-first integration (HAC-71)
 
