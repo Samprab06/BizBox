@@ -24,6 +24,7 @@ import {
   type SensitivityResult,
   type SiteEvaluation,
 } from "@/lib/contracts/evaluation";
+import { demandPersonaSet } from "@/lib/contracts/evaluation";
 import type {
   BehaviorTable,
   DayType,
@@ -167,7 +168,7 @@ function demandInputFor(
   const meanService = site.config.service.meanServiceMin;
   return {
     site: site.storefront,
-    personaSet: request.personaSet,
+    personaSet: demandPersonaSet(request, site, source),
     ...(meanService !== undefined
       ? {
           serviceMeanMin: {
@@ -344,7 +345,7 @@ export function evaluateSite(
   const insightDay = (dayType: DayType) =>
     buildInsightsDay({
       runs: perSeed.map((r) => r.days[dayType]),
-      personas: request.personaSet.personas,
+      personas: demandPersonaSet(request, site, source).personas,
       siteLocation: site.storefront.location,
       capacityInputs: {
         stations: perSeed[0]!.days[dayType].metrics.stations,

@@ -15,6 +15,7 @@ import { CopilotMutationSchemas } from "@/lib/contracts/copilot-tools";
 import {
   EvaluationRequestSchema,
   EvaluationResultSchema,
+  demandPersonaSet,
   type EvaluationRequest,
   type EvaluationResult,
   type HourlyStat,
@@ -175,7 +176,7 @@ export function segmentShares(
     if (!table) return [];
     const failed = new Set(table.failedPersonaIds);
     const answers = new Map(table.personas.map((p) => [p.personaId, p]));
-    for (const persona of request.personaSet.personas) {
+    for (const persona of demandPersonaSet(request, site, "jev").personas) {
       const answer = answers.get(persona.id);
       if (!answer || failed.has(persona.id) || persona.weight <= 0) continue;
       const shares: Record<string, number> = {};
