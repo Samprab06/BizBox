@@ -17,3 +17,20 @@ Recordings show an illustrative prepared example, not live pedestrian measuremen
 ## Verification
 
 Verify media contains the intended roads/dots and visibly distinct one/two counters; verify phone and desktop anchor placement, pause/replay/hidden-tab behavior, poster fallbacks, counter selection through the closing shot, and immutable asset delivery. Retain initial cold-navigation budgets and assert no GIS requests across the landing flow. Run lint, typecheck, unit tests and production build, then relevant cross-browser landing tests.
+
+## Measured map-entry transfer
+
+Fresh isolated Chromium contexts, production server, 1280×720/DPR1. After the initial hero settled, seek directly to the morning chapter and collect resource transfers for nine seconds. The original capture build is `1314178`; the replacement includes the subsequent main integration. Local browser cache starts empty in each context. This is a lab resource sample, not a physical-device frame-rate or LCP guarantee.
+
+| Map-entry resources          | Live renderer baseline | Prepared media |
+| ---------------------------- | ---------------------: | -------------: |
+| Additional transferred bytes |             10,296,374 |        988,324 |
+| Additional requests          |                     77 |              3 |
+| GIS/road/engine requests     |                     69 |              0 |
+| Canvas elements              |                      1 |              0 |
+
+This window includes the expanded screen-background image as well as map media. Transfer decreased90.4%; initial hero budgets remain separately covered. The map MP4 is409,620bytes, its WebP poster340,956bytes; the counter MP4s are165,065/140,360bytes. Browser autoplay policy and decoding still vary by device, so posters remain useful without video playback.
+
+## Final verification
+
+Integrated `a73078b` main normally without conflicts or replacing teammate code. Lint, typecheck, production build, environment-file guard and client-bundle guard pass. Full unit suite:2,201passed/51existing skips. Homepage, retained legacy preview, cold-media budgets and prepared-media behavior:86browser checks passed across Chromium/WebKit/mobile Chrome, with one pre-existing WebKit keyboard skip. New coverage includes no live GIS downloads, immutable/range delivery, poster-only reduced motion/Save Data, manual autoplay recovery, selection through the closing shot and hidden-tab continuity including completed12:00results. The independent focused review's completed-clock regression was fixed and covered by browser tests. The existing recorded-example-loader tracing warning remains.
