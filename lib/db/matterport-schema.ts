@@ -12,6 +12,7 @@ import {
 import type {
   InteriorDimensions,
   InteriorProvenance,
+  ScanPlacement,
 } from "../contracts/interior";
 
 // Source IDs intentionally have no CoStar FKs: source loaders replace those
@@ -34,6 +35,9 @@ export const matterportModels = pgTable(
     // A public scan is still hidden until displayApproved is set by review.
     isPublic: boolean("is_public"),
     checkedAt: timestamp("checked_at", { withTimezone: true }),
+    // HAC-138: authored overlay placement for this scan. NULL = uncalibrated,
+    // so the simulation overlay falls back to Modeled layout.
+    placement: jsonb("placement").$type<ScanPlacement>(),
   },
   (t) => [
     unique("matterport_models_mapping_unique")
