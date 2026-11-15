@@ -1,0 +1,63 @@
+{
+  "sourceCommit": "1314178",
+  "capture": "Existing BizBox landing story in Chromium, DPR 1, Vexcel/OpenStreetMap attribution retained in UI",
+  "mapCrop": [1120, 720, 0, 0],
+  "counterCaptureViewport": [1920, 1080],
+  "counterCrops": {
+    "current": [576, 360, 372, 288],
+    "proposed": [576, 360, 972, 288]
+  },
+  "videoEncoding": {
+    "fps": 25,
+    "mp4": "H.264, CRF 27, yuv420p, faststart, no audio",
+    "webm": "VP9, CRF 36, no audio"
+  },
+  "posterEncoding": "WebP quality82 effort6 from first encoded frame",
+  "assets": [
+    {
+      "file": "counters-current.241ae963b00d.webp",
+      "bytes": 22846,
+      "sha256": "241ae963b00dd86b5b4f0866b48a8cb2c731beceef88e4495db7874fb384a423"
+    },
+    {
+      "file": "houston-morning.055f9ea70170.webm",
+      "bytes": 913524,
+      "sha256": "055f9ea70170ce115644f3fcc41e8d196fa3c5a64bda444bdb3a344c61a6dd02"
+    },
+    {
+      "file": "counters-current.e41fb5fb9c74.mp4",
+      "bytes": 165065,
+      "sha256": "e41fb5fb9c746528a443271af155f76e6e4e56d672a8b6033c470550c811bfbc"
+    },
+    {
+      "file": "counters-proposed.d95fa0f8d616.mp4",
+      "bytes": 140360,
+      "sha256": "d95fa0f8d616c58ddf739e67df7bae68dce2e8cfcf0ae21a195722bc2a599410"
+    },
+    {
+      "file": "counters-proposed.12ee6910802b.webm",
+      "bytes": 194259,
+      "sha256": "12ee6910802b4ba963747280e94b81757a151e2ef48d88a4b2d48f9a926ddb82"
+    },
+    {
+      "file": "counters-proposed.e3737639f84c.webp",
+      "bytes": 23720,
+      "sha256": "e3737639f84c2572cf27269344c71d8339da97af2f837181649ac6045eac58ab"
+    },
+    {
+      "file": "houston-morning.8ae69338a93d.webp",
+      "bytes": 340956,
+      "sha256": "8ae69338a93dbcfaf3a655b2c6aa8ed4f74266f6bc9911010a80906f0044dd54"
+    },
+    {
+      "file": "counters-current.164a3870c9c3.webm",
+      "bytes": 237693,
+      "sha256": "164a3870c9c31439ef2c03238aa7d105a8ad72e3bf3b09694b675b3eb5df417e"
+    },
+    {
+      "file": "houston-morning.7d668686166f.mp4",
+      "bytes": 409620,
+      "sha256": "7d668686166f3baf0a7ed75e43ec948c1fb2d5b285622a15f302e3d57a6aa8c2"
+    }
+  ]
+}

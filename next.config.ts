@@ -22,6 +22,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source:
+          "/landing-assets/prepared/:asset(.*\\.[a-f0-9]{12}\\.(?:mp4|webm|webp))",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
     ];
   },
 };

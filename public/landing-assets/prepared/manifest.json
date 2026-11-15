@@ -1,0 +1,42 @@
+{
+  "map": {
+    "width": 1120,
+    "height": 720,
+    "duration": 6,
+    "mp4": "/landing-assets/prepared/houston-morning.7d668686166f.mp4",
+    "webm": "/landing-assets/prepared/houston-morning.055f9ea70170.webm",
+    "poster": "/landing-assets/prepared/houston-morning.8ae69338a93d.webp",
+    "anchors": [
+      {
+        "siteId": "montrose",
+        "u": 0.5955357142857143,
+        "v": 0.8402777777777778
+      },
+      {
+        "siteId": "heights",
+        "u": 0.5473214285714286,
+        "v": 0.325
+      }
+    ]
+  },
+  "counters": {
+    "current": {
+      "width": 576,
+      "height": 360,
+      "duration": 20,
+      "mp4": "/landing-assets/prepared/counters-current.e41fb5fb9c74.mp4",
+      "webm": "/landing-assets/prepared/counters-current.164a3870c9c3.webm",
+      "poster": "/landing-assets/prepared/counters-current.241ae963b00d.webp",
+      "counterCount": 1
+    },
+    "proposed": {
+      "width": 576,
+      "height": 360,
+      "duration": 12,
+      "mp4": "/landing-assets/prepared/counters-proposed.d95fa0f8d616.mp4",
+      "webm": "/landing-assets/prepared/counters-proposed.12ee6910802b.webm",
+      "poster": "/landing-assets/prepared/counters-proposed.e3737639f84c.webp",
+      "counterCount": 2
+    }
+  }
+}
