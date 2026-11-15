@@ -67,6 +67,37 @@ describe("planWorkspaceActions", () => {
     ]);
   });
 
+  it("runs a single unit where the founder is, without opening the locked compare step", () => {
+    expect(
+      planWorkspaceActions([act({ type: "run_comparison", siteIds: ["1:1"] })], {
+        candidateIds: ids,
+        selectedIds: ["1:1", "2:2"],
+        flow: reachStep(atLocations, "compare"),
+        step: "locations",
+      }),
+    ).toEqual([
+      { kind: "select", siteIds: ["1:1"] },
+      { kind: "run", siteIds: ["1:1"] },
+    ]);
+  });
+
+  it("reruns the same units from results by going back to the compare step", () => {
+    expect(
+      planWorkspaceActions(
+        [act({ type: "run_comparison", siteIds: ["1:1", "2:2"] })],
+        {
+          candidateIds: ids,
+          selectedIds: ["1:1", "2:2"],
+          flow: atResults,
+          step: "results",
+        },
+      ),
+    ).toEqual([
+      { kind: "step", step: "compare" },
+      { kind: "run", siteIds: ["1:1", "2:2"] },
+    ]);
+  });
+
   it("go_to_step counts what earlier actions in the reply unlock, never a locked step", () => {
     const shortlistThenCompare = [
       act({ type: "set_shortlist", siteIds: ["1:1", "2:2"] }),

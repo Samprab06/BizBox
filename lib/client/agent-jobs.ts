@@ -106,8 +106,10 @@ export function planWorkspaceActions(
         const ids = known(action.siteIds).slice(0, MAX_COMPARE_UNITS);
         if (!ids.length) break;
         select(ids);
-        flow = reachStep(flow, "compare");
-        goTo("compare");
+        // `compare` opens only for two or more units, exactly as the workspace unlocks it
+        // (`select` above reaches it). A single unit runs where the founder is: sending them
+        // to a locked step would only bounce them back to the locations.
+        if (canOpenStep(flow, "compare")) goTo("compare");
         effects.push({ kind: "run", siteIds: ids });
         break;
       }

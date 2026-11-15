@@ -868,12 +868,21 @@ export function useLiveComparison(
     stored.retry();
   };
   const run = async (override?: string[]) => {
-    if (operation.current || search.state.mode !== "live") return;
+    // A run the consultant asked for (`override`) that cannot start says why, so it does not
+    // report a run that never happened; a manual run keeps the button's own state.
+    const refuse = (reason: string) => {
+      if (override) emit({ kind: "comparison_failed", reason });
+    };
+    if (operation.current)
+      return refuse("Another comparison is already running; nothing new was started");
+    if (search.state.mode !== "live")
+      return refuse("Live listings are unavailable, so no comparison was started");
     const live = candidates.map(({ candidate }) => candidate.id);
     const ids = override
       ? [...new Set(override)].filter((id) => live.includes(id))
       : selectedRef.current;
-    if (!ids.length) return;
+    if (!ids.length)
+      return refuse("None of those units are available to compare");
     if (override) setSelectedIds(ids);
     const demandSource: DemandSource = capability?.jev ? "jev" : "huff";
     const controller = new AbortController();
