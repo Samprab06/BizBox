@@ -57,7 +57,12 @@ export type InvestigationStepPlanner = (input: {
 }) => Promise<{
   tool: string;
   inputHash: string;
-  execute(input: { signal: AbortSignal; idempotencyKey: string }): Promise<{
+  execute(input: {
+    signal: AbortSignal;
+    idempotencyKey: string;
+    /** Epoch ms (Date.now clock) a step should finish by, ahead of the hard abort (HAC-155). */
+    deadlineAt?: number;
+  }): Promise<{
     summary: InvestigationMilestone["summary"];
     findings?: string[];
     done?: boolean;
@@ -73,6 +78,14 @@ const zeroCounters = () => ({
 const active = (job: InvestigationJob) =>
   job.status === "queued" || job.status === "running";
 class DeadlineReached extends Error {}
+/**
+ * A tool that ran out of time but kept its progress (e.g. a deadline-limited Jev panel, HAC-155)
+ * throws an error with `resumable: true`. The step is not a failure: no milestone is written,
+ * its counter reservation is returned, and the job stays active so the next advance repeats it.
+ */
+const resumableStep = (error: unknown): error is Error =>
+  error instanceof Error &&
+  (error as Error & { resumable?: unknown }).resumable === true;
 
 export function createInvestigationService(
   repository: InvestigationRepository,
@@ -261,6 +274,7 @@ export function createInvestigationService(
           }
         }
         let executing = false;
+        let reservedFrom: InvestigationJob["counters"] | null = null;
         try {
           while (remaining() > 0) {
             const nextSeq = milestones.length;
@@ -310,6 +324,7 @@ export function createInvestigationService(
                 owner,
               );
             // Reserve paid/tool capacity durably before any tool side effect.
+            reservedFrom = job.counters;
             job = await save(
               { ...job, counters, lastAdvanceAt: now().toISOString() },
               owner,
@@ -321,6 +336,7 @@ export function createInvestigationService(
               plan.execute({
                 signal: controller.signal,
                 idempotencyKey: `${job.id}:${job.attempt}:${nextSeq}:${inputHash}`,
+                deadlineAt: Date.now() + remaining(),
               }),
             );
             const milestone = InvestigationMilestoneSchema.parse({
@@ -349,6 +365,7 @@ export function createInvestigationService(
               milestone,
             );
             executing = false;
+            reservedFrom = null;
             milestones.push(milestone);
             if (result.done) return job;
           }
@@ -368,6 +385,17 @@ export function createInvestigationService(
             error.code === "lease_lost"
           )
             throw error;
+          if (executing && resumableStep(error))
+            return await save(
+              {
+                ...job,
+                counters: reservedFrom ?? job.counters,
+                status: options.resumeToolTimeouts ? "running" : "queued",
+                reason: error.message,
+                lastAdvanceAt: now().toISOString(),
+              },
+              owner,
+            );
           return await save(
             {
               ...job,

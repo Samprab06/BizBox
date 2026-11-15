@@ -1,5 +1,11 @@
 import type { Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  closeConsultant,
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 import {
   mockLiveComparison,
   liveComparisonSearch,
@@ -61,16 +67,9 @@ async function showList(page: Page) {
   )
     await page.getByRole("button", { name: /^Show list/ }).click();
 }
+/** HAC-162 on main: the chat is the consultant dock, not a pane inside the workspace. */
 async function showChat(page: Page) {
-  if (
-    !(await page
-      .getByRole("textbox", { name: "Message the BizBox assistant" })
-      .isVisible())
-  )
-    await page
-      .getByRole("button", { name: "Chat", exact: true })
-      .last()
-      .click();
+  await openConsultant(page);
 }
 
 test("compact desktop window expands with the map pane matching its backdrop", async ({
@@ -154,8 +153,9 @@ for (const viewport of [
       const composer = page.getByRole("textbox", {
         name: "Message the BizBox assistant",
       });
-      await showChat(page);
+      await openConsultant(page);
       await composer.fill("Keep this question while I explore");
+      await closeConsultant(page);
       await showList(page);
       await locations
         .getByRole("button", {
@@ -191,7 +191,7 @@ for (const viewport of [
           exact: true,
         }),
       ).toBeVisible();
-      await showChat(page);
+      await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       await page.getByRole("tab", { name: "Voice", exact: true }).click();
       await expect(
@@ -202,6 +202,7 @@ for (const viewport of [
       ).toBeDisabled();
       await page.getByRole("tab", { name: "Text", exact: true }).click();
       await expect(composer).toHaveValue("Keep this question while I explore");
+      await closeConsultant(page);
       await page
         .getByRole("button", { name: "Locations", exact: true })
         .click();
@@ -243,7 +244,7 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: "Compare 2 units", exact: true }),
       ).toBeDisabled();
-      await showChat(page);
+      await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       expect(
         await page.evaluate(

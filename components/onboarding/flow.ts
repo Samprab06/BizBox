@@ -8,6 +8,7 @@
  */
 import { operatingHours } from "@/lib/client/intake-business-profile";
 import { fields, missingFields, profileValidationMessage, type Profile } from "@/components/intake/profile";
+import { DEFAULT_RANGE, formatHoursValue, formatTime, parseHoursValue } from "./clock-dial-math";
 
 export type FieldKey = (typeof fields)[number]["key"];
 
@@ -100,7 +101,7 @@ export const neighborhoods: Record<City, readonly string[]> = {
 /** Curved-ruler settings. Steps are UI aids only; any valid typed amount is kept exactly. */
 export const rulers = {
   rent: { min: 500, max: 20000, step: 100, start: 4500, currency: true, label: "Monthly rent limit" },
-  buildout: { min: 0, max: 500000, step: 5000, start: 80000, currency: true, label: "Buildout budget" },
+  buildout: { min: 5000, max: 500000, step: 5000, start: 80000, currency: true, label: "Buildout budget" },
   staff: { min: 1, max: 30, step: 1, start: 2, currency: false, label: "People on shift" },
 } as const;
 
@@ -125,6 +126,13 @@ export function stepError(step: QuestionStep, value: string): string | undefined
   if (step === "price" && !priceChoices.some((choice) => choice.value === text)) return "Choose a price tier.";
   if (step === "areas" && !text) return "Choose an area, add a note, or skip.";
   if (step === "requirements" && !text) return "Add what the space needs, or skip.";
+  if (step === "staff" && !text) return "Enter how many people will be on shift.";
+  if (step === "rent" || step === "buildout") {
+    const amount = Number(text);
+    const { max } = rulers[step];
+    if (!/^\d+$/.test(text) || amount < 1 || amount > max)
+      return `Enter a whole dollar amount from $1 to ${money(max)}.`;
+  }
   if (!text) return "Add your answer to continue.";
   if (step === "hours" && !operatingHours(text)) return "Use one same-day range, such as 7am–5pm or 07:00–17:00.";
   return profileValidationMessage(field(step), text);
@@ -142,9 +150,14 @@ export function resumeStep(profile: Profile): Step {
   }) ?? "review";
 }
 
-/** The value the screen shows first: the saved answer, or a valid app default for choices. */
+/**
+ * The value the screen shows first: the saved answer, or a valid app default for choices.
+ * Hours start at 9:00 AM – 5:00 PM (HAC-154) unless a readable range is saved. Like the
+ * other starting values, this is only a draft until the founder presses Continue.
+ */
 export function initialValue(step: QuestionStep, profile: Profile): string {
   const saved = profile[step]?.value ?? "";
+  if (step === "hours") return parseHoursValue(saved) ? saved : formatHoursValue(DEFAULT_RANGE);
   const choice = step === "category" || step === "city" || step === "price";
   return choice && stepError(step, saved) ? "" : saved;
 }
@@ -193,12 +206,12 @@ export function nudge(value: number, step: number, min: number, direction: 1 | -
   return min + (base + direction * detents) * step;
 }
 
-/** The ruler's span always includes the current exact value. */
+/** A valid exact value can extend the visual range without exceeding the budget cap. */
 export function rulerBounds(step: RulerStep, value: number) {
   const ruler = rulers[step];
   return {
-    min: Number.isFinite(value) ? Math.min(ruler.min, value) : ruler.min,
-    max: Number.isFinite(value) ? Math.max(ruler.max, value) : ruler.max,
+    min: Number.isSafeInteger(value) && value >= 1 ? Math.min(ruler.min, value) : ruler.min,
+    max: !ruler.currency && Number.isSafeInteger(value) ? Math.max(ruler.max, value) : ruler.max,
   };
 }
 
@@ -209,8 +222,22 @@ export const money = (value: number) =>
 export function reviewValue(step: QuestionStep, value: string): string {
   if (step === "category") return categoryChoices.find((choice) => choice.value === value)?.label ?? value;
   if (step === "price") return priceChoices.find((choice) => choice.value === value)?.label ?? value;
+  if (step === "areas") {
+    return value.split(";").map((part) => {
+      const text = part.trim();
+      const match = /^(favor|avoid)(?::\s*|\s+)(.+)$/i.exec(text);
+      if (!match) return text;
+      const label = match[1].toLowerCase() === "favor" ? "Favor" : "Avoid";
+      const constraint = match[2].replace(/^(anything|anywhere)\b/i, (word) => word.toLowerCase());
+      return `${label}: ${constraint}`;
+    }).filter(Boolean).join("; ");
+  }
   if ((step === "rent" || step === "buildout") && /^\d+$/.test(value)) return money(Number(value));
   if (step === "staff" && /^\d+$/.test(value)) return `${value} on shift`;
+  if (step === "hours") {
+    const range = parseHoursValue(value);
+    if (range) return `${formatTime(range.open)} – ${formatTime(range.close)}`;
+  }
   return value;
 }
 

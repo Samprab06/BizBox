@@ -14,6 +14,16 @@ import {
   expandProjectNavigation,
 } from "./fixtures";
 
+// Keep accessibility checks offline; DOM markers still render over this empty basemap.
+test.beforeEach(async ({ page }) => {
+  await page.route("https://tiles.openfreemap.org/**", (route) =>
+    route.fulfill({
+      json: { version: 8, sources: {}, layers: [] },
+      headers: { "access-control-allow-origin": "*" },
+    }),
+  );
+});
+
 // Every route the navigation links to, in task order.
 const NAV_ORDER: WorkspaceRoute[] = workspaceSteps.map((step) => step.route);
 const siteFor = (view: WorkspaceRoute) =>
@@ -77,7 +87,7 @@ test.describe("every view passes the axe scan", () => {
   test("project unavailable state", async ({ page }) => {
     await page.goto(workspaceHref("no-such-project", "map"));
     await expect(
-      page.getByRole("heading", { name: /could not be found/i }),
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
     await expectNoA11yViolations(page);
   });

@@ -1,11 +1,23 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { ChatBubble } from "@/components/ui/chat";
+import { Pill } from "@/components/ui/pill";
+import { focusRing, pressable } from "@/components/ui/cn";
+import { Markdown } from "@/components/ui/markdown";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
 import { useAssistantDraft } from "./use-assistant-draft";
-import styles from "./workspace-glass.module.css";
 import type { IntakeConversation } from "./use-intake-conversation";
 import { assistantPresentation } from "./assistant-presentation";
 
@@ -49,16 +61,15 @@ function MicIcon() {
   );
 }
 
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink";
-
 function Conversation({
   messages,
   emptyContext,
+  pending = false,
   id,
 }: {
   messages: IntakeConversation["messages"];
   emptyContext?: string | null;
+  pending?: boolean;
   id: string;
 }) {
   const log = useRef<HTMLDivElement>(null);
@@ -66,7 +77,7 @@ function Conversation({
   useEffect(() => {
     const element = log.current;
     if (element) element.scrollTop = element.scrollHeight;
-  }, [count]);
+  }, [count, pending]);
   return (
     <div
       ref={log}
@@ -74,32 +85,53 @@ function Conversation({
       role="log"
       aria-label="Conversation"
       tabIndex={0}
-      className={`${styles.conversation} ${focusRing}`}
+      className={`min-h-0 flex-1 overflow-y-auto px-5 py-4 text-sm ${focusRing}`}
     >
-      {count === 0 && emptyContext && (
-        <p
-          role="note"
-          aria-label="Saved brief"
-          className="text-xs text-white/70"
-        >
-          {emptyContext}
-        </p>
-      )}
-      {count > 0 && (
-        <ol className={styles.messages}>
+      {count === 0 ? (
+        emptyContext ? (
+          <p role="note" aria-label="Saved brief" className="text-xs text-muted">
+            {emptyContext}
+          </p>
+        ) : (
+          <p className="text-muted">
+            Ask BizBox about this space or your brief. Replies come from the
+            BizBox intake assistant.
+          </p>
+        )
+      ) : (
+        <ol className="space-y-3">
           {messages.map((entry, index) => (
-            <li
-              key={index}
-              className={`${styles.message} ${entry.role === "founder" ? styles.founderMessage : ""}`}
-            >
-              <span className={styles.messageIdentity}>
-                {entry.role === "founder" ? "You" : "BizBox"}
-              </span>
-              <span className="break-words">{entry.text}</span>
+            <li key={index}>
+              <ChatBubble
+                role={entry.role === "founder" ? "user" : "assistant"}
+              >
+                <span className="sr-only">
+                  {entry.role === "founder" ? "You: " : "BizBox: "}
+                </span>
+                {entry.role === "founder" ? (
+                  <span className="whitespace-pre-wrap break-words">
+                    {entry.text}
+                  </span>
+                ) : (
+                  <Markdown text={entry.text} className="break-words" />
+                )}
+              </ChatBubble>
             </li>
           ))}
         </ol>
       )}
+      <p
+        aria-live="polite"
+        data-testid="assistant-thinking"
+        className="mr-6 mt-3 text-muted"
+      >
+        {pending && (
+          <>
+            <span className="thinking-dots" aria-hidden="true" />
+            Thinking…
+          </>
+        )}
+      </p>
     </div>
   );
 }
@@ -107,21 +139,40 @@ function Conversation({
 /**
  * One assistant, two input modes. Text and Voice are WAI-ARIA tabs over the same conversation
  * hook and the same composer draft; switching modes only changes which input is shown.
+ * HAC-143: the consultant shell owns the mode and the voice adapter, so both survive
+ * navigation; the panel itself stays mounted in the project layout.
  */
 export function AssistantPanel({
   projectId,
   conversation,
-  selectedSiteId,
-  summary,
+  mode,
+  onModeChange,
+  voiceAdapter,
+  actions,
+  inline,
+  className = "",
 }: {
   projectId: string;
   conversation: IntakeConversation;
-  selectedSiteId?: string;
-  summary: string;
+  mode: AssistantMode;
+  onModeChange: (mode: AssistantMode) => void;
+  voiceAdapter: VoiceAdapter;
+  /** Extra header controls (the shell's layout toggle). */
+  actions?: ReactNode;
+  /** HAC-150: an answer card shown in the Text tab between the conversation and the composer. */
+  inline?: ReactNode;
+  className?: string;
 }) {
-  const [mode, setMode] = useState<AssistantMode>("text");
   const [draft, setDraft] = useAssistantDraft(projectId);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+  // Grow with the text up to the max-h-40 cap, and shrink back after a send.
+  useEffect(() => {
+    const element = field.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [draft, mode]);
   const tabs = useRef<Record<AssistantMode, HTMLButtonElement | null>>({
     text: null,
     voice: null,
@@ -129,15 +180,18 @@ export function AssistantPanel({
   const base = useId();
   const tabId = (value: AssistantMode) => `${base}-tab-${value}`;
   const panelId = (value: AssistantMode) => `${base}-panel-${value}`;
-  const { availability, busy, failure } = conversation;
+  const { availability, busy } = conversation;
   const offline = availability === "offline";
   const presentation = assistantPresentation(
     conversation.session,
     conversation.messages,
   );
 
+  const failure =
+    conversation.failure?.source === "assistant" ? conversation.failure : null;
+
   function select(next: AssistantMode, focus: boolean) {
-    setMode(next);
+    onModeChange(next);
     if (focus) tabs.current[next]?.focus();
   }
 
@@ -148,18 +202,6 @@ export function AssistantPanel({
     select(next, true);
   }
 
-  const voiceAdapter: VoiceAdapter = {
-    readContext: () => ({
-      projectId,
-      mode: "chat",
-      ...(selectedSiteId && selectedSiteId.length <= 200
-        ? { selectedSiteId }
-        : {}),
-      summary: summary.slice(0, VOICE_LIMITS.summaryChars),
-    }),
-    submitTranscript: (text) => conversation.submit(text),
-  };
-
   const status =
     availability === "checking"
       ? "Checking"
@@ -168,64 +210,85 @@ export function AssistantPanel({
         : "Offline";
 
   return (
-    <aside aria-labelledby={`${base}-heading`} className={styles.assistant}>
-      <header className={styles.assistantHeader}>
-        <h2 id={`${base}-heading`} className="sr-only">
-          Assistant
-        </h2>
-        <span
-          className="sr-only"
-          data-agent-availability={availability}
-          role="status"
-          aria-label="Assistant connection"
-        >
-          {status}
-        </span>
-        <div
-          role="tablist"
-          aria-label="Assistant mode"
-          className={styles.assistantModes}
-        >
-          {assistantModes.map((value) => (
-            <button
-              key={value}
-              ref={(element) => {
-                tabs.current[value] = element;
-              }}
-              id={tabId(value)}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              aria-controls={panelId(value)}
-              tabIndex={mode === value ? 0 : -1}
-              onClick={() => select(value, false)}
-              onKeyDown={onTabKey}
-              className={`${styles.assistantTab} ${focusRing} ${mode === value ? styles.activeAssistantTab : ""}`}
-            >
-              {value === "text" ? <ChatIcon /> : <MicIcon />}
-              {MODE_LABEL[value]}
-            </button>
-          ))}
+    <aside
+      aria-labelledby={`${base}-heading`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-panel border border-glass-edge bg-glass-fill text-ink shadow-glass backdrop-blur-glass ${className}`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
+        <div className="flex items-center gap-2">
+          <h2
+            id={`${base}-heading`}
+            className="text-[15px] font-semibold tracking-tight"
+          >
+            Assistant
+          </h2>
+          <Pill
+            data-agent-availability={availability}
+            className="text-[11px] font-normal"
+          >
+            {status}
+          </Pill>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Assistant mode"
+            className="flex rounded-control border border-glass-edge bg-field p-1"
+          >
+            {assistantModes.map((value) => (
+              <button
+                key={value}
+                ref={(element) => {
+                  tabs.current[value] = element;
+                }}
+                id={tabId(value)}
+                type="button"
+                role="tab"
+                aria-selected={mode === value}
+                aria-controls={panelId(value)}
+                tabIndex={mode === value ? 0 : -1}
+                onClick={() => select(value, false)}
+                onKeyDown={onTabKey}
+                className={`flex items-center gap-1.5 rounded-control px-3 py-1.5 text-xs font-medium ${focusRing} ${pressable} ${
+                  mode === value
+                    ? "bg-accent text-on-accent"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {value === "text" ? <ChatIcon /> : <MicIcon />}
+                {MODE_LABEL[value]}
+              </button>
+            ))}
+          </div>
+          {actions}
         </div>
       </header>
+      <p className="border-b border-line px-5 py-2 text-xs text-muted">
+        Staffing changes and Keep/Revert are not connected yet.
+      </p>
 
       {failure && (
-        <div role="alert" className={styles.assistantFailure}>
-          <p className="text-viewport-warn">{failure.message}</p>
+        <div
+          role="alert"
+          className="mx-5 mt-3 rounded-control border border-line bg-panel-raised p-3 text-sm"
+        >
+          <p className="text-warn">{failure.message}</p>
           {failure.retry !== undefined && (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={conversation.retry}
-              className={`${styles.secondary} ${styles.assistantRetry} ${focusRing}`}
+              variant="glass"
+              size="sm"
+              className="mt-2"
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}
       {conversation.storageError && (
-        <p role="alert" className={styles.assistantFailure}>
+        <p role="alert" className="mx-5 mt-3 text-sm text-warn">
           This browser could not save the conversation.
         </p>
       )}
@@ -235,17 +298,19 @@ export function AssistantPanel({
         role="tabpanel"
         aria-labelledby={tabId("text")}
         hidden={mode !== "text"}
-        className={styles.assistantPanel}
+        className="flex min-h-0 flex-1 flex-col"
       >
         {mode === "text" && (
           <>
             <Conversation
               messages={presentation.messages}
               emptyContext={presentation.context}
+              pending={busy}
               id={`${base}-log-text`}
             />
+            {inline}
             <form
-              className={styles.composer}
+              className="border-t border-line p-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 const text = draft.trim();
@@ -255,20 +320,33 @@ export function AssistantPanel({
                 void conversation.submit(text);
               }}
             >
-              <div className={styles.composerField}>
-                <input
+              <div className="flex items-end gap-2 rounded-control border border-glass-edge bg-field p-1.5 pl-4 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus-ring">
+                <textarea
+                  ref={field}
+                  rows={1}
                   aria-label="Message the BizBox assistant"
                   placeholder={presentation.placeholder}
                   maxLength={VOICE_LIMITS.transcriptChars}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  className={styles.composerInput}
+                  onKeyDown={(event) => {
+                    // Enter sends; Shift+Enter adds a line; never mid-IME-composition.
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  className="max-h-40 min-w-0 flex-1 resize-none bg-transparent py-2 text-sm text-ink placeholder:text-muted focus-visible:outline-none"
                 />
-                <button
+                <IconButton
                   type="submit"
+                  variant="primary"
                   disabled={busy || availability === "checking"}
                   aria-label={busy ? "Sending message" : "Send message"}
-                  className={`${styles.sendButton} ${focusRing}`}
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -284,11 +362,12 @@ export function AssistantPanel({
                       strokeLinejoin="round"
                     />
                   </svg>
-                </button>
+                </IconButton>
               </div>
               {offline && (
-                <p className={styles.assistantOffline}>
-                  Assistant unavailable.
+                <p className="mt-2 text-xs text-muted">
+                  The BizBox assistant is offline. Your brief can still be
+                  edited in Intake.
                 </p>
               )}
             </form>
@@ -301,24 +380,22 @@ export function AssistantPanel({
         role="tabpanel"
         aria-labelledby={tabId("voice")}
         hidden={mode !== "voice"}
-        className={`${styles.assistantPanel} ${styles.voiceContainer}`}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto"
       >
         {mode === "voice" && (
           <>
-            <div>
+            <div className="px-5">
               <VoicePanel
                 adapter={voiceAdapter}
                 title="Talk to BizBox"
                 label="Voice assistant"
                 tone="dark"
-                compact
-                className={styles.voiceSurface}
               />
             </div>
             <details
               open={historyOpen}
               onToggle={(event) => setHistoryOpen(event.currentTarget.open)}
-              className={styles.voiceHistory}
+              className="mt-auto flex min-h-0 flex-col border-t border-line"
             >
               <summary
                 // State-driven (not the async native toggle) so a quick tab switch keeps it.
@@ -326,14 +403,15 @@ export function AssistantPanel({
                   event.preventDefault();
                   setHistoryOpen((open) => !open);
                 }}
-                className={focusRing}
+                className={`cursor-pointer px-5 py-3 text-sm ${focusRing}`}
               >
                 Conversation
               </summary>
-              <div className={styles.voiceHistoryLog}>
+              <div className="flex max-h-72 min-h-0 flex-col">
                 <Conversation
                   messages={presentation.messages}
                   emptyContext={presentation.context}
+                  pending={busy}
                   id={`${base}-log-voice`}
                 />
               </div>

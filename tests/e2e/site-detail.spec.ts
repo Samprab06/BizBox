@@ -200,7 +200,7 @@ test.describe("site detail", () => {
 
     expect(response?.status()).toBe(404);
     await expect(
-      page.getByRole("heading", { name: /could not be found/i }),
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
   });
 

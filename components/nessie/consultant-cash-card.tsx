@@ -1,3 +1,4 @@
+import { Card } from "@/components/ui/card";
 import type { NessieConsultantResult } from "@/lib/contracts/nessie";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 
@@ -14,9 +15,10 @@ export function ConsultantCashCard({
 }) {
   const { selectedAccount: account, snapshot, scenario } = result;
   return (
-    <section
+    <Card
+      role="region"
       aria-label="Saved Nessie cash assessment"
-      className="mt-3 min-w-0 space-y-3 rounded-lg border border-line bg-paper p-4 text-sm [overflow-wrap:anywhere]"
+      className="mt-3 min-w-0 space-y-3 rounded-lg border border-line bg-canvas p-4 text-sm [overflow-wrap:anywhere]"
     >
       <p className="font-semibold">
         Capital One Nessie <EvidenceBadge kind="Simulation" />
@@ -128,7 +130,7 @@ export function ConsultantCashCard({
           )}
         </>
       )}
-    </section>
+    </Card>
   );
 }
 

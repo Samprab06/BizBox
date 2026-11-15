@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import type { LiveComparisonController } from "@/lib/client/live-comparison";
@@ -84,19 +86,24 @@ export function LocationExperience({
           aria-label="Workspace view"
         >
           {view !== "locations" && (
-            <button onClick={() => setView("locations")}>Locations</button>
+            <Button variant="glass" onClick={() => setView("locations")}>
+              Locations
+            </Button>
           )}
           {view === "locations" && markers.length > 0 && onOverview && (
-            <button onClick={onOverview}>All locations</button>
+            <Button variant="glass" onClick={onOverview}>
+              All locations
+            </Button>
           )}
           {candidates.length > 0 && (
-            <button
+            <Button
+              variant="glass"
               data-show-location-list
               aria-expanded={listOpen}
               onClick={onShowList}
             >
               Show list ({candidates.length} units)
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -165,12 +172,13 @@ export function LocationExperience({
               </div>
             ) : (
               <div className="mt-3">
-                <button
+                <Button
+                  variant="glass"
                   className={styles.secondary}
                   onClick={() => setView("locations")}
                 >
                   Compare locations first
-                </button>
+                </Button>
               </div>
             )}
           </details>
@@ -184,9 +192,13 @@ export function LocationExperience({
             <div className="flex flex-wrap items-center gap-4">
               <p>{searchUi.label}</p>
               {searchUi.action === "retry" && (
-                <button className={styles.secondary} onClick={controller.retry}>
+                <Button
+                  variant="glass"
+                  className={styles.secondary}
+                  onClick={controller.retry}
+                >
                   Retry
-                </button>
+                </Button>
               )}
               {searchUi.action === "finish_brief" && (
                 <Link

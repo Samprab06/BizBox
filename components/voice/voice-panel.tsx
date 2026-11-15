@@ -39,6 +39,7 @@ export function VoicePanel({
   const [state, setState] = useState<VoiceSnapshot>({
     phase: "idle",
     muted: false,
+    microphoneReady: false,
     message: "Voice is off.",
   });
   const [configured, setConfigured] = useState<boolean | null>(null);
@@ -89,7 +90,7 @@ export function VoicePanel({
         <GradientOrb
           className="w-20 shrink-0 sm:w-24"
           levelRef={level}
-          active={active}
+          active={state.microphoneReady}
         />
         <div className="min-w-0 flex-1">
           <h3 className={compact ? "sr-only" : "font-semibold"}>{title}</h3>
@@ -110,9 +111,7 @@ export function VoicePanel({
                 ? compact && state.phase === "idle"
                   ? "Ready"
                   : state.message
-                : compact
-                  ? "Voice unavailable"
-                  : "Voice is unavailable. Typed intake still works."}
+                : "Voice is unavailable right now. Select Text to keep typing."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {!active ? (
@@ -128,16 +127,20 @@ export function VoicePanel({
               <>
                 <button
                   type="button"
+                  disabled={!state.microphoneReady}
                   onClick={() => client.current?.setMuted(!state.muted)}
                   aria-pressed={state.muted}
-                  className={secondary}
+                  className={`${secondary} disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {state.muted ? "Unmute microphone" : "Mute microphone"}
                 </button>
                 <button
                   type="button"
+                  disabled={
+                    !state.microphoneReady || state.phase === "connecting"
+                  }
                   onClick={() => client.current?.interrupt()}
-                  className={secondary}
+                  className={`${secondary} disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   Stop speaking
                 </button>

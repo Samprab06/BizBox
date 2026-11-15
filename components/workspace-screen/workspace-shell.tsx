@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { Brand } from "@/components/brand/brand";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { buttonVariants } from "@/components/ui/button";
+import { cn, focusRing, pressable } from "@/components/ui/cn";
 import Link from "next/link";
 import { useId, type ReactNode } from "react";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -25,7 +27,9 @@ export function WorkspaceShell({
   navigation?: ReactNode;
   backdrop?: ReactNode;
   children: ReactNode;
-  assistant: ReactNode;
+  /** Optional: inside the consultant shell the assistant is the dock, not a column here. */
+  assistant?: ReactNode;
+  /** `null` hides "Edit brief"; omitted links to the intake for the selected site. */
   editBriefHref?: string | null;
 }) {
   const headingId = useId();
@@ -55,7 +59,7 @@ export function WorkspaceShell({
       </h1>
       <header className={styles.header}>
         <div className={styles.identity}>
-          <Brand />
+          <BrandLogo onDark className="h-7 w-auto" />
           <div className={styles.project}>
             <span>{header.business}</span>
             <span className={styles.projectDivider} aria-hidden="true">
@@ -73,7 +77,12 @@ export function WorkspaceShell({
                 workspaceHref(projectId, "intake", selectedSiteId)
               }
               prefetch={false}
-              className={styles.editBrief}
+              className={cn(
+                styles.editBrief,
+                buttonVariants.glass,
+                focusRing,
+                pressable,
+              )}
             >
               Edit brief
               <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -83,10 +92,16 @@ export function WorkspaceShell({
           )}
         </div>
       </header>
-      <div className={styles.workspace}>
+      <div
+        className={
+          assistant
+            ? styles.workspace
+            : `${styles.workspace} ${styles.workspaceSolo}`
+        }
+      >
         {backdrop && <div className={styles.backdrop}>{backdrop}</div>}
         <div className={styles.visualization}>{children}</div>
-        <div className={styles.assistantSlot}>{assistant}</div>
+        {assistant && <div className={styles.assistantSlot}>{assistant}</div>}
       </div>
     </section>
   );

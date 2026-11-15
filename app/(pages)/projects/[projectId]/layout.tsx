@@ -1,7 +1,19 @@
-import { ProjectFrame } from "@/components/shell/project-frame";
-import { ProjectContextProvider } from "@/components/shell/context-bar";
+import Link from "next/link";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { CopilotDock } from "@/components/copilot/copilot-dock";
+import { CopilotProvider } from "@/components/copilot/copilot-provider";
+import { ConsultantShell } from "@/components/shell/consultant-shell";
+import {
+  ProjectContextBar,
+  ProjectContextProvider,
+} from "@/components/shell/context-bar";
 import { getPreviewProject } from "@/lib/workspace-preview";
 
+/**
+ * HAC-143: the project layout stays mounted across client navigation, so it hosts the
+ * persistent consultant. The URL stays the current step; the shell places the consultant
+ * beside it (or full screen) and keeps one conversation for the whole project.
+ */
 export default async function ProjectLayout({
   children,
   params,
@@ -9,16 +21,39 @@ export default async function ProjectLayout({
   children: React.ReactNode;
   params: Promise<{ projectId: string }>;
 }) {
-  const project = getPreviewProject((await params).projectId);
+  const { projectId } = await params;
+  const project = getPreviewProject(projectId);
   return (
-    <ProjectFrame>
+    <>
+      {/* Stage 2 minimal glass header; DS-8 restyles it with the shared tokens. */}
+      <header className="sticky top-0 z-30 h-16 border-b border-line/70 bg-paper/75 backdrop-blur-md supports-[backdrop-filter]:bg-paper/60">
+        <div className="flex h-full items-center px-5 sm:px-8">
+          <Link
+            href="/projects/houston-coffee/intake"
+            className="inline-flex items-center"
+          >
+            <BrandLogo onDark priority className="h-8 w-auto print:invert" />
+          </Link>
+        </div>
+      </header>
       {project ? (
-        <ProjectContextProvider project={project}>
-          {children}
+        // HAC-84's copilot (scenario, plan, proposed changes) sits in the consultant's dock
+        // under the assistant, so every consultant panel persists with the shell.
+        <ProjectContextProvider project={project} showContextBar={false}>
+          <CopilotProvider projectId={project.id}>
+            <ConsultantShell
+              projectId={projectId}
+              project={project}
+              companion={<CopilotDock />}
+            >
+              <ProjectContextBar />
+              {children}
+            </ConsultantShell>
+          </CopilotProvider>
         </ProjectContextProvider>
       ) : (
-        children
+        <main className="min-w-0 px-5 py-7 sm:px-8">{children}</main>
       )}
-    </ProjectFrame>
+    </>
   );
 }

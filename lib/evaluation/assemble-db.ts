@@ -8,13 +8,18 @@ import {
   type CatchmentExecutor,
 } from "@/lib/data/catchment-repository";
 import { getDb } from "@/lib/db/client";
-import { createJevClientFromEnv, type JevClient } from "@/lib/panel/jev-client";
+import {
+  createJevClientFromEnv,
+  jevBundleOrdersFromEnv,
+  type JevClient,
+} from "@/lib/panel/jev-client";
 import { createPostgresJevCache } from "@/lib/panel/cache-postgres";
 import {
   assembleEvaluation,
   type AssembleEvaluationInput,
   type AssemblyCatchment,
   type AssemblyDependencies,
+  type PanelDeadline,
 } from "./assemble";
 
 type Row = Record<string, unknown>;
@@ -50,6 +55,9 @@ export function createPostgresAssemblyDependencies(
       ? {
           jev: {
             client: jevClient,
+            // HAC-131: one request per persona x site instead of one per order. Opt-in
+            // (JEV_BUNDLE_ORDERS) until validated against live Jev.
+            bundleOrders: jevBundleOrdersFromEnv(),
             cache: createPostgresJevCache(
               db,
               projectId,
@@ -233,6 +241,7 @@ export function createPostgresAssemblyDependencies(
 
 export async function assemblePostgresEvaluation(
   input: AssembleEvaluationInput,
+  panelDeadline: PanelDeadline = {},
 ) {
   const key = process.env.JEV_API_KEY?.trim();
   // Explicit opt-in only: the new shortcut defaults to Huff and cannot silently incur panel calls.
@@ -241,5 +250,6 @@ export async function assemblePostgresEvaluation(
   return assembleEvaluation(
     input,
     createPostgresAssemblyDependencies(getDb(), input.projectId, client),
+    panelDeadline,
   );
 }

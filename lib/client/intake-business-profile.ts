@@ -10,6 +10,7 @@ import {
   type AssumedValue,
 } from "@/lib/contracts";
 import { categoryDefaults } from "@/lib/agent/defaults";
+import { isKnownProjectId } from "@/lib/projects/ids";
 
 export type IntakeProfileResult = {
   profile: BusinessProfile | null;
@@ -114,7 +115,7 @@ export function profileFromIntake(
   });
   if (!parsed.success || missingFields(parsed.data.profile).length)
     return unavailable("Complete your intake to search live listings.");
-  if (projectId !== "houston-coffee")
+  if (!isKnownProjectId(projectId))
     return unavailable("This project is not available.");
   const answers = parsed.data.profile;
   const category =

@@ -12,6 +12,7 @@ import {
   assembleEvaluationRequest,
   AssemblyError,
   AssemblyShortcutSchema,
+  PanelInProgressError,
   type AssembleEvaluationInput,
   type AssemblyDependencies,
 } from "./assemble";
@@ -427,6 +428,49 @@ describe("evaluation assembly with injected source dependencies", () => {
     expect(table.siteId).toBe("101:1");
     expect(table.personas[0]!.where).toHaveProperty("101:1");
     expect(evaluateSites(first.request).result.demandSource).toBe("jev");
+  });
+  it("throws PanelInProgressError at the panel deadline, then resumes to the unbounded request (HAC-155)", async () => {
+    const raw = input();
+    raw.candidateIds = ["101:1"];
+    raw.demandSource = "jev";
+    const deps = dependencies(raw);
+    const client = fakeJevClient();
+    deps.jev = { client, cache: new MemoryJevCache() };
+    let clock = 0;
+    // Every call "takes" 1 s on this clock; the budget allows a handful per run.
+    const ask = client.ask.bind(client);
+    client.ask = async (req) => {
+      clock += 1000;
+      return ask(req);
+    };
+    const deadline = () => ({
+      deadlineAt: clock + 8_000,
+      deadlineReserveMs: 1_000,
+      now: () => clock,
+    });
+    let error: unknown;
+    try {
+      await assembleEvaluation(raw, deps, deadline());
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(PanelInProgressError);
+    const progress = error as PanelInProgressError;
+    expect(progress.message).toMatch(
+      /^Jev panel in progress \(\d+\/\d+ personas\)$/,
+    );
+    expect(progress.completedPersonas).toBeLessThan(progress.totalPersonas);
+    let resumed: Awaited<ReturnType<typeof assembleEvaluation>> | undefined;
+    for (let i = 0; i < 500 && !resumed; i++)
+      resumed = await assembleEvaluation(raw, deps, deadline()).catch((e) => {
+        if (e instanceof PanelInProgressError) return undefined;
+        throw e;
+      });
+    const unbounded = await assembleEvaluation(raw, {
+      ...dependencies(raw),
+      jev: { client: fakeJevClient(), cache: new MemoryJevCache() },
+    });
+    expect(resumed?.request).toEqual(unbounded.request);
   });
   it("does not attach failed Jev tables that would silently remove the population", async () => {
     const raw = input();

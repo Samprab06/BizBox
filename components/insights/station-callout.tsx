@@ -98,7 +98,7 @@ export function StationCallout({
         highest profit.
       </p>
       <details className="min-w-0">
-        <summary className="cursor-pointer rounded font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)]">
+        <summary className="cursor-pointer rounded font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring">
           Station experiment evidence and limitations
         </summary>
         <p className={"mt-3 " + muted}>

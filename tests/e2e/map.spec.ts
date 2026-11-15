@@ -46,6 +46,176 @@ test.describe("map", () => {
     await stubMapStyle(page);
   });
 
+  test("canvas follows container resizing and the consultant round trip", async ({
+    page,
+    gotoView,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.addInitScript(() => {
+      // Reproduce the shell revealing a zero-size mount before the first native
+      // observer delivery. MapLibre skips that delivery and otherwise keeps400px.
+      const NativeObserver = window.ResizeObserver;
+      let firstMap = true;
+      window.ResizeObserver = class extends NativeObserver {
+        observe(target: Element, options?: ResizeObserverOptions) {
+          if (firstMap && target.classList.contains("maplibregl-map")) {
+            firstMap = false;
+            const element = target as HTMLElement;
+            element.style.display = "none";
+            queueMicrotask(() => element.style.removeProperty("display"));
+          }
+          super.observe(target, options);
+        }
+      };
+    });
+    await gotoView("map", "montrose");
+    const map = page.locator(".maplibregl-map");
+    await expect(page.getByLabel("Catchment layer")).toBeVisible();
+    const expectCanvasFits = async () => {
+      await expect
+        .poll(() =>
+          map.evaluate((element) => {
+            const canvas = element.querySelector("canvas")!;
+            return Math.abs(
+              canvas.getBoundingClientRect().width - element.clientWidth,
+            );
+          }),
+        )
+        .toBeLessThanOrEqual(1);
+    };
+    await expectCanvasFits();
+    // The shell changes its grid without a window resize. Exercise that same boundary.
+    for (const width of [400, 700]) {
+      await map.evaluate((element, next) => {
+        element.parentElement!.style.width = `${next}px`;
+      }, width);
+      await expect
+        .poll(() => map.evaluate((element) => element.clientWidth))
+        .toBe(width);
+      await expectCanvasFits();
+    }
+    await map.evaluate((element) => {
+      element.parentElement!.style.width = "";
+    });
+    await page.getByRole("button", { name: "Expand the assistant" }).click();
+    await expect(map).toBeHidden();
+    await page.getByRole("button", { name: "Show the current step" }).click();
+    await expect(map).toBeVisible();
+    await expectCanvasFits();
+    await expect(
+      page.getByRole("link", { name: "Open Montrose storefront" }),
+    ).toHaveAttribute("aria-current", "true");
+  });
+
+  test("sparse basemap numeric properties do not emit MapLibre warnings", async ({
+    page,
+    gotoView,
+  }) => {
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (/Expected value to be of type number/.test(message.text()))
+        warnings.push(message.text());
+    });
+    await page.route(MAP_STYLE_URL, (route) =>
+      route.fulfill({
+        json: {
+          version: 8,
+          sources: {
+            sparse: {
+              type: "geojson",
+              data: {
+                type: "FeatureCollection",
+                features: [
+                  {
+                    type: "Feature",
+                    properties: { rank: null },
+                    geometry: { type: "Point", coordinates: [-95.39, 29.77] },
+                  },
+                  {
+                    type: "Feature",
+                    properties: { ref_length: null },
+                    geometry: {
+                      type: "LineString",
+                      coordinates: [
+                        [-95.4, 29.77],
+                        [-95.38, 29.77],
+                      ],
+                    },
+                  },
+                  {
+                    type: "Feature",
+                    properties: {
+                      render_height: null,
+                      render_min_height: null,
+                    },
+                    geometry: {
+                      type: "Polygon",
+                      coordinates: [
+                        [
+                          [-95.4, 29.76],
+                          [-95.39, 29.76],
+                          [-95.39, 29.77],
+                          [-95.4, 29.76],
+                        ],
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          layers: [
+            {
+              id: "background",
+              type: "background",
+              paint: { "background-color": "#e8efe9" },
+            },
+            // Same nullable numeric boundaries as the supplied Liberty style, without tiles/SDK calls.
+            ...["poi_r20", "poi_r7", "poi_r1"].map((id) => ({
+              id,
+              type: "circle",
+              source: "sparse",
+              filter: [
+                "all",
+                ["==", ["geometry-type"], "Point"],
+                [">=", ["get", "rank"], 1],
+              ],
+            })),
+            ...[
+              "highway-shield-non-us",
+              "highway-shield-us-interstate",
+              "road_shield_us",
+            ].map((id) => ({
+              id,
+              type: "line",
+              source: "sparse",
+              filter: [
+                "all",
+                ["<=", ["get", "ref_length"], 6],
+                ["==", ["geometry-type"], "LineString"],
+              ],
+            })),
+            {
+              id: "building-3d",
+              type: "fill-extrusion",
+              source: "sparse",
+              filter: ["==", ["geometry-type"], "Polygon"],
+              paint: {
+                "fill-extrusion-base": ["get", "render_min_height"],
+                "fill-extrusion-height": ["get", "render_height"],
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await gotoView("map", "montrose");
+    await expect(page.getByLabel("Catchment layer")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    await page.screenshot({ path: "/tmp/hac163-map-numeric.png" });
+    expect(warnings).toEqual([]);
+  });
+
   test("every candidate site is a map marker and a list row, with the same ids", async ({
     page,
     gotoView,
@@ -213,7 +383,7 @@ test.describe("map", () => {
 
     expect(response?.status()).toBe(404);
     await expect(
-      page.getByRole("heading", { name: /could not be found/i }),
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
     ).toBeVisible();
   });
 
@@ -352,7 +522,7 @@ test.describe("intake-backed map", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await expect(
       page
@@ -401,11 +571,11 @@ test.describe("live map boundaries", () => {
     await page.evaluate(() =>
       localStorage.setItem("sitework:intake:v1:houston-coffee", "{broken"),
     );
-    await page.getByRole("button", { name: "Retry search" }).click();
+    await page.reload();
     await expect(
-      page.getByText(/Saved intake could not be read/),
+      page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
-    await page.evaluate(() => {
+    await page.addInitScript(() => {
       Object.defineProperty(window, "localStorage", {
         get() {
           throw new DOMException("Denied", "SecurityError");
@@ -413,10 +583,18 @@ test.describe("live map boundaries", () => {
         configurable: true,
       });
     });
-    await page.getByRole("button", { name: "Retry search" }).click();
+    await page.reload();
     await expect(
-      page.getByText(/Saved intake could not be read/),
+      page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Candidate sites" }).getByRole("link"),
+    ).toHaveCount(SITE_IDS.length);
     expect(requests).toBe(0);
     expect(errors).toEqual([]);
   });
@@ -467,7 +645,7 @@ test.describe("live map boundaries", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await page.clock.install();
     await page.route("**/api/sites", () => new Promise(() => {}));
@@ -478,7 +656,7 @@ test.describe("live map boundaries", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await expect(
       page

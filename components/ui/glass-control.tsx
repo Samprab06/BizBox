@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
+import { cn } from "./cn";
 
 export type GlassControlProps = Omit<
   ComponentPropsWithoutRef<"div">,
@@ -9,17 +10,16 @@ export type GlassControlProps = Omit<
   "aria-label": string;
 };
 
-export function GlassControl({
-  over,
-  className = "",
-  ...props
-}: GlassControlProps) {
+export function GlassControl({ over, className, ...props }: GlassControlProps) {
   return (
     <div
       {...props}
       role="group"
       data-surface={over === "viewport" ? "viewport" : "paper"}
-      className={`sw-glass-control ${className}`}
+      className={cn(
+        "sw-glass-control rounded-panel border-glass-edge shadow-glass",
+        className,
+      )}
     />
   );
 }

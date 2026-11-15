@@ -1,7 +1,12 @@
 import type { Page } from "@playwright/test";
 import { buildLocationPlan } from "../../lib/agent/plan";
 import { fixture } from "../../lib/agent/__fixtures__/plan";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
 // HAC-26: printable location plan, with the comparison and plan APIs mocked.
 
@@ -78,15 +83,92 @@ test.describe("location plan export", () => {
     );
   });
 
-  test("print styles hide the print button", async ({ page }) => {
+  test("print styles keep the plan visible and hide the persistent consultant", async ({
+    page,
+  }) => {
     await mockPlan(page);
     await page.goto(`/projects/${PROJECT}/plan?comparison=${comparisonId}`);
     await expect(
       page.getByRole("button", { name: "Print or save as PDF" }),
     ).toBeVisible();
+    // The narrow-screen dock starts collapsed; open it before testing print hiding.
+    await openConsultant(page);
+    const assistant = page.getByRole("complementary", {
+      name: "Assistant",
+      exact: true,
+      includeHidden: true,
+    });
+    await expect(assistant).toBeVisible();
     await page.emulateMedia({ media: "print" });
     await expect(
       page.getByRole("button", { name: "Print or save as PDF" }),
     ).toBeHidden();
+    await expect(assistant).toBeHidden();
+    await expect(
+      page.getByRole("article", { name: "Location plan" }),
+    ).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+    await page.getByRole("button", { name: "Expand the assistant" }).click();
+    await expect(
+      page.getByRole("article", { name: "Location plan", includeHidden: true }),
+    ).toBeHidden();
+    await page.emulateMedia({ media: "print" });
+    await expect(
+      page.getByRole("article", { name: "Location plan" }),
+    ).toBeVisible();
+    await expect(assistant).toBeHidden();
+  });
+  test("printed plan is dark text on white paper and stays dark on screen", async ({
+    page,
+  }) => {
+    await mockPlan(page);
+    await page.goto(`/projects/${PROJECT}/plan?comparison=${comparisonId}`);
+    const article = page.getByRole("article", { name: "Location plan" });
+    await expect(article).toBeVisible();
+
+    // Resolves any CSS color to opaque sRGB channels through a canvas pixel.
+    const colors = () =>
+      page.evaluate(() => {
+        const ctx = document.createElement("canvas").getContext("2d")!;
+        const rgb = (value: string) => {
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, 1, 1);
+          ctx.fillStyle = value;
+          ctx.fillRect(0, 0, 1, 1);
+          return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+        };
+        const sample = (selector: string) => {
+          const el = document.querySelector(selector) as HTMLElement;
+          return rgb(getComputedStyle(el).color);
+        };
+        return {
+          body: rgb(getComputedStyle(document.body).backgroundColor),
+          heading: sample("article h2"),
+          muted: sample("article dt"),
+          cell: sample("article tbody td"),
+        };
+      });
+    const luminance = ([r, g, b]: number[]) => {
+      const lin = (c: number) => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const contrast = (a: number[], b: number[]) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const screen = await colors();
+    expect(luminance(screen.body)).toBeLessThan(0.1);
+    expect(contrast(screen.heading, screen.body)).toBeGreaterThanOrEqual(4.5);
+
+    await page.emulateMedia({ media: "print" });
+    const print = await colors();
+    expect(print.body).toEqual([255, 255, 255]);
+    for (const text of [print.heading, print.muted, print.cell])
+      expect(contrast(text, print.body)).toBeGreaterThanOrEqual(7);
   });
 });

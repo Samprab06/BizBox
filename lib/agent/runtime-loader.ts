@@ -4,12 +4,17 @@
  * them (HAC-58). Import failures become a typed error that routes report as a 503.
  */
 import type { IntakeSession } from "./intake";
+import type { IntakeUiContext } from "./ui-tools";
 
 export const INTAKE_TIMEOUT_MS = 20_000;
 export type IntakeRunner = (input: {
   session: IntakeSession;
   message: string;
   signal: AbortSignal;
+  /** Bounded line assembled only after server scope validation. */
+  viewContextLine?: string;
+  /** HAC-144: binds the UI tool group; the runner pushes queued actions to `ui.actions`. */
+  ui?: IntakeUiContext;
 }) => Promise<string>;
 
 export class ModelRuntimeUnavailableError extends Error {
@@ -46,4 +51,8 @@ export function loadIntakeRunner(): Promise<IntakeRunner> {
 
 export function loadInvestigationPlannerModule() {
   return loadOrThrow(() => import("./investigation-planner"));
+}
+
+export function loadCopilotModelModule() {
+  return loadOrThrow(() => import("./copilot-model"));
 }

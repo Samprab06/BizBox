@@ -1,0 +1,33 @@
+{
+  "image": "/landing-assets/guided-demo/macbook-gpt-v3.png",
+  "width": 1513,
+  "height": 1040,
+  "screenQuad": [
+    {
+      "x": 0.128222075,
+      "y": 0.026923077
+    },
+    {
+      "x": 0.870456048,
+      "y": 0.026923077
+    },
+    {
+      "x": 0.870456048,
+      "y": 0.614423077
+    },
+    {
+      "x": 0.128222075,
+      "y": 0.614423077
+    }
+  ],
+  "screenPixels": [
+    [194, 28],
+    [1317, 28],
+    [1317, 639],
+    [194, 639]
+  ],
+  "order": ["TL", "TR", "BR", "BL"],
+  "screenOpaque": true,
+  "method": "Built-in GPT Image cutout; black display. Place DOM above hardware and clip rounded aperture/notch. Measured from source pixels; no Blender geometry in this frame.",
+  "notchClip": "polygon(0 0,45% 0,45.5% 3.2%,54.5% 3.2%,55% 0,100% 0,100% 100%,0 100%)"
+}

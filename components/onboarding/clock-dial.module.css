@@ -1,0 +1,45 @@
+/* Clock geometry and pointer behavior; the shared tokens own material and motion. */
+.face {
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.arcHit {
+  cursor: grab;
+  touch-action: none;
+}
+.arcHit:active {
+  cursor: grabbing;
+}
+.handle {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12.5%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  font-size: clamp(8px, 2.9cqi, 11px);
+  font-weight: 600;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+.handle[data-dragging="true"] {
+  cursor: grabbing;
+  z-index: 1;
+}
+.label {
+  font-size: 13px;
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .handle {
+    transition: scale var(--transition-duration-question) var(--ease-question);
+  }
+  .handle[data-dragging="true"] {
+    scale: 1.12;
+  }
+}

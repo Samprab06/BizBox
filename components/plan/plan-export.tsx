@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import { useProjectComparisonId } from "@/lib/client/project-store";
 import {
   planContextSource,
   type WorkspaceObservation,
@@ -30,13 +31,17 @@ const ORIGIN_LABEL: Record<string, string> = {
 /** HAC-26: printable plan for a saved, current comparison. */
 export function PlanExport({
   projectId,
-  comparisonId,
+  comparisonId: urlComparisonId,
   investigationId,
 }: {
   projectId: string;
   comparisonId?: string;
   investigationId?: string;
 }) {
+  // HAC-135: without ?comparison= the plan opens the project's saved comparison.
+  // `undefined` means storage hasn't been read yet (server render, first paint).
+  const resolved = useProjectComparisonId(projectId, urlComparisonId);
+  const comparisonId = resolved ?? undefined;
   const [state, setState] = useState<State>({ kind: "loading" });
   const contextOwner = JSON.stringify([
     projectId,
@@ -130,12 +135,13 @@ export function PlanExport({
   }, [projectId, comparisonId, investigationId, contextOwner]);
 
   const comparisonLink = workspaceHref(projectId, "comparison");
+  if (resolved === undefined) return <p role="status">Preparing the plan…</p>;
   if (!comparisonId)
     return (
       <p role="status">
         Choose a saved comparison first.{" "}
         <Link
-          className="font-semibold text-pine underline"
+          className="font-semibold text-accent underline"
           href={comparisonLink}
         >
           Open the comparison
@@ -152,7 +158,7 @@ export function PlanExport({
           its plan.
         </p>
         <Link
-          className="mt-3 inline-block font-semibold text-pine underline"
+          className="mt-3 inline-block font-semibold text-accent underline"
           href={comparisonLink}
         >
           Rerun the comparison
@@ -164,7 +170,7 @@ export function PlanExport({
       <p role="alert">
         {state.message}{" "}
         <Link
-          className="font-semibold text-pine underline"
+          className="font-semibold text-accent underline"
           href={comparisonLink}
         >
           Back to the comparison
@@ -188,7 +194,7 @@ export function PlanExport({
         <button
           type="button"
           onClick={() => window.print()}
-          className="rounded bg-pine px-3 py-2 text-sm font-semibold text-white print:hidden"
+          className="rounded bg-accent hover:bg-accent-hover px-3 py-2 text-sm font-semibold text-on-accent print:hidden"
         >
           Print or save as PDF
         </button>

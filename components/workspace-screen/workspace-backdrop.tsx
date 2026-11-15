@@ -75,7 +75,7 @@ export function WorkspaceBackdrop({
     );
   return (
     <div
-      className="pointer-events-none absolute inset-x-6 top-24 text-sm text-white/80"
+      className="pointer-events-none absolute inset-x-6 top-24 text-sm text-muted"
       role="status"
     >
       {city ? "Map unavailable" : "Choose a city"}

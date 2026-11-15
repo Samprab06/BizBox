@@ -76,6 +76,36 @@ export const InteriorDimensionsSchema = z
   });
 export type InteriorDimensions = z.infer<typeof InteriorDimensionsSchema>;
 
+/** A Showcase sweep plus an optional camera rotation in degrees. */
+export const ScanSweepSchema = z
+  .object({
+    sweepId: z.string().trim().min(1).max(100),
+    rotation: z
+      .object({ x: z.number().finite(), y: z.number().finite() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type ScanSweep = z.infer<typeof ScanSweepSchema>;
+/**
+ * HAC-138: per-scan overlay placement, authored per public scan because room
+ * geometry (Property Intelligence) is Enterprise-only. Coordinates are Showcase
+ * SDK scan space: metres, Y-up. `origin` and `rotationY` place the layout's
+ * room origin; `scale` sizes the proposed counter glyphs only (positions are
+ * metre-true); `floorY` is the picked floor elevation.
+ */
+export const ScanPlacementSchema = z
+  .object({
+    origin: point,
+    rotationY: z.number().finite(),
+    scale: z.number().finite().positive().max(10),
+    floorY: z.number().finite(),
+    entranceSweep: ScanSweepSchema.nullable(),
+    serviceSweep: ScanSweepSchema.nullable(),
+  })
+  .strict();
+export type ScanPlacement = z.infer<typeof ScanPlacementSchema>;
+
 // App-owned configuration, not an unvalidated SDK/API payload. The private token
 // has no representable field in this contract.
 const showcaseParams = z.object({ sdkKey: z.string().trim().min(1) }).strict();
@@ -96,6 +126,8 @@ export const InteriorResponseSchema = z.discriminatedUnion("kind", [
       modelId: MatterportModelIdSchema,
       showcaseParams: showcaseParams.optional(),
       dimensions: InteriorDimensionsSchema.optional(),
+      /** HAC-138: absent means the overlay falls back to Modeled layout. */
+      placement: ScanPlacementSchema.optional(),
       provenance: InteriorProvenanceSchema,
     })
     .strict(),
@@ -131,6 +163,7 @@ export const MatterportManifestSchema = z
           displayApproved: z.literal(false).default(false),
           dimensions: InteriorDimensionsSchema.optional(),
           dimensionsRecordedAt: z.iso.datetime().optional(),
+          placement: ScanPlacementSchema.optional(),
         })
         .strict()
         .superRefine((model, ctx) => {

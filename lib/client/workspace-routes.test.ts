@@ -44,6 +44,14 @@ it("keeps every URL unchanged", () => {
   expect(workspaceHref("p", "workspace", "a")).toBe("/projects/p/workspace?site=a");
 });
 
+it("carries a saved comparison only to the plan and the simulator", () => {
+  expect(workspaceHref("p", "plan", "a", "c 1")).toBe("/projects/p/plan?comparison=c+1");
+  expect(workspaceHref("p", "simulator", "a", "c1")).toBe("/projects/p/simulator?comparison=c1");
+  expect(workspaceHref("p", "simulator", "a", null)).toBe("/projects/p/simulator?site=a");
+  expect(workspaceHref("p", "comparison", "a", "c1")).toBe("/projects/p/comparison?site=a");
+  expect(workspaceHref("p", "replay", undefined, "c1")).toBe("/projects/p/replay");
+});
+
 it("keeps planned screens out of the linked entries", () => {
   const planned = workspaceTasks.flatMap((task) => task.planned.map((entry) => entry.id));
   expect(planned).toEqual(["sensitivity", "findings"]);

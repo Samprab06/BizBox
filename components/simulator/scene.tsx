@@ -1,14 +1,16 @@
 "use client";
 
 import { Canvas, useThree } from "@react-three/fiber";
-import { Component, useEffect, useRef } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   MeshStandardMaterial,
+  Color,
   OrthographicCamera,
   SphereGeometry,
   TorusGeometry,
 } from "three";
+import { readRenderPalette } from "./render-palette";
 import type { RenderQuality } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
 import type { DayResult } from "@/lib/sim/contracts";
@@ -18,14 +20,12 @@ import { interiorFrame, stationPosition } from "./interior-state";
 const sphere = new SphereGeometry(0.18, 12, 8);
 const ring = new TorusGeometry(0.26, 0.035, 5, 16);
 const customerMaterial = new MeshStandardMaterial({
-  color: "#60a5fa",
   roughness: 0.7,
 });
 const employeeMaterial = new MeshStandardMaterial({
-  color: "#c084fc",
   roughness: 0.7,
 });
-const outlineMaterial = new MeshStandardMaterial({ color: "#f8fafc" });
+const outlineMaterial = new MeshStandardMaterial();
 
 function Unavailable() {
   return (
@@ -104,6 +104,13 @@ export default function Scene({
   quality?: RenderQuality;
   employeeCount?: number;
 }) {
+  const [palette] = useState(() => {
+    const palette = readRenderPalette();
+    customerMaterial.color.set(palette["agent-customer"]);
+    employeeMaterial.color.set(palette["agent-employee"]);
+    outlineMaterial.color.set(palette.ink);
+    return palette;
+  });
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
   const frame = interiorFrame(run, minute, employeeCount);
@@ -114,6 +121,9 @@ export default function Scene({
           <Canvas
             frameloop={visible ? "demand" : "never"}
             orthographic
+            onCreated={({ scene }) => {
+              scene.background = new Color(palette.canvas);
+            }}
             camera={{ position: [0, 28, 12], zoom: 22 }}
             dpr={quality === "balanced" ? 1 : [1, 1.5]}
             fallback={<Unavailable />}
@@ -121,16 +131,20 @@ export default function Scene({
             <CameraSize cutaway={cutaway} />
             <ambientLight intensity={1.65} />
             <directionalLight position={[4, 10, 7]} intensity={2} />
-            <Block at={[0, -0.16, 0]} size={[24, 0.2, 14]} color="#cdd3c2" />
+            <Block
+              at={[0, -0.16, 0]}
+              size={[24, 0.2, 14]}
+              color={palette["panel-raised"]}
+            />
             <Block
               at={[0, -0.05, 5.6]}
               size={[24, 0.17, 3.3]}
-              color="#505956"
+              color={palette["canvas"]}
             />
             <Block
               at={[0, 0.02, 3.3]}
               size={[24, 0.18, 1.45]}
-              color="#ded7c7"
+              color={palette["glass-edge"]}
             />
             {!cutaway &&
               [-8.5, 8.5].map((x) => (
@@ -138,44 +152,56 @@ export default function Scene({
                   key={x}
                   at={[x, 1, -1.5]}
                   size={[3.4, 2, 5]}
-                  color="#719283"
+                  color={palette["panel-raised"]}
                 />
               ))}
-            <Block at={[0, 0.03, -0.5]} size={[8, 0.25, 6]} color="#f0dfbd" />
-            <Block at={[0, 0.1, 1.3]} size={[5.8, 0.12, 2.8]} color="#ddcbaa" />
-            <Block at={[0, 1.2, -3.45]} size={[8, 2.3, 0.16]} color="#537466" />
+            <Block
+              at={[0, 0.03, -0.5]}
+              size={[8, 0.25, 6]}
+              color={palette["field"]}
+            />
+            <Block
+              at={[0, 0.1, 1.3]}
+              size={[5.8, 0.12, 2.8]}
+              color={palette["canvas"]}
+            />
+            <Block
+              at={[0, 1.2, -3.45]}
+              size={[8, 2.3, 0.16]}
+              color={palette["glass-edge"]}
+            />
             <Block
               at={[-3.95, 0.8, -0.55]}
               size={[0.15, 1.5, 5.8]}
-              color="#719283"
+              color={palette["panel-raised"]}
             />
             <Block
               at={[3.95, 0.8, -0.55]}
               size={[0.15, 1.5, 5.8]}
-              color="#719283"
+              color={palette["panel-raised"]}
             />
             {/* Open front is a deliberate cutaway, not a claim about a scanned property. */}
             <Block
               at={[-2.5, 0.14, 2.45]}
               size={[2.7, 0.12, 0.12]}
-              color="#537466"
+              color={palette["glass-edge"]}
             />
             <Block
               at={[2.5, 0.14, 2.45]}
               size={[2.7, 0.12, 0.12]}
-              color="#537466"
+              color={palette["glass-edge"]}
             />
             <Block
               at={[0, 0.15, 2.7]}
               size={[1.4, 0.05, 1.1]}
-              color="#b9c9b8"
+              color={palette["muted"]}
             />
             {Array.from({ length: run.metrics.stations }, (_, index) => (
               <Block
                 key={index}
                 at={[stationPosition(index, run.metrics.stations), 0.55, -1.55]}
                 size={[Math.min(2.1, 5 / run.metrics.stations), 1, 0.8]}
-                color="#24584a"
+                color={palette["panel-raised"]}
               />
             ))}
             {frame.customers.map(({ id, x, z }) => (

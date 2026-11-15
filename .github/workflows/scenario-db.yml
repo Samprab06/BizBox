@@ -10,8 +10,7 @@ on:
       - "lib/db/**"
       - "lib/contracts/**"
       - "drizzle/**"
-  push:
-    branches: ["hac-81-agt-2-scenario-api"]
+      - "lib/agent/thread-store*"
 
 permissions:
   contents: read
@@ -55,10 +54,13 @@ jobs:
           LAYOUT_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
           RUN_INTERIOR_DB_TESTS: "1"
           INTERIOR_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
+          RUN_THREAD_DB_TESTS: "1"
+          HAC83_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hac96_test
         run: >-
           pnpm exec vitest run
           lib/scenario/run-store-postgres.test.ts
           lib/scenario/repository.test.ts
           lib/layout/repository.test.ts
           lib/interior/postgres.test.ts
+          lib/agent/thread-store.test.ts
           --maxWorkers=1

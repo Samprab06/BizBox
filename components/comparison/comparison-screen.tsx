@@ -9,6 +9,9 @@ import {
   exampleComparisonId,
   exampleDemandLabel,
 } from "./example-comparison";
+import { PeakSparkline, WaitOverlayChart } from "./hourly-charts";
+import { FIXTURE_SCENARIO_COUNT as SCENARIO_COUNT } from "@/lib/sim/fixtures/arrival-schedule";
+import { siteHours } from "./hourly-overlay";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -44,13 +47,28 @@ export function ComparisonScreen({
   const demandLabel = exampleDemandLabel(project.sites);
   const id = exampleComparisonId(visits);
   const leader = rows[0];
+  // HAC-95: hourly views come from the same representative run each row cites.
+  const hourly = new Map(
+    rows.map((row) => [
+      row.site.id,
+      siteHours(row.site.id, row.runId, row.run),
+    ]),
+  );
   const overlaps = rows.slice(1).filter((row) => row.high >= leader.low);
-  const checks = scenarios
-    .filter((scenario) => scenario !== visits)
-    .map((scenario) => ({
-      scenario,
-      first: exampleComparison(project.sites, scenario)[0].site,
-    }));
+  // HAC-176: every scenario is listed, the selected one marked, reusing `rows` for it.
+  const checks = scenarios.map((scenario) => ({
+    scenario,
+    current: scenario === visits,
+    first: (scenario === visits
+      ? rows
+      : exampleComparison(project.sites, scenario))[0].site,
+  }));
+  // HAC-176: each line is one seeded run per site, the median-contribution scenario.
+  const runNote = `One representative weekday run per site (${rows
+    .map((row) => `${row.site.address}: seed ${row.run.seed}`)
+    .join(
+      "; ",
+    )}), not an average of all runs. Hourly waits from one run are noisy and can change between visit-frequency scenarios.`;
 
   return (
     <div className="space-y-8">
@@ -90,14 +108,17 @@ export function ComparisonScreen({
         nextAction={
           <a
             href="#example-visit-frequency"
-            className="font-semibold text-pine underline"
+            className="font-semibold text-accent underline"
           >
             Change visit frequency
           </a>
         }
       />
       {previousId && previousId !== id && (
-        <p role="status" className="rounded-lg border border-line bg-paper p-3">
+        <p
+          role="status"
+          className="rounded-lg border border-line bg-canvas p-3"
+        >
           This comparison is outdated.{" "}
           <Link
             className="font-semibold underline"
@@ -123,66 +144,132 @@ export function ComparisonScreen({
             ))}
           </select>
         </label>
-        <button className="rounded-lg bg-pine px-4 py-2 font-semibold text-white">
+        <button className="rounded-lg bg-accent hover:bg-accent-hover px-4 py-2 font-semibold text-on-accent">
           Run scenario
         </button>
       </form>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-left text-sm">
-          <caption className="pb-3 text-left text-muted">
-            Comparison {id}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Rank and space</th>
-              <th scope="col">Mean</th>
-              <th scope="col">90% interval</th>
-              <th scope="col">Representative run</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.site.id} className="border-t border-line">
-                <th scope="row" className="py-4 pr-4">
-                  {index + 1}. {row.site.address}
-                  {overlaps.length > 0 &&
-                    (index === 0 || overlaps.includes(row)) && (
-                      <span className="mt-1 block text-xs font-medium text-muted">
-                        Modeled tie · intervals overlap
+      <div className="relative">
+        <p className="mb-1 text-xs text-muted xl:hidden">
+          Scroll sideways to see every column →
+        </p>
+        <div
+          role="region"
+          aria-label="Comparison table, scrollable"
+          tabIndex={0}
+          className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          <table className="w-full min-w-[44rem] text-left text-sm">
+            <caption className="pb-3 text-left text-muted">
+              Comparison {id}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Rank and space</th>
+                <th scope="col">
+                  Mean monthly contribution (USD, {SCENARIO_COUNT} seeded
+                  scenarios)
+                </th>
+                <th scope="col">90% interval</th>
+                <th scope="col">Peak hour</th>
+                <th scope="col">Representative run</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={row.site.id} className="border-t border-line">
+                  <th scope="row" className="py-4 pr-4">
+                    {index + 1}. {row.site.address}
+                    {overlaps.length > 0 &&
+                      (index === 0 || overlaps.includes(row)) && (
+                        <span className="mt-1 block text-xs font-medium text-muted">
+                          Modeled tie · intervals overlap
+                        </span>
+                      )}
+                  </th>
+                  <td className="pr-4">{currency.format(row.mean)}</td>
+                  <td className="pr-4">
+                    {currency.format(row.low)} to {currency.format(row.high)}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <PeakSparkline data={hourly.get(row.site.id)!} />
+                  </td>
+                  <td>
+                    <Link
+                      className="font-semibold text-accent underline"
+                      href={comparisonLink(
+                        project.id,
+                        "replay",
+                        visits,
+                        row.site.id,
+                      )}
+                    >
+                      Replay day
+                    </Link>
+                    {row.site.id === "montrose" ? (
+                      <Link
+                        className="ml-3 font-semibold text-accent underline"
+                        href={workspaceHref(
+                          project.id,
+                          "simulator",
+                          row.site.id,
+                        )}
+                      >
+                        View on street
+                      </Link>
+                    ) : (
+                      <span className="ml-3 text-muted">
+                        Street view unavailable
                       </span>
                     )}
-                </th>
-                <td className="pr-4">{currency.format(row.mean)}</td>
-                <td className="pr-4">
-                  {currency.format(row.low)} to {currency.format(row.high)}
-                </td>
-                <td>
-                  <Link
-                    className="font-semibold text-pine underline"
-                    href={comparisonLink(
-                      project.id,
-                      "replay",
-                      visits,
-                      row.site.id,
-                    )}
-                  >
-                    Replay day
-                  </Link>
-                  <span className="block text-xs text-muted">{row.runId}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <span className="block text-xs text-muted">
+                      {row.runId}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+      <section
+        aria-labelledby="hourly-wait-heading"
+        className="rounded-xl border border-line p-4"
+      >
+        <h3 id="hourly-wait-heading" className="font-semibold">
+          Hourly p90 wait across the shortlist
+        </h3>
+        <p className="mt-1 text-sm text-muted">
+          90th-percentile wait of served customers, by the hour service started.
+          Each line is the representative weekday run in the table above: a
+          single seeded run per site, not an average.
+        </p>
+        <div className="mt-3">
+          <WaitOverlayChart
+            runNote={runNote}
+            sites={rows.map((row, index) => ({
+              label: `${index + 1}. ${row.site.address}`,
+              data: hourly.get(row.site.id)!,
+            }))}
+          />
+        </div>
+      </section>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-line p-4">
           <h3 className="font-semibold">Visit-frequency sensitivity</h3>
           <ul className="mt-2 space-y-2 text-sm">
-            {checks.map(({ scenario, first }) => (
-              <li key={scenario}>
-                {Math.round(scenario * 100)}% of baseline: {first.address} leads
-                by mean contribution
+            {checks.map(({ scenario, current, first }) => (
+              <li
+                key={scenario}
+                aria-current={current ? "true" : undefined}
+                data-current={current ? "true" : undefined}
+              >
+                {Math.round(scenario * 100)}% of baseline
+                {current && (
+                  <strong className="ml-1 rounded border border-line px-1.5 text-xs">
+                    Current
+                  </strong>
+                )}
+                : {first.address} leads by mean monthly contribution
                 {first.id !== leader.site.id && " (ranking changes)"}.
               </li>
             ))}

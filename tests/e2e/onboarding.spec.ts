@@ -11,6 +11,7 @@ const proceed = (page: Page) => page.getByRole("button", { name: "Continue", exa
 const exact = (page: Page) => page.getByRole("textbox", { name: /exact amount/ });
 const ruler = (page: Page) => page.getByRole("slider");
 const card = (page: Page) => page.getByRole("region", { name: "Review your business" });
+const fieldError = (page: Page) => page.locator("#onboarding-error");
 
 async function saved(page: Page) {
   const raw = await page.evaluate((key) => localStorage.getItem(key), storageKey);
@@ -114,6 +115,12 @@ for (const viewport of [
       await expect(exact(page)).toHaveValue("4600");
       await page.keyboard.press("PageDown");
       await expect(exact(page)).toHaveValue("3600");
+      for (const invalidRent of ["0", "99999999999"]) {
+        await exact(page).fill(invalidRent);
+        await proceed(page).click();
+        await expect(fieldError(page)).toHaveText("Enter a whole dollar amount from $1 to $20,000.");
+        await expect(exact(page)).toHaveAttribute("aria-invalid", "true");
+      }
       await exact(page).fill("4550");
       await expect(ruler(page)).toHaveAttribute("aria-valuetext", "$4,550");
       await expectNoOverflow(page);
@@ -121,6 +128,10 @@ for (const viewport of [
 
       // Buildout: drag the ruler 10 detents.
       await expect(title(page)).toHaveText("What’s your buildout budget?");
+      await exact(page).fill("0");
+      await proceed(page).click();
+      await expect(fieldError(page)).toHaveText("Enter a whole dollar amount from $1 to $500,000.");
+      await exact(page).fill("80000");
       const box = (await ruler(page).boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
@@ -134,16 +145,23 @@ for (const viewport of [
       await page.getByRole("button", { name: "Mid-range" }).click();
       await proceed(page).click();
 
-      // Hours must be one same-day range the map can read; Enter submits.
+      // Hours: the HAC-154 clock dial (covered in onboarding-hours.spec.ts); exact typed times here.
       await expect(title(page)).toHaveText("When will you be open?");
-      const hours = page.getByRole("textbox", { name: "When will you be open?" });
-      await hours.fill("evenings");
-      await hours.press("Enter");
-      await expect(page.getByRole("alert").filter({ hasText: /same-day range/ })).toBeVisible();
-      await hours.fill("11am – 11pm");
-      await hours.press("Enter");
+      await expect(page.getByRole("slider", { name: "Opening time" })).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
+      await page.getByTestId("clock-readout").click();
+      await page.getByRole("textbox", { name: "Opens" }).fill("11am");
+      await page.getByRole("textbox", { name: "Closes" }).fill("11pm");
+      await page.getByRole("textbox", { name: "Closes" }).press("Enter");
+      await expect(page.getByRole("slider", { name: "Closing time" })).toHaveAttribute("aria-valuetext", "Closes at 11:00 PM");
+      await expectNoOverflow(page);
+      await proceed(page).click();
 
       await expect(title(page)).toHaveText("How many people will be on shift?");
+      await exact(page).fill("");
+      await proceed(page).click();
+      await expect(fieldError(page)).toHaveText("Enter how many people will be on shift.");
+      await expect(exact(page)).toHaveValue("");
+      await exact(page).fill("2");
       await ruler(page).focus();
       await page.keyboard.press("ArrowUp");
       await expect(exact(page)).toHaveValue("3");
@@ -156,6 +174,7 @@ for (const viewport of [
       await expect(title(page)).toHaveText("Review your business");
       await expect(card(page).getByText("Quick food", { exact: true })).toBeVisible();
       await expect(card(page).getByText("$4,550")).toBeVisible();
+      await expect(card(page).getByText("Favor: Atwater Village; Avoid: noisy intersections")).toBeVisible();
       await page.getByRole("button", { name: "Edit staff" }).click();
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await proceed(page).click();
@@ -174,7 +193,7 @@ for (const viewport of [
         rent: { value: "4550", origin: "founder" },
         buildout: { value: "130000", origin: "founder" },
         price: { value: "Midrange", origin: "founder" },
-        hours: { value: "11am – 11pm", origin: "founder" },
+        hours: { value: "11:00–23:00", origin: "founder" },
         staff: { value: "3", origin: "founder" },
         requirements: { value: "None", origin: "founder" },
       });
@@ -191,7 +210,7 @@ for (const viewport of [
       await expect(page).toHaveURL(/\/intake\?mode=form$/);
       await expect(page.getByLabel("Service category")).toHaveValue("Quick-service food");
       await expect(page.getByLabel("Monthly rent ceiling ($)")).toHaveValue("4550");
-      await expect(page.getByText("All required fields are filled.")).toBeVisible();
+      await expect(page.getByText(/^Form fields are filled\./)).toBeVisible();
       await page.getByRole("link", { name: "Back to guided setup" }).click();
       await expect(title(page)).toHaveText("Review your business");
     });

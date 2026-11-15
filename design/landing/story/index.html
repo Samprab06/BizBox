@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#342c30" />
+    <title>BizBox — Simulate business decisions.</title>
+    <link rel="preload" href="/assets/houston-sunset.jpg" as="image" />
+    <link rel="stylesheet" href="/story/story.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/three/build/three.module.js",
+          "three/addons/": "/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="world" aria-hidden="true"></div>
+    <canvas id="scene" aria-hidden="true"></canvas>
+
+    <div id="screen-surface" hidden>
+      <img
+        id="screen-poster"
+        alt="Illustrative BizBox map and consultant preview"
+        hidden
+      />
+      <iframe
+        id="product-screen"
+        title="BizBox actual platform: 3D neighborhood and consultant"
+        allow="fullscreen"
+        referrerpolicy="strict-origin-when-cross-origin"
+        tabindex="-1"
+        hidden
+      ></iframe>
+    </div>
+
+    <div class="story-copy hero-copy" id="hero-copy">
+      <h1 aria-label="Simulate business decisions.">
+        <span aria-hidden="true" style="--word-index: 0">Simulate</span>
+        <span aria-hidden="true" style="--word-index: 1">business</span>
+        <span aria-hidden="true" style="--word-index: 2">decisions.</span>
+      </h1>
+    </div>
+    <div class="story-copy location-copy" id="location-copy" hidden>
+      <h2>Find a place for your idea.</h2>
+    </div>
+    <div class="story-copy finish-copy" id="finish-copy" hidden>
+      <h2>Test your business idea.</h2>
+      <a id="open-bizbox" href="#">Open BizBox</a>
+    </div>
+
+    <main
+      id="story-journey"
+      aria-label="BizBox introduction, location walkthrough and return"
+    >
+      <p class="sr-only">
+        Scroll to enter the MacBook, explore the 3D location workspace and
+        return.
+      </p>
+    </main>
+
+    <nav id="story-nav" aria-label="Landing chapters">
+      <button
+        type="button"
+        data-story-target="hero"
+        aria-label="Introduction: Simulate business decisions"
+        aria-current="step"
+      >
+        <span aria-hidden="true"></span>
+      </button>
+      <button
+        type="button"
+        data-story-target="location"
+        aria-label="Location: Find a place for your idea"
+      >
+        <span aria-hidden="true"></span>
+      </button>
+      <button
+        type="button"
+        data-story-target="return"
+        aria-label="Finish: Test your business idea"
+      >
+        <span aria-hidden="true"></span>
+      </button>
+    </nav>
+
+    <a
+      class="model-credit"
+      href="/assets/credits.html"
+      target="_blank"
+      rel="noopener"
+      >MacBook credits</a
+    >
+
+    <p id="story-status" class="sr-only" aria-live="polite"></p>
+    <p id="scene-status" class="sr-only" role="status">Loading MacBook…</p>
+    <p id="error" role="alert" hidden></p>
+    <noscript
+      ><p class="no-script">
+        Enable JavaScript to view the BizBox walkthrough.
+      </p></noscript
+    >
+    <script type="module" src="/story-scene.js"></script>
+    <script type="module" src="/story/shell.js"></script>
+  </body>
+</html>

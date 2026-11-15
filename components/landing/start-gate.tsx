@@ -1,39 +1,71 @@
 "use client";
 
 import Link from "next/link";
+import { Button, buttonVariants, buttonSizes } from "@/components/ui/button";
+import { cn, focusRing, pressable } from "@/components/ui/cn";
 import { useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   intakeStorageKey,
   parseIntakeSession,
 } from "@/components/workspace-screen/intake-conversation";
-import { ENTRY_PROJECT_ID, entryTarget } from "./entry";
+import { entryPath } from "@/components/shell/entry-flow";
+import { workspaceHref } from "@/lib/client/workspace-routes";
+import { DEMO_PROJECT_ID, isGeneratedProjectId } from "@/lib/projects/ids";
+import { CURRENT_PROJECT_KEY, entryPlan } from "./entry";
 
 const subscribe = () => () => {};
 
-function readRaw(projectId: string): string | null {
+function read(key: string): string | null {
   try {
-    return localStorage.getItem(intakeStorageKey(projectId));
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-const primary =
-  "rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
-const secondary =
-  "rounded-full px-5 py-3 text-sm font-medium text-white/90 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+function rememberProject(projectId: string) {
+  try {
+    localStorage.setItem(CURRENT_PROJECT_KEY, projectId);
+  } catch {
+    // Private mode: the founder still lands on their project; only resuming is lost.
+  }
+}
+
+/** HAC-136: asks the server for a new project row and returns its ID. */
+async function createProject(): Promise<string> {
+  const response = await fetch("/api/projects", {
+    method: "POST",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("project unavailable");
+  const body = (await response.json()) as { id?: unknown };
+  if (typeof body.id !== "string" || !isGeneratedProjectId(body.id))
+    throw new Error("unexpected project id");
+  return body.id;
+}
+
+const primary = cn(
+  "inline-flex items-center justify-center rounded-control",
+  buttonVariants.primary,
+  buttonSizes.lg,
+  focusRing,
+  pressable,
+);
+const secondary = cn(
+  "inline-flex items-center justify-center rounded-control underline underline-offset-4",
+  buttonVariants.quiet,
+  buttonSizes.lg,
+  focusRing,
+  pressable,
+);
 
 /**
- * /start: a first visit goes straight into the guided onboarding; a visitor with a saved
- * intake session gets a direct path back into their workspace. Reads the existing session
- * only; nothing is written.
+ * /start: a first visit gets a new project and goes straight into the chat-first entry
+ * (HAC-150); a founder with a complete brief lands docked; one with a started brief chooses
+ * between continuing the chat and the workspace.
  */
-export function StartGate({
-  projectId = ENTRY_PROJECT_ID,
-}: {
-  projectId?: string;
-}) {
+export function StartGate() {
   const router = useRouter();
   const ready = useSyncExternalStore(
     subscribe,
@@ -41,17 +73,76 @@ export function StartGate({
     () => false,
   );
   const target = ready
-    ? entryTarget(parseIntakeSession(readRaw(projectId)), projectId)
+    ? entryPlan(read(CURRENT_PROJECT_KEY), (projectId) =>
+        parseIntakeSession(read(intakeStorageKey(projectId))),
+      )
     : null;
-  const href = target?.kind === "onboarding" ? target.href : null;
+  // HAC-150: a first visit opens the chat; a returning founder with a complete brief goes
+  // to the same entry, which docks straight onto Spaces.
+  const href =
+    target?.kind === "onboarding"
+      ? target.href
+      : target?.kind === "returning" && target.complete
+        ? target.onboardingHref
+        : null;
+  const create = target?.kind === "create";
+  const [attempt, setAttempt] = useState(0);
+  const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
+  const failed = failedAttempt === attempt;
+  // One request per attempt, even when Strict Mode runs the effect twice.
+  const creating = useRef(false);
 
   useEffect(() => {
     if (href) router.replace(href);
   }, [href, router]);
 
-  if (target?.kind !== "returning") {
+  useEffect(() => {
+    if (!create || creating.current) return;
+    creating.current = true;
+    createProject().then(
+      (projectId) => {
+        rememberProject(projectId);
+        router.replace(entryPath(projectId));
+      },
+      () => {
+        creating.current = false;
+        setFailedAttempt(attempt);
+      },
+    );
+  }, [create, attempt, router]);
+
+  if (create && failed) {
     return (
-      <p role="status" className="text-white/80">
+      <>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          BizBox could not start your project
+        </h1>
+        <p role="alert" className="mt-3 max-w-md text-muted">
+          Your new project could not be created just now. Try again, or look
+          around the example project first.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            Try again
+          </Button>
+          <Link
+            href={workspaceHref(DEMO_PROJECT_ID, "intake")}
+            className={secondary}
+          >
+            Open the example project
+          </Link>
+        </div>
+      </>
+    );
+  }
+
+  if (target?.kind !== "returning" || target.complete) {
+    return (
+      <p role="status" className="text-muted">
         Opening BizBox…
       </p>
     );
@@ -61,31 +152,17 @@ export function StartGate({
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
         Welcome back to BizBox
       </h1>
-      <p className="mt-3 max-w-md text-white/75">
-        {target.complete
-          ? "Your business profile is saved on this device. Pick up where you left off."
-          : "You started describing your business. Finish onboarding or jump to your workspace."}
+      <p className="mt-3 max-w-md text-muted">
+        You started describing your business. Pick up the conversation or jump
+        to your workspace.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        {target.complete ? (
-          <>
-            <Link href={target.workspaceHref} className={primary}>
-              Open your workspace
-            </Link>
-            <Link href={target.onboardingHref} className={secondary}>
-              Review your answers
-            </Link>
-          </>
-        ) : (
-          <>
-            <Link href={target.onboardingHref} className={primary}>
-              Continue onboarding
-            </Link>
-            <Link href={target.workspaceHref} className={secondary}>
-              Open your workspace
-            </Link>
-          </>
-        )}
+        <Link href={target.onboardingHref} className={primary}>
+          Continue the conversation
+        </Link>
+        <Link href={target.workspaceHref} className={secondary}>
+          Open your workspace
+        </Link>
       </div>
     </>
   );

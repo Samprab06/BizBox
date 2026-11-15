@@ -3,6 +3,8 @@ import {
   waitForPlaying,
   connectShowcase,
   focusServiceArea,
+  viewerFailure,
+  ViewerError,
   type ShowcaseWindow,
   type MatterportSdk,
 } from "./matterport-bridge";
@@ -138,4 +140,31 @@ it("sanitizes provider failures instead of forwarding SDK URLs or key details", 
   await expect(
     connectShowcase(target, new AbortController().signal),
   ).rejects.toThrow(/^Viewer connection unavailable$/);
+});
+
+it("disconnects an SDK connection that resolves after the timeout", async () => {
+  vi.useFakeTimers();
+  let resolve: (sdk: MatterportSdk) => void = () => {};
+  const disconnect = vi.fn();
+  const target = {
+    MP_SDK: {
+      connect: () => new Promise<MatterportSdk>((done) => (resolve = done)),
+    },
+  } as unknown as ShowcaseWindow;
+  const result = connectShowcase(target, new AbortController().signal, 1000);
+  const settled = expect(result).rejects.toMatchObject({ reason: "timeout" });
+  await vi.advanceTimersByTimeAsync(1000);
+  await settled;
+  resolve({ disconnect } as unknown as MatterportSdk);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(disconnect).toHaveBeenCalledOnce();
+});
+
+it("classifies key and domain refusals separately from other failures", () => {
+  expect(viewerFailure(new Error("Invalid application key"))).toBe("key");
+  expect(viewerFailure(new Error("403 Forbidden"))).toBe("key");
+  expect(viewerFailure(new Error("origin not allowed"))).toBe("key");
+  expect(viewerFailure(new Error("WebGL unavailable"))).toBe("unavailable");
+  expect(viewerFailure(new ViewerError("model", "gone"))).toBe("model");
+  expect(viewerFailure("weird")).toBe("unavailable");
 });

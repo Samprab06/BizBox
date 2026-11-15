@@ -6,22 +6,32 @@ import { useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
 import { TaskNav } from "@/components/shell/task-nav";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { AssistantPanel } from "./assistant-panel";
+import {
+  useConsultant,
+  useConsultantVoice,
+} from "@/components/shell/consultant-shell";
+import { useContextIntake } from "@/lib/client/use-workspace-context";
+import { VOICE_LIMITS } from "@/lib/voice/contracts";
 import { WorkspaceShell } from "./workspace-shell";
 import { workspaceHeader } from "./model";
+import { parseIntakeSession } from "./intake-conversation";
 import {
   realCandidates,
   comparisonMatchesSelection,
   toggleComparisonUnit,
 } from "./client-model";
-import { useIntakeConversation } from "./use-intake-conversation";
 import { LocationExperience } from "./location-experience";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
 import type { ListingCameraRequest } from "@/components/city/listing-markers";
 import { PropertyDetails, ListingList } from "./property-details";
 import styles from "./workspace-glass.module.css";
 
-/** Reuses the current service controllers and one conversation; no alternate store. */
+/**
+ * HAC-128/HAC-130: the client workspace over real listings and the Cesium location layer.
+ * HAC-143: the assistant (Text / Voice over one conversation) is the consultant shell's dock
+ * in the project layout, so it is not mounted here; this screen reuses that conversation and
+ * only supplies the selected listing to the dock's voice context. No alternate store.
+ */
 export function WorkspaceScreen({
   projectId,
   project,
@@ -34,7 +44,11 @@ export function WorkspaceScreen({
   navigation?: ReactNode;
   tilesetUrl?: string;
 }) {
-  const conversation = useIntakeConversation(projectId);
+  const consultant = useConsultant();
+  // Outside a project layout (no shell) the saved session is read directly.
+  const raw = useContextIntake(projectId);
+  const session = consultant?.conversation.session ?? parseIntakeSession(raw);
+  // HAC-162: the founder picks units explicitly; nothing is preselected.
   const controller = useLiveComparison(projectId, undefined, {
     manualSelection: true,
   });
@@ -42,7 +56,9 @@ export function WorkspaceScreen({
     "locations",
   );
   const search = useSearchParams();
-  const [pane, setPane] = useState<"property" | "list" | "chat">("property");
+  // HAC-162 side pane: the selected property or the location list. The chat itself is the
+  // consultant dock (one conversation), so "none" just closes this pane (e.g. for results).
+  const [pane, setPane] = useState<"property" | "list" | "none">("property");
   const [cameraRequest, setCameraRequest] = useState<ListingCameraRequest>({
     kind: "overview",
     revision: 0,
@@ -72,7 +88,7 @@ export function WorkspaceScreen({
     setView("locations");
     setPane("property");
   }, [controller.search?.status, requested, selectedId]);
-  const header = workspaceHeader(conversation.session, project);
+  const header = workspaceHeader(session, project);
   useEffect(() => {
     if (selectedId && pane === "property")
       document
@@ -106,6 +122,19 @@ export function WorkspaceScreen({
       ? "Comparison: " + controller.payload.comparisonId
       : "No saved location comparison",
   ].join(". ");
+  // The dock's voice reads the selected real listing from this screen while it is mounted.
+  useConsultantVoice({
+    readContext: () => ({
+      projectId,
+      mode: "chat",
+      ...(selectedId && selectedId.length <= 200
+        ? { selectedSiteId: selectedId }
+        : {}),
+      summary: summary.slice(0, VOICE_LIMITS.summaryChars),
+    }),
+    submitTranscript: async (text) =>
+      consultant ? consultant.conversation.submit(text) : null,
+  });
   function select(id: string) {
     if (!candidates.some((entry) => entry.candidate.id === id)) return;
     const url = new URL(window.location.href);
@@ -144,6 +173,7 @@ export function WorkspaceScreen({
         ?.focus({ preventScroll: true }),
     );
   }
+  const sidePaneOpen = pane === "list" || (Boolean(selected) && pane === "property");
   return (
     <WorkspaceShell
       header={header}
@@ -180,99 +210,72 @@ export function WorkspaceScreen({
         />
       }
       assistant={
-        <div className={styles.sidePane} data-pane={pane}>
-          <button
-            className={styles.compactChatToggle}
-            onClick={() =>
-              setPane((value) => (value === "chat" ? "property" : "chat"))
-            }
-            aria-expanded={pane === "chat"}
-          >
-            Chat
-          </button>
-          {(selected || pane === "list") && (
-            <div
-              className={styles.paneTabs}
-              role="group"
-              aria-label="Side panel"
-            >
-              {selected && (
+        sidePaneOpen ? (
+          <div className={styles.sidePane} data-pane={pane}>
+            {selected && pane === "list" && (
+              <div
+                className={styles.paneTabs}
+                role="group"
+                aria-label="Side panel"
+              >
                 <button
-                  aria-pressed={pane === "property"}
+                  aria-pressed={false}
                   onClick={() => setPane("property")}
                 >
                   Property
                 </button>
-              )}
-              {pane === "list" && <span>Locations</span>}
-              <button
-                aria-pressed={pane === "chat"}
-                onClick={() => setPane("chat")}
-              >
-                Chat
-              </button>
-            </div>
-          )}
-          {selected && pane === "property" && (
-            <PropertyDetails
-              selected={selected}
-              candidates={candidates}
-              search={controller.search}
-              projectId={projectId}
-              fullDetailsHref={null}
-              onSelect={select}
-              onClose={closeDetails}
-              onInterior={() => setView("interior")}
-              onCompare={() => toggleUnit(selected.candidate.id)}
-              comparisonAdded={controller.selectedIds.includes(
-                selected.candidate.id,
-              )}
-              comparisonFull={controller.selectedIds.length >= 2}
-              onChooseAnother={() => {
-                setPane("list");
-                setView("locations");
-              }}
-              compareDisabled={
-                controller.phase === "loading" || controller.phase === "running"
-              }
-            />
-          )}
-          {pane === "list" && (
-            <ListingList
-              candidates={candidates}
-              selectedIds={controller.selectedIds}
-              selectedId={selected?.candidate.id}
-              running={controller.phase === "running"}
-              search={controller.search}
-              onSelect={select}
-              onCompareIds={controller.setSelectedIds}
-              maxSelected={2}
-              onClose={() => {
-                setPane("property");
-                requestAnimationFrame(() =>
-                  document
-                    .querySelector<HTMLButtonElement>(
-                      "[data-show-location-list]",
-                    )
-                    ?.focus({ preventScroll: true }),
-                );
-              }}
-            />
-          )}
-          <div
-            className={styles.paneChat}
-            hidden={
-              pane === "list" || (Boolean(selected) && pane === "property")
-            }
-          >
-            <AssistantPanel
-              projectId={projectId}
-              conversation={conversation}
-              selectedSiteId={selected?.candidate.id}
-              summary={summary}
-            />
+                <span>Locations</span>
+              </div>
+            )}
+            {selected && pane === "property" && (
+              <PropertyDetails
+                selected={selected}
+                candidates={candidates}
+                search={controller.search}
+                projectId={projectId}
+                fullDetailsHref={null}
+                onSelect={select}
+                onClose={closeDetails}
+                onInterior={() => setView("interior")}
+                onCompare={() => toggleUnit(selected.candidate.id)}
+                comparisonAdded={controller.selectedIds.includes(
+                  selected.candidate.id,
+                )}
+                comparisonFull={controller.selectedIds.length >= 2}
+                onChooseAnother={() => {
+                  setPane("list");
+                  setView("locations");
+                }}
+                compareDisabled={
+                  controller.phase === "loading" ||
+                  controller.phase === "running"
+                }
+              />
+            )}
+            {pane === "list" && (
+              <ListingList
+                candidates={candidates}
+                selectedIds={controller.selectedIds}
+                selectedId={selected?.candidate.id}
+                running={controller.phase === "running"}
+                search={controller.search}
+                onSelect={select}
+                onCompareIds={controller.setSelectedIds}
+                maxSelected={2}
+                onClose={() => {
+                  setPane(selected ? "property" : "none");
+                  requestAnimationFrame(() =>
+                    document
+                      .querySelector<HTMLButtonElement>(
+                        "[data-show-location-list]",
+                      )
+                      ?.focus({ preventScroll: true }),
+                  );
+                }}
+              />
+            )}
           </div>
-        </div>
+        ) : undefined
       }
     >
       <LocationExperience
@@ -285,7 +288,7 @@ export function WorkspaceScreen({
         view={view}
         onViewChange={(next) => {
           setView(next);
-          if (next === "results") setPane("chat");
+          if (next === "results") setPane("none");
         }}
         onShowList={() =>
           setPane((value) => (value === "list" ? "property" : "list"))

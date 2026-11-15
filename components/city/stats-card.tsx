@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
 
 import { useId, useMemo } from "react";
 import type { DayResult } from "@/lib/sim/contracts";
@@ -7,9 +9,11 @@ import { Stat } from "@/components/ui/stat";
 import { EvidenceBadge } from "@/components/ui/evidence-badge";
 import { statsAt } from "./stats";
 
-export type PlaybackSpeed = 1 | 6 | 18 | 60;
+export const playbackSpeeds = [0.5, 1, 2, 4, 6, 18, 60] as const;
+export type PlaybackSpeed = (typeof playbackSpeeds)[number];
 export type StatsCardProps = {
   run: DayResult;
+  runLabel?: string;
   /** Distinct sites from the same scenario/day with matching opening hours. */
   areaRuns?: readonly DayResult[];
   scope: "site" | "area";
@@ -37,7 +41,10 @@ export function StatsCard(props: StatsCardProps) {
     [scope, areaRuns, run],
   );
   const stats = useMemo(() => statsAt(runs, minute), [runs, minute]);
-  const maxServed = Math.max(1, stats.served);
+  const maxServed = Math.max(
+    1,
+    runs.reduce((total, { metrics }) => total + metrics.served, 0),
+  );
   const width = stats.closeMin - stats.openMin;
   const points = stats.purchases
     .map(
@@ -56,7 +63,9 @@ export function StatsCard(props: StatsCardProps) {
       className="w-full max-w-md"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Modeled day so far</h2>
+        <h2 className="font-semibold">
+          Modeled day so far{props.runLabel ? ` · ${props.runLabel}` : ""}
+        </h2>
         <EvidenceBadge kind="Simulation" />
       </div>
       <div
@@ -64,15 +73,17 @@ export function StatsCard(props: StatsCardProps) {
         aria-label="Statistics scope"
         className="my-3 flex flex-wrap gap-2"
       >
-        <button
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-pressed={effectiveScope === "site"}
           onClick={() => props.onScopeChange("site")}
         >
           This site
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-pressed={effectiveScope === "area"}
@@ -80,7 +91,7 @@ export function StatsCard(props: StatsCardProps) {
           onClick={() => props.onScopeChange("area")}
         >
           Area overview
-        </button>
+        </Button>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <Stat
@@ -135,31 +146,32 @@ export function StatsCard(props: StatsCardProps) {
         {clock(stats.minute)} / {clock(stats.closeMin)} close
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button
+        <Button
+          variant="quiet"
           type="button"
           className={button}
           aria-label={playing ? "Pause playback" : "Play playback"}
           onClick={() => props.onPlayingChange(!playing)}
         >
           {playing ? "Pause" : "Play"}
-        </button>
+        </Button>
         <label htmlFor={`${id}-speed`} className="text-sm">
           Playback speed
         </label>
-        <select
+        <Select
           id={`${id}-speed`}
-          className="rounded border border-line bg-surface px-2 py-2"
+          className="rounded border border-line bg-panel-raised px-2 py-2"
           value={speed}
           onChange={(e) =>
             props.onSpeedChange(Number(e.target.value) as PlaybackSpeed)
           }
         >
-          {[1, 6, 18, 60].map((value) => (
+          {playbackSpeeds.map((value) => (
             <option key={value} value={value}>
               {value}×
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <label htmlFor={`${id}-seek`} className="mt-3 block text-sm">
         Seek local time
@@ -167,7 +179,7 @@ export function StatsCard(props: StatsCardProps) {
       <input
         id={`${id}-seek`}
         type="range"
-        className="w-full accent-pine"
+        className="w-full accent-accent"
         min={stats.openMin}
         max={stats.closeMin}
         step={0.1}

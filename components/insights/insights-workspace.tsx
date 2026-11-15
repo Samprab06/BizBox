@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -150,7 +152,8 @@ export function InsightsWorkspace({
           }
         />
       ) : (
-        <section
+        <Card
+          role="region"
           aria-label="Insights"
           className="rounded-card border border-line p-5"
         >
@@ -168,18 +171,19 @@ export function InsightsWorkspace({
                 : "This saved comparison has no retained cross-seed insights. Representative replay data cannot supply honest seed bands."}
           </p>
           {state.kind === "unavailable" && state.failed && (
-            <button
+            <Button
+              variant="primary"
               type="button"
-              className="mt-3 rounded bg-pine px-3 py-2 text-on-pine"
+              className="mt-3 rounded bg-accent px-3 py-2 text-on-accent"
               onClick={() => setAttempt((value) => value + 1)}
             >
               Retry insights
-            </button>
+            </Button>
           )}
-        </section>
+        </Card>
       )}
       {!data && state.kind === "ready" && (
-        <div className="mt-4 rounded-card border border-line p-4">
+        <Card className="mt-4 rounded-card border border-line p-4">
           <StationCalloutController
             key={state.value.payload.comparisonId}
             projectId={projectId}
@@ -191,10 +195,10 @@ export function InsightsWorkspace({
             synthetic={state.value.payload.comparison?.synthetic}
             modelVersion={state.value.payload.result.modelVersion}
           />
-        </div>
+        </Card>
       )}
       <Link
-        className="mt-3 inline-block text-sm text-pine underline"
+        className="mt-3 inline-block text-sm text-accent underline"
         href={
           workspaceHref(projectId, "comparison", siteId) +
           (state.kind === "ready"

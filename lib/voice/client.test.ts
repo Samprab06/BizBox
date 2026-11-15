@@ -13,13 +13,16 @@ const flush = async () => {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 };
 function fixture(adapter?: Partial<VoiceAdapter>) {
-  const track = {
-    enabled: true,
-    stopped: false,
+  class FakeTrack extends EventTarget {
+    enabled = true;
+    stopped = false;
+    readyState: MediaStreamTrackState = "live";
     stop() {
       this.stopped = true;
-    },
-  };
+      this.readyState = "ended";
+    }
+  }
+  const track = new FakeTrack();
   const stream = {
     getTracks: () => [track],
     getAudioTracks: () => [track],
@@ -527,5 +530,152 @@ describe("capture intent stays bound to its original context", () => {
     expect(f.submit).not.toHaveBeenCalled();
     expect(f.client.snapshot.message).toMatch(/repeat|typing/i);
     f.client.stop();
+  });
+});
+
+it("HAC-149 fingerprints comparison changes during an utterance", async () => {
+  let comparisonId = "first";
+  const f = fixture({
+    readContext: () => ({
+      projectId: "houston-coffee",
+      mode: "chat",
+      view: { stage: "comparison", comparisonId },
+    }),
+  });
+  await f.client.start();
+  f.event(
+    JSON.stringify({ type: "input_audio_buffer.speech_started", item_id: "A" }),
+  );
+  comparisonId = "second";
+  f.event(
+    JSON.stringify({
+      type: "input_audio_buffer.committed",
+      item_id: "A",
+      previous_item_id: null,
+    }),
+  );
+  f.event(completed("A", "Compare this one"));
+  await flush();
+  expect(f.submit).not.toHaveBeenCalled();
+  f.client.stop();
+});
+
+describe("microphone readiness", () => {
+  it("keeps readiness false and mute a no-op while microphone permission is pending", async () => {
+    const f = fixture();
+    const acquire = f.client.dependencies.getUserMedia;
+    let resolve!: (stream: MediaStream) => void;
+    f.client.dependencies.getUserMedia = () =>
+      new Promise((done) => {
+        resolve = done;
+      });
+    const start = f.client.start();
+    expect(f.client.snapshot.microphoneReady).toBe(false);
+    f.client.setMuted(true);
+    expect(f.client.snapshot.muted).toBe(false);
+    expect(f.client.snapshot.message).not.toContain("muted");
+    expect(f.fetcher).not.toHaveBeenCalled();
+    f.client.stop();
+    resolve(await acquire());
+    await start;
+    expect(f.track.stopped).toBe(true);
+    expect(f.client.snapshot.microphoneReady).toBe(false);
+    expect(f.fetcher).not.toHaveBeenCalled();
+  });
+  it("publishes live microphone evidence during setup and clears it on disconnect and stop", async () => {
+    const f = fixture();
+    let release!: (response: Response) => void;
+    f.fetcher.mockImplementation(
+      () =>
+        new Promise((done) => {
+          release = done;
+        }),
+    );
+    const start = f.client.start();
+    await flush();
+    expect(f.client.snapshot).toMatchObject({
+      phase: "connecting",
+      microphoneReady: true,
+    });
+    f.client.setMuted(true);
+    expect(f.track.enabled).toBe(false);
+    release(
+      Response.json({ answerSdp: "v=0\r\nmock-answer", sessionSeconds: 180 }),
+    );
+    await start;
+    expect(f.client.snapshot).toMatchObject({
+      phase: "listening",
+      microphoneReady: true,
+      muted: true,
+    });
+    f.peer.connectionState = "disconnected";
+    (f.peer.onconnectionstatechange as unknown as () => void)();
+    expect(f.client.snapshot).toMatchObject({
+      phase: "error",
+      microphoneReady: false,
+    });
+    expect(f.track.stopped).toBe(true);
+  });
+  it("rejects an empty or ended audio stream before setup and notices a lost microphone", async () => {
+    const empty = fixture();
+    empty.client.dependencies.getUserMedia = async () =>
+      ({
+        getTracks: () => [],
+        getAudioTracks: () => [],
+      }) as unknown as MediaStream;
+    await empty.client.start();
+    expect(empty.client.snapshot).toMatchObject({
+      phase: "error",
+      microphoneReady: false,
+    });
+    expect(empty.client.snapshot.message).toContain("No microphone");
+    expect(empty.fetcher).not.toHaveBeenCalled();
+    const ended = fixture();
+    ended.track.readyState = "ended";
+    await ended.client.start();
+    expect(ended.client.snapshot.microphoneReady).toBe(false);
+    expect(ended.fetcher).not.toHaveBeenCalled();
+    const live = fixture();
+    await live.client.start();
+    live.track.readyState = "ended";
+    live.track.dispatchEvent(new Event("ended"));
+    expect(live.client.snapshot).toMatchObject({
+      phase: "error",
+      microphoneReady: false,
+    });
+    expect(live.client.snapshot.message).toContain("disconnected");
+  });
+  it.each([
+    ["NotAllowedError", "permission was denied", "site settings"],
+    ["NotFoundError", "No microphone", "Connect"],
+    ["NotReadableError", "could not be opened", "another app"],
+    ["NotSupportedError", "not supported", "supported browser"],
+  ])(
+    "classifies %s without leaking device details or starting a provider session",
+    async (name, message, action) => {
+      const f = fixture();
+      f.client.dependencies.getUserMedia = async () => {
+        throw new DOMException("private device details", name);
+      };
+      await f.client.start();
+      expect(f.client.snapshot.microphoneReady).toBe(false);
+      expect(f.client.snapshot.message).toContain(message);
+      expect(f.client.snapshot.message).toContain(action);
+      expect(f.client.snapshot.message).toContain("Text");
+      expect(f.client.snapshot.message).not.toContain("private device details");
+      expect(f.fetcher).not.toHaveBeenCalled();
+    },
+  );
+  it("keeps a provider/setup failure distinct from microphone permission denial", async () => {
+    const f = fixture();
+    f.fetcher.mockResolvedValue(new Response(null, { status: 503 }));
+    await f.client.start();
+    expect(f.client.snapshot).toMatchObject({
+      phase: "error",
+      microphoneReady: false,
+    });
+    expect(f.client.snapshot.message).toContain("could not connect");
+    expect(f.client.snapshot.message).not.toContain("permission");
+    expect(f.track.stopped).toBe(true);
   });
 });
