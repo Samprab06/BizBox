@@ -51,13 +51,22 @@ describe("field mapping", () => {
 });
 
 describe("validation", () => {
-  it("keeps exact typed amounts and rejects what production rejects", () => {
+  it("keeps exact whole dollar budgets within the guided limits", () => {
     expect(stepError("rent", "4550")).toBeUndefined();
-    expect(stepError("buildout", "0")).toBeUndefined();
-    expect(stepError("rent", "-5")).toBe("Enter a nonnegative whole number.");
-    expect(stepError("buildout", "1e3")).toBe("Enter a nonnegative whole number.");
+    expect(stepError("rent", "20000")).toBeUndefined();
+    expect(stepError("buildout", "1")).toBeUndefined();
+    expect(stepError("buildout", "500000")).toBeUndefined();
+    for (const value of ["", "0", "-5", "1e3", "99999999999"]) {
+      expect(stepError("rent", value)).toBe("Enter a whole dollar amount from $1 to $20,000.");
+      expect(stepError("buildout", value)).toBe("Enter a whole dollar amount from $1 to $500,000.");
+    }
+  });
+
+  it("requires a whole positive staff count", () => {
+    expect(stepError("staff", " ")).toBe("Enter how many people will be on shift.");
     expect(stepError("staff", "0")).toBe("Enter a positive whole number.");
     expect(stepError("staff", "2.5")).toBe("Enter a positive whole number.");
+    expect(stepError("staff", "4")).toBeUndefined();
   });
 
   it("requires hours the map can read", () => {
@@ -134,9 +143,10 @@ describe("ruler helpers", () => {
     expect(nudge(4500, 100, 500, -1, 10)).toBe(3500);
   });
 
-  it("widens the ruler to include a typed value outside it", () => {
-    expect(rulerBounds("rent", 50000)).toEqual({ min: 500, max: 50000 });
+  it("keeps the ruler inside guided budget limits and includes low valid values", () => {
+    expect(rulerBounds("rent", 50000)).toEqual({ min: 500, max: 20000 });
     expect(rulerBounds("rent", 100)).toEqual({ min: 100, max: 20000 });
+    expect(rulerBounds("buildout", 0)).toEqual({ min: 5000, max: 500000 });
     expect(rulerBounds("staff", Number.NaN)).toEqual({ min: 1, max: 30 });
   });
 
@@ -145,6 +155,12 @@ describe("ruler helpers", () => {
     expect(reviewValue("category", "Salon or barber")).toBe("Salon");
     expect(reviewValue("price", "Midrange")).toBe("Mid-range");
     expect(reviewValue("staff", "3")).toBe("3 on shift");
+  });
+
+  it("labels chat-stated area preferences while preserving named areas and notes", () => {
+    expect(reviewValue("areas", "Favor Montrose; Avoid Anything next to a major highway; Avoid US 59; near offices"))
+      .toBe("Favor: Montrose; Avoid: anything next to a major highway; Avoid: US 59; near offices");
+    expect(reviewValue("areas", "No preference")).toBe("No preference");
   });
 });
 

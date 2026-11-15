@@ -1,5 +1,6 @@
 "use client";
 
+import { Markdown } from "@/components/ui/markdown";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { useConsultant, useConsultantVoice } from "@/components/shell/consultant-shell";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -143,7 +144,11 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
             {session.messages.map((entry, index) => (
               <li key={index} className={entry.role === "founder" ? "ml-5 rounded-xl bg-mint p-3" : "mr-5 rounded-xl bg-paper p-3"}>
                 <span className="block text-xs font-semibold">{entry.role === "founder" ? "You" : "Intake"}</span>
-                <p className="mt-1 break-words text-sm">{entry.text}</p>
+                {entry.role === "founder" ? (
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm">{entry.text}</p>
+                ) : (
+                  <Markdown text={entry.text} className="mt-1 break-words text-sm" />
+                )}
               </li>
             ))}
           </ol>

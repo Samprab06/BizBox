@@ -11,6 +11,9 @@ import {
   CHAPTERS,
   typingAt,
   activeTime,
+  chatAt,
+  chatSchedule,
+  holdSpaceSlide,
   ONBOARDING_MS,
 } from "./timeline";
 
@@ -110,6 +113,54 @@ describe("location story timeline", () => {
 });
 
 describe("bounded location Spaces transition", () => {
+  it("swipes prompt to map, reverses continuously, and never retains map after prompt settles", () => {
+    const forward = retargetSpaceSlide(
+      initialSpaceSlide("question"),
+      "map",
+      0,
+      true,
+    );
+    expect(spaceSlideAt(forward, 0)).toMatchObject({
+      mix: -1,
+      retainMap: true,
+      retainQuestion: true,
+    });
+    expect(spaceSlideAt(forward, 250).mix).toBeCloseTo(-0.5);
+    const reverse = retargetSpaceSlide(forward, "question", 250, true);
+    expect(spaceSlideAt(reverse, 250).mix).toBeCloseTo(-0.5);
+    expect(spaceSlideAt(reverse, 750)).toMatchObject({
+      mix: -1,
+      retainMap: false,
+      retainQuestion: true,
+      active: false,
+    });
+  });
+  it("freezes a paused swipe without losing either pane and resumes from its held position", () => {
+    const forward = retargetSpaceSlide(
+      initialSpaceSlide("question"),
+      "map",
+      0,
+      true,
+    );
+    const held = holdSpaceSlide(forward, 200);
+    expect(spaceSlideAt(held, 5000)).toMatchObject({
+      active: false,
+      retainQuestion: true,
+      retainMap: true,
+    });
+    expect(spaceSlideAt(held, 5000).mix).toBeCloseTo(
+      spaceSlideAt(forward, 200).mix,
+    );
+    const resumed = retargetSpaceSlide(held, "map", 5000, true);
+    expect(spaceSlideAt(resumed, 5000).mix).toBeCloseTo(
+      spaceSlideAt(held, 5000).mix,
+    );
+    expect(spaceSlideAt(resumed, 5500)).toMatchObject({
+      mix: 0,
+      retainQuestion: false,
+      retainMap: true,
+    });
+  });
   it("retains outgoing map for500ms then releases it", () => {
     const state = retargetSpaceSlide(
       initialSpaceSlide("map"),
@@ -224,5 +275,43 @@ describe("bounded location Spaces transition", () => {
     late(200);
     expect(callbacks.size).toBe(0);
     expect(frames).toHaveLength(count);
+  });
+});
+
+describe("scripted prompt exchanges", () => {
+  const prompt = "Is the higher rent worth it?";
+  const replies = [
+    "One counter limits completed orders.",
+    "Compare the included costs.",
+  ];
+  it("composes before send, presses send before moving to a user bubble, then reveals separate reply paragraphs", () => {
+    const schedule = chatSchedule(prompt, replies);
+    const composing = chatAt(prompt, replies, 500);
+    expect(composing.promptText.length).toBeGreaterThan(0);
+    expect(composing.sent).toBe(false);
+    expect(composing.replyVisible).toBe(false);
+    expect(chatAt(prompt, replies, schedule.sendAt + 50).sendPressed).toBe(
+      true,
+    );
+    expect(chatAt(prompt, replies, schedule.sentAt).sent).toBe(true);
+    expect(chatAt(prompt, replies, schedule.replyAt - 1).replyVisible).toBe(
+      false,
+    );
+    expect(chatAt(prompt, replies, schedule.duration).paragraphs).toEqual(
+      replies,
+    );
+    expect(chatAt(prompt, replies, schedule.duration).complete).toBe(true);
+  });
+  it("replays deterministically and offers completed distinct-speaker content in reduced motion", () => {
+    const done = chatAt(prompt, replies, 0, true);
+    expect(done).toMatchObject({
+      sent: true,
+      replyVisible: true,
+      complete: true,
+      paragraphs: replies,
+    });
+    expect(chatAt(prompt, replies, -100).promptText).toBe("");
+    expect(chatAt(prompt, replies, 0).sent).toBe(false);
+    expect(chatAt(prompt, replies, 700)).toEqual(chatAt(prompt, replies, 700));
   });
 });

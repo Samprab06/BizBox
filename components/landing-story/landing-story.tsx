@@ -10,8 +10,7 @@ import {
 } from "react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { cameraAt, type MacbookFrame } from "../landing-demo/camera";
-import { OnboardingScene } from "../landing-demo/onboarding";
-import { onboardingAt } from "../landing-demo/timeline";
+import { StoryOnboarding } from "./story-onboarding";
 import {
   Glass,
   WordHeading,
@@ -33,7 +32,8 @@ import {
   chapterTarget,
   scrollOffset,
   activeTime,
-  typingAt,
+  chatSchedule,
+  holdSpaceSlide,
   ONBOARDING_MS,
   type StoryChapter,
 } from "./timeline";
@@ -42,19 +42,21 @@ import {
   MorningScene,
   LocationAnalytics,
   ConsultantScene,
-  InteriorScene,
+  LocationQuestion,
+  LOCATION_PROMPT,
+  LOCATION_REPLY,
+  COUNTER_PROMPT,
+  counterReply,
   CounterComparison,
   CounterQuestion,
 } from "./story-scenes";
 import base from "../landing-demo/landing-demo.module.css";
 import styles from "./landing-story.module.css";
-const entryHref = "/projects/houston-coffee/intake";
+const entryHref = "/start";
 const timedLimits: Partial<Record<StoryChapter, number>> = {
-  question: 2000,
-  locations: 800,
+  question: chatSchedule(LOCATION_PROMPT, LOCATION_REPLY).duration,
+  locations: 1600,
   morning: 6000,
-  consultant: 20000,
-  "counter-question": 2000,
 };
 export function LandingStory({
   data,
@@ -87,24 +89,37 @@ export function LandingStory({
     ? "map"
     : frame.chapter === "analytics"
       ? "analytics"
-      : null;
+      : frame.chapter === "question"
+        ? "question"
+        : null;
   const spaceModel = useRef(initialSpaceSlide(null));
   const [spaceFrame, setSpaceFrame] = useState(() =>
     spaceSlideAt(initialSpaceSlide(null), 0),
   );
   useEffect(() => {
-    spaceModel.current = retargetSpaceSlide(
+    const now = performance.now();
+    const previousScene = spaceModel.current.scene;
+    const next = retargetSpaceSlide(
       spaceModel.current,
       desiredSpace,
-      performance.now(),
+      now,
       visible && !reduced,
     );
+    spaceModel.current =
+      paused && visible && !reduced
+        ? previousScene === desiredSpace
+          ? holdSpaceSlide(next, now)
+          : initialSpaceSlide(desiredSpace)
+        : next;
     return runSpaceSlide(
       spaceModel.current,
       setSpaceFrame,
       browserSlideScheduler(),
     );
-  }, [desiredSpace, visible, reduced]);
+  }, [desiredSpace, visible, reduced, paused]);
+  const [heldQuestionMs, setHeldQuestionMs] = useState(0);
+  if (frame.chapter === "question" && heldQuestionMs !== chapterMs)
+    setHeldQuestionMs(chapterMs);
   const outdoorMinute =
     frame.chapter === "morning"
       ? reduced
@@ -130,17 +145,27 @@ export function LandingStory({
   const outdoor = frame.outdoors ? outdoorNow : heldOutdoor;
   const paneMix =
     spaceFrame.scene === null
-      ? Number(desiredSpace === "analytics")
+      ? desiredSpace === "question"
+        ? -1
+        : Number(desiredSpace === "analytics")
       : spaceFrame.mix;
   const showMap =
     visible &&
-    (desiredSpace === "map" ||
-      (desiredSpace === "analytics" && spaceFrame.retainMap));
+    desiredSpace !== null &&
+    (desiredSpace === "map" || spaceFrame.retainMap);
+  const showQuestion =
+    desiredSpace === "question" ||
+    (desiredSpace !== null && spaceFrame.retainQuestion);
   const showAnalytics =
     desiredSpace === "analytics" ||
-    (desiredSpace === "map" &&
-      (spaceFrame.scene === "analytics" || spaceFrame.active));
-  const timedLimit = timedLimits[frame.chapter] ?? 0;
+    (desiredSpace !== null && spaceFrame.retainAnalytics);
+  const timedLimit =
+    frame.chapter === "consultant"
+      ? chatSchedule(data.consultant.question, data.consultant.messages)
+          .duration
+      : frame.chapter === "counter-question"
+        ? chatSchedule(COUNTER_PROMPT, counterReply(demo)).duration
+        : (timedLimits[frame.chapter] ?? 0);
   const needsOnboarding =
     frame.onboardingReady && settled && elapsed < ONBOARDING_MS;
   const needsChapterTime = chapterMs < timedLimit;
@@ -309,7 +334,10 @@ export function LandingStory({
     document.addEventListener("keydown", keys);
     return () => document.removeEventListener("keydown", keys);
   }, [frame.index, seek]);
-  const camera = cameraAt(viewport, macbook, frame.entry);
+  const camera = cameraAt(viewport, macbook, frame.entry, {
+    heroScale: viewport.width > 700 && viewport.height > 480 ? 0.86 : 1,
+    heroCenterY: 0.65,
+  });
   const { card, screen } = camera;
   const onboardingStyle = {
     left: card.left - screen.left,
@@ -330,7 +358,6 @@ export function LandingStory({
     "--controls-height": `${card.controlsHeight}px`,
     "--controls-gap": `${card.controlsGap}px`,
   } as CSSProperties;
-  const onboarding = onboardingAt(elapsed, reduced && frame.onboardingReady);
   const replay = () => {
     setPaused(false);
     if (frame.chapter === "counters") setCounterRevision((value) => value + 1);
@@ -343,6 +370,11 @@ export function LandingStory({
   const selectSite = useCallback((id: string) => setSelected(id), []);
   const onInterior =
     frame.chapter === "interior" || frame.chapter === "counter-question";
+  const sendQuestion = (prompt: string, replies: readonly string[]) =>
+    setClock({
+      chapter: frame.chapter,
+      ms: Math.max(chapterMs, chatSchedule(prompt, replies).sentAt),
+    });
   return (
     <div
       className={`${base.root} ${styles.root}`}
@@ -351,10 +383,19 @@ export function LandingStory({
       data-onboarding-ms={Math.round(elapsed)}
       data-space-mix={paneMix}
       data-space-active={spaceFrame.active}
+      data-location-reveal={
+        frame.chapter === "locations" && !reduced
+          ? chapterMs < 350
+            ? 0
+            : chapterMs < 1000
+              ? 1
+              : 2
+          : 2
+      }
     >
       <Refraction />
       <div className={base.world} />
-      <Glass className={base.navbar}>
+      <Glass className={`${base.navbar} ${styles.navbar}`}>
         <button
           className={base.brand}
           onClick={() => go("hero")}
@@ -376,7 +417,7 @@ export function LandingStory({
         </nav>
       </Glass>
       <div
-        className={base.heroCopy}
+        className={`${base.heroCopy} ${styles.heroCopy}`}
         style={{
           opacity: frame.heroOpacity,
           visibility: frame.heroOpacity === 0 ? "hidden" : "visible",
@@ -409,15 +450,16 @@ export function LandingStory({
           clipPath: `polygon(0 0,45% 0,45.5% ${camera.notchDepth}%,54.5% ${camera.notchDepth}%,55% 0,100% 0,100% 100%,0 100%)`,
         }}
         data-device-view={frame.entry < 0.72 ? "laptop" : "fullscreen"}
-        data-screen-scene="onboarding"
+        data-screen-scene={frame.chapter}
       >
         <div className={base.screenBase} />
         {(frame.chapter === "hero" || frame.chapter === "onboarding") && (
-          <OnboardingScene
+          <StoryOnboarding
             ready={frame.onboardingReady}
             style={onboardingStyle}
             demo={demo}
-            {...onboarding}
+            elapsed={elapsed}
+            reduced={reduced}
             paused={paused}
             onPause={() => setPaused((v) => !v)}
             onReplay={() => {
@@ -429,27 +471,25 @@ export function LandingStory({
             onContinue={() => go("question")}
           />
         )}
-        {frame.chapter === "question" && (
-          <section
-            className={styles.questionScene}
-            aria-label="Example location question"
+        {showQuestion && (
+          <div
+            className={styles.spacePane}
+            data-space-pane="question"
+            style={{
+              transform: `translate3d(${-(paneMix + 1) * 100}%,0,0)`,
+              willChange: spaceFrame.active ? "transform" : "auto",
+            }}
+            inert={desiredSpace !== "question"}
           >
-            <Glass className={`${styles.bubble} ${styles.userBubble}`}>
-              <span>You</span>
-              <h2 aria-hidden="true">
-                {typingAt(
-                  "Where should I open my café?",
-                  chapterMs,
-                  150,
-                  reduced,
-                )}
-                <span className={styles.caret} />
-              </h2>
-              <span className={styles.srOnly}>
-                Where should I open my café?
-              </span>
-            </Glass>
-          </section>
+            <div className={base.screenBase} />
+            <LocationQuestion
+              elapsed={
+                frame.chapter === "question" ? chapterMs : heldQuestionMs
+              }
+              reduced={reduced}
+              onSend={() => sendQuestion(LOCATION_PROMPT, LOCATION_REPLY)}
+            />
+          </div>
         )}
         {showMap && (
           <div
@@ -504,20 +544,40 @@ export function LandingStory({
             <LocationAnalytics data={data} />
           </div>
         )}
-        {frame.chapter === "consultant" && (
-          <ConsultantScene data={data} elapsed={chapterMs} reduced={reduced} />
-        )}
-        {onInterior && (
-          <InteriorScene
+        {(frame.chapter === "consultant" || onInterior) && (
+          <ConsultantScene
             data={data}
-            mix={frame.chapter === "counter-question" ? 1 : frame.interiorMix}
-            cursorMix={frame.cursorMix}
+            elapsed={
+              frame.chapter === "consultant"
+                ? chapterMs
+                : chatSchedule(
+                    data.consultant.question,
+                    data.consultant.messages,
+                  ).duration
+            }
+            reduced={reduced}
+            onSend={() =>
+              sendQuestion(data.consultant.question, data.consultant.messages)
+            }
+            interiorMix={
+              frame.chapter === "counter-question"
+                ? 1
+                : frame.chapter === "interior"
+                  ? frame.interiorMix
+                  : 0
+            }
+            cursorMix={frame.chapter === "interior" ? frame.cursorMix : 0}
             pan={frame.interiorPan}
             onEnter={() => seek(0.742)}
           />
         )}
         {frame.chapter === "counter-question" && (
-          <CounterQuestion elapsed={chapterMs} reduced={reduced} />
+          <CounterQuestion
+            demo={demo}
+            elapsed={chapterMs}
+            reduced={reduced}
+            onSend={() => sendQuestion(COUNTER_PROMPT, counterReply(demo))}
+          />
         )}
         {(frame.chapter === "counters" || frame.chapter === "return") && (
           <CounterComparison
@@ -556,7 +616,7 @@ export function LandingStory({
           )}
       </div>
       <div
-        className={base.finishCopy}
+        className={`${base.finishCopy} ${styles.finishCopy}`}
         style={{
           opacity: frame.finalOpacity,
           visibility: frame.finalOpacity === 0 ? "hidden" : "visible",
