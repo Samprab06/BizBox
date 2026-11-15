@@ -178,14 +178,13 @@ export function PreparedVideo({
           poster={media.poster}
           onLoadedMetadata={(event) => {
             const element = event.currentTarget;
+            // Seek inside the last frame: the exact end timestamp can have no
+            // decodable sample. The finished flag retains completed progress.
             if (position.current > 0)
-              element.currentTime =
-                finished.current && !loop
-                  ? element.duration
-                  : Math.min(
-                      position.current,
-                      Math.max(0, element.duration - 0.05),
-                    );
+              element.currentTime = Math.min(
+                position.current,
+                Math.max(0, element.duration - 0.05),
+              );
             callbacks.current.onProgress?.(
               finished.current && !loop ? media.duration : element.currentTime,
             );
