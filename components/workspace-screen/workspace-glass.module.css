@@ -338,6 +338,12 @@
   border-radius: 16px;
   text-align: left;
 }
+.listFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px;
+}
 .listRow > label {
   display: flex;
   align-items: center;

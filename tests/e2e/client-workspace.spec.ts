@@ -213,7 +213,10 @@ for (const viewport of [
         page.getByRole("region", { name: "Unit comparison" }),
       ).toContainText("Listing facts");
       expect(posts).toEqual([]);
+      // The consultant dock stays available beside (or, on a phone, over) the comparison.
+      await showChat(page);
       await expect(composer).toBeVisible();
+      await closeConsultant(page);
       await page
         .getByRole("button", { name: "Run comparison", exact: true })
         .click();
@@ -497,7 +500,9 @@ test.describe("inventory readiness desktop", () => {
       page.getByRole("textbox", { name: "Message the BizBox assistant" }),
     ).toHaveAttribute("placeholder", "Ask about your saved brief…");
     await expect(
-      page.getByText("Assistant unavailable.", { exact: true }),
+      page.getByText(
+        "The BizBox assistant is offline. Your brief can still be edited in Intake.",
+      ),
     ).toBeVisible();
     await page.getByRole("tab", { name: "Voice", exact: true }).click();
     await page.getByText("Conversation", { exact: true }).click();
@@ -695,7 +700,7 @@ test.describe("inventory readiness desktop", () => {
           r.limit === 8 && Object.keys(r).sort().join(",") === "limit,profile",
       ),
     ).toBe(true);
-    await page.getByRole("button", { name: "Property", exact: true }).click();
+    // The chat is the consultant dock, so the property pane never closed.
     await expect(
       page.getByRole("region", { name: "Selected location" }),
     ).toContainText("202 Invented St");

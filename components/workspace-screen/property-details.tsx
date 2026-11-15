@@ -280,13 +280,16 @@ export function ListingList({
                 onClick={() => onSelect(entry.candidate.id)}
               >
                 <strong>{unitAddress(entry, candidates)}</strong>
+              </button>
+              {/* Facts sit beside the button so its accessible name matches its visible text. */}
+              <div className={styles.listFacts}>
                 <span id={"listing-facts-" + entry.candidate.id}>
                   {area(entry)} · {rent(entry)}
                 </span>
                 <span className={styles.muted}>
                   {marker ? `Map ${marker.index}` : "Coordinates unavailable"}
                 </span>
-              </button>
+              </div>
               <label>
                 <input
                   type="checkbox"
