@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -7,11 +9,13 @@ import {
   workspaceTasks,
   type WorkspaceRoute,
 } from "@/lib/client/workspace-routes";
+import { useProjectComparisonId } from "@/lib/client/project-store";
 
 /**
  * The workspace navigation: three founder tasks, the screens under each, the task the
  * founder is in, and the next step. The grouping lives in `lib/client/workspace-routes.ts`;
- * planned screens are skipped there, so only real routes are linked.
+ * planned screens are skipped there, so only real routes are linked. The plan and simulator
+ * links carry the project's saved comparison (HAC-135), so they never open empty.
  */
 export function TaskNav({
   projectId,
@@ -31,6 +35,9 @@ export function TaskNav({
 }) {
   const currentTask = taskForRoute(route);
   const next = nextStep(route);
+  const comparisonId = useProjectComparisonId(projectId);
+  const href = (target: WorkspaceRoute) =>
+    workspaceHref(projectId, target, siteId, comparisonId);
 
   const content = (
     <>
@@ -62,7 +69,7 @@ export function TaskNav({
                 {task.entries.map((entry) => (
                   <li key={entry.route}>
                     <Link
-                      href={workspaceHref(projectId, entry.route, siteId)}
+                      href={href(entry.route)}
                       prefetch={false}
                       aria-current={entry.route === route ? "page" : undefined}
                       className="block rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-surface aria-[current=page]:bg-pine aria-[current=page]:text-on-pine"
@@ -79,7 +86,7 @@ export function TaskNav({
       {next && (
         <p className="mt-4 text-sm text-muted">
           <Link
-            href={workspaceHref(projectId, next.route, siteId)}
+            href={href(next.route)}
             prefetch={false}
             data-next-step
             className="font-semibold text-pine underline"

@@ -9,6 +9,7 @@ import { applyLayoutToConfig } from "@/lib/layout";
 import type {
   AssembleEvaluationInput,
   AssembledEvaluation,
+  PanelDeadline,
 } from "@/lib/evaluation/assemble";
 import { ScenarioRunError } from "./run-store";
 
@@ -23,11 +24,15 @@ export function createScenarioPreparer({
     version: number,
   ) => Promise<BusinessProfile | null>;
   loadLayout: (projectId: string, id: string) => Promise<Layout | null>;
-  assemble: (input: AssembleEvaluationInput) => Promise<AssembledEvaluation>;
+  assemble: (
+    input: AssembleEvaluationInput,
+    deadline?: PanelDeadline,
+  ) => Promise<AssembledEvaluation>;
 }) {
   return async (
     scenario: Scenario,
     demandSource: DemandSource,
+    deadline?: PanelDeadline,
   ): Promise<AssembledEvaluation> => {
     const snapshot = await loadProfile(
       scenario.projectId,
@@ -71,15 +76,18 @@ export function createScenarioPreparer({
         "invalid",
         "Selected layout category does not match the profile",
       );
-    const result = await assemble({
-      projectId: scenario.projectId,
-      profileId: profile.id,
-      profileVersion: scenario.profileVersion,
-      profile: BusinessProfileSchema.parse(profile),
-      candidateIds: scenario.siteIds,
-      demandSource,
-      ...(o.seedSet ? { seeds: o.seedSet.value.length } : {}),
-    });
+    const result = await assemble(
+      {
+        projectId: scenario.projectId,
+        profileId: profile.id,
+        profileVersion: scenario.profileVersion,
+        profile: BusinessProfileSchema.parse(profile),
+        candidateIds: scenario.siteIds,
+        demandSource,
+        ...(o.seedSet ? { seeds: o.seedSet.value.length } : {}),
+      },
+      deadline,
+    );
     if (
       result.request.projectId !== scenario.projectId ||
       result.request.profileId !== profile.id ||

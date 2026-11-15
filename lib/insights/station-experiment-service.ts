@@ -21,7 +21,10 @@ import {
   seedList,
   type evaluateSitesResumable,
 } from "@/lib/evaluation/evaluate";
-import type { AssembledEvaluation } from "@/lib/evaluation/assemble";
+import type {
+  AssembledEvaluation,
+  PanelDeadline,
+} from "@/lib/evaluation/assemble";
 import type { ComparisonStore, StoredComparison } from "@/lib/evaluation/store";
 import type { ScenarioRepository } from "@/lib/scenario/repository";
 import { createRootScenario } from "@/lib/scenario/model";
@@ -529,12 +532,17 @@ export function withStationExperimentSnapshots({
   prepare: (
     scenario: Scenario,
     source: DemandSource,
+    deadline?: PanelDeadline,
   ) => Promise<AssembledEvaluation>;
 }) {
-  return async (scenario: Scenario, source: DemandSource) =>
+  return async (
+    scenario: Scenario,
+    source: DemandSource,
+    deadline?: PanelDeadline,
+  ) =>
     (await prepareStationExperimentScenario(
       { comparisons },
       scenario,
       source,
-    )) ?? prepare(scenario, source);
+    )) ?? prepare(scenario, source, deadline);
 }

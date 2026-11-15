@@ -20,10 +20,22 @@ import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
 import type { WorkspaceObservation } from "@/lib/client/workspace-context";
 import { SimulatorViewport } from "./viewport";
 import { customerLabel } from "./customer-label";
+import { InspectPanel } from "@/components/city/inspect-panel";
 import type { RenderQuality } from "./render-policy";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { InsightsDrawer } from "@/components/insights/insights-drawer";
+import {
+  playbackSpeeds,
+  StatsCard,
+  type PlaybackSpeed,
+} from "@/components/city/stats-card";
 import type { MatterportConfig } from "../interior/matterport-view";
+import { InteriorView } from "../interior/interior-view";
+import {
+  CityInteriorTransition,
+  useViewHandoff,
+} from "@/components/city/transition";
+import { viewMinute } from "@/components/city/transition-state";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
 const Scene = dynamic(() => import("./scene"), { ssr: false });
@@ -35,7 +47,6 @@ const usd = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const speeds = [0.5, 1, 2, 4];
 const playbackFrameInterval = 1000 / 60;
 
 function clock(minute: number) {
@@ -98,17 +109,19 @@ export function SimulatorDemo({
   );
   const [previewIndex, setPreviewIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   // Both views share a clock; the controller that starts it chooses its stop.
   const [playbackEnd, setPlaybackEnd] = useState(end);
-  const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
+  const [inspectIndex, setInspectIndex] = useState(0);
   const [quality, setQuality] = useState<RenderQuality>("balanced");
   const [interiorMode, setInteriorMode] = useState<"scan" | "modeled">(
     matterport ? "scan" : "modeled",
   );
-  const [activePlan, setActivePlan] = useState(0);
   const running = playing && minute < playbackEnd;
+  // HAC-99: street ↔ interior handoff. Clock, run and selection stay here.
+  const handoff = useViewHandoff();
 
   useEffect(() => {
     if (!running) return;
@@ -150,15 +163,6 @@ export function SimulatorDemo({
     };
   }, [running, playbackEnd, speed, coordinates]);
 
-  const customerIds = [
-    ...new Set(
-      data.flatMap(({ run }) =>
-        run.events
-          .filter((event) => event.type === "arrival")
-          .map((event) => event.customerId),
-      ),
-    ),
-  ];
   const [base, alternative] = data;
   const gain = alternative
     ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
@@ -168,10 +172,7 @@ export function SimulatorDemo({
     : 0;
   const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
   const previewRun = data[previewIndex].run;
-  const previewMinute = Math.min(
-    previewRun.metrics.closeMin,
-    Math.max(previewRun.metrics.openMin, minute),
-  );
+  const previewMinute = viewMinute("interior", minute, previewRun.metrics);
   const previewFrame = replayAt(previewRun.events, previewMinute);
   const insightsControl = (
     <InsightsDrawer
@@ -369,51 +370,45 @@ export function SimulatorDemo({
         <p className="mt-2 text-xs text-muted">{story.footnote}</p>
       </Card>
 
-      {coordinates ? (
-        <SimulatorViewport
-          label="3D neighborhood"
-          className="h-[40rem] max-h-[80dvh] min-h-[32rem]"
-        >
-          <Neighborhood
-            {...coordinates}
-            minute={minute}
-            quality={quality}
-            locationLabel={context.siteId ?? "Selected location"}
-            controls={
-              <div>
-                <label className="flex flex-wrap items-center gap-2 text-xs">
-                  Graphics
-                  <select
-                    aria-label="Graphics quality"
-                    value={quality}
-                    onChange={(event) =>
-                      setQuality(event.target.value as RenderQuality)
-                    }
-                    className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
-                  >
-                    <option value="balanced">Balanced</option>
-                    <option value="detailed">Detailed</option>
-                  </select>
-                </label>
-                {insightsControl}
-              </div>
-            }
-          >
+      <CityInteriorTransition
+        handoff={handoff}
+        siteLabel={context.siteId ?? base.run.siteId}
+        interior={
+          <div className="space-y-2">
+            <InteriorView
+              siteId={context.siteId ?? base.run.siteId}
+              sdkKey={matterport?.sdkKey}
+              run={previewRun}
+              minute={previewMinute}
+              employeeCount={data[previewIndex].staffing?.headcount}
+              selected={selected}
+              select={select}
+              seek={(value) => {
+                setPlaying(false);
+                setMinute(value);
+              }}
+            />
             <Timeline
-              label="Neighborhood timeline"
-              floating
-              className="absolute inset-x-3 bottom-8 z-10"
-              minute={minute}
-              min={start}
-              max={end}
-              step={1}
+              label="Interior timeline"
+              className=""
+              minute={previewMinute}
+              min={previewRun.metrics.openMin}
+              max={previewRun.metrics.closeMin}
+              step={0.01}
               running={running}
-              ended={minute >= end}
+              ended={minute >= previewRun.metrics.closeMin}
               speed={speed}
               onSpeed={setSpeed}
               onToggle={() => {
-                setPlaybackEnd(end);
-                if (minute >= end) setMinute(start);
+                setPlaybackEnd(previewRun.metrics.closeMin);
+                if (
+                  minute >= previewRun.metrics.closeMin ||
+                  minute < previewRun.metrics.openMin
+                ) {
+                  setMinute(previewRun.metrics.openMin);
+                  setPlaying(true);
+                  return;
+                }
                 setPlaying(!running);
               }}
               onSeek={(value) => {
@@ -421,17 +416,75 @@ export function SimulatorDemo({
                 setMinute(value);
               }}
             />
-          </Neighborhood>
-        </SimulatorViewport>
-      ) : (
-        <Card>
-          <p role="status" className="text-sm text-muted">
-            3D neighborhood unavailable. The modeled operating replay is
-            available below.
-          </p>
-          {insightsControl}
-        </Card>
-      )}
+            {insightsControl}
+          </div>
+        }
+        city={
+          coordinates ? (
+            <SimulatorViewport
+              label="3D neighborhood"
+              className="h-[40rem] max-h-[80dvh] min-h-[32rem]"
+            >
+              <Neighborhood
+                {...coordinates}
+                minute={minute}
+                quality={quality}
+                locationLabel={context.siteId ?? "Selected location"}
+                controls={
+                  <div>
+                    <label className="flex flex-wrap items-center gap-2 text-xs">
+                      Graphics
+                      <select
+                        aria-label="Graphics quality"
+                        value={quality}
+                        onChange={(event) =>
+                          setQuality(event.target.value as RenderQuality)
+                        }
+                        className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
+                      >
+                        <option value="balanced">Balanced</option>
+                        <option value="detailed">Detailed</option>
+                      </select>
+                    </label>
+                    {insightsControl}
+                  </div>
+                }
+              >
+                <Timeline
+                  label="Neighborhood timeline"
+                  floating
+                  className="absolute inset-x-3 bottom-8 z-10"
+                  minute={minute}
+                  min={start}
+                  max={end}
+                  step={1}
+                  running={running}
+                  ended={minute >= end}
+                  speed={speed}
+                  onSpeed={setSpeed}
+                  onToggle={() => {
+                    setPlaybackEnd(end);
+                    if (minute >= end) setMinute(start);
+                    setPlaying(!running);
+                  }}
+                  onSeek={(value) => {
+                    setPlaying(false);
+                    setMinute(value);
+                  }}
+                />
+              </Neighborhood>
+            </SimulatorViewport>
+          ) : (
+            <Card>
+              <p role="status" className="text-sm text-muted">
+                3D neighborhood unavailable. The modeled operating replay is
+                available below.
+              </p>
+              {insightsControl}
+            </Card>
+          )
+        }
+      />
 
       {story.compare && alternative && (
         <Card className="grid gap-5 sm:grid-cols-3">
@@ -569,6 +622,31 @@ export function SimulatorDemo({
             </button>
           )}
         </div>
+        <StatsCard
+          run={previewRun}
+          runLabel={story.scenarioLabels[previewIndex]}
+          scope="site"
+          minute={previewMinute}
+          playing={running}
+          speed={speed}
+          onScopeChange={() => {}}
+          onMinuteChange={(value) => {
+            setPlaying(false);
+            setMinute(value);
+          }}
+          onPlayingChange={(value) => {
+            if (
+              value &&
+              (minute < previewRun.metrics.openMin ||
+                minute >= previewRun.metrics.closeMin)
+            ) {
+              setMinute(previewRun.metrics.openMin);
+            }
+            setPlaybackEnd(previewRun.metrics.closeMin);
+            setPlaying(value);
+          }}
+          onSpeedChange={setSpeed}
+        />
         <section
           id="scanned-interior"
           aria-label="Interior view controls"
@@ -605,7 +683,15 @@ export function SimulatorDemo({
               replay is selected.
             </p>
           )}
-          {interiorMode === "scan" && matterport && (
+          {interiorMode === "scan" &&
+            matterport &&
+            handoff.view === "interior" && (
+              <p className="text-xs text-muted">
+                The interior is open above; the scanned plan returns here when
+                you go back to the street.
+              </p>
+            )}
+          {interiorMode === "scan" && matterport && handoff.view === "city" && (
             <>
               <div
                 role="radiogroup"
@@ -617,9 +703,9 @@ export function SimulatorDemo({
                     key={index}
                     type="button"
                     role="radio"
-                    aria-checked={activePlan === index}
-                    tabIndex={activePlan === index ? 0 : -1}
-                    onClick={() => setActivePlan(index)}
+                    aria-checked={previewIndex === index}
+                    tabIndex={previewIndex === index ? 0 : -1}
+                    onClick={() => setPreviewIndex(index)}
                     onKeyDown={(event) => {
                       const direction =
                         event.key === "ArrowRight" || event.key === "ArrowDown"
@@ -640,7 +726,7 @@ export function SimulatorDemo({
                           : event.key === "End"
                             ? data.length - 1
                             : (index + direction + data.length) % data.length;
-                      setActivePlan(next);
+                      setPreviewIndex(next);
                       event.currentTarget.parentElement
                         ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
                         [next]?.focus();
@@ -653,11 +739,12 @@ export function SimulatorDemo({
               </div>
               <MatterportView
                 config={matterport}
-                run={data[activePlan].run}
-                minute={minute}
-                employeeCount={data[activePlan].staffing?.headcount}
+                run={previewRun}
+                minute={previewMinute}
+                employeeCount={data[previewIndex].staffing?.headcount}
                 selected={selected}
                 select={select}
+                seek={setMinute}
               />
             </>
           )}
@@ -809,20 +896,44 @@ export function SimulatorDemo({
             );
           })}
         </div>
-        <label className="flex flex-wrap items-center justify-end gap-2 text-sm text-muted">
-          Modeled customer
-          <select
-            aria-label="Inspect a customer"
-            className="max-w-full rounded-lg border border-muted bg-surface px-3 py-2 text-ink"
-            value={customerIds.includes(selected) ? selected : ""}
-            onChange={(event) => select(event.target.value)}
-          >
-            <option value="">Inspect a customer</option>
-            {customerIds.map((id) => (
-              <option key={id}>{id}</option>
-            ))}
-          </select>
-        </label>
+        {/* HAC-93: one selection shared by every view; the card reads the shop clock. */}
+        <InspectPanel
+          events={data[inspectIndex].run.events}
+          minute={shopMinute}
+          closeMin={closeMin}
+          selectedId={selected}
+          onSelect={select}
+          source={context.phase === "ready" ? "stored" : "engine"}
+          scenarioLabel={
+            data.length > 1
+              ? (story.scenarioLabels[inspectIndex] ??
+                `Scenario ${inspectIndex + 1}`)
+              : undefined
+          }
+          following={handoff.following}
+          onFollowChange={handoff.setFollowing}
+          followUnavailableReason="the modeled café shows the whole floor, and this run has no street trips to follow in the city"
+          controls={
+            data.length > 1 && (
+              <label className="grid gap-1 text-sm font-medium">
+                Scenario
+                <select
+                  className="rounded-lg border border-line bg-surface p-2 text-ink"
+                  value={inspectIndex}
+                  onChange={(event) =>
+                    setInspectIndex(Number(event.target.value))
+                  }
+                >
+                  {data.map((_, index) => (
+                    <option key={index} value={index}>
+                      {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          }
+        />
       </section>
       {story.provenance && (
         <Card role="region" aria-label="Recorded run provenance">
@@ -870,8 +981,8 @@ function Timeline({
   step: number;
   running: boolean;
   ended: boolean;
-  speed: number;
-  onSpeed: (speed: number) => void;
+  speed: PlaybackSpeed;
+  onSpeed: (speed: PlaybackSpeed) => void;
   onToggle: () => void;
   onSeek: (minute: number) => void;
 }) {
@@ -932,7 +1043,11 @@ function Timeline({
         aria-label={`Speed ${speed}×`}
         title="Change speed"
         onClick={() =>
-          onSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length])
+          onSpeed(
+            playbackSpeeds[
+              (playbackSpeeds.indexOf(speed) + 1) % playbackSpeeds.length
+            ],
+          )
         }
         className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-mint"
       >

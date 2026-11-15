@@ -431,7 +431,11 @@ test.describe("bad input", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Comparison" }),
     ).toBeVisible();
-    await expect(page.getByRole("table")).toBeVisible();
+    // The page has two tables: the comparison table and the screen-reader
+    // table behind the hourly wait chart. Target the comparison one by name.
+    await expect(
+      page.getByRole("table", { name: /^Comparison / }),
+    ).toBeVisible();
     expect(problems).toEqual([]);
   });
 

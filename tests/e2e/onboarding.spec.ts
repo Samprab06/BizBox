@@ -134,14 +134,16 @@ for (const viewport of [
       await page.getByRole("button", { name: "Mid-range" }).click();
       await proceed(page).click();
 
-      // Hours must be one same-day range the map can read; Enter submits.
+      // Hours: the HAC-154 clock dial (covered in onboarding-hours.spec.ts); exact typed times here.
       await expect(title(page)).toHaveText("When will you be open?");
-      const hours = page.getByRole("textbox", { name: "When will you be open?" });
-      await hours.fill("evenings");
-      await hours.press("Enter");
-      await expect(page.getByRole("alert").filter({ hasText: /same-day range/ })).toBeVisible();
-      await hours.fill("11am – 11pm");
-      await hours.press("Enter");
+      await expect(page.getByRole("slider", { name: "Opening time" })).toHaveAttribute("aria-valuetext", "Opens at 9:00 AM");
+      await page.getByTestId("clock-readout").click();
+      await page.getByRole("textbox", { name: "Opens" }).fill("11am");
+      await page.getByRole("textbox", { name: "Closes" }).fill("11pm");
+      await page.getByRole("textbox", { name: "Closes" }).press("Enter");
+      await expect(page.getByRole("slider", { name: "Closing time" })).toHaveAttribute("aria-valuetext", "Closes at 11:00 PM");
+      await expectNoOverflow(page);
+      await proceed(page).click();
 
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await ruler(page).focus();
@@ -174,7 +176,7 @@ for (const viewport of [
         rent: { value: "4550", origin: "founder" },
         buildout: { value: "130000", origin: "founder" },
         price: { value: "Midrange", origin: "founder" },
-        hours: { value: "11am – 11pm", origin: "founder" },
+        hours: { value: "11:00–23:00", origin: "founder" },
         staff: { value: "3", origin: "founder" },
         requirements: { value: "None", origin: "founder" },
       });

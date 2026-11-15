@@ -1033,3 +1033,9 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* HAC-143: inside the consultant shell the assistant is the dock beside this screen, so the
+   workspace has no assistant column of its own. */
+.workspace.workspaceSolo {
+  grid-template-columns: minmax(0, 1fr);
+}

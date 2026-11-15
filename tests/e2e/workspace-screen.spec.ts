@@ -1,8 +1,15 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
-// HAC-128/HAC-130: the connected BizBox workspace screen. Every network boundary is a page.route mock: no
+// HAC-128/HAC-130: the connected BizBox workspace screen. HAC-143: the assistant is the consultant
+// shell's dock (a bottom sheet under 768 px, opened with `openConsultant`). Every network boundary
+// is a page.route mock: no
 // model, voice, listing or database service is called.
 
 const VIEWPORTS = [
@@ -66,10 +73,15 @@ const tab = (page: Page, name: "Text" | "Voice") =>
 const composer = (page: Page) =>
   page.getByRole("textbox", { name: "Message the BizBox assistant" });
 
-async function open(page: Page, projectId: string) {
+async function open(page: Page, projectId: string, consultant = true) {
   await page.goto(workspaceHref(projectId, "workspace"));
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
+  ).toBeVisible();
+  if (!consultant) return;
+  await openConsultant(page);
+  await expect(
+    assistant(page).getByText("Live", { exact: true }),
   ).toBeVisible();
   await expect(
     assistant(page).locator('[data-agent-availability="live"]'),
@@ -100,7 +112,8 @@ for (const viewport of VIEWPORTS) {
       projectId,
     }) => {
       const { calls, pending } = await mockServices(page);
-      await open(page, projectId);
+      // The location panel is checked first: on a phone the open sheet covers most of it.
+      await open(page, projectId, false);
 
       // Missing inventory must not present the decorative city photo as a property or map.
       await expect(
@@ -127,6 +140,10 @@ for (const viewport of VIEWPORTS) {
       await expect(
         location.getByRole("button", { name: "Interior", exact: true }),
       ).toBeDisabled();
+      await openConsultant(page);
+      await expect(
+        assistant(page).getByText("Live", { exact: true }),
+      ).toBeVisible();
 
       // A draft survives a round trip through the Voice tab.
       await composer(page).fill("Is parking nearby?");
@@ -231,6 +248,7 @@ test("offline, nothing is sent, the draft is kept and no reply is invented", asy
 }) => {
   const { calls } = await mockServices(page, { live: false });
   await page.goto(workspaceHref(projectId, "workspace"));
+  await openConsultant(page);
   await expect(
     assistant(page).locator('[data-agent-availability="offline"]'),
   ).toHaveCount(1);

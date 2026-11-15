@@ -6,16 +6,26 @@ import { useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
 import { TaskNav } from "@/components/shell/task-nav";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { AssistantPanel } from "./assistant-panel";
+import {
+  useConsultant,
+  useConsultantVoice,
+} from "@/components/shell/consultant-shell";
+import { useContextIntake } from "@/lib/client/use-workspace-context";
+import { VOICE_LIMITS } from "@/lib/voice/contracts";
 import { WorkspaceShell } from "./workspace-shell";
 import { workspaceHeader } from "./model";
+import { parseIntakeSession } from "./intake-conversation";
 import { realCandidates, comparisonMatchesSelection } from "./client-model";
-import { useIntakeConversation } from "./use-intake-conversation";
 import { LocationExperience } from "./location-experience";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
 import type { ListingCameraRequest } from "@/components/city/listing-markers";
 
-/** Reuses the current service controllers and one conversation; no alternate store. */
+/**
+ * HAC-128/HAC-130: the client workspace over real listings and the Cesium location layer.
+ * HAC-143: the assistant (Text / Voice over one conversation) is the consultant shell's dock
+ * in the project layout, so it is not mounted here; this screen reuses that conversation and
+ * only supplies the selected listing to the dock's voice context. No alternate store.
+ */
 export function WorkspaceScreen({
   projectId,
   project,
@@ -29,7 +39,10 @@ export function WorkspaceScreen({
   navigation?: ReactNode;
   tilesetUrl?: string;
 }) {
-  const conversation = useIntakeConversation(projectId);
+  const consultant = useConsultant();
+  // Outside a project layout (no shell) the saved session is read directly.
+  const raw = useContextIntake(projectId);
+  const session = consultant?.conversation.session ?? parseIntakeSession(raw);
   const controller = useLiveComparison(projectId);
   const [view, setView] = useState<"locations" | "interior" | "results">(
     "locations",
@@ -62,7 +75,7 @@ export function WorkspaceScreen({
     url.searchParams.set("site", selectedId);
     window.history.replaceState(null, "", url);
   }, [controller.search?.status, requested, selectedId]);
-  const header = workspaceHeader(conversation.session, project);
+  const header = workspaceHeader(session, project);
   const summary = [
     "City: " + header.city,
     "Business: " + header.business,
@@ -78,6 +91,19 @@ export function WorkspaceScreen({
       ? "Comparison: " + controller.payload.comparisonId
       : "No saved location comparison",
   ].join(". ");
+  // The dock's voice reads the selected real listing from this screen while it is mounted.
+  useConsultantVoice({
+    readContext: () => ({
+      projectId,
+      mode: "chat",
+      ...(selectedId && selectedId.length <= 200
+        ? { selectedSiteId: selectedId }
+        : {}),
+      summary: summary.slice(0, VOICE_LIMITS.summaryChars),
+    }),
+    submitTranscript: async (text) =>
+      consultant ? consultant.conversation.submit(text) : null,
+  });
   function select(id: string) {
     if (!candidates.some((entry) => entry.candidate.id === id)) return;
     const url = new URL(window.location.href);
@@ -123,14 +149,6 @@ export function WorkspaceScreen({
           candidates={candidates}
           onSelect={select}
           cameraRequest={cameraRequest}
-        />
-      }
-      assistant={
-        <AssistantPanel
-          projectId={projectId}
-          conversation={conversation}
-          selectedSiteId={selected?.candidate.id}
-          summary={summary}
         />
       }
     >

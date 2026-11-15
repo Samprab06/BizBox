@@ -9,6 +9,13 @@ import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 import { parseStoredInsights } from "@/components/insights/stored-insights";
 import type { SiteInsights } from "@/lib/contracts/insights";
+import { RestoreSavedComparison } from "@/lib/client/project-store";
+import { publicCafeScan } from "@/lib/interior/fixtures";
+
+const cafeSweep = publicCafeScan.placement.serviceSweep;
+const cafeViewpoint = cafeSweep?.rotation
+  ? { sweepId: cafeSweep.sweepId, rotation: cafeSweep.rotation }
+  : undefined;
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +23,12 @@ type Search = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) =>
   typeof v === "string" && v.length <= 300 ? v : undefined;
 
-/** HAC-63: ?comparison=<id>[&site=<siteId>][&project=<projectId>] opens a stored run; otherwise the labelled example. */
+/**
+ * HAC-63: ?comparison=<id>[&site=<siteId>][&project=<projectId>] opens a stored run; otherwise the labelled example.
+ * HAC-135: this server page can't read the browser's saved comparison, so without
+ * ?comparison= it renders `RestoreSavedComparison`, which adds the saved id to the URL
+ * on the client and the page reloads the stored run.
+ */
 async function loadStored(projectId: string, search: Search) {
   const comparisonId = one(search.comparison);
   if (!comparisonId) return null;
@@ -97,8 +109,16 @@ export default async function Page({
   // is passed to the labelled example only.
   const sdkKey = process.env.MATTERPORT_SDK_KEY?.trim();
   const stored = await loadStored(projectId, search);
+  const restore = one(search.comparison) ? null : (
+    <RestoreSavedComparison projectId={projectId} />
+  );
   if (!stored && !getPreviewProject(projectId) && !one(search.comparison))
-    return <WorkspaceView projectId={projectId} view="simulator" />;
+    return (
+      <>
+        {restore}
+        <WorkspaceView projectId={projectId} view="simulator" />
+      </>
+    );
   if (stored)
     return (
       <SimulatorContext projectId={projectId}>
@@ -142,6 +162,7 @@ export default async function Page({
       : undefined;
   return (
     <SimulatorContext projectId={projectId}>
+      {restore}
       <WorkspaceView
         projectId={projectId}
         view="simulator"
@@ -165,18 +186,15 @@ export default async function Page({
             sdkKey
               ? {
                   sdkKey,
-                  modelId: "qfmMbTLt4Bo",
-                  // Proposed service-area overlay, registered against the public
-                  // scan's floor intersections; not a measured business layout.
+                  modelId: publicCafeScan.modelId,
+                  // HAC-138: proposed service-area overlay from the café's
+                  // registry row; not a measured business layout.
                   placement: {
-                    origin: { x: 17.1, y: 0.04, z: 10.3 },
-                    rotationY: Math.PI,
-                    scale: 0.5,
+                    origin: publicCafeScan.placement.origin,
+                    rotationY: publicCafeScan.placement.rotationY,
+                    scale: publicCafeScan.placement.scale,
                   },
-                  viewpoint: {
-                    sweepId: "y0xe63ayfyepf8cg51cua77hb",
-                    rotation: { x: -17, y: 168 },
-                  },
+                  viewpoint: cafeViewpoint,
                 }
               : undefined
           }

@@ -23,7 +23,8 @@ export function WorkspaceShell({
   navigation?: ReactNode;
   backdrop?: ReactNode;
   children: ReactNode;
-  assistant: ReactNode;
+  /** Optional: inside the consultant shell the assistant is the dock, not a column here. */
+  assistant?: ReactNode;
 }) {
   const headingId = useId();
   const photo = cityPhotoFor(header.city);
@@ -75,10 +76,16 @@ export function WorkspaceShell({
           </Link>
         </div>
       </header>
-      <div className={styles.workspace}>
+      <div
+        className={
+          assistant
+            ? styles.workspace
+            : `${styles.workspace} ${styles.workspaceSolo}`
+        }
+      >
         {backdrop && <div className={styles.backdrop}>{backdrop}</div>}
         <div className={styles.visualization}>{children}</div>
-        <div className={styles.assistantSlot}>{assistant}</div>
+        {assistant && <div className={styles.assistantSlot}>{assistant}</div>}
       </div>
     </section>
   );

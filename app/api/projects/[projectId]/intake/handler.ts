@@ -1,4 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  UiActionListSchema,
+  type UiAction,
+  type AgentViewContext,
+} from "@/lib/contracts/agent";
 import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
@@ -7,6 +13,14 @@ import {
   ModelRuntimeUnavailableError,
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
+import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
+import type { JobsPort } from "@/lib/agent/job-tools";
+import {
+  formatViewContext,
+  resolveViewContext,
+  InvalidViewReferenceError,
+  type ViewContextLookups,
+} from "@/lib/agent/view-context";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const projectIdSchema = z.string().trim().min(1).max(200);
@@ -14,6 +28,18 @@ type Context = { params: Promise<{ projectId: string }> };
 type Dependencies = {
   projectExists: (projectId: string) => Promise<boolean>;
   runAgent?: IntakeRunner;
+  viewContextLookups?: ViewContextLookups;
+  /** HAC-144: trusted ID checks for the UI tools. Without them no UI tools are bound. */
+  uiLookups?: IntakeUiLookups;
+  /** HAC-151: server ports for the `jobs` tools (shortlist, comparison, investigation, plan). */
+  jobs?: JobsPort;
+  newActionId?: () => string;
+  onCompleted?: (
+    projectId: string,
+    input: z.infer<typeof IntakeRequestSchema>,
+    reply: string,
+    draft: unknown,
+  ) => Promise<void>;
 };
 const json = (body: unknown, status: number) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -26,6 +52,22 @@ const unavailable = () =>
     },
     503,
   );
+/** A credential- and content-free tag for a failed thread append (e.g. "42P01"). */
+function threadErrorTag(error: unknown): string {
+  if (error && typeof error === "object") {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^[A-Za-z0-9_]{1,40}$/.test(code))
+      return code;
+    const cause = (error as { cause?: { code?: unknown } }).cause;
+    if (
+      cause &&
+      typeof cause.code === "string" &&
+      /^[A-Za-z0-9_]{1,40}$/.test(cause.code)
+    )
+      return cause.code;
+  }
+  return error instanceof Error ? error.name.slice(0, 60) : "unknown";
+}
 function invalid(error: unknown) {
   const field_errors: Record<string, string[]> = {};
   if (error instanceof z.ZodError) {
@@ -96,15 +138,21 @@ export function createIntakeHandler(dependencies: Dependencies) {
       return unavailable();
     }
     let session;
+    let wasComplete: boolean;
     try {
       session = createIntakeSession(projectId, input.state);
+      wasComplete = session.snapshot().profile !== null;
       if (input.patch) session.saveProfile(input.patch);
     } catch (error) {
       return invalid(error);
     }
+    let validatedView: AgentViewContext | undefined;
     let assistantMessage =
       session.snapshot().nextQuestion?.question ??
       "Review your profile, assumptions, and findings.";
+    const newId = dependencies.newActionId ?? (() => `ui_${randomUUID()}`);
+    // The per-turn collector the UI tools push to; kept when the step budget runs out.
+    const actions: UiAction[] = [];
     if (input.message) {
       const controller = new AbortController();
       const signal = AbortSignal.any([request.signal, controller.signal]);
@@ -118,17 +166,40 @@ export function createIntakeHandler(dependencies: Dependencies) {
           onAbort = () => reject(new Error("Intake deadline exceeded"));
           signal.addEventListener("abort", onAbort, { once: true });
         });
-        // The agent SDK loads only here, so validation never depends on it (HAC-58).
-        const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
-        assistantMessage = await Promise.race([
-          runAgent({
+        const runTurn = async () => {
+          const view = await resolveViewContext(
+            projectId,
+            input.view,
+            dependencies.viewContextLookups,
+            session.snapshot().profile,
+          );
+          signal.throwIfAborted();
+          validatedView = view;
+          const viewContextLine = view ? formatViewContext(view) : undefined;
+          const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
+          signal.throwIfAborted();
+          return runAgent({
             session,
-            message: input.message,
+            message: input.message!,
             signal,
-          }),
-          aborted,
-        ]);
+            viewContextLine,
+            ...(dependencies.uiLookups
+              ? {
+                  ui: {
+                    projectId,
+                    lookups: dependencies.uiLookups,
+                    view,
+                    ...(dependencies.jobs ? { jobs: dependencies.jobs } : {}),
+                    actions,
+                    newId,
+                  },
+                }
+              : {}),
+          });
+        };
+        assistantMessage = await Promise.race([runTurn(), aborted]);
       } catch (error) {
+        if (error instanceof InvalidViewReferenceError) return invalid(error);
         if (error instanceof ModelRuntimeUnavailableError)
           return json(
             {
@@ -171,7 +242,43 @@ export function createIntakeHandler(dependencies: Dependencies) {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
       }
+    } else {
+      // No model runs this turn: a rule moves a newly completed profile to the spaces.
+      actions.push(
+        ...ruleBasedUiActions({
+          wasComplete,
+          isComplete: session.snapshot().profile !== null,
+          newId,
+        }),
+      );
     }
-    return json({ ...session.snapshot(), assistantMessage }, 200);
+    if (dependencies.onCompleted) {
+      try {
+        const recordedInput = { ...input };
+        delete recordedInput.view;
+        if (validatedView) recordedInput.view = validatedView;
+        await dependencies.onCompleted(
+          projectId,
+          recordedInput,
+          assistantMessage,
+          session.snapshot(),
+        );
+      } catch (error) {
+        // Recording the exchange in the copilot thread is best-effort: a missing
+        // table (migration 0008 not applied) or a failed write never changes the
+        // intake response. Log one short line without any message text.
+        console.warn(
+          `[intake] copilot thread append skipped: ${threadErrorTag(error)}`,
+        );
+      }
+    }
+    return json(
+      {
+        ...session.snapshot(),
+        assistantMessage,
+        actions: UiActionListSchema.parse(actions),
+      },
+      200,
+    );
   };
 }
