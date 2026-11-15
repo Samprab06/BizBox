@@ -72,14 +72,6 @@ async function showChat(page: Page) {
       .last()
       .click();
 }
-async function more(page: Page) {
-  if (
-    !(await page
-      .getByRole("button", { name: "Compare locations", exact: true })
-      .isVisible())
-  )
-    await page.getByText("More", { exact: true }).click();
-}
 
 test("compact desktop window expands with the map pane matching its backdrop", async ({
   page,
@@ -166,7 +158,25 @@ for (const viewport of [
       await composer.fill("Keep this question while I explore");
       await showList(page);
       await locations
-        .getByRole("button", { name: "View 202 Invented St" })
+        .getByRole("button", {
+          name: "View 101 Invented St · Unit 1",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Add to comparison", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Choose another unit", exact: true })
+        .click();
+      await locations
+        .getByRole("button", {
+          name: "View 202 Invented St · Unit 1",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Add to comparison", exact: true })
         .click();
       await expect(page).toHaveURL(/site=202%3A302/);
       await expect(
@@ -195,9 +205,16 @@ for (const viewport of [
       await page
         .getByRole("button", { name: "Locations", exact: true })
         .click();
-      await more(page);
       await page
-        .getByRole("button", { name: "Compare locations", exact: true })
+        .getByRole("button", { name: "Compare 2 units", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Unit comparison" }),
+      ).toContainText("Listing facts");
+      expect(posts).toEqual([]);
+      await expect(composer).toBeVisible();
+      await page
+        .getByRole("button", { name: "Run comparison", exact: true })
         .click();
       await expect(
         page.getByRole("region", { name: "Location comparison results" }),
@@ -220,8 +237,11 @@ for (const viewport of [
       await expect(
         page.getByRole("region", { name: "Location comparison results" }),
       ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "Edit choices", exact: true })
+        .click();
       await expect(
-        page.getByRole("button", { name: "Compare locations", exact: true }),
+        page.getByRole("button", { name: "Compare 2 units", exact: true }),
       ).toBeDisabled();
       await showChat(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
@@ -288,13 +308,119 @@ test("unavailable inventory never substitutes example properties", async ({
   await expect(
     page.getByRole("group", { name: "Matching locations" }),
   ).toHaveCount(0);
-  await more(page);
   await expect(
-    page.getByRole("button", { name: "Compare locations", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "Compare 2 units", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByText("Montrose storefront", { exact: true }),
   ).toHaveCount(0);
+});
+
+test("unit labels, explicit pair selection and failed comparison retain exactly the chosen source facts", async ({
+  page,
+}) => {
+  const { search } = await services(page);
+  const a = structuredClone(search.candidates[0]),
+    b = structuredClone(search.candidates[1]),
+    c = structuredClone(search.candidates[0]);
+  b.propertyId = a.propertyId;
+  b.candidate.address = a.candidate.address;
+  b.candidate.floorAreaSqFt.value = 1600;
+  b.baseRentCents.value = 190000;
+  c.candidate.id = "203:303";
+  c.propertyId = "103";
+  c.listingId = "203";
+  c.candidate.address = "303 Other St";
+  search.candidates = [b, c, a];
+  search.totalMatched = 3;
+  const attempts: string[][] = [];
+  await page.route("**/api/comparisons", (route) => {
+    attempts.push(route.request().postDataJSON().candidateIds);
+    return route.fulfill({
+      status: 503,
+      json: { message: "Test service unavailable" },
+    });
+  });
+  await page.goto("/projects/houston-coffee/workspace");
+  await expect(page.getByText("Comparison 0/2", { exact: true })).toBeVisible();
+  await showList(page);
+  await expect(
+    page.getByRole("checkbox", {
+      name: "Compare 101 Invented St · Unit 1",
+      exact: true,
+    }),
+  ).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "View 101 Invented St · Unit 2", exact: true })
+    .click();
+  const property = page.getByRole("region", { name: "Selected location" });
+  await expect(property).toContainText("101 Invented St · Unit 2");
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  await property
+    .getByRole("region", { name: "Spaces at this location" })
+    .getByRole("button", { name: /^Unit 1\b/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  const tray = page.getByRole("region", { name: "Comparison shortlist" });
+  await expect(tray).toContainText("Comparison 2/2");
+  await expect(tray).toContainText("101 Invented St · Unit 1");
+  await expect(tray).toContainText("101 Invented St · Unit 2");
+  expect(attempts).toEqual([]);
+  await page
+    .getByRole("button", { name: "Choose another unit", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "View 303 Other St · Unit 1", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Add to comparison", exact: true }),
+  ).toBeDisabled();
+  await expect(property).toContainText("Remove one to add this unit");
+  await tray
+    .getByRole("button", {
+      name: "Remove 101 Invented St · Unit 1",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Compare 2 units", exact: true })
+    .click();
+  const comparison = page.getByRole("region", { name: "Unit comparison" });
+  await expect(comparison).toContainText("101 Invented St · Unit 2");
+  await expect(comparison).toContainText("303 Other St · Unit 1");
+  await expect(
+    page.getByRole("textbox", { name: "Message the BizBox assistant" }),
+  ).toBeVisible();
+  expect(attempts).toEqual([]);
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  await expect(comparison.getByRole("alert")).toContainText(
+    "Comparison unavailable",
+  );
+  expect(attempts).toEqual([["202:302", "203:303"]]);
+  await expect(
+    comparison.getByRole("table", {
+      name: "Source listing facts for the two chosen units",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Location comparison results" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Retry comparison", exact: true })
+    .click();
+  await expect.poll(() => attempts.length).toBe(2);
+  expect(attempts[1]).toEqual(["202:302", "203:303"]);
+  await page.screenshot({ path: "/tmp/bizbox-unit-comparison-facts.png" });
+  await expectNoA11yViolations(page);
 });
 
 // Desktop-only readiness regression. All founder answers and API payloads below are
@@ -521,7 +647,10 @@ test.describe("inventory readiness desktop", () => {
     const locations = page.getByRole("group", { name: "Matching locations" });
     await showList(page);
     await locations
-      .getByRole("button", { name: "View 202 Invented St", exact: true })
+      .getByRole("button", {
+        name: "View 202 Invented St · Unit 1",
+        exact: true,
+      })
       .click();
     await expect(
       page.getByRole("region", { name: "Selected location" }),
@@ -592,7 +721,7 @@ test.describe("inventory readiness desktop", () => {
     await showList(page);
     await expect(
       locations.getByRole("button", {
-        name: "View 202 Invented St",
+        name: "View 202 Invented St · Unit 1",
         exact: true,
       }),
     ).toHaveCount(0);
@@ -617,7 +746,7 @@ for (const width of [1366, 500, 640, 820]) {
         await show.focus();
         await page.keyboard.press("Enter");
         const option = page.getByRole("button", {
-          name: "View 101 Invented St",
+          name: "View 101 Invented St · Unit 1",
           exact: true,
         });
         await option.focus();
@@ -637,6 +766,7 @@ for (const width of [1366, 500, 640, 820]) {
       page,
     }) => {
       const { search, posts } = await services(page);
+      search.candidates[1].propertyId = search.candidates[0].propertyId;
       search.candidates[1].candidate.floorAreaSqFt.value = 1600;
       search.candidates[1].baseRentCents.value = 190000;
       await page.route("**/api/sites", (route) =>
@@ -644,7 +774,7 @@ for (const width of [1366, 500, 640, 820]) {
       );
       await page.goto("/projects/houston-coffee/workspace");
       await expect(
-        page.getByRole("button", { name: "Show list (2 spaces)" }),
+        page.getByRole("button", { name: "Show list (2 units)" }),
       ).toBeVisible();
       await expect(
         page.getByRole("region", { name: "Selected location" }),
@@ -655,10 +785,13 @@ for (const width of [1366, 500, 640, 820]) {
       await expect(page.locator("[data-map-sheet]")).toHaveCount(0);
       await showList(page);
       await expect(
-        page.getByText("2 of 2 matching spaces shown", { exact: true }),
+        page.getByText("2 of 2 matching units shown", { exact: true }),
       ).toBeVisible();
       await page
-        .getByRole("button", { name: "View 101 Invented St", exact: true })
+        .getByRole("button", {
+          name: "View 101 Invented St · Unit 1",
+          exact: true,
+        })
         .click();
       const property = page.getByRole("region", { name: "Selected location" });
       await expect(property).toBeVisible();

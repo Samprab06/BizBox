@@ -5,6 +5,7 @@ import type { WorkspaceCandidate } from "./client-model";
 import { siteDemandLabel } from "@/lib/evaluation/demand-label";
 import styles from "./workspace-glass.module.css";
 import { ComparisonChart } from "./comparison-chart";
+import { unitAddress } from "./client-model";
 
 const count = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -19,14 +20,16 @@ export function LocationResults({
   payload,
   candidates,
   onSelect,
+  framed = true,
 }: {
   payload: LiveComparisonPayload;
   candidates: readonly WorkspaceCandidate[];
   onSelect: (id: string) => void;
+  framed?: boolean;
 }) {
   return (
     <section
-      className={styles.comparison}
+      className={framed ? styles.comparison : undefined}
       aria-label="Location comparison results"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -50,9 +53,12 @@ export function LocationResults({
               return [
                 {
                   id,
-                  label:
-                    candidates.find((entry) => entry.candidate.id === id)
-                      ?.candidate.address ?? "Saved location",
+                  label: candidates.find((entry) => entry.candidate.id === id)
+                    ? unitAddress(
+                        candidates.find((entry) => entry.candidate.id === id)!,
+                        candidates,
+                      )
+                    : "Saved unit",
                   ...(metric === "monthlyServedCustomers"
                     ? site.monthlyServedCustomers
                     : site.monthlyContributionUsd),
@@ -79,9 +85,7 @@ export function LocationResults({
             {payload.result.ranking.map((id) => {
               const result = payload.result.sites.find((s) => s.siteId === id);
               if (!result) return null;
-              const candidate = candidates.find(
-                (s) => s.candidate.id === id,
-              )?.candidate;
+              const candidate = candidates.find((s) => s.candidate.id === id);
               return (
                 <tr key={id}>
                   <th scope="row">
@@ -89,7 +93,9 @@ export function LocationResults({
                       className="text-left underline underline-offset-4"
                       onClick={() => onSelect(id)}
                     >
-                      {candidate?.address ?? "Saved location"}
+                      {candidate
+                        ? unitAddress(candidate, candidates)
+                        : "Saved unit"}
                     </button>
                   </th>
                   <td>

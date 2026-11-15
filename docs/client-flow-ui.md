@@ -2,6 +2,12 @@
 
 Spec: [client-flow-design](superpowers/specs/2026-11-14-client-flow-design.md). Plan: [client-flow-ui](superpowers/plans/2026-11-14-client-flow-ui.md). Tracking: HAC-162.
 
+## Current entry point
+
+Akshar rejected the exposed review controls and ambiguous comparison UX. `/review/client-flow` now redirects to `/projects/houston-coffee/workspace`; Preview state, Reset review and sample stage navigation are no longer a client entry. The current work is real property → labeled unit → explicitly add two choices → compare listing facts → optionally request modeled results. The hosted database health and actual listing search have recovered; the local simulation API still needs its own database configuration. No production credentials were copied or simulation service proxied.
+
+The earlier sample review described below remains implementation history, not the current client route.
+
 ## Scope
 This UI pass follows Akshar's accepted desktop flow while database access is blocked. It preserves the onboarding/workspace smoked-glass system. The canonical project workspace continues to use its actual services and explicit errors. The separate `/review/client-flow` page uses deterministic illustrative sample data and local state so all screens can be reviewed without credentials, data writes or paid calls.
 

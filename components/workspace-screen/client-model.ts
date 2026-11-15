@@ -7,6 +7,37 @@ import {
 } from "@/components/city/listing-markers";
 
 export type WorkspaceCandidate = SiteSearchResult["candidates"][number];
+export function unitLabel(
+  entry: WorkspaceCandidate,
+  candidates: readonly WorkspaceCandidate[],
+) {
+  const units = candidates
+    .filter((candidate) => candidate.propertyId === entry.propertyId)
+    .sort((a, b) =>
+      a.candidate.id.localeCompare(b.candidate.id, "en", { numeric: true }),
+    );
+  return `Unit ${
+    Math.max(
+      0,
+      units.findIndex(
+        (candidate) => candidate.candidate.id === entry.candidate.id,
+      ),
+    ) + 1
+  }`;
+}
+export function toggleComparisonUnit(
+  ids: readonly string[],
+  id: string,
+): string[] {
+  if (ids.includes(id)) return ids.filter((value) => value !== id);
+  return ids.length >= 2 ? [...ids] : [...ids, id];
+}
+export function unitAddress(
+  entry: WorkspaceCandidate,
+  candidates: readonly WorkspaceCandidate[],
+) {
+  return `${entry.candidate.address} · ${unitLabel(entry, candidates)}`;
+}
 
 export function realCandidates(candidates: readonly WorkspaceCandidate[]) {
   return candidates.filter(({ candidate }) => !candidate.synthetic);

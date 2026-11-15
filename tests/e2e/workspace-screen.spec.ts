@@ -121,16 +121,12 @@ for (const viewport of VIEWPORTS) {
       await expect(
         page.getByText("City preview · photo, not a map", { exact: true }),
       ).toHaveCount(0);
-      await location.getByText("More", { exact: true }).click();
       await expect(
-        location.getByRole("button", {
-          name: "Compare locations",
-          exact: true,
-        }),
-      ).toBeDisabled();
+        location.getByRole("button", { name: "Compare 2 units", exact: true }),
+      ).toHaveCount(0);
       await expect(
-        location.getByRole("button", { name: "Interior", exact: true }),
-      ).toBeDisabled();
+        location.getByRole("button", { name: "View interior", exact: true }),
+      ).toHaveCount(0);
 
       // A draft survives a round trip through the Voice tab.
       await composer(page).fill("Is parking nearby?");

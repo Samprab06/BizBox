@@ -420,6 +420,7 @@ export function useStoredComparison(
 export function useLiveComparison(
   projectId: string,
   initialComparisonId?: string,
+  options: { manualSelection?: boolean } = {},
 ): LiveComparisonController {
   const [attempt, setAttempt] = useState(0);
   const search = useSiteSearch(projectId, attempt);
@@ -508,9 +509,13 @@ export function useLiveComparison(
     const first = previousCandidates.current === null;
     previousCandidates.current = candidateKey;
     setSelectedIds((current) =>
-      first ? ids : current.filter((id) => ids.includes(id)),
+      first
+        ? options.manualSelection
+          ? []
+          : ids
+        : current.filter((id) => ids.includes(id)),
     );
-  }, [candidateKey, search.state.mode]);
+  }, [candidateKey, search.state.mode, options.manualSelection]);
   const retry = () => {
     setFailure("");
     setAttempt((n) => n + 1);
@@ -547,7 +552,9 @@ export function useLiveComparison(
     } catch {
       if (mounted.current && operation.current === controller)
         setFailure(
-          "Live comparison could not be run. Showing example data; retry to try again.",
+          options.manualSelection
+            ? "Comparison unavailable. Your selected units are unchanged."
+            : "Live comparison could not be run. Showing example data; retry to try again.",
         );
     } finally {
       if (operation.current === controller) {

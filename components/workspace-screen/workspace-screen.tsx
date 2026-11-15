@@ -9,7 +9,11 @@ import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { AssistantPanel } from "./assistant-panel";
 import { WorkspaceShell } from "./workspace-shell";
 import { workspaceHeader } from "./model";
-import { realCandidates, comparisonMatchesSelection } from "./client-model";
+import {
+  realCandidates,
+  comparisonMatchesSelection,
+  toggleComparisonUnit,
+} from "./client-model";
 import { useIntakeConversation } from "./use-intake-conversation";
 import { LocationExperience } from "./location-experience";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
@@ -31,7 +35,9 @@ export function WorkspaceScreen({
   tilesetUrl?: string;
 }) {
   const conversation = useIntakeConversation(projectId);
-  const controller = useLiveComparison(projectId);
+  const controller = useLiveComparison(projectId, undefined, {
+    manualSelection: true,
+  });
   const [view, setView] = useState<"locations" | "interior" | "results">(
     "locations",
   );
@@ -111,6 +117,14 @@ export function WorkspaceScreen({
     setPane("property");
     setCameraRequest((request) => ({
       kind: "selection",
+      revision: request.revision + 1,
+    }));
+  }
+  function toggleUnit(id: string) {
+    if (!candidates.some((entry) => entry.candidate.id === id)) return;
+    controller.setSelectedIds(toggleComparisonUnit(controller.selectedIds, id));
+    setCameraRequest((request) => ({
+      ...request,
       revision: request.revision + 1,
     }));
   }
@@ -205,17 +219,21 @@ export function WorkspaceScreen({
               candidates={candidates}
               search={controller.search}
               projectId={projectId}
+              fullDetailsHref={null}
               onSelect={select}
               onClose={closeDetails}
               onInterior={() => setView("interior")}
-              onCompare={() => {
-                setView("results");
-                void controller.run();
+              onCompare={() => toggleUnit(selected.candidate.id)}
+              comparisonAdded={controller.selectedIds.includes(
+                selected.candidate.id,
+              )}
+              comparisonFull={controller.selectedIds.length >= 2}
+              onChooseAnother={() => {
+                setPane("list");
+                setView("locations");
               }}
               compareDisabled={
-                controller.phase === "loading" ||
-                controller.phase === "running" ||
-                controller.selectedIds.length < 2
+                controller.phase === "loading" || controller.phase === "running"
               }
             />
           )}
@@ -228,6 +246,7 @@ export function WorkspaceScreen({
               search={controller.search}
               onSelect={select}
               onCompareIds={controller.setSelectedIds}
+              maxSelected={2}
               onClose={() => {
                 setPane("property");
                 requestAnimationFrame(() =>
@@ -264,11 +283,19 @@ export function WorkspaceScreen({
         selected={selected}
         onSelect={select}
         view={view}
-        onViewChange={setView}
+        onViewChange={(next) => {
+          setView(next);
+          if (next === "results") setPane("chat");
+        }}
         onShowList={() =>
           setPane((value) => (value === "list" ? "property" : "list"))
         }
         listOpen={pane === "list"}
+        onToggleUnit={toggleUnit}
+        onEditChoices={() => {
+          setPane("list");
+          setView("locations");
+        }}
         onOverview={() => {
           setView("locations");
           setCameraRequest((request) => ({

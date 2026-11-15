@@ -8,6 +8,8 @@ import {
   candidateFitReasons,
   searchFilterLabel,
   type WorkspaceCandidate,
+  unitLabel,
+  unitAddress,
 } from "./client-model";
 import { metricText } from "./model";
 import styles from "./workspace-glass.module.css";
@@ -72,6 +74,9 @@ export function PropertyDetails({
   onCompare,
   compareDisabled,
   fullDetailsHref,
+  comparisonAdded = false,
+  comparisonFull = false,
+  onChooseAnother,
 }: {
   selected: WorkspaceCandidate;
   candidates: WorkspaceCandidate[];
@@ -83,15 +88,15 @@ export function PropertyDetails({
   onCompare?: () => void;
   compareDisabled?: boolean;
   fullDetailsHref?: string | null;
+  comparisonAdded?: boolean;
+  comparisonFull?: boolean;
+  onChooseAnother?: () => void;
 }) {
-  const group = candidateMarkers(candidates).find((marker) =>
-    marker.members.some((member) => member.siteId === selected.candidate.id),
-  );
-  const members = candidates.filter((entry) =>
-    group
-      ? group.members.some((member) => member.siteId === entry.candidate.id)
-      : entry.propertyId === selected.propertyId,
-  );
+  const members = candidates
+    .filter((entry) => entry.propertyId === selected.propertyId)
+    .sort((a, b) =>
+      a.candidate.id.localeCompare(b.candidate.id, "en", { numeric: true }),
+    );
   const facts = Object.entries(selected.candidate.features)
     .filter(([, fact]) => fact.value === true && fact.origin === "costar")
     .map(
@@ -114,7 +119,7 @@ export function PropertyDetails({
       tabIndex={-1}
     >
       <div className={styles.panelHeading}>
-        <h2>{selected.candidate.address}</h2>
+        <h2>{unitAddress(selected, candidates)}</h2>
         <button
           className={styles.secondary}
           onClick={onClose}
@@ -123,7 +128,9 @@ export function PropertyDetails({
           ×
         </button>
       </div>
-      <p className={styles.muted}>{selected.candidate.name}</p>
+      {!/^CoStar space /i.test(selected.candidate.name) && (
+        <p className={styles.muted}>{selected.candidate.name}</p>
+      )}
       {fit.length > 0 && <p className="mt-2 text-xs">{fit.join(" · ")}</p>}
       <dl className={styles.propertyFacts}>
         <div>
@@ -138,7 +145,7 @@ export function PropertyDetails({
       {facts.length > 0 && <p className="text-xs">{facts.join(" · ")}</p>}
       {members.length > 1 && (
         <section aria-label="Spaces at this location" className="mt-5">
-          <h3>{members.length} matching spaces shown</h3>
+          <h3>{members.length} units shown</h3>
           <div className={styles.unitList}>
             {members.map((entry) => (
               <button
@@ -147,8 +154,10 @@ export function PropertyDetails({
                 aria-pressed={entry.candidate.id === selected.candidate.id}
                 onClick={() => onSelect(entry.candidate.id)}
               >
-                <strong>{area(entry)}</strong>
-                <span>{rent(entry)}</span>
+                <strong>{unitLabel(entry, candidates)}</strong>
+                <span>
+                  {area(entry)} · {rent(entry)}
+                </span>
               </button>
             ))}
           </div>
@@ -158,10 +167,15 @@ export function PropertyDetails({
         {onCompare && (
           <button
             className={styles.primary}
-            disabled={compareDisabled}
+            disabled={compareDisabled || (comparisonFull && !comparisonAdded)}
             onClick={onCompare}
           >
-            Compare locations
+            {comparisonAdded ? "Remove from comparison" : "Add to comparison"}
+          </button>
+        )}
+        {onChooseAnother && (
+          <button className={styles.secondary} onClick={onChooseAnother}>
+            Choose another unit
           </button>
         )}
         <button className={styles.secondary} onClick={onInterior}>
@@ -179,10 +193,18 @@ export function PropertyDetails({
           </Link>
         )}
       </div>
+      {comparisonFull && !comparisonAdded && (
+        <p className="mt-3 text-xs">
+          Two units selected. Remove one to add this unit.
+        </p>
+      )}
       <details className="mt-5 text-xs">
         <summary>Details</summary>
         <p className="mt-3">
           Property-level listing coordinates; 3D imagery coverage varies.
+        </p>
+        <p>
+          Unit numbers label this shortlist; they are not broker suite numbers.
         </p>
         <p>Rent source: {selected.baseRentCents.origin}</p>
         <p>
@@ -206,6 +228,7 @@ export function ListingList({
   onSelect,
   onCompareIds,
   onClose,
+  maxSelected = Infinity,
 }: {
   candidates: WorkspaceCandidate[];
   selectedId?: string;
@@ -215,6 +238,7 @@ export function ListingList({
   onSelect: (id: string) => void;
   onCompareIds: (ids: string[]) => void;
   onClose: () => void;
+  maxSelected?: number;
 }) {
   const markers = candidateMarkers(candidates);
   return (
@@ -234,7 +258,7 @@ export function ListingList({
         {search?.status === "ready"
           ? ` of ${search.totalMatched.toLocaleString("en-US")}`
           : ""}{" "}
-        matching spaces shown
+        matching units shown
       </p>
       <div
         className={styles.listRows}
@@ -250,12 +274,12 @@ export function ListingList({
           return (
             <div key={entry.candidate.id} className={styles.listRow}>
               <button
-                aria-label={"View " + entry.candidate.address}
+                aria-label={"View " + unitAddress(entry, candidates)}
                 aria-describedby={"listing-facts-" + entry.candidate.id}
                 aria-pressed={selectedId === entry.candidate.id}
                 onClick={() => onSelect(entry.candidate.id)}
               >
-                <strong>{entry.candidate.address}</strong>
+                <strong>{unitAddress(entry, candidates)}</strong>
                 <span id={"listing-facts-" + entry.candidate.id}>
                   {area(entry)} · {rent(entry)}
                 </span>
@@ -266,9 +290,13 @@ export function ListingList({
               <label>
                 <input
                   type="checkbox"
-                  aria-label={"Compare " + entry.candidate.address}
+                  aria-label={"Compare " + unitAddress(entry, candidates)}
                   checked={selectedIds.includes(entry.candidate.id)}
-                  disabled={running}
+                  disabled={
+                    running ||
+                    (!selectedIds.includes(entry.candidate.id) &&
+                      selectedIds.length >= maxSelected)
+                  }
                   onChange={(event) =>
                     onCompareIds(
                       event.target.checked

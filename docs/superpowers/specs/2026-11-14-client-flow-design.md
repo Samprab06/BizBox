@@ -23,3 +23,7 @@ No production database repair, new credentials, paid calls, new traffic dataset,
 
 ## Delivery
 Review route shows all screens without database, shared production comparison/details use the same components where practical, and spec identifies remaining service connections. Verify desktop wide and narrow app-pane layout, keyboard controls, state continuity and meaningful graph behavior, plus repository checks in clean exact-source snapshot. Show screenshots and preview URL.
+
+## Follow-up: real property/unit comparison
+
+Akshar rejected the review controls and ambiguous comparison flow. The review URL now redirects to the actual Houston workspace. Units use stable display numbering within their source property, never claimed as broker suite identifiers. The client starts with no units selected for comparison. Add up to two explicit units, show their address/unit/rent/area in a visible shortlist, allow removal and choosing another, then compare source facts before asking for modeled outcomes. Existing comparison controller/API remains authoritative; failures never substitute sample outputs. Preserve same-property distinct units, chat draft, selection URL, source coordinates and glass styling. No new backend contracts or simulation math.

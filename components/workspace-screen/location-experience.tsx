@@ -10,7 +10,7 @@ import {
   searchPresentation,
   type WorkspaceCandidate,
 } from "./client-model";
-import { LocationResults } from "./location-results";
+import { ComparisonTray, UnitComparison } from "./unit-comparison";
 import styles from "./workspace-glass.module.css";
 import { SearchFilterSummary } from "./property-details";
 
@@ -33,6 +33,8 @@ export function LocationExperience({
   onOverview,
   onShowList,
   listOpen,
+  onToggleUnit,
+  onEditChoices,
 }: {
   projectId: string;
   controller: LiveComparisonController;
@@ -44,6 +46,8 @@ export function LocationExperience({
   onOverview?: () => void;
   onShowList?: () => void;
   listOpen?: boolean;
+  onToggleUnit: (id: string) => void;
+  onEditChoices: () => void;
 }) {
   const markers = candidateMarkers(candidates);
   const payload =
@@ -60,8 +64,9 @@ export function LocationExperience({
   const selectedIds = controller.selectedIds.filter((id) =>
     candidates.some((entry) => entry.candidate.id === id),
   );
-  const canCompare =
-    !running && controller.phase !== "loading" && selectedIds.length >= 2;
+  const selectedUnits = selectedIds
+    .map((id) => candidates.find((entry) => entry.candidate.id === id)!)
+    .filter(Boolean);
   function select(id: string) {
     onSelect(id);
   }
@@ -90,73 +95,50 @@ export function LocationExperience({
               aria-expanded={listOpen}
               onClick={onShowList}
             >
-              Show list ({candidates.length} spaces)
+              Show list ({candidates.length} units)
             </button>
           )}
         </div>
-        <details className={styles.moreActions}>
-          <summary>More</summary>
-          <div>
-            <button
-              aria-pressed={view === "interior"}
-              disabled={!selected}
-              onClick={() => setView("interior")}
-            >
-              Interior
-            </button>
-            {payload && (
-              <button
-                aria-pressed={view === "results"}
-                onClick={() => setView("results")}
-              >
-                Results
-              </button>
-            )}
-            <button
-              className={styles.primary}
-              disabled={!canCompare}
-              onClick={() => {
-                setView("results");
-                void controller.run();
-              }}
-            >
-              {running ? "Comparing…" : "Compare locations"}
-            </button>
-          </div>
-        </details>
       </div>
 
+      {view === "results" && (
+        <UnitComparison
+          units={selectedUnits}
+          candidates={candidates}
+          controller={controller}
+          payload={payload}
+          onSelect={select}
+          onEdit={onEditChoices}
+        />
+      )}
+      {view === "locations" &&
+        candidates.length > 0 &&
+        selectedUnits.length === 0 && (
+          <div className="pointer-events-auto mx-3 flex items-center justify-between gap-3">
+            <span className="text-xs">Comparison 0/2</span>
+            <button className={styles.primary} disabled>
+              Compare 2 units
+            </button>
+          </div>
+        )}
       <div
         data-map-sheet={
-          view !== "locations" || !candidates.length ? "" : undefined
+          view !== "locations" || !candidates.length || selectedUnits.length > 0
+            ? ""
+            : undefined
         }
         className="pointer-events-none relative z-20 mt-auto flex min-h-0 flex-col gap-3 p-3 pb-8 sm:p-4 sm:pb-8"
       >
-        {view === "results" && (
-          <div className="pointer-events-auto max-h-[430px] overflow-y-auto">
-            {running ? (
-              <div className={styles.notice} role="status">
-                Comparing locations…
-              </div>
-            ) : payload ? (
-              <LocationResults
-                payload={payload}
-                candidates={candidates}
-                onSelect={(id) => {
-                  select(id);
-                  setView("locations");
-                }}
-              />
-            ) : (
-              <div className={styles.notice} role="status">
-                {controller.phase === "example"
-                  ? "Comparison unavailable. Try again."
-                  : "Select two locations to compare."}
-              </div>
-            )}
-          </div>
+        {view === "locations" && selectedUnits.length > 0 && (
+          <ComparisonTray
+            units={selectedUnits}
+            candidates={candidates}
+            onSelect={select}
+            onRemove={onToggleUnit}
+            running={running}
+            onCompare={() => setView("results")}
+          />
         )}
-
         {view === "interior" && selected && (
           <details
             className={

@@ -1,9 +1,6 @@
-import type { Metadata } from "next";
-import { ClientFlowReview } from "@/components/client-flow-review/review";
-export const metadata: Metadata = {
-  title: "BizBox · Client flow review",
-  robots: { index: false, follow: false },
-};
+import { redirect } from "next/navigation";
+
+/** The client now uses real inventory; the retired sample review is not a product entry. */
 export default function Page() {
-  return <ClientFlowReview />;
+  redirect("/projects/houston-coffee/workspace");
 }
