@@ -7,7 +7,7 @@ a salon or barber, or a fitness studio) choose a retail space to lease in **Hous
 **Los Angeles**. Instead of gut feel and a broker's pitch, it ranks real for-lease spaces
 for that founder's business and shows why each one ranks where it does.
 
-**Live app:** https://hackprincetonweb.vercel.app (built for HackPrinceton).
+**Live app:** https://usebizbox.app (built for HackPrinceton).
 
 The output is a **ranking with ranges, never a sales forecast**. Every number records where
 it came from: `costar`, `public`, `founder` or `default`.

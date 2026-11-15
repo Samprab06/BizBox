@@ -167,8 +167,8 @@ export function SimulatorDemo({
   const gain = alternative
     ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
     : 0;
-  const kept = alternative
-    ? base.run.metrics.abandoned - alternative.run.metrics.abandoned
+  const additionalServed = alternative
+    ? alternative.run.metrics.served - base.run.metrics.served
     : 0;
   const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
   const previewRun = data[previewIndex].run;
@@ -204,9 +204,7 @@ export function SimulatorDemo({
         }
         answer={simulatorAnswer({
           example: context.phase === "example",
-          additionalServed: alternative
-            ? alternative.run.metrics.served - base.run.metrics.served
-            : 0,
+          additionalServed,
           contributionChange: gain,
           robustness,
         })}
@@ -507,8 +505,8 @@ export function SimulatorDemo({
           </dl>
           <dl>
             <Stat
-              label="Modeled customers retained / weekday"
-              value={`${kept >= 0 ? "+" : "−"}${Math.abs(kept)}`}
+              label="Change in modeled customers served / weekday"
+              value={`${additionalServed >= 0 ? "+" : "−"}${Math.abs(additionalServed)}`}
             />
           </dl>
           <dl>
@@ -575,7 +573,7 @@ export function SimulatorDemo({
         <div className="flex flex-wrap gap-2">
           <Timeline
             label="Shared playback"
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-[1_1_20rem]"
             minute={shopMinute}
             min={openMin}
             max={closeMin}

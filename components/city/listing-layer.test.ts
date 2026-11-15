@@ -25,7 +25,12 @@ function fixture(reduced = false) {
     canvas,
     pick: vi.fn(),
     requestRender: vi.fn(),
-    postRender: { addEventListener: vi.fn(() => stopPostRender) },
+    postRender: {
+      addEventListener: vi.fn((callback: () => void) => {
+        void callback;
+        return stopPostRender;
+      }),
+    },
   };
   const viewer = { camera, entities, scene } as unknown as Viewer;
   const input = {
@@ -101,6 +106,47 @@ function fixture(reduced = false) {
   };
 }
 describe("existing Cesium viewer shortlist attachment", () => {
+  it("projects visible anchors once per changed frame and can replace native labels with DOM glass", () => {
+    const f = fixture();
+    const onProject = vi.fn();
+    const scene = f.scene as typeof f.scene & {
+      cartesianToCanvasCoordinates: () => { x: number; y: number };
+    };
+    scene.cartesianToCanvasCoordinates = () => ({ x: 350, y: 300 });
+    Object.assign(f.viewer, { clock: { currentTime: 0 } });
+    const layer = createListingLayer(f.viewer, f.sdk, {
+      ...f.options,
+      onProject,
+      showLabels: false,
+    });
+    const entity = f.entities.add.mock.results[0].value;
+    entity.position = { getValue: () => [0, 0, 0] };
+    const paint = f.scene.postRender.addEventListener.mock.calls[0][0];
+    paint();
+    paint();
+    expect(onProject).toHaveBeenCalledTimes(1);
+    expect(onProject).toHaveBeenLastCalledWith([
+      { id: f.options.markers[0].id, x: 350, y: 300 },
+    ]);
+    expect(entity.label.show.value).toBe(false);
+    layer.update({ ...f.options, onProject, showLabels: true });
+    paint();
+    expect(entity.label.show.value).toBe(true);
+    scene.cartesianToCanvasCoordinates = () => ({ x: 390, y: 300 });
+    paint();
+    expect(onProject).toHaveBeenLastCalledWith([
+      { id: f.options.markers[0].id, x: 390, y: 300 },
+    ]);
+    scene.cartesianToCanvasCoordinates = () => ({ x: -100, y: -100 });
+    paint();
+    expect(onProject).toHaveBeenLastCalledWith([]);
+    scene.cartesianToCanvasCoordinates = () => ({ x: 390, y: 300 });
+    paint();
+    layer.update({ ...f.options, onProject, markers: [] });
+    paint();
+    expect(onProject).toHaveBeenLastCalledWith([]);
+    layer.destroy();
+  });
   it("maps pin/address selection to exact WGS84 coordinates and the corresponding listing IDs", () => {
     const f = fixture();
     const options = {

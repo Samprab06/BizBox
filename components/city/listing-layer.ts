@@ -17,6 +17,10 @@ export type ListingLayerOptions = {
   onSelectSite: (siteId: string) => void;
   cameraRequest: ListingCameraRequest;
   viewport?: (canvas: HTMLCanvasElement) => MapViewport;
+  /** Optional DOM annotation anchors; screen pixels relative to the existing canvas. */
+  onProject?: (points: readonly { id: string; x: number; y: number }[]) => void;
+  /** Defaults to native labels; landing can render translucent DOM cards instead. */
+  showLabels?: boolean;
 };
 
 /** Annotation/camera attachment to the existing viewer. No clock, imagery or data requests. */
@@ -72,7 +76,7 @@ export function createListingLayer(
   };
   let labelLayout = "";
   const stopLabels = viewer.scene.postRender.addEventListener(() => {
-    if (disposed || !entities.length) return;
+    if (disposed) return;
     const viewport = options.viewport?.(canvas) ?? {
       left: 0,
       top: 0,
@@ -103,9 +107,10 @@ export function createListingLayer(
     const signature = JSON.stringify(points);
     if (signature === labelLayout) return;
     labelLayout = signature;
+    options.onProject?.(points.map(({ id, x, y }) => ({ id, x, y })));
     const offsets = listingLabelOffsets(points, viewport);
     leaders?.replaceChildren();
-    if (leaders)
+    if (leaders && options.showLabels !== false)
       for (const point of points) {
         const offset = offsets.get(point.id)!;
         const center = { x: point.x + offset.x, y: point.y + offset.y };
@@ -149,7 +154,9 @@ export function createListingLayer(
       }
     for (const entity of entities) {
       const offset = offsets.get(entityGroups.get(entity)!.id);
-      entity.label!.show = new sdk.ConstantProperty(Boolean(offset));
+      entity.label!.show = new sdk.ConstantProperty(
+        options.showLabels !== false && Boolean(offset),
+      );
       if (offset)
         entity.label!.pixelOffset = new sdk.ConstantProperty(
           new sdk.Cartesian2(offset.x, offset.y),
@@ -205,6 +212,7 @@ export function createListingLayer(
   }
   function update(next: ListingLayerOptions) {
     if (disposed) return;
+    if (options.showLabels !== next.showLabels) labelLayout = "";
     options = next;
     const nextFingerprint = JSON.stringify(next.markers);
     const changed = nextFingerprint !== fingerprint;

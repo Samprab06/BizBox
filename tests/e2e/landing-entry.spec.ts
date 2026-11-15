@@ -249,13 +249,16 @@ test.describe("the landing at /", () => {
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openLanding(page);
-    expect(
-      await page.evaluate(
-        () =>
-          (window as unknown as { bizboxState: { reducedMotion?: boolean } })
-            .bizboxState.reducedMotion,
-      ),
-    ).toBe(true);
+    // Readiness can precede the first frame that publishes reduced-motion state.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (window as unknown as { bizboxState?: { reducedMotion?: boolean } })
+              .bizboxState?.reducedMotion,
+        ),
+      )
+      .toBe(true);
     await expect(page.locator(".nav-cta")).toBeVisible();
   });
 
@@ -272,9 +275,7 @@ test.describe("the landing at /", () => {
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".nav-cta")).toBeInViewport();
       await page.goto("/start");
-      await expect(page).toHaveURL(
-        /\/projects\/p-0123456789abcdef0123$/,
-      );
+      await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
     });
   }
 });

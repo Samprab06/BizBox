@@ -1,0 +1,31 @@
+{
+  "image": "/landing-assets/guided-demo/macbook-frame-v2.png",
+  "width": 1600,
+  "height": 1120,
+  "screenQuad": [
+    {
+      "x": 0.16593729,
+      "y": 0.050961673
+    },
+    {
+      "x": 0.834069848,
+      "y": 0.050961673
+    },
+    {
+      "x": 0.834069848,
+      "y": 0.668703705
+    },
+    {
+      "x": 0.16593729,
+      "y": 0.668703705
+    }
+  ],
+  "order": [
+    "TL",
+    "TR",
+    "BR",
+    "BL"
+  ],
+  "source": "HAC115 prepared CC BY MacBook; same source/credits as ../macbook",
+  "method": "Blender EEVEE offline render, orthographic frontal product view, holdout display, transparent RGBA. No live runtime renderer."
+}
