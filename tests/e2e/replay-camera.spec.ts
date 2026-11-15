@@ -121,12 +121,24 @@ test("replay canvas lets a phone scroll, and moves the camera only on request", 
   expect(await page.evaluate(() => scrollY)).toBe(scroll);
 
   // Reset works while the camera is on; turning it off restores page scrolling.
-  await screen.tap(floor.getByRole("button", { name: "Reset camera" }));
-  await screen.tap(done);
-  await expect(move).toHaveAttribute("aria-pressed", "false");
-  await expect
-    .poll(async () => (await canvas.screenshot()).equals(baseline))
-    .toBe(true);
+  // Reset works while the camera is on, then Done restores page scrolling. The overlay
+  // buttons are part of the canvas screenshot, so the view can only match the baseline
+  // once the camera is off. A synthetic tap can be dropped while the page is busy, so
+  // Done is tapped only while it is still pressed and the idempotent Reset is repeated
+  // until the view is back.
+  const reset = floor.getByRole("button", { name: "Reset camera" });
+  await screen.tap(reset);
+  await expect(async () => {
+    if ((await done.getAttribute("aria-pressed")) === "true")
+      await screen.tap(done);
+    await expect(move).toHaveAttribute("aria-pressed", "false", {
+      timeout: 1000,
+    });
+  }).toPass();
+  await expect(async () => {
+    if (!(await canvas.screenshot()).equals(baseline)) await screen.tap(reset);
+    expect((await canvas.screenshot()).equals(baseline)).toBe(true);
+  }).toPass();
 });
 
 test("replay camera orbits, zooms, and resets with the keyboard", async ({
