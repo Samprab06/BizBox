@@ -9,6 +9,7 @@ import {
 import {
   EvaluationOverridesSchema,
   SensitivityRequestSchema,
+  demandPersonaSet,
 } from "@/lib/contracts/evaluation";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type { CatchmentResponse } from "@/lib/contracts/catchment";
@@ -584,66 +585,76 @@ export function createInvestigationTools(
             context.signal,
             { deadlineAt: context.deadlineAt, signal: context.signal },
           );
-          const tables = polled.request.sites.map((site) => ({
-            siteId: site.siteId,
-            behaviorTableId: site.behaviorTableId ?? null,
-            segments: ["resident", "worker", "passby"].flatMap((kind) => {
-              const ids = new Set(
-                polled.request.personaSet.personas
-                  .filter((p) => p.kind === kind)
-                  .map((p) => p.id),
-              );
-              const behaviors =
-                site.behaviorTable?.personas.filter((p) =>
-                  ids.has(p.personaId),
-                ) ?? [];
-              if (!behaviors.length) return [];
-              const weights = new Map(
-                polled.request.personaSet.personas.map((p) => [p.id, p.weight]),
-              );
-              const totalWeight = behaviors.reduce(
-                (sum, b) => sum + (weights.get(b.personaId) ?? 0),
-                0,
-              );
-              const mean = (
-                value: (b: (typeof behaviors)[number]) => number,
-              ) =>
-                totalWeight > 0
-                  ? behaviors.reduce(
-                      (sum, b) =>
-                        sum + value(b) * (weights.get(b.personaId) ?? 0),
-                      0,
-                    ) / totalWeight
-                  : 0;
-              const destinations = [
-                ...new Set(behaviors.flatMap((p) => Object.keys(p.where))),
-              ];
-              return [
-                {
-                  segment: kind,
-                  where: Object.fromEntries(
-                    destinations.map((d) => [d, mean((b) => b.where[d] ?? 0)]),
-                  ),
-                  visitsPerMonth: mean((b) => b.visitsPerMonth),
-                  timeBlocks: Object.fromEntries(
-                    Object.keys(behaviors[0]!.timeBlocks).map((t) => [
-                      t,
-                      mean((b) => b.timeBlocks[t as keyof typeof b.timeBlocks]),
-                    ]),
-                  ),
-                  stayCurve: behaviors[0]!.stayByLineLength.map((p, i) => ({
-                    lineLength: p.lineLength,
-                    p: mean((b) => b.stayByLineLength[i]?.p ?? 0),
-                  })),
-                },
-              ];
-            }),
-            lowConfidencePersonaIds:
-              site.behaviorTable?.personas
-                .filter((p) => Object.values(p.confidence).some((v) => v < 0.5))
-                .map((p) => p.personaId)
-                .slice(0, 20) ?? [],
-          }));
+          const tables = polled.request.sites.map((site) => {
+            const personas = demandPersonaSet(
+              polled.request,
+              site,
+              "jev",
+            ).personas;
+            return {
+              siteId: site.siteId,
+              behaviorTableId: site.behaviorTableId ?? null,
+              segments: ["resident", "worker", "passby"].flatMap((kind) => {
+                const ids = new Set(
+                  personas.filter((p) => p.kind === kind).map((p) => p.id),
+                );
+                const behaviors =
+                  site.behaviorTable?.personas.filter((p) =>
+                    ids.has(p.personaId),
+                  ) ?? [];
+                if (!behaviors.length) return [];
+                const weights = new Map(personas.map((p) => [p.id, p.weight]));
+                const totalWeight = behaviors.reduce(
+                  (sum, b) => sum + (weights.get(b.personaId) ?? 0),
+                  0,
+                );
+                const mean = (
+                  value: (b: (typeof behaviors)[number]) => number,
+                ) =>
+                  totalWeight > 0
+                    ? behaviors.reduce(
+                        (sum, b) =>
+                          sum + value(b) * (weights.get(b.personaId) ?? 0),
+                        0,
+                      ) / totalWeight
+                    : 0;
+                const destinations = [
+                  ...new Set(behaviors.flatMap((p) => Object.keys(p.where))),
+                ];
+                return [
+                  {
+                    segment: kind,
+                    where: Object.fromEntries(
+                      destinations.map((d) => [
+                        d,
+                        mean((b) => b.where[d] ?? 0),
+                      ]),
+                    ),
+                    visitsPerMonth: mean((b) => b.visitsPerMonth),
+                    timeBlocks: Object.fromEntries(
+                      Object.keys(behaviors[0]!.timeBlocks).map((t) => [
+                        t,
+                        mean(
+                          (b) => b.timeBlocks[t as keyof typeof b.timeBlocks],
+                        ),
+                      ]),
+                    ),
+                    stayCurve: behaviors[0]!.stayByLineLength.map((p, i) => ({
+                      lineLength: p.lineLength,
+                      p: mean((b) => b.stayByLineLength[i]?.p ?? 0),
+                    })),
+                  },
+                ];
+              }),
+              lowConfidencePersonaIds:
+                site.behaviorTable?.personas
+                  .filter((p) =>
+                    Object.values(p.confidence).some((v) => v < 0.5),
+                  )
+                  .map((p) => p.personaId)
+                  .slice(0, 20) ?? [],
+            };
+          });
           return {
             summary: json({
               profileId: current.id,
@@ -717,6 +728,9 @@ export function createInvestigationTools(
               assumptions: assembled.assumptions,
               ...(assembled.jevCompetitorSet
                 ? { jevCompetitorSet: assembled.jevCompetitorSet }
+                : {}),
+              ...(assembled.jevPersonaSet
+                ? { jevPersonaSet: assembled.jevPersonaSet }
                 : {}),
             };
             context.signal.throwIfAborted();

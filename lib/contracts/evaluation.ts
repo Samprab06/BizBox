@@ -47,6 +47,13 @@ export const EvaluationSiteSchema = z
     /** Cached Jev answers for this site. Without one, the site cannot use demandSource "jev". */
     behaviorTable: BehaviorTable.optional(),
     behaviorTableId: z.string().min(1).optional(),
+    /**
+     * HAC-159: the personas Jev was asked about for this site, built from this site's own
+     * catchment so they do not depend on the other candidates. Jev demand uses them instead of
+     * the shared `personaSet`, which stays the population for Huff. Absent on requests from
+     * before HAC-159, which used the shared set for Jev too.
+     */
+    jevPersonaSet: PersonaSet.optional(),
     /** Panel coverage when Jev was asked for this site (HAC-101); carried to the result. */
     jevPanel: JevPanelCoverageSchema.optional(),
     /** Origin of config.service.meanServiceMin (founder when the profile states it). */
@@ -62,8 +69,34 @@ export const EvaluationSiteSchema = z
   .refine((s) => !s.behaviorTable || s.behaviorTable.siteId === s.siteId, {
     path: ["behaviorTable", "siteId"],
     message: "behavior table must be for this site",
-  });
+  })
+  .refine(
+    (s) => {
+      if (!s.behaviorTable || !s.jevPersonaSet) return true;
+      const ids = new Set(s.jevPersonaSet.personas.map((p) => p.id));
+      return s.behaviorTable.personas.every((p) => ids.has(p.personaId));
+    },
+    {
+      path: ["behaviorTable", "personas"],
+      message:
+        "behavior table personas must belong to the site's Jev persona set",
+    },
+  );
 export type EvaluationSite = z.infer<typeof EvaluationSiteSchema>;
+
+/**
+ * The personas behind a site's demand: its own Jev persona set (HAC-159) when Jev answered
+ * for it, otherwise the request's shared study-area personas (Huff, and older requests).
+ */
+export function demandPersonaSet(
+  request: Pick<EvaluationRequest, "personaSet">,
+  site: Pick<EvaluationSite, "jevPersonaSet">,
+  source: DemandSource,
+): PersonaSet {
+  return source === "jev" && site.jevPersonaSet
+    ? site.jevPersonaSet
+    : request.personaSet;
+}
 
 /** One-at-a-time changes applied to every site. Multipliers default to 1. */
 export const EvaluationOverridesSchema = z
