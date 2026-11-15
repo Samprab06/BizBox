@@ -304,8 +304,11 @@ function StationController({
           )}
           {visible.status === "unavailable" && (
             <p role="status">
-              {visible.unavailable?.reason ??
-                "Station alternatives are unavailable for this saved data."}
+              {founderLabels &&
+              visible.unavailable?.code === "no_effective_variants"
+                ? "This space has no room for more counters at its size."
+                : (visible.unavailable?.reason ??
+                  "Station alternatives are unavailable for this saved data.")}
             </p>
           )}
           {result?.status === "available" && result.selected && (

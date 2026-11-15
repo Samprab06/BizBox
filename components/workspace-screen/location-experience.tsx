@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import type {
   LiveComparisonController,
@@ -25,14 +24,6 @@ import type { WorkspaceStep } from "./workspace-flow";
 import styles from "./workspace-glass.module.css";
 import { SearchFilterSummary } from "./property-details";
 
-const StationCalloutController = dynamic(
-  () =>
-    import("@/components/insights/station-callout-controller").then(
-      (m) => m.StationCalloutController,
-    ),
-  { ssr: false },
-);
-
 /**
  * The workspace's view for one guided-flow step (Scene 1): `locations` is the map, the top
  * locations and the shortlist tray; `compare` the chosen units and the run; `results` the
@@ -43,7 +34,6 @@ export function LocationExperience({
   controller,
   candidates,
   shownCount,
-  selected,
   onSelect,
   step,
   interior,
@@ -91,9 +81,6 @@ export function LocationExperience({
   onChooseSite?: (siteId: string) => void;
 }) {
   const markers = candidateMarkers(candidates);
-  const resultForSite = matching?.result.sites.find(
-    (entry) => entry.siteId === selected?.candidate.id,
-  );
   const running = controller.phase === "running";
   const search = controller.search;
   const searchUi = searchPresentation(search, controller.phase === "loading");
@@ -159,6 +146,7 @@ export function LocationExperience({
       )}
       {step === "results" && (
         <ResultsStep
+          projectId={projectId}
           payload={finishedComparison(controller.payload)}
           stale={comparisonStaleness(
             controller.payload,
@@ -219,44 +207,6 @@ export function LocationExperience({
             onCompare={onCompare}
           />
         )}
-        {locations && interior && selected && (
-          <details
-            className={
-              styles.details +
-              " pointer-events-auto max-h-[400px] max-w-xl overflow-y-auto"
-            }
-          >
-            <summary className="cursor-pointer text-sm font-medium">
-              Test capacity
-            </summary>
-            {matching && resultForSite ? (
-              <div className="mt-4">
-                <StationCalloutController
-                  projectId={projectId}
-                  comparisonId={matching.comparisonId}
-                  siteId={selected.candidate.id}
-                  profileId={matching.result.profileId}
-                  profileVersion={matching.result.profileVersion}
-                  seeds={matching.result.seeds}
-                  synthetic={false}
-                  modelVersion={matching.result.modelVersion}
-                  founderLabels
-                />
-              </div>
-            ) : (
-              <div className="mt-3">
-                <Button
-                  variant="glass"
-                  className={styles.secondary}
-                  onClick={() => onInteriorChange(false)}
-                >
-                  Compare locations first
-                </Button>
-              </div>
-            )}
-          </details>
-        )}
-
         {locations && !interior && !candidates.length && (
           <div
             className={styles.notice + " pointer-events-auto max-w-fit"}

@@ -22,7 +22,17 @@ import {
 import { LocationResults } from "./location-results";
 import { ComparisonProgress } from "./comparison-progress";
 import { SiteTweakChips } from "./site-tweaks";
+import dynamic from "next/dynamic";
+import { useState } from "react";
 import styles from "./workspace-glass.module.css";
+
+const StationCalloutController = dynamic(
+  () =>
+    import("@/components/insights/station-callout-controller").then(
+      (m) => m.StationCalloutController,
+    ),
+  { ssr: false },
+);
 
 const MIN_COMPARE_UNITS = 2;
 const compareLabel = (count: number) =>
@@ -284,6 +294,7 @@ export function UnitComparison({
  * controls to change a site or rerun.
  */
 export function ResultsStep({
+  projectId,
   payload,
   units,
   candidates,
@@ -297,6 +308,7 @@ export function ResultsStep({
   onChooseSite,
   stale = null,
 }: {
+  projectId?: string;
   payload: LiveComparisonPayload | null;
   onChooseSite?: (siteId: string) => void;
   /** Why this run is not for the current choices, if it is. Never hides the results. */
@@ -338,6 +350,13 @@ export function ResultsStep({
             : "No finished comparison yet. Run a comparison first."}
         </p>
       )}
+      {projectId && payload && !payload.comparison?.synthetic && (
+        <ServiceCounters
+          projectId={projectId}
+          payload={payload}
+          candidates={candidates}
+        />
+      )}
       {tweaked.length > 0 && (
         <div className="mt-5">
           <h3 className="mb-2 text-sm font-semibold">Changes in this run</h3>
@@ -372,6 +391,66 @@ export function ResultsStep({
         </button>
       </div>
     </section>
+  );
+}
+
+/** Current vs +1 vs +2 service counters for one modeled site, inside the results step. */
+function ServiceCounters({
+  projectId,
+  payload,
+  candidates,
+}: {
+  projectId: string;
+  payload: LiveComparisonPayload;
+  candidates: WorkspaceCandidate[];
+}) {
+  const modeled = payload.result.ranking.filter((id) =>
+    payload.result.sites.some((site) => site.siteId === id),
+  );
+  const [picked, setPicked] = useState<string | null>(null);
+  const siteId = picked && modeled.includes(picked) ? picked : modeled[0];
+  if (!siteId) return null;
+  const label = (id: string) => {
+    const unit = candidates.find((entry) => entry.candidate.id === id);
+    return unit ? unitAddress(unit, candidates) : id;
+  };
+  return (
+    <div className="mt-6" data-service-counters>
+      <h3 className="text-base font-semibold">Service counters</h3>
+      <p className="mb-3 text-xs">
+        Test 1 or 2 more counters at this site (modeled)
+      </p>
+      {modeled.length > 1 && (
+        <div
+          className="mb-3 flex flex-wrap gap-2"
+          role="group"
+          aria-label="Site for service counters"
+        >
+          {modeled.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={styles.secondary}
+              aria-pressed={id === siteId}
+              onClick={() => setPicked(id)}
+            >
+              {label(id)}
+            </button>
+          ))}
+        </div>
+      )}
+      <StationCalloutController
+        projectId={projectId}
+        comparisonId={payload.comparisonId}
+        siteId={siteId}
+        profileId={payload.result.profileId}
+        profileVersion={payload.result.profileVersion}
+        seeds={payload.result.seeds}
+        synthetic={false}
+        modelVersion={payload.result.modelVersion}
+        founderLabels
+      />
+    </div>
   );
 }
 
