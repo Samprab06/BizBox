@@ -72,10 +72,14 @@ function currentViewState(
   const searchDraft = Object.fromEntries(
     Object.entries(profile).filter(([key]) => key in IntakeDraftSchema.shape),
   );
+  const draft = IntakeDraftSchema.safeParse(
+    fillMissing(session.live?.state.draft, searchDraft),
+  );
+  // Partial live constraints can conflict with older completed form values (e.g. hours).
+  // Keep the valid original state so sending a turn never fails during serialization.
+  if (!draft.success) return session.live?.state;
   return {
-    draft: IntakeDraftSchema.parse(
-      fillMissing(session.live?.state.draft, searchDraft),
-    ),
+    draft: draft.data,
     assumptions: session.live?.state.assumptions ?? {},
   };
 }

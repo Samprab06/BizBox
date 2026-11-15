@@ -96,7 +96,7 @@ which the server sets. Each call:
 3. pushes the action into the turn's collector and returns a short confirmation.
 
 Duplicate actions are skipped, and a fourth action is refused. The request's optional
-`view` (`AgentViewContext`) is shown to the model as the founder's screen, so it can use
+A server-resolved, bounded `viewContextLine` is shown to the model so it can use
 the candidate IDs there. The prompt's "do not call other services" rule has one
 exception: these tools. The handler returns the collected actions, including when the
 step budget runs out (`GraphRecursionError`). The client parses `actions` but does not
@@ -164,7 +164,8 @@ saved project profile. For a completed browser form, the shared request builder 
 `profileFromIntake` (the same normalization used by listing search) to seed only
 missing draft leaves through the existing `state` contract. Explicit live values,
 unknowns, origin labels and assumptions survive; pending form edits still apply last.
-Incomplete forms keep their previous state. No profile/request schema is added.
+Incomplete forms and incompatible partial-draft/form constraints keep their previous
+valid state, so context serialization cannot interrupt the conversation. No profile/request schema is added.
 This is a read-only operation; no search registry, migration,
 model request or profile persistence is added. A known-invalid reference returns
 422 before a model call. If neither a complete draft nor a saved profile exists,

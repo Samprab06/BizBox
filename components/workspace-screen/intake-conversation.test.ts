@@ -264,3 +264,68 @@ it("seeds only missing API draft leaves from the completed browser search form",
     ).state,
   ).toEqual(browser.live?.state);
 });
+
+it("keeps the valid original draft if filling a partial constraint would conflict with the form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Any",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      state: {
+        draft: { operatingHours: { openMinute: 1080 } },
+        assumptions: {},
+      },
+      missingRequiredFields: [],
+      findings: [],
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "Compare this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  expect(body.state).toEqual(browser.live?.state);
+  expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
+  const { createIntakeHandler } =
+    await import("@/app/api/projects/[projectId]/intake/handler");
+  const handler = createIntakeHandler({
+    projectExists: async () => true,
+    viewContextLookups: {
+      comparison: async () => null,
+      scenario: async () => null,
+      investigation: async () => null,
+      candidates: async () => null,
+    },
+    runAgent: async ({ viewContextLine }) =>
+      viewContextLine?.includes('"phase":"missing"')
+        ? "Continue the conversation"
+        : "Unexpected selection",
+  });
+  const response = await handler(
+    new Request("http://localhost/intake", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ projectId: "houston-coffee" }) },
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).assistantMessage).toBe(
+    "Continue the conversation",
+  );
+});

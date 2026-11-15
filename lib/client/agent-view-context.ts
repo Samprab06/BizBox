@@ -94,7 +94,12 @@ export function agentViewForRoute(
     (!stored || candidates.includes(observation.siteId ?? ""))
   )
     view.siteId = observation.siteId;
-  else if (selected && candidates.includes(selected)) view.siteId = selected;
+  else if (view.stage === "workspace" && observation.kind === "search") {
+    const displayed =
+      observation.candidates.find((candidate) => candidate.id === selected) ??
+      observation.candidates[0];
+    if (displayed && !displayed.synthetic) view.siteId = displayed.id;
+  } else if (selected && candidates.includes(selected)) view.siteId = selected;
   const parsed = AgentViewContextSchema.safeParse(view);
   return parsed.success ? parsed.data : { stage: view.stage };
 }

@@ -56,7 +56,7 @@ describe("agent view from workspace registry", () => {
       }),
     ).toEqual({ stage: "workspace", phase: "example" });
   });
-  it("caps candidates and treats ambiguous query IDs as absent", () => {
+  it("caps candidates and uses the displayed workspace default for an ambiguous URL", () => {
     const observation = {
       kind: "search",
       phase: "live",
@@ -76,7 +76,7 @@ describe("agent view from workspace registry", () => {
       },
     });
     expect(view.candidateIds).toHaveLength(8);
-    expect(view.siteId).toBeUndefined();
+    expect(view.siteId).toBe("s0");
   });
 });
 
@@ -140,4 +140,32 @@ it("drops all stale IDs for mismatched or ambiguous comparison queries", () => {
       }),
     ).toEqual({ stage: "comparison", phase: "ready" });
   }
+});
+
+it("matches the workspace default first displayed candidate when the URL has no selection", () => {
+  const path = "/projects/p/workspace";
+  const view = agentViewForRoute("p", path, "", {
+    current: {
+      projectId: "p",
+      routeKey: `${path}?`,
+      observation: { kind: "search", phase: "live", candidates: [listing] },
+    },
+  });
+  expect(view.siteId).toBe(listing.id);
+});
+
+it("does not claim a different live site when the displayed workspace selection is synthetic", () => {
+  const path = "/projects/p/workspace";
+  const view = agentViewForRoute("p", path, "", {
+    source: {
+      projectId: "p",
+      routeKey: `${path}?`,
+      observation: {
+        kind: "search",
+        phase: "live",
+        candidates: [{ ...listing, id: "example", synthetic: true }, listing],
+      },
+    },
+  });
+  expect(view.siteId).toBeUndefined();
 });
