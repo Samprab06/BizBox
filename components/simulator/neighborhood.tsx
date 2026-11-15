@@ -41,6 +41,13 @@ import {
   listingTileError,
   LISTING_TILE_BUDGET,
 } from "@/components/city/listing-markers";
+import {
+  attachContextImagery,
+  createContextGlobe,
+  observeContextMesh,
+  CONTEXT_MESH_HEIGHT,
+  type ContextMeshState,
+} from "@/components/city/context-imagery";
 
 export default function Neighborhood({
   longitude,
@@ -118,6 +125,10 @@ export default function Neighborhood({
     undefined,
     initialCityLoad,
   );
+  const [meshStatus, setMeshStatus] = useState<ContextMeshState | "failed">(
+    "hidden",
+  );
+  const [contextFailure, setContextFailure] = useState(false);
   const skipped = load.phase === "skipped";
   const status =
     load.phase === "failed"
@@ -183,9 +194,9 @@ export default function Neighborhood({
       });
       viewer = new Viewer(target, {
         baseLayer: false,
-        // Preserve source mesh below the ellipsoid: a height-zero globe can
-        // occlude negative-elevation Vexcel geometry.
-        globe: false,
+        // Listing context uses a display-only floor below the source mesh.
+        // Other consumers keep their original globe-free scene.
+        globe: listingOptions.current ? createContextGlobe(sdk) : false,
         skyBox: false,
         skyAtmosphere: false,
         useBrowserRecommendedResolution: false,
@@ -212,6 +223,48 @@ export default function Neighborhood({
         RENDER_SETTINGS[qualityRef.current].maxPixelRatio,
       );
       viewer.scene.sun = new Sun();
+      if (listingOptions.current) {
+        setMeshStatus("hidden");
+        setContextFailure(false);
+        viewer.camera.setView({
+          destination: Cartesian3.fromDegrees(longitude, latitude, 80_000),
+          orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+        });
+        let baseReady = false;
+        const context = attachContextImagery(viewer, sdk, {
+          ready: () => {
+            baseReady = true;
+            if (!closed) {
+              const at = Date.now();
+              dispatchLoad({ type: "first-building", at });
+              dispatchLoad({ type: "settled", at });
+              setContextFailure(false);
+            }
+          },
+          error: () => {
+            if (!closed) {
+              setContextFailure(true);
+              if (!baseReady) dispatchLoad({ type: "failed" });
+            }
+          },
+        });
+        disposers.push(() => context.destroy());
+        const attachment = createListingLayer(
+          viewer,
+          sdk,
+          listingOptions.current,
+        );
+        listingAttachment.current = attachment;
+        disposers.push(() => {
+          attachment.destroy();
+          if (listingAttachment.current === attachment)
+            listingAttachment.current = undefined;
+        });
+        updateScene.current = () => {
+          if (!closed && viewer && !viewer.isDestroyed() && visibleRef.current)
+            viewer.scene.requestRender();
+        };
+      }
       // Keep Cesium's familiar bindings/collision protection, with less coasting
       // and a wider input budget when a frame is delayed by tile loading.
       const controls = viewer.scene.screenSpaceCameraController;
@@ -225,27 +278,49 @@ export default function Neighborhood({
         ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
       };
       dispatchLoad({ type: "engine-ready" });
-      const tilesetRequest = Cesium3DTileset.fromUrl(tilesetUrl, {
-        showCreditsOnScreen: true,
-        maximumScreenSpaceError: initialSettings.tileError,
-        cacheBytes: initialSettings.cacheBytes,
-        maximumCacheOverflowBytes: initialSettings.maximumCacheOverflowBytes,
-        shadows: ShadowMode.DISABLED,
-        lightColor: new Cartesian3(0.22, 0.22, 0.22),
-        dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
-        // Skip intermediate ancestors held by replacement traversal: the
-        // street view's initial request roughly halves (HAC-177). Regional
-        // shortlists also load only the desired coarse LOD. Cache stays bounded.
-        skipLevelOfDetail: true,
-        immediatelyLoadDesiredLevelOfDetail: Boolean(listingOptions.current),
-      });
-      void tilesetRequest.then(
-        () => {
-          if (!closed) dispatchLoad({ type: "imagery-ready" });
-        },
-        () => {},
-      );
-      const [tileset] = await Promise.all([tilesetRequest, decoders]);
+      let tileset: import("cesium").Cesium3DTileset;
+      try {
+        if (!tilesetUrl) throw new Error("3D source unavailable");
+        const tilesetRequest = Cesium3DTileset.fromUrl(tilesetUrl, {
+          showCreditsOnScreen: true,
+          maximumScreenSpaceError: initialSettings.tileError,
+          cacheBytes: initialSettings.cacheBytes,
+          maximumCacheOverflowBytes: initialSettings.maximumCacheOverflowBytes,
+          shadows: ShadowMode.DISABLED,
+          lightColor: new Cartesian3(0.22, 0.22, 0.22),
+          dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
+          // Skip intermediate ancestors held by replacement traversal: the
+          // street view's initial request roughly halves (HAC-177). Regional
+          // shortlists also load only the desired coarse LOD. Cache stays bounded.
+          skipLevelOfDetail: true,
+          immediatelyLoadDesiredLevelOfDetail: Boolean(listingOptions.current),
+        });
+        void tilesetRequest.then(
+          () => {
+            if (!closed) dispatchLoad({ type: "imagery-ready" });
+          },
+          () => {},
+        );
+        [tileset] = await Promise.all([tilesetRequest, decoders]);
+      } catch (error) {
+        // HAC-130: the listing overview keeps its 2D context when the 3D mesh is unavailable.
+        if (!listingOptions.current) throw error;
+        let previous = "";
+        disposers.push(
+          viewer.scene.preRender.addEventListener(() => {
+            const next =
+              viewer!.camera.positionCartographic.height <= CONTEXT_MESH_HEIGHT
+                ? "failed"
+                : "hidden";
+            if (!closed && next !== previous) {
+              previous = next;
+              setMeshStatus(next);
+            }
+          }),
+        );
+        viewer.scene.requestRender();
+        return;
+      }
       if (closed) {
         tileset.destroy();
         return;
@@ -259,6 +334,15 @@ export default function Neighborhood({
         1,
         0,
       );
+      if (listingOptions.current) {
+        tileset.show =
+          viewer.camera.positionCartographic.height <= CONTEXT_MESH_HEIGHT;
+        disposers.push(
+          observeContextMesh(viewer, tileset, (state) => {
+            if (!closed) setMeshStatus(state);
+          }),
+        );
+      }
       viewer.scene.primitives.add(tileset);
       const city = viewer;
       const roadColors = new Map<
@@ -554,33 +638,23 @@ export default function Neighborhood({
       disposers.push(() => window.removeEventListener("resize", resize));
       updateScene.current();
 
-      viewer.camera.setView({
-        destination: Cartesian3.fromDegrees(
-          longitude,
-          latitude - 0.0037,
-          birdseye ? 650 : 150,
-        ),
-        orientation: {
-          heading: 0,
-          pitch: CesiumMath.toRadians(birdseye ? -60 : -10),
-          roll: 0,
-        },
-      });
+      if (!listingOptions.current)
+        viewer.camera.setView({
+          destination: Cartesian3.fromDegrees(
+            longitude,
+            latitude - 0.0037,
+            birdseye ? 650 : 150,
+          ),
+          orientation: {
+            heading: 0,
+            pitch: CesiumMath.toRadians(birdseye ? -60 : -10),
+            roll: 0,
+          },
+        });
       if (listingOptions.current) {
         // Reuses Cesium's own render loop. No polling, private SDK state or
         // external root patch: only a public presentation threshold changes.
         disposers.push(city.scene.preRender.addEventListener(applyTileError));
-        const attachment = createListingLayer(
-          viewer,
-          sdk,
-          listingOptions.current,
-        );
-        listingAttachment.current = attachment;
-        disposers.push(() => {
-          attachment.destroy();
-          if (listingAttachment.current === attachment)
-            listingAttachment.current = undefined;
-        });
       }
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
@@ -691,7 +765,8 @@ export default function Neighborhood({
       void updateRoads();
       const stopWatching = tileset.tileVisible.addEventListener(() => {
         stopWatching();
-        if (closed) return;
+        // The listing overview is ready when its map context is (see attachContextImagery).
+        if (closed || listingOptions.current) return;
         const at = Date.now();
         dispatchLoad({ type: "first-building", at });
         // allTilesLoaded can fire on the frame before the last tile renders.
@@ -714,7 +789,8 @@ export default function Neighborhood({
           if (!closed) dispatchLoad({ type: "settled", at: Date.now() });
         }),
         tileset.tileFailed.addEventListener(() => {
-          if (!closed) dispatchLoad({ type: "failed" });
+          if (!closed && !listingOptions.current)
+            dispatchLoad({ type: "failed" });
         }),
       );
       viewer.scene.requestRender();
@@ -793,7 +869,16 @@ export default function Neighborhood({
           data-city-overlay
           className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-muted"
         >
-          {load.phase === "failed" ? (
+          {listingLayer ? (
+            load.phase === "failed" ? (
+              <p role="status">Map context unavailable. Retry the map.</p>
+            ) : (
+              <span role="status" className="flex items-center gap-3">
+                <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
+                Loading map context
+              </span>
+            )
+          ) : load.phase === "failed" ? (
             <p role="status">{view.title}</p>
           ) : skipped ? (
             <div className="pointer-events-auto grid justify-items-center gap-2 rounded bg-panel-raised px-4 py-3 text-center">
@@ -845,7 +930,24 @@ export default function Neighborhood({
         </div>
       )}
 
-      {load.phase === "visible" && (
+      {listingLayer &&
+        status === "ready" &&
+        (contextFailure ||
+          (meshStatus !== "ready" && meshStatus !== "hidden")) && (
+          <p
+            role="status"
+            className="pointer-events-none absolute bottom-8 left-4 z-10 rounded bg-panel-raised px-2 py-1 text-xs text-muted"
+          >
+            {contextFailure
+              ? "Some map context unavailable"
+              : meshStatus === "loading"
+                ? "Loading 3D imagery"
+                : meshStatus === "failed"
+                  ? "3D imagery unavailable"
+                  : "3D imagery not available here"}
+          </p>
+        )}
+      {!listingLayer && load.phase === "visible" && (
         <p
           role="status"
           className="pointer-events-none absolute top-3 left-1/2 z-10 w-max max-w-[min(30rem,50%)] -translate-x-1/2 rounded bg-panel-raised px-2 py-1 text-center text-[11px] text-muted"
@@ -942,9 +1044,11 @@ export default function Neighborhood({
 
       {children}
 
-      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-muted sm:right-6">
-        © Vexcel Imaging · © Microsoft · © OpenStreetMap via OpenFreeMap
-      </p>
+      {!listingLayer && (
+        <p className="absolute right-4 bottom-2 z-10 text-[10px] text-muted sm:right-6">
+          © Vexcel Imaging · © Microsoft · © OpenStreetMap via OpenFreeMap
+        </p>
+      )}
     </div>
   );
 }

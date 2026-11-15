@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#11151e" />
+    <title>BizBox · Consultant workspace preview</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#conversation">Skip to consultant</a>
+    <div class="app">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="BizBox workspace preview"
+          ><span class="brand-symbol" aria-hidden="true">b</span>BizBox</a
+        >
+        <div class="project-title">
+          <span>Bean There</span><span class="slash">/</span
+          ><span class="muted">Los Angeles</span>
+        </div>
+        <span class="example-badge"><i></i>Example data</span>
+        <button
+          class="icon-button reset"
+          id="reset"
+          aria-label="Restart preview"
+          title="Restart preview"
+        >
+          ↺
+        </button>
+      </header>
+      <main class="workspace">
+        <section
+          class="visual-panel"
+          aria-label="Location and simulation visualization"
+        >
+          <div id="scene" class="scene">
+            <div id="scene-fallback" class="scene-fallback" hidden>
+              <div class="fallback-blocks" aria-hidden="true"></div>
+              <p>3D preview unavailable</p>
+              <span>You can still explore the full flow below.</span>
+            </div>
+          </div>
+          <div class="viewport-top">
+            <div
+              class="view-switch glass"
+              role="group"
+              aria-label="Visualization view"
+            >
+              <button data-view="city" aria-pressed="true">
+                <span aria-hidden="true">▱</span> Neighborhood</button
+              ><button data-view="interior" aria-pressed="false">
+                Interior
+              </button>
+            </div>
+            <div class="map-tools glass">
+              <button id="zoom-in" aria-label="Zoom in">＋</button
+              ><button id="zoom-out" aria-label="Zoom out">−</button
+              ><button id="reset-camera" aria-label="Reset camera">⌖</button>
+            </div>
+          </div>
+          <div class="scene-heading" id="scene-heading"></div>
+          <div
+            id="map-pins"
+            class="map-pins"
+            aria-label="Example locations"
+          ></div>
+          <div class="scene-footnote" id="scene-footnote">
+            Illustrative 3D neighborhood · Vexcel integration pending
+          </div>
+          <div class="visual-content" id="visual-content"></div>
+          <div class="playback glass" id="playback" hidden>
+            <div class="playback-top">
+              <span id="playback-scenario">Baseline</span
+              ><span class="playback-scope">Morning peak · Example run</span
+              ><span class="mono" id="clock">08:00</span>
+            </div>
+            <div class="playback-controls">
+              <button
+                id="play-pause"
+                class="play-button"
+                aria-label="Play replay"
+              >
+                ▶</button
+              ><select id="speed" aria-label="Playback speed">
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option></select
+              ><span class="time-bound">08:00</span
+              ><input
+                id="seek"
+                type="range"
+                min="0"
+                max="60"
+                value="0"
+                step="1"
+                aria-label="Replay time"
+                aria-valuetext="08:00"
+              /><span class="time-bound">09:00</span>
+            </div>
+          </div>
+        </section>
+        <aside class="consultant-panel" aria-label="Consultant">
+          <header class="consultant-header">
+            <div><h1>Consultant</h1></div>
+            <button
+              class="icon-button"
+              id="history-toggle"
+              aria-label="Show conversation"
+              title="Show conversation"
+            >
+              ☷
+            </button>
+          </header>
+          <div
+            class="mode-switch"
+            role="tablist"
+            aria-label="Conversation mode"
+          >
+            <button
+              role="tab"
+              id="text-tab"
+              aria-controls="text-panel"
+              aria-selected="true"
+              data-mode="text"
+            >
+              <span aria-hidden="true">▤</span> Text</button
+            ><button
+              role="tab"
+              id="voice-tab"
+              aria-controls="voice-panel"
+              aria-selected="false"
+              tabindex="-1"
+              data-mode="voice"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" />
+                <path d="M6 10v2a6 6 0 0 0 12 0v-2M12 18v3M8 21h8" /></svg
+              >Voice
+            </button>
+          </div>
+          <section
+            id="text-panel"
+            class="text-panel"
+            role="tabpanel"
+            aria-labelledby="text-tab"
+          >
+            <div
+              id="conversation"
+              class="conversation"
+              tabindex="-1"
+              aria-label="Example conversation"
+            ></div>
+            <div class="contextual-actions" id="contextual-actions"></div>
+          </section>
+          <section
+            id="voice-panel"
+            class="voice-panel"
+            role="tabpanel"
+            aria-labelledby="voice-tab"
+            hidden
+          >
+            <div class="voice-orb-wrap">
+              <canvas
+                id="voice-orb"
+                width="420"
+                height="420"
+                aria-hidden="true"
+              ></canvas>
+              <div class="orb-fallback" aria-hidden="true"></div>
+            </div>
+            <h2 id="voice-status" role="status">Ready when you are</h2>
+            <p class="voice-caption" id="voice-caption">
+              Try the voice interaction.
+            </p>
+            <p class="live-transcript" id="live-transcript"></p>
+            <div class="voice-context glass" id="voice-context"></div>
+            <div class="voice-actions">
+              <button id="voice-start" class="primary">Start demo</button
+              ><button
+                id="voice-mute"
+                class="round-button"
+                aria-label="Mute microphone demo"
+                aria-pressed="false"
+                hidden
+              >
+                ♩</button
+              ><button id="voice-end" class="secondary" hidden>
+                End voice
+              </button>
+            </div>
+            <div class="voice-demo-label">
+              Voice preview · no microphone connected
+            </div>
+            <details id="voice-history">
+              <summary>Conversation <span aria-hidden="true">⌄</span></summary>
+              <div id="voice-history-content"></div>
+            </details>
+          </section>
+          <div id="decision-card" class="decision-card" hidden></div>
+          <form class="composer" id="composer">
+            <label class="sr-only" for="chat-input">Message consultant</label
+            ><textarea
+              id="chat-input"
+              rows="1"
+              maxlength="500"
+              placeholder="Ask about this location…"
+            ></textarea
+            ><button type="submit" aria-label="Send message">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m4 12 16-8-7 16-2-7-7-1Zm7 1 9-9" />
+              </svg>
+            </button>
+          </form>
+          <div class="composer-note" id="composer-note">
+            Design preview · replies and results are examples
+          </div>
+        </aside>
+      </main>
+      <footer class="checkpoint-bar">
+        <span class="checkpoint-label">EXPLORE THE FLOW</span>
+        <nav aria-label="Preview checkpoints" id="checkpoints"></nav>
+        <span class="checkpoint-count" id="checkpoint-count">01 / 07</span>
+      </footer>
+    </div>
+    <div
+      id="announcement"
+      class="sr-only"
+      role="status"
+      aria-live="polite"
+    ></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

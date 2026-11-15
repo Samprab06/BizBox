@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Viewer } from "cesium";
 import { createListingLayer, type ListingLayerOptions } from "./listing-layer";
-import { groupListingMarkers } from "./listing-markers";
+import { groupListingMarkers, overheadFrame } from "./listing-markers";
 
 afterEach(() => vi.unstubAllGlobals());
 function fixture(reduced = false) {
@@ -11,7 +11,7 @@ function fixture(reduced = false) {
     clientHeight: 800,
     addEventListener: vi.fn((type, callback) => listeners.set(type, callback)),
     removeEventListener: vi.fn(),
-    closest: () => null,
+    closest: vi.fn<() => Element | null>(() => null),
   };
   const camera = {
     cancelFlight: vi.fn(),
@@ -21,28 +21,55 @@ function fixture(reduced = false) {
   };
   const entities = { add: vi.fn((entity) => entity), remove: vi.fn() };
   const stopPostRender = vi.fn();
+  let renderLabels = () => {};
   const scene = {
     canvas,
     pick: vi.fn(),
     requestRender: vi.fn(),
+    cartesianToCanvasCoordinates: vi.fn(() => ({ x: 350, y: 250 })),
     postRender: {
       addEventListener: vi.fn((callback: () => void) => {
-        void callback;
+        renderLabels = callback;
         return stopPostRender;
       }),
     },
   };
-  const viewer = { camera, entities, scene } as unknown as Viewer;
+  const resize = vi.fn();
+  const viewer = {
+    camera,
+    entities,
+    scene,
+    resize,
+    clock: { currentTime: 0 },
+  } as unknown as Viewer;
   const input = {
     callback: undefined as undefined | ((event: { position: unknown }) => void),
     destroy: vi.fn(),
   };
   const disconnect = vi.fn();
+  let notifyResize = () => {};
+  const observe = vi.fn();
+  const pendingFrames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback: FrameRequestCallback) => {
+      pendingFrames.set(++nextFrame, callback);
+      return nextFrame;
+    }),
+  );
+  vi.stubGlobal(
+    "cancelAnimationFrame",
+    vi.fn((id: number) => pendingFrames.delete(id)),
+  );
   vi.stubGlobal("window", { matchMedia: () => ({ matches: reduced }) });
   vi.stubGlobal(
     "ResizeObserver",
     class {
-      observe() {}
+      constructor(callback: () => void) {
+        notifyResize = callback;
+      }
+      observe = observe;
       disconnect = disconnect;
     },
   );
@@ -103,13 +130,100 @@ function fixture(reduced = false) {
     canvas,
     disconnect,
     stopPostRender,
+    resize,
+    observe,
+    notifyResize: () => notifyResize(),
+    renderLabels: () => renderLabels(),
+    nextFrame: () => {
+      const current = [...pendingFrames.values()];
+      pendingFrames.clear();
+      for (const callback of current) callback(0);
+    },
   };
 }
 describe("existing Cesium viewer shortlist attachment", () => {
+  it("settles compact-to-expanded layout and resizes the SDK before fitting its new aspect/pane", () => {
+    const f = fixture();
+    const pane = {} as Element,
+      toolbar = {} as Element;
+    const workspace = {
+      querySelector: (selector: string) =>
+        selector === "[data-map-viewport]"
+          ? pane
+          : selector === "[data-map-toolbar]"
+            ? toolbar
+            : null,
+    } as unknown as Element;
+    f.canvas.closest.mockReturnValue({
+      parentElement: { parentElement: workspace },
+    } as unknown as Element);
+    let viewport = { left: 40, top: 100, width: 380, height: 300 };
+    const options = { ...f.options, viewport: () => viewport };
+    const layer = createListingLayer(f.viewer, f.sdk, options);
+    expect(f.observe).toHaveBeenCalledWith(workspace);
+    expect(f.observe).toHaveBeenCalledWith(pane);
+    expect(f.observe).toHaveBeenCalledWith(toolbar);
+    f.canvas.clientWidth = 1000;
+    f.canvas.clientHeight = 780;
+    viewport = { left: 40, top: 100, width: 570, height: 640 };
+    f.resize.mockImplementation(() => {
+      f.camera.frustum.fovy = Math.PI / 5;
+    });
+    f.notifyResize();
+    f.notifyResize();
+    f.nextFrame();
+    expect(f.resize).not.toHaveBeenCalled();
+    f.nextFrame();
+    expect(f.resize).toHaveBeenCalledTimes(1);
+    const target = overheadFrame(
+      options.markers,
+      { width: 1000, height: 780 },
+      viewport,
+      Math.PI / 5,
+    )!;
+    expect(f.camera.setView).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        destination: [target.longitude, target.latitude, target.height],
+      }),
+    );
+    expect(f.entities.add).toHaveBeenCalledTimes(1);
+    f.notifyResize();
+    f.nextFrame();
+    f.nextFrame();
+    expect(f.resize).toHaveBeenCalledTimes(1); // Unchanged pane/chat layout cannot steal a manual pan.
+    f.notifyResize();
+    f.listeners.get("pointerdown")!();
+    f.nextFrame();
+    f.nextFrame();
+    expect(f.resize).toHaveBeenCalledTimes(1);
+    f.notifyResize();
+    layer.destroy();
+    f.nextFrame();
+    f.nextFrame();
+    expect(f.resize).toHaveBeenCalledTimes(1);
+  });
+  it("invalidates label offsets when only the free-pane bounds change", () => {
+    const f = fixture();
+    let left = 40;
+    const layer = createListingLayer(f.viewer, f.sdk, {
+      ...f.options,
+      viewport: () => ({ left, top: 100, width: 600, height: 400 }),
+    });
+    const entity = f.entities.add.mock.results[0].value;
+    entity.position = { getValue: () => [-95.6, 29.7, 2] };
+    f.renderLabels();
+    const first = entity.label.pixelOffset;
+    f.renderLabels();
+    expect(entity.label.pixelOffset).toBe(first);
+    left = 150;
+    f.renderLabels();
+    expect(entity.label.pixelOffset).not.toBe(first);
+    layer.destroy();
+  });
   it("projects visible anchors once per changed frame and can replace native labels with DOM glass", () => {
     const f = fixture();
     const onProject = vi.fn();
-    const scene = f.scene as typeof f.scene & {
+    const scene = f.scene as unknown as {
       cartesianToCanvasCoordinates: () => { x: number; y: number };
     };
     scene.cartesianToCanvasCoordinates = () => ({ x: 350, y: 300 });

@@ -61,6 +61,74 @@ async function services(page: Page) {
   return { posts, search };
 }
 
+async function showList(page: Page) {
+  if (
+    !(await page.getByRole("group", { name: "Matching locations" }).isVisible())
+  )
+    await page.getByRole("button", { name: /^Show list/ }).click();
+}
+/** HAC-162 on main: the chat is the consultant dock, not a pane inside the workspace. */
+async function showChat(page: Page) {
+  await openConsultant(page);
+}
+
+test("compact desktop window expands with the map pane matching its backdrop", async ({
+  page,
+}) => {
+  await services(page);
+  await page.setViewportSize({ width: 500, height: 900 });
+  await page.goto("/projects/houston-coffee/workspace");
+  await expect(page.getByRole("button", { name: /^Show list/ })).toBeVisible();
+  const map = page.locator("[data-map-viewport]");
+  // Presentation geometry exists with or without configured provider imagery.
+  const backdrop = map
+    .locator("..")
+    .locator("..")
+    .locator(":scope > div")
+    .first();
+  async function expectMapGeometry() {
+    await expect
+      .poll(async () => {
+        const pane = await map.boundingBox();
+        const scene = await backdrop.boundingBox();
+        return pane && scene
+          ? Math.max(
+              Math.abs(pane.height - scene.height),
+              Math.abs(pane.y - scene.y),
+              Math.abs(pane.x - scene.x),
+            )
+          : Infinity;
+      })
+      .toBeLessThan(2);
+  }
+  await expectMapGeometry();
+  expect((await map.boundingBox())!.height).toBeGreaterThan(350);
+  await page.setViewportSize({ width: 1000, height: 852 });
+  await expectMapGeometry();
+  const canvas = page
+    .getByRole("region", { name: "Vexcel 3D neighborhood" })
+    .locator("canvas");
+  if (await canvas.count()) {
+    await expect(canvas).toBeVisible();
+    await expect
+      .poll(async () => {
+        const pane = await page.locator("[data-map-viewport]").boundingBox();
+        const scene = await canvas.boundingBox();
+        return pane && scene ? Math.abs(pane.height - scene.height) : Infinity;
+      })
+      .toBeLessThan(2);
+  }
+  const pane = await page.locator("[data-map-viewport]").boundingBox();
+  expect(pane!.height).toBeGreaterThan(650);
+  expect(pane!.width).toBeGreaterThan(500);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "/tmp/bizbox-expanded-desktop-fixture.png" });
+});
+
 for (const viewport of [
   { width: 1366, height: 900 },
   { width: 820, height: 1180 },
@@ -74,12 +142,10 @@ for (const viewport of [
       const { posts } = await services(page);
       await page.goto("/projects/houston-coffee/workspace");
       const locations = page.getByRole("group", { name: "Matching locations" });
-      await expect(
-        locations.getByRole("button", { name: "View 101 Invented St" }),
-      ).toBeVisible();
+      await expect(locations).toHaveCount(0);
       await expect(
         page.getByRole("region", { name: "Selected location" }),
-      ).toContainText("101 Invented St");
+      ).toHaveCount(0);
       await expect(
         page.getByText("City preview · photo, not a map"),
       ).toHaveCount(0);
@@ -90,8 +156,27 @@ for (const viewport of [
       await openConsultant(page);
       await composer.fill("Keep this question while I explore");
       await closeConsultant(page);
+      await showList(page);
       await locations
-        .getByRole("button", { name: "View 202 Invented St" })
+        .getByRole("button", {
+          name: "View 101 Invented St · Unit 1",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Add to comparison", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Choose another unit", exact: true })
+        .click();
+      await locations
+        .getByRole("button", {
+          name: "View 202 Invented St · Unit 1",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("button", { name: "Add to comparison", exact: true })
         .click();
       await expect(page).toHaveURL(/site=202%3A302/);
       await expect(
@@ -122,7 +207,18 @@ for (const viewport of [
         .getByRole("button", { name: "Locations", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Compare locations", exact: true })
+        .getByRole("button", { name: "Compare 2 units", exact: true })
+        .click();
+      await expect(
+        page.getByRole("region", { name: "Unit comparison" }),
+      ).toContainText("Listing facts");
+      expect(posts).toEqual([]);
+      // The consultant dock stays available beside (or, on a phone, over) the comparison.
+      await showChat(page);
+      await expect(composer).toBeVisible();
+      await closeConsultant(page);
+      await page
+        .getByRole("button", { name: "Run comparison", exact: true })
         .click();
       await expect(
         page.getByRole("region", { name: "Location comparison results" }),
@@ -138,14 +234,18 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: /Run baseline/ }),
       ).toHaveCount(0);
+      await showList(page);
       await locations
         .getByRole("checkbox", { name: "Compare 202 Invented St" })
         .uncheck();
       await expect(
         page.getByRole("region", { name: "Location comparison results" }),
       ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "Edit choices", exact: true })
+        .click();
       await expect(
-        page.getByRole("button", { name: "Compare locations", exact: true }),
+        page.getByRole("button", { name: "Compare 2 units", exact: true }),
       ).toBeDisabled();
       await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
@@ -185,7 +285,7 @@ test("only a matching non-demo registry scan can mount the Matterport view", asy
       },
     }),
   );
-  await page.goto("/projects/houston-coffee/workspace");
+  await page.goto("/projects/houston-coffee/workspace?site=201%3A301");
   await expect(
     page.getByRole("button", { name: "View interior", exact: true }),
   ).toBeVisible();
@@ -213,11 +313,118 @@ test("unavailable inventory never substitutes example properties", async ({
     page.getByRole("group", { name: "Matching locations" }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Compare locations", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("button", { name: "Compare 2 units", exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByText("Montrose storefront", { exact: true }),
   ).toHaveCount(0);
+});
+
+test("unit labels, explicit pair selection and failed comparison retain exactly the chosen source facts", async ({
+  page,
+}) => {
+  const { search } = await services(page);
+  const a = structuredClone(search.candidates[0]),
+    b = structuredClone(search.candidates[1]),
+    c = structuredClone(search.candidates[0]);
+  b.propertyId = a.propertyId;
+  b.candidate.address = a.candidate.address;
+  b.candidate.floorAreaSqFt.value = 1600;
+  b.baseRentCents.value = 190000;
+  c.candidate.id = "203:303";
+  c.propertyId = "103";
+  c.listingId = "203";
+  c.candidate.address = "303 Other St";
+  search.candidates = [b, c, a];
+  search.totalMatched = 3;
+  const attempts: string[][] = [];
+  await page.route("**/api/comparisons", (route) => {
+    attempts.push(route.request().postDataJSON().candidateIds);
+    return route.fulfill({
+      status: 503,
+      json: { message: "Test service unavailable" },
+    });
+  });
+  await page.goto("/projects/houston-coffee/workspace");
+  await expect(page.getByText("Comparison 0/2", { exact: true })).toBeVisible();
+  await showList(page);
+  await expect(
+    page.getByRole("checkbox", {
+      name: "Compare 101 Invented St · Unit 1",
+      exact: true,
+    }),
+  ).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "View 101 Invented St · Unit 2", exact: true })
+    .click();
+  const property = page.getByRole("region", { name: "Selected location" });
+  await expect(property).toContainText("101 Invented St · Unit 2");
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  await property
+    .getByRole("region", { name: "Spaces at this location" })
+    .getByRole("button", { name: /^Unit 1\b/ })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  const tray = page.getByRole("region", { name: "Comparison shortlist" });
+  await expect(tray).toContainText("Comparison 2/2");
+  await expect(tray).toContainText("101 Invented St · Unit 1");
+  await expect(tray).toContainText("101 Invented St · Unit 2");
+  expect(attempts).toEqual([]);
+  await page
+    .getByRole("button", { name: "Choose another unit", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "View 303 Other St · Unit 1", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Add to comparison", exact: true }),
+  ).toBeDisabled();
+  await expect(property).toContainText("Remove one to add this unit");
+  await tray
+    .getByRole("button", {
+      name: "Remove 101 Invented St · Unit 1",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", { name: "Add to comparison", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Compare 2 units", exact: true })
+    .click();
+  const comparison = page.getByRole("region", { name: "Unit comparison" });
+  await expect(comparison).toContainText("101 Invented St · Unit 2");
+  await expect(comparison).toContainText("303 Other St · Unit 1");
+  await expect(
+    page.getByRole("textbox", { name: "Message the BizBox assistant" }),
+  ).toBeVisible();
+  expect(attempts).toEqual([]);
+  await page
+    .getByRole("button", { name: "Run comparison", exact: true })
+    .click();
+  await expect(comparison.getByRole("alert")).toContainText(
+    "Comparison unavailable",
+  );
+  expect(attempts).toEqual([["202:302", "203:303"]]);
+  await expect(
+    comparison.getByRole("table", {
+      name: "Source listing facts for the two chosen units",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Location comparison results" }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Retry comparison", exact: true })
+    .click();
+  await expect.poll(() => attempts.length).toBe(2);
+  expect(attempts[1]).toEqual(["202:302", "203:303"]);
+  await page.screenshot({ path: "/tmp/bizbox-unit-comparison-facts.png" });
+  await expectNoA11yViolations(page);
 });
 
 // Desktop-only readiness regression. All founder answers and API payloads below are
@@ -238,7 +445,7 @@ const inventedBrief = (city = "Houston") => ({
       requirements: "None",
     }).map(([key, value]) => [key, { value, origin: "founder" }]),
   ),
-  messages: [],
+  messages: [] as { role: "agent" | "founder"; text: string }[],
 });
 async function readinessServices(
   page: Page,
@@ -269,6 +476,66 @@ async function readinessServices(
 
 test.describe("inventory readiness desktop", () => {
   test.use({ viewport: { width: 1366, height: 900 } });
+  test("completed brief replaces only the obsolete opener in Text and Voice presentation", async ({
+    page,
+  }) => {
+    const brief = inventedBrief();
+    const opener =
+      "What kind of business are you opening? Describe the concept in a sentence or two.";
+    const saved = {
+      ...brief,
+      messages: [{ role: "agent" as const, text: opener }],
+    };
+    await readinessServices(page, saved);
+    await page.route("**/api/sites", (route) =>
+      route.fulfill({ status: 503, json: {} }),
+    );
+    await page.goto("/projects/houston-coffee/workspace");
+    const note = page.getByRole("note", { name: "Saved brief" });
+    await expect(note).toHaveText(
+      "Coffee shop · Houston · Rent limit $4,500/mo",
+    );
+    await expect(page.getByText(opener, { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Message the BizBox assistant" }),
+    ).toHaveAttribute("placeholder", "Ask about your saved brief…");
+    await expect(
+      page.getByText(
+        "The BizBox assistant is offline. Your brief can still be edited in Intake.",
+      ),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Voice", exact: true }).click();
+    await page.getByText("Conversation", { exact: true }).click();
+    await expect(note).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("sitework:intake:v1:houston-coffee")!)
+            .messages,
+      ),
+    ).toEqual(saved.messages);
+    await page.getByRole("tab", { name: "Text", exact: true }).click();
+    await page.evaluate(() => {
+      const key = "sitework:intake:v1:houston-coffee";
+      const session = JSON.parse(localStorage.getItem(key)!);
+      session.messages.push(
+        { role: "founder", text: "Keep this actual question" },
+        { role: "agent", text: "Keep this actual reply" },
+      );
+      localStorage.setItem(key, JSON.stringify(session));
+      window.dispatchEvent(
+        new CustomEvent("sitework:intake-updated", { detail: { key } }),
+      );
+    });
+    await expect(page.getByRole("log", { name: "Conversation" })).toContainText(
+      "Keep this actual question",
+    );
+    await expect(page.getByRole("log", { name: "Conversation" })).toContainText(
+      "Keep this actual reply",
+    );
+    await expect(note).toHaveCount(0);
+    await expectNoA11yViolations(page);
+  });
   test("missing or unsupported brief never requests inventory and offers the brief action", async ({
     page,
   }) => {
@@ -321,6 +588,7 @@ test.describe("inventory readiness desktop", () => {
       .getByRole("region", { name: "Location and interior workspace" })
       .getByRole("button", { name: "Retry", exact: true })
       .click();
+    await showList(page);
     await expect(
       page.getByRole("group", { name: "Matching locations" }),
     ).toBeVisible();
@@ -383,9 +651,17 @@ test.describe("inventory readiness desktop", () => {
     });
     await page.goto("/projects/houston-coffee/workspace");
     const locations = page.getByRole("group", { name: "Matching locations" });
+    await showList(page);
     await locations
-      .getByRole("button", { name: "View 202 Invented St", exact: true })
+      .getByRole("button", {
+        name: "View 202 Invented St · Unit 1",
+        exact: true,
+      })
       .click();
+    await expect(
+      page.getByRole("region", { name: "Selected location" }),
+    ).toContainText("202 Invented St");
+    await showChat(page);
     await page
       .getByRole("textbox", { name: "Message the BizBox assistant" })
       .fill("Retain this draft");
@@ -424,10 +700,12 @@ test.describe("inventory readiness desktop", () => {
           r.limit === 8 && Object.keys(r).sort().join(",") === "limit,profile",
       ),
     ).toBe(true);
+    // The chat is the consultant dock, so the property pane never closed.
     await expect(
       page.getByRole("region", { name: "Selected location" }),
     ).toContainText("202 Invented St");
     await expect(page).toHaveURL(/site=202%3A302/);
+    await showChat(page);
     await expect(
       page.getByRole("textbox", { name: "Message the BizBox assistant" }),
     ).toHaveValue("Retain this draft");
@@ -444,17 +722,127 @@ test.describe("inventory readiness desktop", () => {
     await expect.poll(() => requests.length).toBe(3);
     await expect(
       page.getByRole("region", { name: "Selected location" }),
-    ).toContainText("101 Invented St");
-    await expect(page).toHaveURL(/site=201%3A301/);
+    ).toHaveCount(0);
+    await expect(page).not.toHaveURL(/[?&]site=/);
+    await showList(page);
     await expect(
       locations.getByRole("button", {
-        name: "View 202 Invented St",
+        name: "View 202 Invented St · Unit 1",
         exact: true,
       }),
     ).toHaveCount(0);
+    await showChat(page);
     await expect(
       page.getByRole("textbox", { name: "Message the BizBox assistant" }),
     ).toHaveValue("Retain this draft");
     await expectNoA11yViolations(page);
   });
 });
+
+for (const width of [1366, 500, 640, 820]) {
+  test.describe(`map-first desktop preview ${width}`, () => {
+    test.use({ viewport: { width, height: 900 } });
+    if (width === 1366)
+      test("keyboard discovery moves focus into property details and returns to the map action", async ({
+        page,
+      }) => {
+        await services(page);
+        await page.goto("/projects/houston-coffee/workspace");
+        const show = page.getByRole("button", { name: /^Show list/ });
+        await show.focus();
+        await page.keyboard.press("Enter");
+        const option = page.getByRole("button", {
+          name: "View 101 Invented St · Unit 1",
+          exact: true,
+        });
+        await option.focus();
+        await page.keyboard.press("Enter");
+        const property = page.getByRole("region", {
+          name: "Selected location",
+        });
+        await expect(property).toBeFocused();
+        await property
+          .getByRole("button", { name: "Close property details" })
+          .focus();
+        await page.keyboard.press("Enter");
+        await expect(show).toBeFocused();
+        await expect(property).toHaveCount(0);
+      });
+    test("arrival is clear; explicit list selection reveals grouped facts and Close clears a deep link", async ({
+      page,
+    }) => {
+      const { search, posts } = await services(page);
+      search.candidates[1].propertyId = search.candidates[0].propertyId;
+      search.candidates[1].candidate.floorAreaSqFt.value = 1600;
+      search.candidates[1].baseRentCents.value = 190000;
+      await page.route("**/api/sites", (route) =>
+        route.fulfill({ json: search }),
+      );
+      await page.goto("/projects/houston-coffee/workspace");
+      await expect(
+        page.getByRole("button", { name: "Show list (2 units)" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("region", { name: "Selected location" }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("group", { name: "Matching locations" }),
+      ).toHaveCount(0);
+      await expect(page.locator("[data-map-sheet]")).toHaveCount(0);
+      await showList(page);
+      await expect(
+        page.getByText("2 of 2 matching units shown", { exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("button", {
+          name: "View 101 Invented St · Unit 1",
+          exact: true,
+        })
+        .click();
+      const property = page.getByRole("region", { name: "Selected location" });
+      await expect(property).toBeVisible();
+      await expect(property).toContainText("Asking rent / month");
+      const units = property.getByRole("region", {
+        name: "Spaces at this location",
+      });
+      await expect(units.getByRole("button")).toHaveCount(2);
+      await units.getByRole("button", { name: /1,600 sq ft/ }).click();
+      await expect(page).toHaveURL(/site=202%3A302/);
+      await expect(property).toContainText("202 Invented St");
+      const viewport = await page.locator("[data-map-viewport]").boundingBox();
+      const panel = await property.boundingBox();
+      expect(viewport!.height).toBeGreaterThan(350);
+      const visualization = await page
+        .locator("[data-map-viewport]")
+        .evaluate((element) =>
+          element.parentElement!.getBoundingClientRect().toJSON(),
+        );
+      expect(Math.abs(visualization.height - viewport!.height)).toBeLessThan(2);
+      if (width <= 850)
+        expect(panel!.y).toBeGreaterThanOrEqual(viewport!.y + viewport!.height);
+      if (width > 850)
+        expect(panel!.x).toBeGreaterThanOrEqual(viewport!.x + viewport!.width);
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({ path: `/tmp/bizbox-map-first-${width}.png` });
+      await property
+        .getByRole("button", { name: "Close property details" })
+        .click();
+      await expect(page).not.toHaveURL(/[?&]site=/);
+      await expect(property).toHaveCount(0);
+      // Closing an initially server-rendered explicit URL must not revive its prop.
+      await page.goto("/projects/houston-coffee/workspace?site=201%3A301");
+      await expect(property).toContainText("101 Invented St");
+      await property
+        .getByRole("button", { name: "Close property details" })
+        .click();
+      await expect(page).not.toHaveURL(/[?&]site=/);
+      await expect(property).toHaveCount(0);
+      expect(posts).toHaveLength(0);
+      await expectNoA11yViolations(page);
+    });
+  });
+}

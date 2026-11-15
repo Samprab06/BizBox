@@ -1,0 +1,178 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { simulateDay } from "@/lib/sim/engine";
+import { hourlySeries } from "@/lib/sim/hourly";
+import { computeMonthlyEconomics } from "@/lib/sim/economics";
+import { buildFixtureSchedule } from "@/lib/sim/fixtures/arrival-schedule";
+import type { SiteConfig } from "@/lib/sim/contracts";
+import { runPreview, type PreviewInput } from "./simulation-preview";
+
+const INPUT: PreviewInput = {
+  siteId: "preview-silver-lake",
+  category: "coffee",
+  dayType: "weekday",
+  seed: 42,
+  stations: 2,
+  staff: 2,
+  avgTicket: 6.5,
+  monthlyRent: 4500,
+  areaSqFt: 1450,
+  buildout: 80000,
+  dailyCustomers: 180,
+  openMin: 420,
+  closeMin: 1080,
+};
+
+// Independent canonical configuration for this coffee input. The preview must not
+// silently alter ticket, costs, capacity, hours, or the 22/8 monthly calendar.
+const CONFIG: SiteConfig = {
+  hours: {
+    weekday: { openMin: 420, closeMin: 1080 },
+    weekend: { openMin: 420, closeMin: 1080 },
+  },
+  stations: { planned: 2, usableSf: 1450, sfPerStation: 100 },
+  service: { meanServiceMin: 4 },
+  prices: { avgTicketUsd: 6.5 },
+  staff: { headcount: 2, wageUsdPerHour: 15.24 },
+  costs: { cogsPctOfRevenue: 0.3 },
+  lease: {
+    sf: 1450,
+    askingRentUsdPerSfYear: (4500 * 12) / 1450,
+    tripleNet: false,
+    opexUsdPerSfYear: 0,
+    buildoutUsd: 80000,
+    leaseTermMonths: 36,
+  },
+  calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("offline simulation preview", () => {
+  it("is deterministic, cloneable, and does not mutate the caller", () => {
+    const original = structuredClone(INPUT);
+    const first = runPreview(INPUT);
+    expect(runPreview(INPUT)).toEqual(first);
+    expect(INPUT).toEqual(original);
+    expect(structuredClone(first)).toEqual(first);
+    expect(first.provenance.kind).toBe("example");
+    expect(first.provenance.label).toMatch(/synthetic|example/i);
+  });
+
+  it("returns canonical engine events, hourly aggregation, and two-day-type economics", () => {
+    const weekday = simulateDay(
+      buildFixtureSchedule({ ...INPUT, dayType: "weekday" }),
+      CONFIG,
+    );
+    const weekend = simulateDay(
+      buildFixtureSchedule({ ...INPUT, dayType: "weekend" }),
+      CONFIG,
+    );
+    const result = runPreview(INPUT);
+    expect(result.day).toEqual(weekday.metrics);
+    expect(result.events).toEqual(weekday.events);
+    expect(result.hourly).toEqual(hourlySeries(weekday.events, weekday.metrics));
+    expect(result.dayTypes).toEqual({
+      weekday: weekday.metrics,
+      weekend: weekend.metrics,
+    });
+    expect(result.monthly).toEqual(
+      computeMonthlyEconomics(CONFIG, {
+        weekday: weekday.metrics,
+        weekend: weekend.metrics,
+      }),
+    );
+    expect(result.monthly.costs.baseRentUsd).toBeCloseTo(4500, 9);
+    expect(result.monthly.costs.staffHours).toBe(660);
+    expect(result.hourly.reduce((sum, hour) => sum + hour.served, 0)).toBe(
+      result.day.served,
+    );
+  });
+
+  it("selects weekend replay while keeping both monthly day types", () => {
+    const result = runPreview({ ...INPUT, dayType: "weekend" });
+    expect(result.day).toEqual(result.dayTypes.weekend);
+    expect(result.day.dayType).toBe("weekend");
+    const weekday = runPreview(INPUT);
+    expect(result.monthly).toEqual(weekday.monthly);
+    expect(result.events).not.toEqual(weekday.events);
+  });
+
+  it("charges additional staff labor without inventing staff throughput", () => {
+    const baseline = runPreview(INPUT);
+    const staffed = runPreview({ ...INPUT, staff: 3 });
+    expect(staffed.day).toEqual(baseline.day);
+    expect(staffed.events).toEqual(baseline.events);
+    expect(staffed.hourly).toEqual(baseline.hourly);
+    expect(staffed.monthly.costs.laborUsd - baseline.monthly.costs.laborUsd)
+      .toBeCloseTo(5029.2, 8);
+    expect(staffed.monthly.contributionUsd - baseline.monthly.contributionUsd)
+      .toBeCloseTo(-5029.2, 8);
+  });
+
+  it("uses stations for service capacity", () => {
+    const one = runPreview({ ...INPUT, stations: 1, dailyCustomers: 800 });
+    const four = runPreview({ ...INPUT, stations: 4, dailyCustomers: 800 });
+    expect(one.day.stations).toBe(1);
+    expect(four.day.stations).toBe(4);
+    expect(four.day.served).toBeGreaterThan(one.day.served);
+  });
+
+  it.each(["coffee", "quick_food", "salon", "fitness"] as const)(
+    "supports the authored %s category with conserved customer outcomes",
+    (category) => {
+      const result = runPreview({ ...INPUT, category });
+      expect(result.day.arrivals).toBe(
+        result.day.served + result.day.abandoned +
+          result.day.inServiceAtClose + result.day.waitingAtClose,
+      );
+      expect(result.events.filter((event) => event.type === "completion"))
+        .toHaveLength(result.day.served);
+      expect(result.hourly).toHaveLength(24);
+    },
+  );
+
+  it("allows zero authored demand and reports real fixed-cost losses", () => {
+    const result = runPreview({ ...INPUT, dailyCustomers: 0 });
+    expect(result.day.arrivals).toBe(0);
+    expect(result.events).toEqual([]);
+    expect(result.day.meanWaitMin).toBeNull();
+    expect(result.monthly.revenueUsd).toBe(0);
+    expect(result.monthly.contributionUsd).toBeCloseTo(-16780.6222222222, 7);
+  });
+
+  it.each([
+    ["missing fields", {}],
+    ["customer limit", { ...INPUT, dailyCustomers: 1001 }],
+    ["station limit", { ...INPUT, stations: 13 }],
+    ["staff limit", { ...INPUT, staff: 13 }],
+    ["fractional staff", { ...INPUT, staff: 1.5 }],
+    ["unusable area", { ...INPUT, areaSqFt: 50 }],
+    ["station floor limit", { ...INPUT, areaSqFt: 150 }],
+    ["overnight hours", { ...INPUT, openMin: 1200, closeMin: 420 }],
+    ["nonfinite ticket", { ...INPUT, avgTicket: Infinity }],
+    ["negative rent", { ...INPUT, monthlyRent: -1 }],
+    ["invalid category", { ...INPUT, category: "other" }],
+    ["extra field", { ...INPUT, apiKey: "not-accepted" }],
+  ])("rejects %s before simulation", (_name, input) => {
+    expect(() => runPreview(input)).toThrow();
+  });
+});
+
+describe("simulation worker message boundary", () => {
+  it("returns correlated cloneable results and errors for invalid inputs", async () => {
+    const responses: unknown[] = [];
+    vi.stubGlobal("postMessage", (value: unknown) => responses.push(value));
+    vi.stubGlobal("onmessage", null);
+    await import("./simulation-worker");
+    const dispatch = globalThis.onmessage as unknown as
+      (event: MessageEvent<unknown>) => void;
+    dispatch({ data: { id: "run-1", input: INPUT } } as MessageEvent<unknown>);
+    dispatch({ data: { id: "bad-1", input: { ...INPUT, stations: 99 } } } as
+      MessageEvent<unknown>);
+    expect(responses[0]).toEqual({ id: "run-1", result: runPreview(INPUT) });
+    expect(responses[1]).toEqual({ id: "bad-1", error: expect.any(String) });
+    expect(structuredClone(responses)).toEqual(responses);
+  });
+});

@@ -528,6 +528,7 @@ export function useStoredComparison(
 export function useLiveComparison(
   projectId: string,
   initialComparisonId?: string,
+  options: { manualSelection?: boolean } = {},
 ): LiveComparisonController {
   const [attempt, setAttempt] = useState(0);
   const search = useSiteSearch(projectId, attempt);
@@ -626,12 +627,17 @@ export function useLiveComparison(
     const ids = candidateKey ? candidateKey.split(",") : [];
     const first = previousCandidates.current === null;
     previousCandidates.current = candidateKey;
-    setSelectedIdsState((current) =>
-      first
-        ? restoreShortlist(readShortlist(localStorage, projectId), ids)
-        : current.filter((id) => ids.includes(id)),
-    );
-  }, [candidateKey, search.state.mode, projectId]);
+    setSelectedIdsState((current) => {
+      if (!first) return current.filter((id) => ids.includes(id));
+      const saved = readShortlist(localStorage, projectId);
+      const restored = restoreShortlist(saved, ids);
+      // HAC-162: the client workspace starts with nothing chosen and compares at most two
+      // units, so it restores only a saved shortlist that already fits that limit.
+      if (options.manualSelection)
+        return saved && restored.length <= 2 ? restored : [];
+      return restored;
+    });
+  }, [candidateKey, search.state.mode, projectId, options.manualSelection]);
   const retry = () => {
     setFailure("");
     setAttempt((n) => n + 1);
@@ -678,7 +684,9 @@ export function useLiveComparison(
     } catch {
       if (mounted.current && operation.current === controller)
         setFailure(
-          "Live comparison could not be run. Showing example data; retry to try again.",
+          options.manualSelection
+            ? "Comparison unavailable. Your selected units are unchanged."
+            : "Live comparison could not be run. Showing example data; retry to try again.",
         );
     } finally {
       if (operation.current === controller) {

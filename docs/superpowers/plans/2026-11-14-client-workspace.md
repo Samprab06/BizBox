@@ -63,3 +63,33 @@ Akshar requested the real returned locations in Cesium, specifically from above.
 - [x] Audit all four captured real CoStar coordinates against Cesium entity round-trips (error below1e-10degrees), identity tileset matrix and overhead orientation. Fresh live browser tag selection confirms expected site/URL/details and stable canvas.
 - [x] Diagnose transient same-host Vercel edge reset read-only. Restore owned4201 preview via temporary process-local DNS preference, normal TLS retained. No repository transport workaround or cached-data fallback.
 - [x] Final exact-source checks passed: lint/typecheck/build, 1,416 unit tests /43 existing skips, 11 affected desktop Chromium regressions. Actual live address-tag selection and overview checked; coordinate audit documented. Local commit only; no publication authorized.
+
+## Houston map-first exploration
+
+Akshar explicitly narrowed the next pass to Houston onboarding → real matching pins → click for details. No agentic-chat integration, simulation, analytics or LA provider work is part of this pass.
+
+- [x] Default arrival shows the map and genuine returned property tags, without an automatic selection, property sheet or card carousel.
+- [x] Explicit pin/list selection opens actual property/unit facts in a dedicated side panel; close clears selection and restores exploration. Coincident units share one pin and are distinguished by source rent/size.
+- [x] Optional results list and Property/Chat controls preserve the existing conversation, and remain usable inside the narrow desktop Codex preview container without covering the map. This is desktop-window behavior, not resumed phone work.
+- [x] Changed criteria invalidate stale selection; no hardcoded sample locations, fabricated coordinates or expanded search contracts. Retain the existing eight-space response limit and distinguish shown results/property groups from total matched spaces.
+- [x] Verify changed Houston briefs/categories, native actual-user-tab pin/details flow, full desktop flow and exact-source checks. Preserve unrelated onboarding/prototype files; local delivery only.
+
+Frontend specialist owns workspace components/CSS and affected regressions. Manager owns review, exact-source validation, native browser QA, documentation and handoff. Existing city annotation layer, Vexcel provider/budgets, runtime and data contracts remain unchanged.
+
+Final exact-source evidence: lint/typecheck/build pass, 1,416 unit tests pass (43 existing skips), and 74 desktop Chromium cases pass (2 existing skips). Two legacy navigation expectations were updated because this workspace no longer propagates a fictional default site. Native actual IAB tab9 verified clear arrival, pin-to-property selection, grouped-unit rent/size/ID changes, close/query clearing and optional8of115list. Native screenshots: `/tmp/bizbox-houston-map-first-iab.png` and `/tmp/bizbox-houston-property-details-iab.png`. These use live source data, not API fixtures.
+
+## Saved context and expanded-window repair
+
+- [x] Reproduce actual988px expanded IAB clipping after compact layout, then verify corrected500→988transition and all four real property tags. Observe actual map/toolbar and synchronize Cesium sizing before overhead fitting; preserve manual input and one Viewer.
+- [x] Suppress only obsolete leading intake opener in workspace after valid completed brief; retain original history, actual offline status and Text/Voice continuity. Show saved context without a synthetic reply.
+- [x] Reproduce offline-onboarding request bootstrap and stale-draft bugs with two failing tests. Include current representable founder answers in message requests through the existing API schema; preserve form-only pending-edit synchronization.
+- [x] Exact-source lint/typecheck/build passed; 1,423 unit tests /43 existing skips and 76 desktop Chromium /2 existing skips passed. Local delivery only. Source imagery coverage and local consultant configuration remain explicit limitations. No new provider, model call, runtime or production work.
+
+## Continuous Houston geographic context
+
+- [x] Replace black overview gaps with real geographic tiles from the already-used OpenFreeMap source, rendered within the existing Cesium Viewer.
+- [x] Hide Vexcel above 10 km camera height; preserve real close-up mesh and exact source-coordinate pins. Use a -200 m display-only floor below negative mesh elevations; never feed it to simulation.
+- [x] Bound context tile cache/concurrency and dispose requests; retain base/pins if Vexcel is missing or fails, and settle unavailable close-up coverage honestly.
+- [x] Verify source decoding, lifecycle/LOD and actual IAB rendering; lint/typecheck/build passed, 1,429 unit tests passed (43 existing skips), and 76 desktop Chromium cases passed (2 existing skips). After the single-line first-tile recovery correction, rerun affected provider tests, lint/typecheck/build and desktop suite.
+
+No new vendor, dependency, API key, data contract or runtime integration. Manager owns documentation and final verification.
