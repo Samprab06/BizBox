@@ -1,6 +1,6 @@
 # Replay 3D view: manual script
 
-Ticket: HAC-36 · Last run: not yet run · App URL: https://hackprincetonweb.vercel.app
+Ticket: HAC-36 · Last run: not yet run · App URL: https://usebizbox.app
 
 Playwright checks replay determinism, controls, labels and the no-WebGL fallback
 (`tests/e2e/replay-determinism.spec.ts`). This script covers what only looking can check:
@@ -8,7 +8,7 @@ the 3D canvas itself.
 
 ## Preconditions
 
-- App running at https://hackprincetonweb.vercel.app (or local `pnpm start` on
+- App running at https://usebizbox.app (or local `pnpm start` on
   http://localhost:3000; use that URL in every step instead).
 - Browser and viewport: Chrome with hardware acceleration on, 1440x900.
 - Starting state: a fresh tab. No sign-in is needed.
