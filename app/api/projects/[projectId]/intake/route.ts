@@ -6,7 +6,6 @@ import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
 import { createPostgresIntakeUiLookups } from "./ui-lookups";
 import { createPostgresJobsPort } from "@/lib/agent/job-tools-postgres";
-import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +13,6 @@ export const maxDuration = 30;
 
 export const POST = createIntakeHandler({
   viewContextLookups: createPostgresViewContextLookups(),
-  onCompleted: createIntakeThreadRecorder(),
   projectExists: async (projectId) => {
     const rows = await getDb()
       .select({ id: projects.id })
