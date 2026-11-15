@@ -106,6 +106,11 @@ export function PreparedVideo({
   useEffect(() => {
     const element = video.current;
     if (!mounted || !element) return;
+    if (position.current > 0) {
+      // Restoring a paused/end frame needs metadata even without calling play.
+      element.preload = "metadata";
+      element.load();
+    }
     return () => {
       position.current = element.currentTime || position.current;
       element.pause();
@@ -133,6 +138,8 @@ export function PreparedVideo({
       return;
     }
     let closed = false;
+    // WebKit can leave dynamically mounted sources idle with preload="none".
+    if (element.readyState === HTMLMediaElement.HAVE_NOTHING) element.load();
     void element.play().catch(() => {
       if (!closed) setBlocked(true);
     });
@@ -140,7 +147,7 @@ export function PreparedVideo({
       closed = true;
       element.pause();
     };
-  }, [mounted, running, replayRevision, loop]);
+  }, [mounted, running, replayRevision, loop, media.mp4, media.webm]);
   return (
     <div
       className={`${styles.media} ${fit === "contain" ? styles.contain : ""}`}
@@ -160,6 +167,7 @@ export function PreparedVideo({
       />
       {mounted && (
         <video
+          key={media.mp4}
           ref={video}
           className={styles.video}
           aria-label={label}
@@ -170,14 +178,13 @@ export function PreparedVideo({
           poster={media.poster}
           onLoadedMetadata={(event) => {
             const element = event.currentTarget;
+            // Seek inside the last frame: the exact end timestamp can have no
+            // decodable sample. The finished flag retains completed progress.
             if (position.current > 0)
-              element.currentTime =
-                finished.current && !loop
-                  ? element.duration
-                  : Math.min(
-                      position.current,
-                      Math.max(0, element.duration - 0.05),
-                    );
+              element.currentTime = Math.min(
+                position.current,
+                Math.max(0, element.duration - 0.05),
+              );
             callbacks.current.onProgress?.(
               finished.current && !loop ? media.duration : element.currentTime,
             );
