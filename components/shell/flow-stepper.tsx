@@ -65,7 +65,7 @@ const badge: Record<StepperStatus, string> = {
 export function FlowStepperView({ items }: { items: readonly StepperItem[] }) {
   return (
     <nav aria-label="Progress" className="min-w-0" data-flow-stepper="">
-      <ol className="flex min-w-0 items-center gap-0.5 sm:gap-1">
+      <ol className="flex min-w-0 items-center gap-1">
         {items.map((item, index) => {
           const content = (
             <>
@@ -82,7 +82,7 @@ export function FlowStepperView({ items }: { items: readonly StepperItem[] }) {
                 className={cn(
                   "truncate",
                   item.status === "current"
-                    ? "max-w-[9rem] font-semibold text-ink sm:max-w-none"
+                    ? "min-w-0 font-semibold text-ink"
                     : "sr-only lg:not-sr-only",
                 )}
               >
@@ -93,8 +93,13 @@ export function FlowStepperView({ items }: { items: readonly StepperItem[] }) {
               )}
             </>
           );
-          const shape =
-            "inline-flex min-h-9 min-w-0 items-center gap-2 rounded-full px-1.5 py-1 text-sm lg:px-2.5";
+          // Phones: bare number badges, so the current label has the room.
+          const shape = cn(
+            "inline-flex min-h-9 min-w-0 items-center gap-1.5 rounded-full py-1 text-[13px] sm:gap-2 sm:text-sm",
+            item.status === "current"
+              ? "pl-1 pr-2 sm:pr-2.5 lg:pl-1.5"
+              : "px-0.5 sm:px-1.5 lg:px-2.5",
+          );
           return (
             <li
               key={item.id}

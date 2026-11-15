@@ -30,7 +30,7 @@ export default async function ProjectLayout({
       {/* Glass header: the brand and, for a known project, the Scene 1 progress stepper,
           which is the flow's only back/forth navigation. */}
       <header className="sticky top-0 z-30 h-16 border-b border-line/70 bg-paper/75 backdrop-blur-md supports-[backdrop-filter]:bg-paper/60">
-        <div className="flex h-full min-w-0 items-center gap-3 px-4 sm:gap-6 sm:px-8">
+        <div className="flex h-full min-w-0 items-center gap-2 px-3 sm:gap-6 sm:px-8">
           <Link
             href="/"
             className={cn("inline-flex shrink-0 items-center rounded-control", focusRing)}
@@ -38,7 +38,7 @@ export default async function ProjectLayout({
             <BrandLogo
               onDark
               priority
-              className="h-6 w-auto sm:h-8 print:invert"
+              className="h-5 w-auto sm:h-8 print:invert"
             />
           </Link>
           {project && (
