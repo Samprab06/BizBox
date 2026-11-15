@@ -101,6 +101,16 @@ test("the displayed workspace site accompanies 'compare this one' in the real ch
     });
   });
   await page.goto("/projects/houston-coffee/workspace");
+  // HAC-162 leaves arrival unselected. The chat context must follow the unit
+  // the founder actually opens, rather than an automatic first-listing choice.
+  await expect(
+    page.getByRole("region", { name: "Selected location" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: /^Show list/ }).click();
+  await page
+    .getByRole("group", { name: "Matching locations" })
+    .getByRole("button", { name: /^View 100 Invented Street/ })
+    .click();
   await openConsultant(page);
   await expect(
     page.getByRole("complementary", { name: "Assistant" }),
