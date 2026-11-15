@@ -302,8 +302,7 @@ export function searchSites(
         ]
           .map((key) => text(record(property.data.primaryAddress)[key]))
           .filter(Boolean)
-          .join(" ") ||
-        `Address unavailable — CoStar property ${property.id}, ${property.city}`,
+          .join(" ") || `Address not listed, ${property.city}`,
       city: request.profile.city,
       latitude: assumed(
         property.latitude,
