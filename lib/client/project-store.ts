@@ -22,6 +22,8 @@ const SavedSchema = z.object({
    * A different key for the same units makes the stored result outdated.
    */
   tweaksKey: z.string().optional(),
+  /** The candidate ids the run requested; the server may have modeled fewer. */
+  requestedIds: z.array(z.string()).optional(),
 });
 export type SavedComparison = z.infer<typeof SavedSchema>;
 

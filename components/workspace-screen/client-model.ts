@@ -4,6 +4,7 @@ import {
   type LiveComparisonPayload,
 } from "@/lib/client/live-comparison";
 import type { InteriorResponse } from "@/lib/contracts/interior";
+import { metricText } from "./model";
 import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import {
   groupListingMarkers,
@@ -82,6 +83,93 @@ export function comparisonMatchesSelection(
 ) {
   return payload ? payloadMatches(payload, ids, tweaksKey) : false;
 }
+
+/** Why the finished comparison on screen is not for the current choices, or null when it is. */
+export type Staleness = "answers" | "selection" | null;
+
+/** The latest finished (non-synthetic) comparison, whatever the current selection. */
+export function finishedComparison(
+  payload: LiveComparisonPayload | null,
+): LiveComparisonPayload | null {
+  return payload?.comparison?.synthetic === false ? payload : null;
+}
+
+export function comparisonStaleness(
+  payload: LiveComparisonPayload | null,
+  ids: readonly string[],
+  tweaksKey = "",
+): Staleness {
+  const finished = finishedComparison(payload);
+  if (!finished) return null;
+  if (finished.outdated) return "answers";
+  return payloadMatches(finished, ids, tweaksKey) ? null : "selection";
+}
+
+/** What the founder sees after a run that does not match the current choices. */
+export function staleMessage(staleness: Staleness): string {
+  return staleness === "answers"
+    ? "Your answers changed during the run. Rerun to update."
+    : staleness === "selection"
+      ? "You changed the selection or settings since this run."
+      : "";
+}
+
+const NOT_MODELED_REASONS: Record<string, string> = {
+  SITE_INPUT_UNKNOWN: "the listing is missing size, rent or location details",
+  INSUFFICIENT_AREA: "the space is too small for your setup",
+  CANDIDATE_UNAVAILABLE: "the listing is no longer available",
+};
+
+export type NotModeledUnit = { id: string; address: string; reason: string };
+
+/** Requested units the server could not model, each with a plain reason. */
+export function notModeledUnits(
+  payload: LiveComparisonPayload,
+  candidates: readonly WorkspaceCandidate[],
+): NotModeledUnit[] {
+  const modeled = new Set(payload.result.sites.map((site) => site.siteId));
+  return (payload.requestedIds ?? [])
+    .filter((id) => !modeled.has(id))
+    .map((id) => {
+      const entry = candidates.find((value) => value.candidate.id === id);
+      const code = (payload.assembly?.findings ?? []).find(
+        (finding) => finding.siteId === id && finding.code in NOT_MODELED_REASONS,
+      )?.code;
+      return {
+        id,
+        address: entry ? unitAddress(entry, candidates) : "Saved unit",
+        reason: (code && NOT_MODELED_REASONS[code]) ?? "it couldn't be modeled",
+      };
+    });
+}
+
+/** Plain-language notes for a listing; flags that are noise or unknown are dropped. */
+export function listingNotes(entry: WorkspaceCandidate): string[] {
+  const text: Record<string, string> = {
+    endcap_position: "End-cap unit",
+    frontage_building_level:
+      "Frontage is for the whole building, not just this unit",
+    nnn_opex_estimated:
+      "Triple-net lease: taxes, insurance and upkeep are extra (estimated)",
+    nnn_opex_override: "Using your estimate for extra lease costs",
+    opex_unknown: "Extra operating costs aren't listed",
+    opex_assumed_included: "Operating costs assumed included in rent",
+  };
+  return [
+    ...new Set(
+      entry.flags.flatMap((flag) => (text[flag] ? [text[flag]] : [])),
+    ),
+  ];
+}
+
+export const rentText = (entry: WorkspaceCandidate) =>
+  entry.baseRentCents.value === null
+    ? "Not listed"
+    : metricText(entry.baseRentCents) + "/mo";
+export const areaText = (entry: WorkspaceCandidate) =>
+  entry.candidate.floorAreaSqFt.value === null
+    ? "Not listed"
+    : metricText(entry.candidate.floorAreaSqFt) + " sq ft";
 
 export function scannedInterior(value: InteriorResponse | null) {
   return value?.kind === "scan" &&

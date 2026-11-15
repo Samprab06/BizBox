@@ -71,6 +71,12 @@ export type LiveComparisonPayload = {
    * "" or absent means none.
    */
   tweaksKey?: string;
+  /**
+   * The candidate ids sent in the POST. The server may model fewer units than were requested
+   * (see `assembly.findings`); a stored comparison matches the selection by these ids.
+   * Absent for comparisons saved before this field existed.
+   */
+  requestedIds?: string[];
 };
 
 /** Scene 1: what the running comparison is doing, for the progress panel. */
@@ -79,6 +85,15 @@ export type ComparisonRun = {
   demandSource: DemandSource;
   /** `Date.now()` when the run began. */
   startedAt: number;
+};
+
+/** Extra facts about a flow event, for the screen's own decisions (never sent anywhere). */
+export type FlowEventInfo = {
+  /**
+   * `comparison_finished` only: whether the finished run matches the units and tweaks that
+   * are selected now (they may have changed while it ran).
+   */
+  matches?: boolean;
 };
 
 export type LiveComparisonController = {
@@ -166,7 +181,22 @@ export {
   type SavedComparison,
 } from "./project-store";
 const intakeKey = (projectId: string) => `sitework:intake:v1:${projectId}`;
-const fingerprint = (profile: BusinessProfile) => JSON.stringify(profile);
+/**
+ * Only the answers that change a comparison. Free text (concept, areas, requirements, customers)
+ * is descriptive: the evaluation ignores it, so editing it never makes a result outdated.
+ */
+export function intakeFingerprint(profile: BusinessProfile): string {
+  return JSON.stringify({
+    category: profile.category,
+    city: profile.city.trim().toLowerCase(),
+    hours: [profile.operatingHours.openMinute, profile.operatingHours.closeMinute],
+    servers: profile.capacity.servers.value,
+    rentCeilingCents: profile.economics.monthlyRentCeilingCents.value,
+    buildoutCents: profile.economics.buildoutBudgetCents.value,
+    priceTier: profile.economics.priceTier.value,
+  });
+}
+const fingerprint = intakeFingerprint;
 
 function readIntake(projectId: string) {
   try {
@@ -333,7 +363,11 @@ export async function requestLiveComparison(
   )
     throw new Error("Comparison identity mismatch");
   return {
-    payload: { ...payload, tweaksKey } as LiveComparisonPayload,
+    payload: {
+      ...payload,
+      tweaksKey,
+      requestedIds: [...candidateIds],
+    } as LiveComparisonPayload,
     saved: {
       projectId: profile.projectId,
       comparisonId: payload.comparisonId,
@@ -341,6 +375,7 @@ export async function requestLiveComparison(
       profileVersion: saved.profile.version,
       intakeFingerprint: fingerprint(profile),
       tweaksKey,
+      requestedIds: [...candidateIds],
     } satisfies SavedComparison,
   };
 }
@@ -356,8 +391,14 @@ export function payloadMatches(
 ) {
   if (payload.outdated || payload.comparison?.synthetic !== false) return false;
   if ((payload.tweaksKey ?? "") !== tweaksKey) return false;
-  const actual = payload.result.sites.map((site) => site.siteId).sort();
-  return JSON.stringify(actual) === JSON.stringify([...ids].sort());
+  const wanted = JSON.stringify([...ids].sort());
+  // A site in the result that was not selected never matches.
+  if (payload.result.sites.some((site) => !ids.includes(site.siteId)))
+    return false;
+  // The server may drop units it cannot model; match on what was asked for when known.
+  const compared =
+    payload.requestedIds ?? payload.result.sites.map((site) => site.siteId);
+  return JSON.stringify([...compared].sort()) === wanted;
 }
 
 /** Scene 1: which quarter of the Jev panel has answered (0-4); 4 is every persona. */
@@ -588,6 +629,9 @@ export function useStoredComparison(
               saved?.comparisonId === comparisonId
                 ? (saved.tweaksKey ?? "")
                 : "",
+            ...(saved?.comparisonId === comparisonId && saved.requestedIds
+              ? { requestedIds: saved.requestedIds }
+              : {}),
           },
           message: "",
           failed: false,
@@ -628,6 +672,7 @@ export function useStoredComparison(
             !current ||
             fingerprint(current) !== saved.intakeFingerprint,
           tweaksKey: saved.tweaksKey ?? "",
+          ...(saved.requestedIds ? { requestedIds: saved.requestedIds } : {}),
         },
         message: "",
         failed: false,
@@ -661,7 +706,7 @@ export function useLiveComparison(
      * Scene 1: told when a run starts, makes panel progress (at most once per 25% band),
      * finishes or fails. Called synchronously; must not throw or block the run.
      */
-    onFlowEvent?: (event: FlowEvent) => void;
+    onFlowEvent?: (event: FlowEvent, info?: FlowEventInfo) => void;
   } = {},
 ): LiveComparisonController {
   const [attempt, setAttempt] = useState(0);
@@ -693,9 +738,9 @@ export function useLiveComparison(
   useEffect(() => {
     flowEventRef.current = options.onFlowEvent;
   }, [options.onFlowEvent]);
-  const emit = (event: FlowEvent) => {
+  const emit = (event: FlowEvent, info?: FlowEventInfo) => {
     try {
-      flowEventRef.current?.(event);
+      flowEventRef.current?.(event, info);
     } catch {
       /* The consultant hearing about the run never affects the run. */
     }
@@ -834,8 +879,10 @@ export function useLiveComparison(
       emit({ kind: "comparison_started", siteIds: ids, demandSource });
     let reported = initialProgressReported(Date.now());
     try {
+      // Read at run time: an agent reply may have rewritten the intake since this render.
+      const profile = readIntake(projectId).profile ?? search.state.profile;
       const response = await requestLiveComparison(
-        search.state.profile,
+        profile,
         ids,
         demandSource,
         controller.signal,
@@ -855,10 +902,28 @@ export function useLiveComparison(
       if (mounted.current && operation.current === controller) {
         writeShortlist(projectId, ids);
         stored.adopt(response.payload, response.saved);
-        emit({
-          kind: "comparison_finished",
-          comparisonId: response.payload.comparisonId,
-        });
+        const now = selectedRef.current;
+        emit(
+          {
+            kind: "comparison_finished",
+            comparisonId: response.payload.comparisonId,
+          },
+          {
+            matches:
+              payloadMatches(
+                response.payload,
+                now,
+                siteTweaksKey(now, readFlowState(projectId).siteTweaks),
+              ) &&
+              (() => {
+                const current = readIntake(projectId).profile;
+                return (
+                  !!current &&
+                  fingerprint(current) === response.saved.intakeFingerprint
+                );
+              })(),
+          },
+        );
       }
     } catch {
       if (mounted.current && operation.current === controller) {

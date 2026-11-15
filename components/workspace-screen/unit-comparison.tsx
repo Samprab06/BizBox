@@ -8,8 +8,17 @@ import {
   type SiteTweakMap,
   type SiteTweaks,
 } from "@/lib/contracts/evaluation";
-import { unitAddress, type WorkspaceCandidate } from "./client-model";
-import { metricText } from "./model";
+import {
+  areaText,
+  comparisonStaleness,
+  finishedComparison,
+  listingNotes,
+  rentText,
+  staleMessage,
+  unitAddress,
+  type Staleness,
+  type WorkspaceCandidate,
+} from "./client-model";
 import { LocationResults } from "./location-results";
 import { ComparisonProgress } from "./comparison-progress";
 import { SiteTweakChips } from "./site-tweaks";
@@ -63,8 +72,7 @@ export function ComparisonTray({
                 {unitAddress(unit, candidates)}
               </strong>
               <span className="mt-1 block text-xs opacity-75">
-                {metricText(unit.baseRentCents)}/mo ·{" "}
-                {metricText(unit.candidate.floorAreaSqFt)} sq ft
+                {rentText(unit)} · {areaText(unit)}
               </span>
             </button>
             <button
@@ -96,12 +104,14 @@ export function UnitComparison({
   onEdit,
   onRemoveTweak,
   onViewResults,
+  onChooseSite,
 }: {
   units: WorkspaceCandidate[];
   candidates: WorkspaceCandidate[];
   controller: LiveComparisonController;
   /** The finished comparison matching these units and tweaks, if any. */
   payload: LiveComparisonPayload | null;
+  onChooseSite?: (siteId: string) => void;
   tweaks: SiteTweakMap;
   onSelect: (id: string) => void;
   onEdit: () => void;
@@ -116,6 +126,13 @@ export function UnitComparison({
   );
   // A failed run (the founder's or the consultant's) keeps the selection and offers Retry.
   const failed = !running && Boolean(controller.runError);
+  // The latest finished run shows below the Run button even when the choices changed since.
+  const latest = finishedComparison(controller.payload);
+  const stale = comparisonStaleness(
+    latest,
+    controller.selectedIds,
+    controller.tweaksKey,
+  );
   return (
     <section className={styles.unitComparison} aria-label="Unit comparison">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -165,17 +182,13 @@ export function UnitComparison({
               <tr>
                 <th scope="row">Asking rent</th>
                 {units.map((unit) => (
-                  <td key={unit.candidate.id}>
-                    {metricText(unit.baseRentCents)}/mo
-                  </td>
+                  <td key={unit.candidate.id}>{rentText(unit)}</td>
                 ))}
               </tr>
               <tr>
                 <th scope="row">Size</th>
                 {units.map((unit) => (
-                  <td key={unit.candidate.id}>
-                    {metricText(unit.candidate.floorAreaSqFt)} sq ft
-                  </td>
+                  <td key={unit.candidate.id}>{areaText(unit)}</td>
                 ))}
               </tr>
               {anyTweaks && (
@@ -195,21 +208,20 @@ export function UnitComparison({
                   ))}
                 </tr>
               )}
-              <tr>
-                <th scope="row">Notes</th>
-                {units.map((unit) => (
-                  <td key={unit.candidate.id}>
-                    <details>
-                      <summary>Listing notes</summary>
-                      {unit.flags.length ? (
-                        unit.flags.map((flag) => <p key={flag}>{flag}</p>)
-                      ) : (
-                        <p>No additional notes returned.</p>
-                      )}
-                    </details>
-                  </td>
-                ))}
-              </tr>
+              {units.some((unit) => listingNotes(unit).length > 0) && (
+                <tr>
+                  <th scope="row">Good to know</th>
+                  {units.map((unit) => (
+                    <td key={unit.candidate.id}>
+                      {listingNotes(unit).map((note) => (
+                        <p key={note} className="text-xs opacity-75">
+                          {note}
+                        </p>
+                      ))}
+                    </td>
+                  ))}
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="my-6 flex flex-wrap items-center gap-3">
@@ -228,11 +240,6 @@ export function UnitComparison({
                       ? "Run with changes"
                       : "Run comparison"}
             </button>
-            {payload && !running && (
-              <button className={styles.secondary} onClick={onViewResults}>
-                View results
-              </button>
-            )}
             <span className="text-xs opacity-75">
               Modeled estimates; no measured foot traffic.
             </span>
@@ -248,6 +255,23 @@ export function UnitComparison({
             <p role="alert" className="mb-5 text-sm">
               {controller.runError}
             </p>
+          )}
+          {latest && !running && (
+            <>
+              <StaleBanner stale={stale} />
+              <LocationResults
+                payload={latest}
+                candidates={candidates}
+                onSelect={onSelect}
+                onChoose={onChooseSite}
+                framed={false}
+              />
+              <div className={styles.stepActions}>
+                <button className={styles.primary} onClick={onViewResults}>
+                  Continue to results
+                </button>
+              </div>
+            </>
           )}
         </>
       )}
@@ -270,8 +294,13 @@ export function ResultsStep({
   onChangeSite,
   onRerun,
   onRemoveTweak,
+  onChooseSite,
+  stale = null,
 }: {
   payload: LiveComparisonPayload | null;
+  onChooseSite?: (siteId: string) => void;
+  /** Why this run is not for the current choices, if it is. Never hides the results. */
+  stale?: Staleness;
   units: WorkspaceCandidate[];
   candidates: WorkspaceCandidate[];
   tweaks: SiteTweakMap;
@@ -292,17 +321,21 @@ export function ResultsStep({
       data-agent-anchor="comparison_recommendation"
     >
       {payload ? (
-        <LocationResults
-          payload={payload}
-          candidates={candidates}
-          onSelect={onSelect}
-          framed={false}
-        />
+        <>
+          <StaleBanner stale={stale} onRerun={onRerun} running={running} />
+          <LocationResults
+            payload={payload}
+            candidates={candidates}
+            onSelect={onSelect}
+            onChoose={onChooseSite}
+            framed={false}
+          />
+        </>
       ) : (
         <p role="status" className="text-sm">
           {loading
             ? "Loading results…"
-            : "These results no longer match your selection. Rerun the comparison."}
+            : "No finished comparison yet. Run a comparison first."}
         </p>
       )}
       {tweaked.length > 0 && (
@@ -339,5 +372,31 @@ export function ResultsStep({
         </button>
       </div>
     </section>
+  );
+}
+
+/** A non-blocking note that the results on screen are for earlier choices. */
+function StaleBanner({
+  stale,
+  onRerun,
+  running = false,
+}: {
+  stale: Staleness;
+  onRerun?: () => void;
+  running?: boolean;
+}) {
+  if (!stale) return null;
+  return (
+    <div
+      role="status"
+      className="mb-4 flex flex-wrap items-center gap-3 text-sm"
+    >
+      <span>{staleMessage(stale)}</span>
+      {onRerun && (
+        <button className={styles.secondary} onClick={onRerun} disabled={running}>
+          Rerun
+        </button>
+      )}
+    </div>
   );
 }

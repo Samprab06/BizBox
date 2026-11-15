@@ -13,6 +13,8 @@ import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import {
   candidateMarkers,
+  comparisonStaleness,
+  finishedComparison,
   searchPresentation,
   type WorkspaceCandidate,
 } from "./client-model";
@@ -58,6 +60,7 @@ export function LocationExperience({
   presented,
   onViewResults,
   onRerun,
+  onChooseSite,
 }: {
   projectId: string;
   controller: LiveComparisonController;
@@ -81,6 +84,8 @@ export function LocationExperience({
   presented: boolean;
   onViewResults: () => void;
   onRerun: () => void;
+  /** Finalizes the plan on this location (the "Choose this location" button). */
+  onChooseSite?: (siteId: string) => void;
 }) {
   const markers = candidateMarkers(candidates);
   const resultForSite = matching?.result.sites.find(
@@ -146,11 +151,18 @@ export function LocationExperience({
           onEdit={onEditChoices}
           onRemoveTweak={onRemoveTweak}
           onViewResults={onViewResults}
+          onChooseSite={onChooseSite}
         />
       )}
       {step === "results" && (
         <ResultsStep
-          payload={matching}
+          payload={finishedComparison(controller.payload)}
+          stale={comparisonStaleness(
+            controller.payload,
+            controller.selectedIds,
+            controller.tweaksKey,
+          )}
+          onChooseSite={onChooseSite}
           units={selectedUnits}
           candidates={candidates}
           tweaks={tweaks}
