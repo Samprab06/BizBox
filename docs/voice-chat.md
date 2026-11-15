@@ -45,10 +45,13 @@ prevents late voice output, closes tracks/peer/audio/animation resources, and do
 not undo a message already submitted to the existing business action.
 
 Audio commits define turn order because transcript completions can arrive out of
-order. Each turn captures its question/context; a changed prompt or selected
+order. Commits are queued in the ordered WebRTC data channel's arrival order;
+the provider's conversation-wide predecessor is not required to equal the last
+microphone item. A null or different predecessor cannot shut down playback.
+Each turn captures its question/context; a changed prompt or selected
 context suppresses the stale answer instead of applying it to the next field.
-The owning intake queue rechecks that prompt before applying the answer. Muted
-commits remain suppressed even if transcription completes after unmuting.
+The owning intake queue rechecks that prompt before applying the answer. Captures
+started while muted remain suppressed even if transcription completes after unmuting.
 
 ## Client UI mount
 
@@ -163,3 +166,35 @@ Compact and full VoicePanel consumers retain the same lifecycle and orb meters.
 Unit and browser tests use fake tracks/peers and intercepted session responses for
 pending permission, denial, missing/unreadable/unsupported microphones, setup,
 ready, disconnect and cancellation. They do not record audio or call a provider.
+
+## Reply playback and workspace controls (2026-11-15)
+
+Workspace voice uses the same conversation submission and action dispatcher as
+text, including comparison tools and navigation. The compact panel shows the
+transparent orb before activation, with status and controls underneath; it does
+not introduce a separate glass card or change onboarding styles.
+
+Mute microphone affects new input only: an utterance started before mute can
+finish transcription, reach the agent and speak while the microphone is muted.
+It disables the input track without clearing recorded audio or pending transcripts.
+Speech first detected while muted remains suppressed even after unmute.
+Stop speaking cancels output; Stop voice closes the
+session. Unconfirmed voice activity cannot cancel an agent reply still being
+computed or waiting for its audio response ID. A completed new transcript or
+speech detected during started output still interrupts the previous reply.
+
+Context checks retain project, page, selection, comparison, scenario and prompt
+identity while ignoring changing replay time and progress. Long replies speak a
+bounded excerpt and retain the full written response. Empty replies, failed
+output and playback timeouts show short recovery statuses without exposing
+provider errors. Existing session, transcript and output limits are unchanged.
+Server VAD now uses a 300 ms silence window (provider default: 500 ms) to start
+transcription sooner after speech ends. Short pauses may split an utterance;
+ordered transcript processing remains unchanged. Text-agent/tool latency and
+speech generation still contribute to the total response time.
+
+Regression tests cover pending replies, muted input, noisy activity, long replies,
+failed output and replay progress. Workspace browser tests cover the idle orb and
+a spoken comparison command through the text-agent route and comparison action
+to Results, followed by output while muted and explicit cancellation. These use
+mocked transport and do not establish live microphone/provider playback success.

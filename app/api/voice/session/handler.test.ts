@@ -107,6 +107,7 @@ describe("voice session setup", () => {
           transcription: { model: "gpt-live-transcribe" },
           turn_detection: {
             type: "server_vad",
+            silence_duration_ms: 300,
             create_response: false,
             interrupt_response: false,
           },

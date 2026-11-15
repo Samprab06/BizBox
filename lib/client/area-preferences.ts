@@ -48,7 +48,12 @@ export function areaPreferencesFromAnswer(
   try {
     if (parts.length !== 2) throw new Error("Multiple map payloads");
     const saved = SavedMapSchema.parse(JSON.parse(parts[1]));
-    if (saved.city !== city) throw new Error("Different city");
+    if (saved.city !== city)
+      return {
+        preferences: empty,
+        mapped: true,
+        error: `Your saved area selections are for ${saved.city}, but your city is ${city}. Redraw the areas for ${city}, or go back and change the city.`,
+      };
     if (saved.marks.length)
       return {
         preferences: empty,

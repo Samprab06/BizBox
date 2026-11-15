@@ -57,11 +57,11 @@ type Session = {
   queue: { id: string; text?: string; context: string; discarded: boolean }[];
   captures: Map<string, { context: string; muted: boolean }>;
   committed: Set<string>;
-  lastCommitted?: string;
   cancelEvents: Set<string>;
   cancelSequence: number;
   processing: boolean;
   speech?: Speech;
+  playbackNotice?: string;
   epoch: number;
   turn: number;
   ready: boolean;
@@ -303,7 +303,16 @@ export class VoiceClient {
     return JSON.stringify([
       context.projectId,
       context.mode,
-      context.view,
+      context.view && {
+        stage: context.view.stage,
+        siteId: context.view.siteId,
+        comparisonId: context.view.comparisonId,
+        investigationId: context.view.investigationId,
+        scenarioId: context.view.scenarioId,
+        candidateIds: context.view.candidateIds,
+        shortlistIds: context.view.shortlistIds,
+        step: context.view.step,
+      },
       context.selectedSiteId,
       context.scenarioId,
       context.prompt,
@@ -343,17 +352,9 @@ export class VoiceClient {
         );
         return;
       }
-      if (
-        run.lastCommitted &&
-        event.previous_item_id !== undefined &&
-        event.previous_item_id !== run.lastCommitted
-      ) {
-        this.fail(
-          run,
-          "Voice lost the order of your answers. Please continue by typing or restart voice.",
-        );
-        return;
-      }
+      // The ordered data channel supplies microphone commit order. The provider's
+      // previous_item_id describes the whole conversation, not only audio commits;
+      // another item or a null predecessor must not tear down reply playback.
       let capture = run.captures.get(id);
       try {
         capture ??= {
@@ -369,8 +370,9 @@ export class VoiceClient {
       }
       run.captures.delete(id);
       run.committed.add(id);
-      run.lastCommitted = id;
-      const discarded = capture.muted || this.snapshot.muted;
+      // Mute blocks new captures, not words already recorded before the click.
+      // Provider commit/transcription events may arrive after tracks are disabled.
+      const discarded = capture.muted;
       run.queue.push({
         id,
         context: capture.context,
@@ -401,7 +403,7 @@ export class VoiceClient {
         return;
       }
       run.seen.add(id);
-      pending.text = pending.discarded || this.snapshot.muted ? "" : text;
+      pending.text = pending.discarded ? "" : text;
       if (pending.text) this.interrupt();
       if (run.queue[0]?.text !== undefined) void this.drain(run);
     } else if (event.type === "input_audio_buffer.speech_started") {
@@ -432,7 +434,9 @@ export class VoiceClient {
           return;
         }
       }
-      if (!this.snapshot.muted) this.interrupt();
+      // Barge in on audible speech, but wait for actual transcribed words before
+      // canceling an agent reply still being computed. VAD can trigger on noise.
+      if (!this.snapshot.muted && run.speech?.responseId) this.interrupt();
     } else if (event.type === "response.created") {
       const response = event.response as
         { id?: unknown; metadata?: { voice_turn?: unknown } } | undefined;
@@ -475,7 +479,10 @@ export class VoiceClient {
         response.id === run.speech?.responseId &&
         response?.status !== "completed"
       )
-        this.finishSpeech(run);
+        this.finishSpeech(
+          run,
+          "Audio reply failed. The written reply is available in the conversation.",
+        );
     } else if (
       event.type === "error" ||
       event.type === "conversation.item.input_audio_transcription.failed"
@@ -521,13 +528,24 @@ export class VoiceClient {
           run.cancelled,
         ]);
         if (!this.valid(run)) return;
-        if (epoch !== run.epoch || !reply) continue;
-        if (reply.length > VOICE_LIMITS.replyChars) {
+        if (epoch !== run.epoch) continue;
+        if (!reply?.trim()) {
           notice =
-            "The reply is too long to speak. Read it in the conversation.";
+            "No spoken reply was returned. Check the conversation or try again.";
           continue;
         }
-        await this.speak(run, reply);
+        const longReply = reply.length > VOICE_LIMITS.replyChars;
+        const excerpt = reply.slice(0, VOICE_LIMITS.replyChars);
+        const spoken =
+          longReply && excerpt.lastIndexOf(" ") > 0
+            ? excerpt.slice(0, excerpt.lastIndexOf(" "))
+            : excerpt;
+        await this.speak(run, spoken);
+        notice =
+          run.playbackNotice ??
+          (longReply
+            ? "The full reply is available in the conversation."
+            : undefined);
       }
       if (this.valid(run))
         this.update(
@@ -550,9 +568,14 @@ export class VoiceClient {
   private speak(run: Session, text: string): Promise<void> {
     return new Promise((resolve) => {
       const token = `turn-${++run.turn}`;
+      run.playbackNotice = undefined;
       run.speech = { token, finish: resolve };
       run.speech.timer = this.dependencies.setTimer(() => {
-        if (this.valid(run)) this.interrupt();
+        if (this.valid(run)) {
+          this.interrupt();
+          run.playbackNotice =
+            "Audio playback timed out. The written reply is available in the conversation.";
+        }
       }, 30_000);
       if (
         !this.send(run, {
@@ -567,10 +590,14 @@ export class VoiceClient {
           },
         })
       )
-        this.finishSpeech(run);
+        this.finishSpeech(
+          run,
+          "Audio playback is unavailable. The written reply is available in the conversation.",
+        );
     });
   }
-  private finishSpeech(run: Session) {
+  private finishSpeech(run: Session, notice?: string) {
+    if (notice) run.playbackNotice = notice;
     if (run.audio) run.audio.muted = true;
     const speech = run.speech;
     run.speech = undefined;
@@ -613,17 +640,19 @@ export class VoiceClient {
       track.enabled = !muted;
     });
     this.snapshot = { ...this.snapshot, muted };
-    if (muted) {
-      this.interrupt();
-      this.send(run, { type: "input_audio_buffer.clear" });
-      run.queue.length = 0;
-      run.captures.forEach((capture) => {
-        capture.muted = true;
-      });
-    }
+    // Disabling the track sends silence, allowing VAD to finish the current
+    // utterance. Clearing its buffer/queue here would erase pre-mute input.
     this.update(
       this.snapshot.phase,
-      muted ? "Microphone muted." : "Microphone on.",
+      muted
+        ? this.snapshot.phase === "thinking"
+          ? "Microphone muted. Waiting for the agent’s reply."
+          : this.snapshot.phase === "speaking"
+            ? "Microphone muted. Reply audio is still on."
+            : run.queue.length || [...run.captures.values()].some(c => !c.muted)
+              ? "Microphone muted. Finishing your answer…"
+              : "Microphone muted."
+        : "Microphone on.",
     );
   }
   stop() {

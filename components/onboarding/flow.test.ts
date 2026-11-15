@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fields, initialSession, intakeSessionSchema, updateProfile, type Profile } from "@/components/intake/profile";
 import { patchFromForm } from "@/components/intake/live";
 import { profileFromIntake } from "@/lib/client/intake-business-profile";
+import { mapMarker, writeAreaMap } from "./area-map-data";
 import {
   categoryChoices,
   formatAreas,
@@ -104,6 +105,36 @@ describe("areas", () => {
 });
 
 describe("resume and defaults", () => {
+  it("resumes a mismatched saved map at areas while preserving every answer", () => {
+    const profile = completeProfile();
+    profile.areas = { value: writeAreaMap([], "Los Angeles", "near transit", [{ bounds: [-118.4, 34, -118.2, 34.1], brush: "avoid" }]), origin: "founder" };
+    const before = structuredClone(profile);
+    expect(resumeStep(profile)).toBe("areas");
+    expect(stepError("areas", profile.areas.value, "Houston")).toContain("Los Angeles");
+    expect(profile).toEqual(before);
+  });
+
+  it.each(["Houston", "Los Angeles"] as const)("accepts matching maps and no preference for %s", city => {
+    const profile = completeProfile();
+    profile.city = { value: city, origin: "founder" };
+    const bounds: [number, number, number, number] = city === "Houston" ? [-95.5, 29.6, -95.3, 29.8] : [-118.4, 34, -118.2, 34.1];
+    profile.areas = { value: writeAreaMap([], city, "", [{ bounds, brush: "favor" }]), origin: "founder" };
+    expect(resumeStep(profile)).toBe("review");
+    expect(stepError("areas", profile.areas.value, city)).toBeUndefined();
+    profile.areas.value = "No preference";
+    expect(resumeStep(profile)).toBe("review");
+  });
+
+  it.each([
+    "Saved selection" + mapMarker + "bad",
+    writeAreaMap([{ lng: -95.4, lat: 29.7, brush: "avoid" }], "Houston", ""),
+  ])("routes damaged or legacy saved maps to area recovery", value => {
+    const profile = completeProfile();
+    profile.areas = { value, origin: "founder" };
+    expect(resumeStep(profile)).toBe("areas");
+    expect(stepError("areas", value, "Houston")).toBeTruthy();
+  });
+
   it("starts a new founder at the first question even though category and city have defaults", () => {
     expect(resumeStep(initialSession.profile)).toBe("category");
     expect(initialValue("category", initialSession.profile)).toBe("Coffee shop");

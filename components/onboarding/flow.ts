@@ -7,6 +7,7 @@
  * or store of its own. The field mapping follows the HAC-112 handoff (HANDOFF.md).
  */
 import { areaMapSummary } from "./area-map-data";
+import { areaPreferencesFromAnswer } from "@/lib/client/area-preferences";
 import { operatingHours } from "@/lib/client/intake-business-profile";
 import { fields, missingFields, profileValidationMessage, type Profile } from "@/components/intake/profile";
 import { DEFAULT_RANGE, formatHoursValue, formatTime, parseHoursValue } from "./clock-dial-math";
@@ -119,13 +120,15 @@ export const skipValues: Partial<Record<QuestionStep, string>> = {
 const field = (key: FieldKey) => fields.find((entry) => entry.key === key)!;
 
 /** The message to show before the founder can continue, or undefined when the answer is valid. */
-export function stepError(step: QuestionStep, value: string): string | undefined {
+export function stepError(step: QuestionStep, value: string, city?: string): string | undefined {
   const text = value.trim();
   if (step === "category" && !categoryChoices.some((choice) => choice.value === text))
     return "Choose an available business type.";
   if (step === "city" && !cityChoices.some((choice) => choice.value === text)) return "Choose Houston or Los Angeles.";
   if (step === "price" && !priceChoices.some((choice) => choice.value === text)) return "Choose a price tier.";
   if (step === "areas" && !text) return "Choose an area, add a note, or skip.";
+  if (step === "areas" && (city === "Houston" || city === "Los Angeles"))
+    return areaPreferencesFromAnswer(value, city).error;
   if (step === "requirements" && !text) return "Add what the space needs, or skip.";
   if (step === "staff" && !text) return "Enter how many people will be on shift.";
   if (step === "rent" || step === "buildout") {
@@ -144,10 +147,10 @@ export function stepError(step: QuestionStep, value: string): string | undefined
  * app default (category and city start as defaults), or the review once nothing is missing.
  */
 export function resumeStep(profile: Profile): Step {
-  if (!missingFields(profile).length) return "review";
+  const incomplete = missingFields(profile).length > 0;
   return questionSteps.find((step) => {
     const answer = profile[step];
-    return !answer || answer.origin !== "founder" || stepError(step, answer.value) !== undefined;
+    return !answer || (incomplete && answer.origin !== "founder") || stepError(step, answer.value, profile.city?.value) !== undefined;
   }) ?? "review";
 }
 

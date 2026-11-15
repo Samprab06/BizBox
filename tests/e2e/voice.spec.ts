@@ -2,6 +2,13 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { closeConsultant, expect, openConsultant, test } from "./fixtures";
 
+import {
+  mockLiveComparison,
+  threeSiteSearch,
+  threeSiteIds,
+  threeSiteComparison,
+} from "./live-comparison-fixtures";
+
 type Harness = {
   deny: boolean;
   failureName: string | null;
@@ -366,7 +373,7 @@ test("permission denial permits retry and leaves typed input available", async (
   expect(setups()).toBe(1);
 });
 
-test("mute cancels identified speech without treating its cancellation race as a failed session", async ({
+test("stop speaking cancels identified speech without treating its cancellation race as a failed session", async ({
   page,
 }) => {
   await mockVoice(page);
@@ -376,6 +383,9 @@ test("mute cancels identified speech without treating its cancellation race as a
   await expect(profileConcept(page)).toHaveValue("Coffee");
   await page.evaluate(() => window.__voice.beginReply());
   await expect(voice(page).getByRole("status")).toContainText("Speaking");
+  await voice(page)
+    .getByRole("button", { name: "Stop speaking", exact: true })
+    .click();
   await voice(page)
     .getByRole("button", { name: "Mute microphone", exact: true })
     .click();
@@ -716,4 +726,161 @@ test("losing the live microphone stops owned resources and offers retry", async 
   ).toBeEnabled();
   expect(await page.evaluate(() => window.__voice.stopped)).toBe(1);
   expect(await page.evaluate(() => window.__voice.peersClosed)).toBe(1);
+});
+
+test("workspace voice orb is transparent before microphone activation and keeps its controls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await mockLiveComparison(page);
+  const setups = await mockVoice(page);
+  await page.route("**/api/sites", (route) =>
+    route.fulfill({ json: threeSiteSearch }),
+  );
+  await page.goto("/projects/houston-coffee/workspace?step=locations");
+  await openConsultant(page);
+  await page.getByRole("tab", { name: "Voice", exact: true }).click();
+  const panel = voice(page);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("status", { name: "Voice status" })).toHaveText(
+    "Ready",
+  );
+  expect(await page.evaluate(() => window.__voice.gets)).toBe(0);
+  expect(setups()).toBe(0);
+  const orb = panel.locator("[data-orb-mode]");
+  await expect(orb).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.screenshot({ path: "/tmp/bizbox-workspace-orb.png" });
+  await start(page);
+  await expect(
+    panel.getByRole("button", { name: "Mute microphone" }),
+  ).toBeEnabled();
+  await panel.getByRole("button", { name: "Mute microphone" }).click();
+  await expect(
+    panel.getByRole("button", { name: "Unmute microphone" }),
+  ).toBeVisible();
+  await panel.getByRole("button", { name: "Stop voice", exact: true }).click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(orb).toHaveAttribute("data-orb-mode", "static");
+  await expect(
+    panel.getByRole("button", { name: "Start voice", exact: true }),
+  ).toBeEnabled();
+});
+
+test("workspace voice uses the text agent tools and speaks its reply while the microphone is muted", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await mockLiveComparison(page);
+  await mockVoice(page);
+  await page.route("**/api/sites", (route) =>
+    route.fulfill({ json: threeSiteSearch }),
+  );
+  const messages: Record<string, unknown>[] = [];
+  const comparisons: Record<string, unknown>[] = [];
+  let release!: () => void;
+  const replyPending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let voiceReplyId = 0;
+  const reply = (message: string, actions: Record<string, unknown>[] = []) => ({
+    draft: {},
+    assumptions: {},
+    missingRequiredFields: [],
+    findings: [],
+    nextQuestion: null,
+    assistantMessage: message,
+    actions: actions.map((a, i) => ({
+      id: `voice-action-${++voiceReplyId}-${i}`,
+      ...a,
+    })),
+  });
+  await page.route("**/api/projects/*/intake", async (route) => {
+    if (route.request().method() === "GET")
+      return route.fulfill({ json: { modelConfigured: true } });
+    const body = route.request().postDataJSON();
+    if (body.event)
+      return route.fulfill({
+        json: reply(
+          "Ready.",
+          body.event.kind === "arrived_workspace"
+            ? [{ type: "present_top_sites", siteIds: [...threeSiteIds] }]
+            : [],
+        ),
+      });
+    messages.push(body);
+    await replyPending;
+    return route.fulfill({
+      json: reply("Comparing all three locations now.", [
+        { type: "run_comparison", siteIds: [...threeSiteIds] },
+      ]),
+    });
+  });
+  await page.route("**/api/comparisons", (route) => {
+    const body = route.request().postDataJSON();
+    comparisons.push(body);
+    return route.fulfill({
+      status: 201,
+      json: threeSiteComparison(body.candidateIds),
+    });
+  });
+  await page.goto("/projects/houston-coffee/workspace?step=locations");
+  await expect(
+    page.getByRole("region", { name: "Top locations", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Voice", exact: true }).click();
+  await start(page);
+  await page.evaluate(() => window.__voice.emit({
+    type: "input_audio_buffer.speech_started",
+    item_id: "spoken-comparison",
+  }));
+  // The founder finishes speaking and mutes before the provider has transcribed it.
+  await voice(page)
+    .getByRole("button", { name: "Mute microphone", exact: true })
+    .click();
+  await page.evaluate(() => window.__voice.complete(
+    "spoken-comparison",
+    "Compare these three locations",
+  ));
+  await expect.poll(() => messages.length).toBe(1);
+  expect(messages[0]).toMatchObject({
+    message: "Compare these three locations",
+    view: {
+      stage: "workspace",
+      step: "locations",
+      candidateIds: [...threeSiteIds],
+    },
+  });
+  release();
+  await expect(page).toHaveURL(/step=results/);
+  expect(comparisons).toHaveLength(1);
+  expect(comparisons[0].candidateIds).toEqual([...threeSiteIds]);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.__voice.sent.filter((e) => e.type === "response.create")
+            .length,
+      ),
+    )
+    .toBe(1);
+  await page.evaluate(() => window.__voice.beginReply());
+  await expect(
+    voice(page).getByRole("status", { name: "Voice status" }),
+  ).toContainText("Speaking");
+  await expect(
+    voice(page).getByRole("button", { name: "Unmute microphone" }),
+  ).toBeVisible();
+  await voice(page)
+    .getByRole("button", { name: "Stop speaking", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__voice.sent.some((e) => e.type === "response.cancel"),
+      ),
+    )
+    .toBe(true);
+  await voice(page)
+    .getByRole("button", { name: "Stop voice", exact: true })
+    .click();
 });

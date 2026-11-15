@@ -22,8 +22,16 @@ describe("topSiteIds", () => {
   it("prefers the consultant's visible picks, else the best-ranked three", () => {
     const ids = ["a", "b", "c", "d"];
     expect(topSiteIds(null, ids)).toEqual(["a", "b", "c"]);
-    expect(topSiteIds(["d", "x", "b"], ids)).toEqual(["d", "b"]);
+    expect(topSiteIds(["d", "x", "b"], ids)).toEqual(["d", "b", "a"]);
     expect(topSiteIds(["x"], ids)).toEqual(["a", "b", "c"]);
+  });
+  it("fills stale or duplicate picks with current ranked alternatives", () => {
+    expect(topSiteIds(["old-a", "old-b", "c"], ["a", "b", "c", "d"]))
+      .toEqual(["c", "a", "b"]);
+    expect(topSiteIds(["b", "b"], ["a", "b", "c"]))
+      .toEqual(["b", "a", "c"]);
+    expect(topSiteIds(["old"], ["only-match"])).toEqual(["only-match"]);
+    expect(topSiteIds(["old"], [])).toEqual([]);
   });
 });
 

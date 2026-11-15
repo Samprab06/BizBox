@@ -221,6 +221,7 @@ export function createVoiceSessionHandlers(dependencies: Dependencies = {}) {
               transcription: { model: config.transcriptionModel },
               turn_detection: {
                 type: "server_vad",
+                silence_duration_ms: 300,
                 create_response: false,
                 interrupt_response: false,
               },

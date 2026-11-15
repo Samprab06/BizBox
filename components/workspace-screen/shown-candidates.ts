@@ -1,6 +1,6 @@
 /**
- * The locations drawn on the map and listed: the top picks, then anything the founder chose
- * to compare, then the open site. The full search result stays available for lookups.
+ * Resolve the requested visible IDs, choices and open site against current search results.
+ * The workspace passes every search ID; stale IDs never invent a visible location.
  */
 export function shownSiteIds(
   topIds: readonly string[],

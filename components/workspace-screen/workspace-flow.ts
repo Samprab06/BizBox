@@ -38,13 +38,13 @@ export function resolveWorkspaceStep(
   return "locations";
 }
 
-/** The top locations to emphasise: the consultant's picks, else the best-ranked three. */
+/** Keep eligible consultant picks, then fill the top three from the current ranking. */
 export function topSiteIds(
   presented: readonly string[] | null,
   candidateIds: readonly string[],
 ): string[] {
   const picks = (presented ?? []).filter((id) => candidateIds.includes(id));
-  return (picks.length ? picks : candidateIds).slice(0, MAX_COMPARE_UNITS);
+  return [...new Set([...picks, ...candidateIds])].slice(0, MAX_COMPARE_UNITS);
 }
 
 export type StageStatus = "pending" | "active" | "done" | "skipped";

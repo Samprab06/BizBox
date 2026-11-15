@@ -178,11 +178,12 @@ export function WorkspaceScreen({
     setPresented(readIds(topSitesKey(projectId)));
   }, [projectId]);
   const topIds = topSiteIds(presented, candidateIds);
-  // The map and list show the top three plus anything chosen or open; lookups use all.
+  // Keep every current search result on the map and in the list. Top picks only
+  // control the ranked summary, so old recommendations cannot hide alternatives.
   const shown = useMemo(
     () =>
-      shownCandidates(candidates, topIds, controller.selectedIds, selectedId),
-    [candidates, topIds, controller.selectedIds, selectedId],
+      shownCandidates(candidates, candidateIds, controller.selectedIds, selectedId),
+    [candidates, candidateIds, controller.selectedIds, selectedId],
   );
   const siteTweaks = flow.state.siteTweaks;
   const matching =
@@ -508,7 +509,7 @@ export function WorkspaceScreen({
             )}
             {pane === "list" && (
               <ListingList
-                candidates={shown}
+                candidates={candidates}
                 selectedIds={controller.selectedIds}
                 selectedId={selected?.candidate.id}
                 running={running}
@@ -538,7 +539,7 @@ export function WorkspaceScreen({
         projectId={projectId}
         controller={controller}
         candidates={candidates}
-        shownCount={shown.length}
+        shownCount={candidates.length}
         selected={selected}
         onSelect={select}
         step={step}
