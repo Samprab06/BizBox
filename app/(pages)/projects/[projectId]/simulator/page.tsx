@@ -10,6 +10,12 @@ import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 import { parseStoredInsights } from "@/components/insights/stored-insights";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { RestoreSavedComparison } from "@/lib/client/project-store";
+import { publicCafeScan } from "@/lib/interior/fixtures";
+
+const cafeSweep = publicCafeScan.placement.serviceSweep;
+const cafeViewpoint = cafeSweep?.rotation
+  ? { sweepId: cafeSweep.sweepId, rotation: cafeSweep.rotation }
+  : undefined;
 
 export const dynamic = "force-dynamic";
 
@@ -180,18 +186,15 @@ export default async function Page({
             sdkKey
               ? {
                   sdkKey,
-                  modelId: "qfmMbTLt4Bo",
-                  // Proposed service-area overlay, registered against the public
-                  // scan's floor intersections; not a measured business layout.
+                  modelId: publicCafeScan.modelId,
+                  // HAC-138: proposed service-area overlay from the café's
+                  // registry row; not a measured business layout.
                   placement: {
-                    origin: { x: 17.1, y: 0.04, z: 10.3 },
-                    rotationY: Math.PI,
-                    scale: 0.5,
+                    origin: publicCafeScan.placement.origin,
+                    rotationY: publicCafeScan.placement.rotationY,
+                    scale: publicCafeScan.placement.scale,
                   },
-                  viewpoint: {
-                    sweepId: "y0xe63ayfyepf8cg51cua77hb",
-                    rotation: { x: -17, y: 168 },
-                  },
+                  viewpoint: cafeViewpoint,
                 }
               : undefined
           }

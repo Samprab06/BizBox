@@ -16,6 +16,7 @@ import type { InvestigationJob, InvestigationMilestone } from "./jobs";
 import {
   AssemblyError,
   type AssembledEvaluation,
+  type PanelDeadline,
 } from "@/lib/evaluation/assemble";
 import {
   buildStoredComparison,
@@ -99,6 +100,8 @@ export type InvestigationToolContext = {
   milestones: InvestigationMilestone[];
   signal: AbortSignal;
   idempotencyKey: string;
+  /** Epoch ms the step should finish by; a Jev panel stops asking near it (HAC-155). */
+  deadlineAt?: number;
 };
 export type InvestigationToolResult = {
   summary: z.infer<ReturnType<typeof z.json>>;
@@ -144,6 +147,7 @@ export type InvestigationToolDependencies = {
     siteIds: string[],
     options: PollContext & { mode: "paid" | "cache-only" | "huff" },
     signal: AbortSignal,
+    deadline?: PanelDeadline,
   ): Promise<AssembledEvaluation>;
   comparisons: ComparisonStore;
   saveSensitivity?(
@@ -578,6 +582,7 @@ export function createInvestigationTools(
               price: input.price,
             },
             context.signal,
+            { deadlineAt: context.deadlineAt, signal: context.signal },
           );
           const tables = polled.request.sites.map((site) => ({
             siteId: site.siteId,

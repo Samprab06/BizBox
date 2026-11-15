@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Profile } from "@/components/intake/profile";
+import { ClockDial } from "./clock-dial";
+import { DEFAULT_RANGE, formatHoursValue, parseHoursValue } from "./clock-dial-math";
 import { CurvedRuler } from "./curved-ruler";
 import {
   categoryChoices,
@@ -203,7 +205,14 @@ export function OnboardingFlow({
       case "customers":
         return text({ textarea: true, maxLength: 250, placeholder: "Residents, commuters, students…" });
       case "hours":
-        return text({ maxLength: 80, placeholder: "7am – 6pm" });
+        return (
+          <ClockDial
+            value={parseHoursValue(value) ?? DEFAULT_RANGE}
+            onChange={(next) => setDraft(key, formatHoursValue(next))}
+            labelledBy="onboarding-title"
+            describedBy={describedBy}
+          />
+        );
       case "requirements":
         return text({ textarea: true, maxLength: 300, placeholder: "Street frontage, parking, ground floor…" });
       case "city":

@@ -4,7 +4,18 @@ import { createIntakeHandler } from "./handler";
 vi.mock("server-only", () => ({}));
 import { founderAnswers } from "@/lib/agent/__fixtures__/founder";
 import { BusinessProfileSchema } from "@/lib/contracts";
-import { INTAKE_TIMEOUT_MS } from "@/lib/agent/runner";
+import { AIMessage } from "@langchain/core/messages";
+import { createIntakeSession } from "@/lib/agent/intake";
+import {
+  createDeepIntakeRunner,
+  INTAKE_TIMEOUT_MS,
+} from "@/lib/agent/runner";
+import {
+  fixtureUiLookups,
+  ScriptedModel,
+  UI_FIXTURE,
+} from "@/lib/agent/__fixtures__/scripted-model";
+import { UiActionListSchema } from "@/lib/contracts/agent";
 import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
 import type { ThreadStore } from "@/lib/agent/thread-store";
 
@@ -243,5 +254,145 @@ describe("POST project intake", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe("HAC-144 intake UI actions", () => {
+  const uiHandler = (model: ScriptedModel) => {
+    let n = 0;
+    return createIntakeHandler({
+      projectExists: async () => true,
+      runAgent: createDeepIntakeRunner(model),
+      uiLookups: fixtureUiLookups(),
+      newActionId: () => `ui_${++n}`,
+    });
+  };
+  const houstonState = () => {
+    const session = createIntakeSession(UI_FIXTURE.projectId);
+    session.saveProfile({ city: "Houston" });
+    const { draft, assumptions } = session.snapshot();
+    return { draft, assumptions };
+  };
+
+  it("returns { ...snapshot, assistantMessage, actions } for a scripted Montrose request", async () => {
+    const model = new ScriptedModel([
+      new AIMessage({
+        content: "",
+        tool_calls: [
+          { id: "1", name: "show_step", args: { stage: "map" } },
+          {
+            id: "2",
+            name: "open_site",
+            args: { siteId: UI_FIXTURE.montroseSiteId },
+          },
+        ],
+      }),
+      new AIMessage("Here are the Montrose spaces."),
+    ]);
+    const response = await uiHandler(model)(
+      request({
+        state: houstonState(),
+        message: "show me spaces in Montrose",
+        view: {
+          stage: "workspace",
+          candidateIds: [UI_FIXTURE.montroseSiteId],
+        },
+      }),
+      context(UI_FIXTURE.projectId),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.assistantMessage).toBe("Here are the Montrose spaces.");
+    expect(body.draft.city).toBe("Houston");
+    expect(UiActionListSchema.parse(body.actions)).toEqual([
+      { id: "ui_1", type: "navigate", stage: "map" },
+      { id: "ui_2", type: "open_site", siteId: UI_FIXTURE.montroseSiteId },
+    ]);
+  });
+
+  it("rejects a spoofed site ID and a comparison from another project server-side", async () => {
+    const model = new ScriptedModel([
+      new AIMessage({
+        content: "",
+        tool_calls: [
+          { id: "1", name: "open_site", args: { siteId: "L-spoof:S-1" } },
+          {
+            id: "2",
+            name: "show_plan",
+            args: { comparisonId: UI_FIXTURE.foreignComparisonId },
+          },
+        ],
+      }),
+      new AIMessage("I couldn't open those."),
+    ]);
+    const response = await uiHandler(model)(
+      request({
+        message: "open my plan",
+        view: { stage: "workspace", siteId: "L-spoof:S-1" },
+      }),
+      context(UI_FIXTURE.projectId),
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.actions).toEqual([]);
+  });
+
+  it("returns the actions collected so far when the step budget runs out", async () => {
+    const targets = ["map", "candidate_list", "site_summary"];
+    const model = new ScriptedModel(
+      Array.from({ length: 20 }, (_, index) =>
+        new AIMessage({
+          content: "",
+          tool_calls: [
+            {
+              id: `h-${index}`,
+              name: "highlight",
+              args: { target: targets[index % 3] },
+            },
+          ],
+        }),
+      ),
+    );
+    const response = await uiHandler(model)(
+      request({ message: "point at things" }),
+      context(UI_FIXTURE.projectId),
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.assistantMessage).toContain("couldn't process that");
+    expect(body.actions.map((a: { target: string }) => a.target)).toEqual(
+      targets,
+    );
+  });
+
+  it("without a model, the patch that completes the profile shows the spaces step", async () => {
+    let n = 0;
+    const handler = createIntakeHandler({
+      projectExists: async () => true,
+      newActionId: () => `ui_${++n}`,
+    });
+    const session = createIntakeSession("project-1");
+    for (const answer of founderAnswers.slice(0, -1)) session.saveProfile(answer);
+    const { draft, assumptions } = session.snapshot();
+    const completing = await (
+      await handler(
+        request({ state: { draft, assumptions }, patch: founderAnswers.at(-1) }),
+        context(),
+      )
+    ).json();
+    expect(completing.profile).not.toBeNull();
+    expect(completing.actions).toEqual([
+      { id: "ui_1", type: "navigate", stage: "map" },
+    ]);
+    // A later form sync of the already-complete profile does not navigate again.
+    const again = await (
+      await handler(
+        request({
+          state: { draft: completing.draft, assumptions: completing.assumptions },
+        }),
+        context(),
+      )
+    ).json();
+    expect(again.actions).toEqual([]);
   });
 });

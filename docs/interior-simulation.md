@@ -34,8 +34,12 @@ Mint service markers are proposed overlays; the photographed counter is not
 removed or remodeled.
 
 The proposed overlay is registered near floor intersections in the public scan
-at `{ x: 17.1, y: 0.04, z: 10.3 }`, rotated by π radians and scaled by 0.5. This
-is an illustrative placement, not measured room geometry or a physical layout
+at `{ x: 17.1, y: 0.04, z: 10.3 }`, rotated by π radians and scaled by 0.5. These
+values live in the café's registry row (`lib/interior/__fixtures__/public-cafe.json`,
+HAC-138); `lib/layout/scan-transform.ts` maps layout feet to scan metres, and in
+development the viewer's **Dev: pick placement anchors** panel solves a placement
+from 2–3 picked floor points. A scan without a placement keeps the overlay on
+Modeled layout and says why. This is an illustrative placement, not measured room geometry or a physical layout
 validation. Blue and purple dots belong to the SDK scene graph, not a flat HTML
 layer. Connection/overlay errors are explicit; the UI never silently labels the
 modeled fallback as a scanned interior.

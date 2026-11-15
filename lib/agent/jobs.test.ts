@@ -75,6 +75,48 @@ describe("durable investigation jobs", () => {
     expect(executed).toEqual(["job-1:1:0:hash-0", "job-1:1:1:hash-1"]);
   });
 
+  it("keeps a resumable step (deadline-limited Jev panel) active, refunds its reservation and writes no milestone (HAC-155)", async () => {
+    const f = setup();
+    await f.service.create(input);
+    const deadlines: (number | undefined)[] = [];
+    let polls = 0;
+    const planner: InvestigationStepPlanner = async ({ nextSeq }) =>
+      nextSeq === 1
+        ? null
+        : {
+            tool: "poll_customers",
+            inputHash: "poll",
+            execute: async ({ deadlineAt }) => {
+              deadlines.push(deadlineAt);
+              if (++polls === 1)
+                throw Object.assign(
+                  new Error("Jev panel in progress (12/40 personas)"),
+                  { resumable: true },
+                );
+              return { summary: { polled: true } };
+            },
+          };
+    const paused = await f.service.advance("job-1", planner, {
+      maxDurationMs: 1000,
+    });
+    expect(paused.status).toBe("queued");
+    expect(paused.reason).toBe("Jev panel in progress (12/40 personas)");
+    expect(paused.counters).toEqual({
+      toolCalls: 0,
+      pollCustomers: 0,
+      evaluateSites: 0,
+    });
+    expect(await f.repository.listMilestones("job-1")).toHaveLength(0);
+    expect(deadlines[0]).toBeGreaterThan(Date.now());
+    expect(deadlines[0]).toBeLessThanOrEqual(Date.now() + 800);
+    const done = await f.service.advance("job-1", planner, {
+      maxDurationMs: 1000,
+    });
+    expect(done.status).toBe("succeeded");
+    expect(done.counters.pollCustomers).toBe(1);
+    expect(await f.repository.listMilestones("job-1")).toHaveLength(1);
+  });
+
   it("expires started queued/running jobs at five minutes, but not brand-new jobs", async () => {
     const f = setup();
     await f.service.create(input);

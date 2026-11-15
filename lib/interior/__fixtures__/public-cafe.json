@@ -1,0 +1,15 @@
+{
+  "modelId": "qfmMbTLt4Bo",
+  "description": "Public café scan used as a visual reference in the simulator example",
+  "placement": {
+    "origin": { "x": 17.1, "y": 0.04, "z": 10.3 },
+    "rotationY": 3.141592653589793,
+    "scale": 0.5,
+    "floorY": 0.04,
+    "entranceSweep": null,
+    "serviceSweep": {
+      "sweepId": "y0xe63ayfyepf8cg51cua77hb",
+      "rotation": { "x": -17, "y": 168 }
+    }
+  }
+}

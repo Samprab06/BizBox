@@ -24,7 +24,8 @@ import type {
   CandidateSite,
 } from "@/lib/panel/contracts";
 import { buildPersonas } from "@/lib/panel/personas";
-import { runPanelForSites } from "@/lib/panel/panel";
+import { runPanelForSites, type RunPanelOptions } from "@/lib/panel/panel";
+import { panelProgressMessage } from "@/lib/panel/progress";
 import type { JevClient } from "@/lib/panel/jev-client";
 import type { JevCache } from "@/lib/panel/cache";
 import type { ScenarioOverrides } from "@/lib/contracts/scenario";
@@ -96,6 +97,27 @@ export class AssemblyError extends Error {
     super(message);
   }
 }
+/**
+ * HAC-155: the Jev panel reached its deadline before every persona answered. Not a failure:
+ * the answers received are cached by key, so assembling the same inputs again resumes from
+ * them. Never reported as a finished Jev result, and never replaced by a silent Huff fallback.
+ */
+export class PanelInProgressError extends Error {
+  /** Marks a step that should be resent unchanged (read by the investigation job loop). */
+  readonly resumable = true;
+  constructor(
+    public readonly completedPersonas: number,
+    public readonly totalPersonas: number,
+  ) {
+    super(panelProgressMessage({ completedPersonas, totalPersonas }));
+    this.name = "PanelInProgressError";
+  }
+}
+/** Deadline for the Jev panel step of an assembly (see `RunPanelOptions.deadlineAt`). */
+export type PanelDeadline = Pick<
+  RunPanelOptions,
+  "deadlineAt" | "deadlineReserveMs" | "signal" | "now"
+>;
 export type AssemblySearch = {
   result: SiteSearchResult;
   frontageFt?: Record<string, AssumedValue>;
@@ -146,6 +168,7 @@ const TICKETS = {
 export async function assembleEvaluation(
   raw: AssembleEvaluationInput,
   deps: AssemblyDependencies,
+  panelDeadline: PanelDeadline = {},
 ): Promise<AssembledEvaluation> {
   const input = AssemblyInputSchema.parse(raw);
   const { profile } = input;
@@ -684,7 +707,7 @@ export async function assembleEvaluation(
     "Competitor size/frontage/position/anchors, price and independent brand class are uncalibrated defaults; only location/category come from source records.",
   );
   if (input.demandSource === "jev" && deps.jev && price > 0) {
-    const { tables } = await runPanelForSites({
+    const { tables, progress } = await runPanelForSites({
       personaSet,
       sites: panelSites,
       competitors: panelCompetitors,
@@ -694,7 +717,13 @@ export async function assembleEvaluation(
         serviceMinPerCustomer: service,
       },
       ...deps.jev,
+      ...panelDeadline,
     });
+    if (progress.inProgress)
+      throw new PanelInProgressError(
+        progress.completedPersonas,
+        progress.totalPersonas,
+      );
     const canonical = new Map([
       ...sites.map((s) => [optionId(s.siteId), s.siteId] as const),
       ...competitors.map((c) => [optionId(c.id), c.id] as const),

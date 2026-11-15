@@ -226,6 +226,7 @@ function setup(configured = false) {
     milestones: [],
     signal: new AbortController().signal,
     idempotencyKey: "step1",
+    deadlineAt: 1_000_000,
   };
   const registry = createInvestigationTools(deps);
   async function execute(name: InvestigationToolName, args: unknown) {
@@ -286,6 +287,11 @@ describe("investigation tools over existing scoped services", () => {
       ["paid", "cache-only"],
     );
     expect(vi.mocked(f.deps.assemble).mock.calls[1]![2].price).toBe(7);
+    // HAC-155: the paid poll carries the step deadline into the Jev panel.
+    expect(vi.mocked(f.deps.assemble).mock.calls[0]![4]).toEqual({
+      deadlineAt: 1_000_000,
+      signal: f.context.signal,
+    });
     const run = await f.execute("get_site_run", {
       run_id: summary.sites[0]!.runIds[0],
     });
