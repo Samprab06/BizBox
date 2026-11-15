@@ -11,6 +11,7 @@ const proceed = (page: Page) => page.getByRole("button", { name: "Continue", exa
 const exact = (page: Page) => page.getByRole("textbox", { name: /exact amount/ });
 const ruler = (page: Page) => page.getByRole("slider");
 const card = (page: Page) => page.getByRole("region", { name: "Review your business" });
+const fieldError = (page: Page) => page.locator("#onboarding-error");
 
 async function saved(page: Page) {
   const raw = await page.evaluate((key) => localStorage.getItem(key), storageKey);
@@ -117,7 +118,7 @@ for (const viewport of [
       for (const invalidRent of ["0", "99999999999"]) {
         await exact(page).fill(invalidRent);
         await proceed(page).click();
-        await expect(card(page).getByRole("alert")).toHaveText("Enter a whole dollar amount from $1 to $20,000.");
+        await expect(fieldError(page)).toHaveText("Enter a whole dollar amount from $1 to $20,000.");
         await expect(exact(page)).toHaveAttribute("aria-invalid", "true");
       }
       await exact(page).fill("4550");
@@ -129,7 +130,7 @@ for (const viewport of [
       await expect(title(page)).toHaveText("What’s your buildout budget?");
       await exact(page).fill("0");
       await proceed(page).click();
-      await expect(card(page).getByRole("alert")).toHaveText("Enter a whole dollar amount from $1 to $500,000.");
+      await expect(fieldError(page)).toHaveText("Enter a whole dollar amount from $1 to $500,000.");
       await exact(page).fill("80000");
       const box = (await ruler(page).boundingBox())!;
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -158,7 +159,7 @@ for (const viewport of [
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await exact(page).fill("");
       await proceed(page).click();
-      await expect(card(page).getByRole("alert")).toHaveText("Enter how many people will be on shift.");
+      await expect(fieldError(page)).toHaveText("Enter how many people will be on shift.");
       await expect(exact(page)).toHaveValue("");
       await exact(page).fill("2");
       await ruler(page).focus();
