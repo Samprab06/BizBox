@@ -27,19 +27,9 @@ export function assistantPresentation(
         INITIAL_OPENERS.has(entry.text)
       ),
   );
-  const rent = session.profile.rent;
-  const context = [
-    session.profile.category!.value,
-    session.profile.city!.value,
-    rent?.origin === "founder"
-      ? `Rent limit ${Number(rent.value).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}/mo`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
   return {
     messages: visible,
-    context,
-    placeholder: "Ask about your saved brief…",
+    context: null,
+    placeholder: "Ask about these locations…",
   };
 }

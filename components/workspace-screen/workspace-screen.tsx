@@ -51,6 +51,7 @@ import {
   toggleComparisonUnit,
 } from "./client-model";
 import { LocationExperience } from "./location-experience";
+import { shownCandidates } from "./shown-candidates";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
 import type { ListingCameraRequest } from "@/components/city/listing-markers";
 import { PropertyDetails, ListingList } from "./property-details";
@@ -174,6 +175,12 @@ export function WorkspaceScreen({
     setPresented(readIds(topSitesKey(projectId)));
   }, [projectId]);
   const topIds = topSiteIds(presented, candidateIds);
+  // The map and list show the top three plus anything chosen or open; lookups use all.
+  const shown = useMemo(
+    () =>
+      shownCandidates(candidates, topIds, controller.selectedIds, selectedId),
+    [candidates, topIds, controller.selectedIds, selectedId],
+  );
   const siteTweaks = flow.state.siteTweaks;
   const matching =
     controller.phase === "ready" &&
@@ -389,7 +396,9 @@ export function WorkspaceScreen({
     }
   }
   /** Builds the final plan from the comparison on screen (and its grounded /plan, if any). */
-  async function finalize(effect: Extract<WorkspaceEffect, { kind: "finalize" }>) {
+  async function finalize(
+    effect: Extract<WorkspaceEffect, { kind: "finalize" }>,
+  ) {
     const payload = controller.payload;
     if (
       !payload ||
@@ -436,7 +445,8 @@ export function WorkspaceScreen({
 
   const locations = step === "locations";
   const sidePaneOpen =
-    locations && (pane === "list" || (Boolean(selected) && pane === "property"));
+    locations &&
+    (pane === "list" || (Boolean(selected) && pane === "property"));
   const running = controller.phase === "running";
   return (
     <WorkspaceShell
@@ -448,10 +458,7 @@ export function WorkspaceScreen({
       editBriefHref={null}
       navigation={
         navigation ?? (
-          <Link
-            href="/workspace/credits.html"
-            className="text-xs underline"
-          >
+          <Link href="/workspace/credits.html" className="text-xs underline">
             Photo credits
           </Link>
         )
@@ -462,7 +469,7 @@ export function WorkspaceScreen({
           interior={locations && interior}
           selected={selected}
           tilesetUrl={tilesetUrl}
-          candidates={candidates}
+          candidates={shown}
           onSelect={select}
           cameraRequest={cameraRequest}
         />
@@ -511,7 +518,7 @@ export function WorkspaceScreen({
             )}
             {pane === "list" && (
               <ListingList
-                candidates={candidates}
+                candidates={shown}
                 selectedIds={controller.selectedIds}
                 selectedId={selected?.candidate.id}
                 running={running}
@@ -541,6 +548,7 @@ export function WorkspaceScreen({
         projectId={projectId}
         controller={controller}
         candidates={candidates}
+        shownCount={shown.length}
         selected={selected}
         onSelect={select}
         step={step}
@@ -597,5 +605,8 @@ function pulseAnchor(target: HighlightTarget) {
       : [{ boxShadow: ring }, { boxShadow: clear }],
     { duration: reduce ? 1600 : 900, iterations: reduce ? 1 : 2 },
   );
-  window.setTimeout(() => element.removeAttribute("data-agent-highlight"), 2000);
+  window.setTimeout(
+    () => element.removeAttribute("data-agent-highlight"),
+    2000,
+  );
 }

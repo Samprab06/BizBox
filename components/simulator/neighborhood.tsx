@@ -943,7 +943,7 @@ export default function Neighborhood({
               : meshStatus === "loading"
                 ? "Loading 3D imagery"
                 : meshStatus === "failed"
-                  ? "3D imagery unavailable"
+                  ? "3D imagery: Houston only"
                   : "3D imagery not available here"}
           </p>
         )}

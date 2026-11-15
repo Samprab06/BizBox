@@ -29,8 +29,8 @@ describe("workspace conversation presentation", () => {
     const original = structuredClone(saved);
     const result = assistantPresentation(saved, saved.messages);
     expect(result.messages).toEqual([]);
-    expect(result.context).toBe("Coffee shop · Houston · Rent limit $4,500/mo");
-    expect(result.placeholder).toBe("Ask about your saved brief…");
+    expect(result.context).toBeNull();
+    expect(result.placeholder).toBe("Ask about these locations…");
     expect(saved).toEqual(original);
   });
   it("preserves real founder/agent turns and later identical text", () => {

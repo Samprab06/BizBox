@@ -324,9 +324,11 @@ export function ConsultantShell({
             >
               <span>
                 {sheetOpen ? "Hide assistant" : "Open assistant"}
-                <span className="ml-2 rounded border border-viewport-line px-1.5 py-0.5 text-[11px] font-normal text-viewport-muted">
-                  {status}
-                </span>
+                {!sheetOpen && (
+                  <span className="ml-2 rounded border border-viewport-line px-1.5 py-0.5 text-[11px] font-normal text-viewport-muted">
+                    {status}
+                  </span>
+                )}
               </span>
               <svg
                 viewBox="0 0 20 20"

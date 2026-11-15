@@ -63,12 +63,10 @@ function MicIcon() {
 
 function Conversation({
   messages,
-  emptyContext,
   pending = false,
   id,
 }: {
   messages: IntakeConversation["messages"];
-  emptyContext?: string | null;
   pending?: boolean;
   id: string;
 }) {
@@ -88,16 +86,10 @@ function Conversation({
       className={`min-h-0 flex-1 overflow-y-auto px-5 py-4 text-sm ${focusRing}`}
     >
       {count === 0 ? (
-        emptyContext ? (
-          <p role="note" aria-label="Saved brief" className="text-xs text-muted">
-            {emptyContext}
-          </p>
-        ) : (
-          <p className="text-muted">
-            Ask BizBox about this space or your brief. Replies come from the
-            BizBox intake assistant.
-          </p>
-        )
+        <p className="text-muted">
+          Ask BizBox about this space or your brief. Replies come from the
+          BizBox intake assistant.
+        </p>
       ) : (
         <ol className="space-y-3">
           {messages.map((entry, index) => (
@@ -263,9 +255,6 @@ export function AssistantPanel({
           {actions}
         </div>
       </header>
-      <p className="border-b border-line px-5 py-2 text-xs text-muted">
-        Staffing changes and Keep/Revert are not connected yet.
-      </p>
 
       {failure && (
         <div
@@ -304,7 +293,6 @@ export function AssistantPanel({
           <>
             <Conversation
               messages={presentation.messages}
-              emptyContext={presentation.context}
               pending={busy}
               id={`${base}-log-text`}
             />
@@ -366,8 +354,8 @@ export function AssistantPanel({
               </div>
               {offline && (
                 <p className="mt-2 text-xs text-muted">
-                  The BizBox assistant is offline. Your brief can still be
-                  edited in Intake.
+                  The BizBox assistant is offline. You can still edit your
+                  brief under Your business in the top bar.
                 </p>
               )}
             </form>
@@ -410,7 +398,6 @@ export function AssistantPanel({
               <div className="flex max-h-72 min-h-0 flex-col">
                 <Conversation
                   messages={presentation.messages}
-                  emptyContext={presentation.context}
                   pending={busy}
                   id={`${base}-log-voice`}
                 />
