@@ -39,6 +39,7 @@ import {
   ONBOARDING_MS,
   type StoryChapter,
 } from "./timeline";
+import { NESSIE_PROMPT, nessieSchedule } from "./nessie-story";
 import { StoryMap } from "./story-map";
 import { PREPARED_MEDIA } from "./prepared-media-data";
 import type { PreparedPlaybackState } from "./prepared-video";
@@ -161,8 +162,7 @@ export function LandingStory({
     (desiredSpace !== null && spaceFrame.retainAnalytics);
   const timedLimit =
     frame.chapter === "consultant"
-      ? chatSchedule(data.consultant.question, data.consultant.messages)
-          .duration
+      ? nessieSchedule(data).duration
       : frame.chapter === "counter-question"
         ? chatSchedule(COUNTER_PROMPT, counterReply(demo)).duration
         : (timedLimits[frame.chapter] ?? 0);
@@ -606,15 +606,10 @@ export function LandingStory({
             elapsed={
               frame.chapter === "consultant"
                 ? chapterMs
-                : chatSchedule(
-                    data.consultant.question,
-                    data.consultant.messages,
-                  ).duration
+                : nessieSchedule(data).duration
             }
             reduced={reduced}
-            onSend={() =>
-              sendQuestion(data.consultant.question, data.consultant.messages)
-            }
+            onSend={() => sendQuestion(NESSIE_PROMPT, [])}
             interiorMix={
               frame.chapter === "counter-question"
                 ? 1

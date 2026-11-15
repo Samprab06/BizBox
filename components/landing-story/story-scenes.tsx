@@ -15,6 +15,8 @@ import { PreparedVideo } from "./prepared-video";
 import { PREPARED_MEDIA } from "./prepared-media-data";
 import { smooth } from "../landing-demo/timeline";
 import { chatAt } from "./timeline";
+import { nessieAt } from "./nessie-story";
+import { NessieConversation } from "./nessie-conversation";
 import styles from "./landing-story.module.css";
 import { STORY_ASSETS } from "./asset-paths";
 export function LocationDetails({ data }: { data: LocationStoryData }) {
@@ -265,12 +267,7 @@ export function ConsultantScene({
     fullWidth: number;
     fullHeight: number;
   } | null>(null);
-  const chat = chatAt(
-    data.consultant.question,
-    data.consultant.messages,
-    elapsed,
-    reduced,
-  );
+  const chat = nessieAt(data, elapsed, reduced);
   const mixRef = useRef(interiorMix);
   const measureRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
@@ -354,12 +351,10 @@ export function ConsultantScene({
           }}
           inert={interiorMix > 0.5}
         >
-          <ScriptedConversation
-            prompt={data.consultant.question}
-            replies={data.consultant.messages}
+          <NessieConversation
+            data={data}
             elapsed={elapsed}
             reduced={reduced}
-            label="Consultant question"
             onSend={onSend}
           >
             <div
@@ -370,9 +365,9 @@ export function ConsultantScene({
               aria-label="Generated café interior preview"
               aria-owns={interiorId}
             ></div>
-          </ScriptedConversation>
+          </NessieConversation>
           <p className={styles.qualifier}>
-            Prepared example · modeled, not a forecast
+            Simulated banking · modeled costs, not a forecast
           </p>
         </div>
       </div>
@@ -394,6 +389,7 @@ export function ConsultantScene({
             transform: `scale(${1 + 0.04 * pan}) translateX(${-pan * 0.6}%)`,
           }}
           fill
+          unoptimized
           sizes="100vw"
           priority
         />
