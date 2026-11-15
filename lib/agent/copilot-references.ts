@@ -13,6 +13,7 @@ import {
 import type { CopilotStoredComparison } from "./copilot-read-tools";
 import { acceptanceAt } from "@/lib/evaluation/evaluate";
 import { flattenOverrides } from "@/lib/scenario/model";
+import { segmentShares } from "./diagnose";
 
 export const CopilotReferenceSchema = z.union([
   CopilotReadReferenceSchema,
@@ -185,6 +186,29 @@ export function resolveCopilotReference(input: {
         value: hours[0][reference.metric],
         origin: "default" as const,
         limitation: "Saved representative run only",
+      };
+    }
+    case "segment_share": {
+      const record = comparisonFor(reference.comparisonId);
+      const site = record.evaluation.result.sites.find(
+        (s) => s.siteId === reference.siteId,
+      );
+      if (!site) return fail();
+      const row = segmentShares(
+        EvaluationRequestSchema.parse(record.evaluation.request),
+        site.siteId,
+        site.demandSource,
+      ).find((r) => r.segment === reference.segment);
+      const value = row?.shares[reference.storeId];
+      if (value === undefined) return fail();
+      return {
+        reference,
+        value,
+        origin: "default" as const,
+        limitation:
+          site.demandSource === "jev"
+            ? "Modeled Jev panel choice share, not observed foot traffic"
+            : "Huff fallback choice share, not observed foot traffic",
       };
     }
     case "candidate":
