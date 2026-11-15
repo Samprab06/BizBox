@@ -5,10 +5,12 @@
  *
  * HAC-136: a first visit gets its own project (`POST /api/projects`); the landing remembers
  * that project's ID on this device so a returning founder resumes their own brief.
+ *
+ * Scene 1: the brief is taken by the structured questionnaire (the flow's `questions` step,
+ * `/intake`); a complete brief continues at the workspace's `locations` step.
  */
 import { missingFields, type IntakeSession } from "@/components/intake/profile";
-import { entryPath } from "@/components/shell/entry-flow";
-import { workspaceHref } from "@/lib/client/workspace-routes";
+import { flowStepHref } from "@/lib/client/flow-progress";
 import { DEMO_PROJECT_ID, isKnownProjectId } from "@/lib/projects/ids";
 
 /** localStorage key holding the ID of the project this device's founder is working on. */
@@ -19,10 +21,9 @@ export type EntryTarget =
   | {
       kind: "returning";
       complete: boolean;
-      /** The project's chat-first entry (HAC-150); a complete brief docks from there. */
+      /** The questionnaire (the flow's `questions` step). */
       onboardingHref: string;
-      /** The guided intake, kept as the "Edit brief" view. */
-      briefHref: string;
+      /** The workspace's `locations` step, where a complete brief continues. */
       workspaceHref: string;
     };
 
@@ -44,17 +45,14 @@ export function entryTarget(
   session: IntakeSession | null,
   projectId: string,
 ): EntryTarget {
-  // HAC-150: the chat-first entry is where the brief is taken; the guided intake (HAC-127)
-  // remains as the "Edit brief" view.
-  const onboardingHref = entryPath(projectId);
+  const onboardingHref = flowStepHref(projectId, "questions");
   if (!session || !hasStarted(session))
     return { kind: "onboarding", href: onboardingHref };
   return {
     kind: "returning",
     complete: missingFields(session.profile).length === 0,
     onboardingHref,
-    briefHref: workspaceHref(projectId, "intake"),
-    workspaceHref: workspaceHref(projectId, "workspace"),
+    workspaceHref: flowStepHref(projectId, "locations"),
   };
 }
 

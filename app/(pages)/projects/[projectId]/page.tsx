@@ -1,8 +1,16 @@
+import { redirect } from "next/navigation";
+import { workspaceHref } from "@/lib/client/workspace-routes";
+
 /**
- * HAC-150: the project's entry route. The shell (project layout) opens the consultant full
- * screen here and docks it beside Spaces once the brief is complete or the agent navigates,
- * so this page has nothing of its own to show. It exists so `/projects/<id>` is a route.
+ * Scene 1: the project's entry route opens the flow's first step, the questionnaire. The
+ * path is `flowStepHref(projectId, "questions")`; that helper lives in a client module, so
+ * this server page builds the same `/intake` URL with `workspaceHref`.
  */
-export default function ProjectEntryPage() {
-  return null;
+export default async function ProjectEntryPage({
+  params,
+}: {
+  params: Promise<{ projectId: string }>;
+}) {
+  const { projectId } = await params;
+  redirect(workspaceHref(projectId, "intake"));
 }

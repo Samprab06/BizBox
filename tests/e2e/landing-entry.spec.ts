@@ -1,11 +1,6 @@
 import type { Page } from "@playwright/test";
-import { workspaceHref } from "../../lib/client/workspace-routes";
-import {
-  expect,
-  expectNoA11yViolations,
-  openConsultant,
-  test,
-} from "./fixtures";
+import { flowStepHref } from "../../lib/client/flow-progress";
+import { expect, expectNoA11yViolations, test } from "./fixtures";
 
 // The preserved static preview leads into the guided onboarding and
 // the workspace. Every network boundary is a page.route mock: no model, voice, map tile,
@@ -251,7 +246,7 @@ test.describe("the legacy landing preview", () => {
     );
     await expect.poll(() => page.frames().length).toBeGreaterThan(1);
     await page.locator(".nav-cta").click();
-    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
     expect(page.frames()).toHaveLength(1);
   });
 
@@ -271,7 +266,7 @@ test.describe("the legacy landing preview", () => {
     await page.keyboard.press("Tab");
     await expect(page.locator(":focus")).toHaveClass(/nav-cta/);
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
   });
 
   test("reduced motion still loads the landing and its call-to-action", async ({
@@ -305,32 +300,30 @@ test.describe("the legacy landing preview", () => {
       await expectNoHorizontalOverflow(page);
       await expect(page.locator(".nav-cta")).toBeInViewport();
       await page.goto("/start");
-      await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
+      await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
     });
   }
 });
 
 test.describe("landing to onboarding to workspace", () => {
-  test("a first visit goes through /start into the chat-first entry and its answers resume from the landing", async ({
+  test("a first visit goes through /start into the questionnaire and its answers resume from the landing", async ({
     page,
   }) => {
     await openLanding(page);
     await page.locator(".nav-cta").click();
-    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
-    // HAC-150: the brief starts as a full-screen chat; the guided chips are an inline card.
-    await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
-      "data-consultant-layout",
-      "focus",
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
+    // Scene 1: the brief is the structured questionnaire, not a full-screen chat.
+    await expect(page.locator('[data-consultant-layout="focus"]')).toHaveCount(0);
+    await expect(page.locator("#onboarding-title")).toHaveText(
+      "What are you opening?",
     );
-    await expect(
-      page.getByRole("heading", { name: "What are you opening?" }),
-    ).toBeVisible();
 
     // One answer goes into the existing intake session.
     await page.getByRole("button", { name: "Quick food" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Describe your business." }),
-    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.locator("#onboarding-title")).toHaveText(
+      "Describe your business.",
+    );
     await expect
       .poll(async () => {
         const saved = await page.evaluate(
@@ -350,15 +343,15 @@ test.describe("landing to onboarding to workspace", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Open your workspace" }),
-    ).toHaveAttribute("href", workspaceHref(NEW_PROJECT, "workspace"));
-    await page.getByRole("link", { name: "Continue the conversation" }).click();
-    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123$/);
-    await expect(page.getByLabel("Conversation")).toContainText(
+    ).toHaveAttribute("href", flowStepHref(NEW_PROJECT, "locations"));
+    await page.getByRole("link", { name: "Continue the questions" }).click();
+    await expect(page).toHaveURL(/\/projects\/p-0123456789abcdef0123\/intake$/);
+    await expect(page.locator("#onboarding-title")).toHaveText(
       "Describe your business.",
     );
   });
 
-  test("a started brief offers the conversation or the workspace", async ({
+  test("a started brief offers the questions or the workspace", async ({
     page,
   }) => {
     await savePartialProfile(page);
@@ -370,31 +363,24 @@ test.describe("landing to onboarding to workspace", () => {
     await expectNoA11yViolations(page);
     await page.getByRole("link", { name: "Open your workspace" }).click();
     await expect(page).toHaveURL(
-      /\/projects\/p-0123456789abcdef0123\/workspace$/,
+      /\/projects\/p-0123456789abcdef0123\/workspace\?step=locations$/,
     );
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Workspace" }),
-    ).toBeVisible();
-    await openConsultant(page);
   });
 
-  test("a returning founder with a finished profile lands docked on Spaces from the call-to-action", async ({
+  test("a returning founder with a finished profile continues at Top locations from the call-to-action", async ({
     page,
   }) => {
     await saveFinishedProfile(page);
     await openLanding(page);
     await page.locator(".nav-cta").click();
     await expect(page).toHaveURL(
-      /\/projects\/p-0123456789abcdef0123\/workspace$/,
+      /\/projects\/p-0123456789abcdef0123\/workspace\?step=locations$/,
     );
     await expect(
-      page.getByRole("heading", { level: 1, name: "Workspace" }),
-    ).toBeVisible();
-    await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
-      "data-consultant-layout",
-      "docked",
-    );
-    await openConsultant(page);
+      page
+        .getByRole("navigation", { name: "Progress" })
+        .locator('[aria-current="step"]'),
+    ).toContainText("Top locations");
   });
 
   test("the landing's final stage leads a returning founder to their own workspace", async ({
@@ -408,14 +394,11 @@ test.describe("landing to onboarding to workspace", () => {
     });
     await expect(link).toBeVisible({ timeout: 15_000 });
     await link.click();
-    // HAC-136: the link goes through /start, which knows this device's project; HAC-150: with a
-    // finished brief it carries on to the docked workspace by itself.
+    // HAC-136: the link goes through /start, which knows this device's project; with a
+    // finished brief it carries on to the Top locations step by itself.
     await expect(page).toHaveURL(
-      /\/projects\/p-0123456789abcdef0123\/workspace$/,
+      /\/projects\/p-0123456789abcdef0123\/workspace\?step=locations$/,
     );
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Workspace" }),
-    ).toBeVisible();
   });
 
   test("/start is usable at phone width", async ({ page }) => {

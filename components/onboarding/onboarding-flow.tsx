@@ -58,12 +58,16 @@ export function OnboardingFlow({
   onCommit,
   formHref,
   nextHref,
+  onNext,
   notice,
 }: {
   profile: Profile;
   onCommit: (key: QuestionStep, value: string) => void;
   formHref: string;
+  /** Where "Find my locations" leads: the flow's `locations` step. */
   nextHref: string;
+  /** Runs as the founder follows `nextHref` (Scene 1: unlocks the `locations` step). */
+  onNext?: () => void;
   notice?: ReactNode;
 }) {
   const [step, setStep] = useState<Step>(() => resumeStep(profile));
@@ -222,6 +226,7 @@ export function OnboardingFlow({
                   profile={profile}
                   formHref={formHref}
                   nextHref={nextHref}
+                  onNext={onNext}
                   onFix={go}
                 />
               ) : (
@@ -522,11 +527,13 @@ function ReviewActions({
   profile,
   formHref,
   nextHref,
+  onNext,
   onFix,
 }: {
   profile: Profile;
   formHref: string;
   nextHref: string;
+  onNext?: () => void;
   onFix: (step: Step) => void;
 }) {
   const invalid = questionSteps.find(
@@ -554,6 +561,7 @@ function ReviewActions({
       ) : (
         <Link
           href={nextHref}
+          onClick={onNext}
           className={cn(
             "inline-flex items-center justify-center gap-2 rounded-control",
             buttonVariants.primary,
@@ -562,7 +570,7 @@ function ReviewActions({
             pressable,
           )}
         >
-          Open workspace <span aria-hidden="true">→</span>
+          Find my locations <span aria-hidden="true">→</span>
         </Link>
       )}
     </>
