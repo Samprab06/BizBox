@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { z } from "zod";
+import type { SiteTweakMap } from "@/lib/contracts/evaluation";
 
 /**
  * HAC-135: the small client project store. It keeps the state a founder builds up in a
@@ -16,6 +17,13 @@ const SavedSchema = z.object({
   profileId: z.string().min(1),
   profileVersion: z.number().int().positive(),
   intakeFingerprint: z.string(),
+  /**
+   * Scene 1: the per-site tweaks the run used (`siteTweaksKey`); "" or absent means none.
+   * A different key for the same units makes the stored result outdated.
+   */
+  tweaksKey: z.string().optional(),
+  /** The candidate ids the run requested; the server may have modeled fewer. */
+  requestedIds: z.array(z.string()).optional(),
 });
 export type SavedComparison = z.infer<typeof SavedSchema>;
 
@@ -67,6 +75,46 @@ export function writeSavedComparison(saved: SavedComparison) {
 }
 
 const ShortlistSchema = z.array(z.string().min(1)).max(8);
+
+/**
+ * Scene 1: a stable key for the tweaks that apply to these units (ids in any order). Two
+ * selections with the same units and the same tweaks share a key; no tweaks is "".
+ */
+export function siteTweaksKey(
+  ids: readonly string[],
+  tweaks: SiteTweakMap,
+): string {
+  const entries = [...new Set(ids)]
+    .sort()
+    .flatMap((id) => {
+      const value = tweaks[id];
+      return value && Object.keys(value).length ? [[id, canonical(value)]] : [];
+    });
+  return entries.length ? JSON.stringify(entries) : "";
+}
+
+/** The tweaks for these units only (the POST /api/comparisons `siteTweaks` body). */
+export function pickSiteTweaks(
+  ids: readonly string[],
+  tweaks: SiteTweakMap,
+): SiteTweakMap {
+  return Object.fromEntries(
+    ids.flatMap((id) => {
+      const value = tweaks[id];
+      return value && Object.keys(value).length ? [[id, value]] : [];
+    }),
+  );
+}
+
+function canonical(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, canonical(entry)]),
+  );
+}
 
 export function readShortlist(
   storage: Pick<Storage, "getItem">,

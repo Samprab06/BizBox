@@ -15,6 +15,21 @@ import {
   type StationSelection,
 } from "./station-callout-client";
 import { muted } from "./insights-frame";
+import styles from "./station-counters.module.css";
+import {
+  FOUNDER_INTRO,
+  amountRange,
+  founderOptionTitle,
+  founderRecommendation,
+  founderSourceLine,
+  founderStatusBadge,
+  hoursLine,
+  moneyRange,
+  progressLine,
+  signedAmount,
+  signedMoneyPerMonth,
+  staffLine,
+} from "./station-callout-copy";
 
 const names: Record<StationExperimentConfigurationId, string> = {
   baseline: "Baseline",
@@ -201,6 +216,23 @@ function StationController({
     visible?.configurations.filter((config) => config.status === "succeeded")
       .length ?? 0;
   const result = visible?.result;
+  if (founderLabels)
+    return (
+      <FounderCounters
+        visible={visible}
+        loading={loading}
+        writing={writing}
+        error={error}
+        needsRead={needsRead}
+        completed={completed}
+        onRun={run}
+        onRetry={() => {
+          setLoading(true);
+          setError(null);
+          setAttempt((value) => value + 1);
+        }}
+      />
+    );
   return (
     <section
       aria-label="Station experiment"
@@ -304,8 +336,11 @@ function StationController({
           )}
           {visible.status === "unavailable" && (
             <p role="status">
-              {visible.unavailable?.reason ??
-                "Station alternatives are unavailable for this saved data."}
+              {founderLabels &&
+              visible.unavailable?.code === "no_effective_variants"
+                ? "This space has no room for more counters at its size."
+                : (visible.unavailable?.reason ??
+                  "Station alternatives are unavailable for this saved data.")}
             </p>
           )}
           {result?.status === "available" && result.selected && (
@@ -361,5 +396,204 @@ function StationController({
         </Button>
       </div>
     </section>
+  );
+}
+
+export function FounderCounters({
+  visible,
+  loading,
+  writing,
+  error,
+  needsRead,
+  completed,
+  onRun,
+  onRetry,
+}: {
+  visible: StationExperimentRun | null;
+  loading: boolean;
+  writing: boolean;
+  error: string | null;
+  needsRead: boolean;
+  completed: number;
+  onRun: (confirm: boolean) => void;
+  onRetry: () => void;
+}) {
+  const result = visible?.result;
+  const variants = result?.status === "available" ? result.variants : [];
+  const baseline = visible?.configurations.find((c) => c.id === "baseline");
+  const baselineStations = baseline?.effectiveStations ?? 0;
+  const selected = result?.status === "available" ? result.selected : null;
+  return (
+    <section
+      aria-label="Station experiment"
+      aria-busy={loading || writing}
+      className="min-w-0 space-y-3 text-sm"
+    >
+      <p>{FOUNDER_INTRO}</p>
+      {visible && (
+        <p className={muted}>
+          {founderSourceLine(visible.source.demandSource)}
+          {baseline ? ` · ${hoursLine(baseline.hours)}` : ""}
+        </p>
+      )}
+      {loading && <p role="status">Loading…</p>}
+      {error && (
+        <p role="alert" className="text-[var(--sw-assumption-ink)]">
+          {error}
+        </p>
+      )}
+      {visible && (
+        <>
+          {visible.source.outdated === true && (
+            <p role="status" className="font-semibold">
+              These results are for earlier choices. Rerun to refresh them.
+            </p>
+          )}
+          <ul aria-label="Counter options" className={styles.cards}>
+            {visible.configurations.map((config) => {
+              const needsConfirm =
+                visible.status === "needs_confirmation" &&
+                visible.confirmation?.configurationId === config.id;
+              const badge = founderStatusBadge(config.status, needsConfirm);
+              const variant = variants.find(
+                (v) => v.change.toPlannedStations === config.plannedStations,
+              );
+              return (
+                <li key={config.id} className={styles.card}>
+                  <div className={styles.head}>
+                    <strong className={styles.title}>
+                      {founderOptionTitle(
+                        config.id,
+                        config.effectiveStations,
+                        baselineStations,
+                      )}
+                    </strong>
+                    {badge && (
+                      <span
+                        className={`${styles.badge} ${badge.tone === "warn" ? styles.badgeWarn : ""}`}
+                      >
+                        {badge.label}
+                      </span>
+                    )}
+                  </div>
+                  <p className={styles.sub}>{staffLine(config.staffHeadcount)}</p>
+                  {variant ? (
+                    <dl className={styles.metrics}>
+                      <Metric
+                        label="Monthly contribution"
+                        value={signedMoneyPerMonth(
+                          variant.monthlyContributionChangeUsd.mean,
+                        )}
+                        range={moneyRange(
+                          variant.monthlyContributionChangeUsd.low,
+                          variant.monthlyContributionChangeUsd.high,
+                        )}
+                      />
+                      <Metric
+                        label="Monthly revenue"
+                        value={signedMoneyPerMonth(
+                          variant.monthlyRevenueChangeUsd.mean,
+                        )}
+                        range={moneyRange(
+                          variant.monthlyRevenueChangeUsd.low,
+                          variant.monthlyRevenueChangeUsd.high,
+                        )}
+                      />
+                      <Metric
+                        label="Walk-aways"
+                        value={signedAmount(
+                          variant.monthlyWalkAwayChange.mean,
+                          "customers/mo",
+                        )}
+                        range={amountRange(
+                          variant.monthlyWalkAwayChange.low,
+                          variant.monthlyWalkAwayChange.high,
+                        )}
+                      />
+                    </dl>
+                  ) : config.id === "baseline" && config.status === "succeeded" ? (
+                    <p className={styles.sub}>Your starting point.</p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          <p role="status" className={muted}>
+            {progressLine(completed, visible.configurations.length)}
+            {writing ? " · running…" : ""}
+          </p>
+          {visible.status === "unavailable" && (
+            <p role="status">
+              {visible.unavailable?.code === "no_effective_variants"
+                ? "This space has no room for more counters at its size."
+                : "Counter options aren't available for this comparison."}
+            </p>
+          )}
+          {visible.status === "ready" && result?.status === "available" && (
+            <p role="status" className={styles.recommendation}>
+              {founderRecommendation(
+                selected
+                  ? {
+                      fromEffectiveStations:
+                        selected.change.fromEffectiveStations,
+                      toEffectiveStations: selected.change.toEffectiveStations,
+                      contributionMean:
+                        selected.monthlyContributionChangeUsd.mean,
+                    }
+                  : null,
+              )}
+            </p>
+          )}
+        </>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {visible?.nextConfigurationId && visible.status !== "unavailable" && (
+          <Button
+            variant="quiet"
+            type="button"
+            className={button}
+            disabled={loading || writing || needsRead || !!error}
+            onClick={() => onRun(visible.status === "needs_confirmation")}
+          >
+            {writing
+              ? "Running…"
+              : visible.status === "needs_confirmation"
+                ? "Confirm and continue"
+                : completed || visible.status === "running"
+                  ? "Continue the counter test"
+                  : "Run the counter test"}
+          </Button>
+        )}
+        {(!visible || needsRead || !!error) && (
+          <Button
+            variant="quiet"
+            type="button"
+            className={button}
+            disabled={loading || writing}
+            onClick={onRetry}
+          >
+            {visible ? "Refresh" : "Try again"}
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
+function Metric({
+  label,
+  value,
+  range,
+}: {
+  label: string;
+  value: string;
+  range: string;
+}) {
+  return (
+    <div className={styles.metric}>
+      <dt className={styles.metricLabel}>{label}</dt>
+      <dd className={styles.metricValue}>
+        {value} <span className={styles.metricRange}>({range})</span>
+      </dd>
+    </div>
   );
 }

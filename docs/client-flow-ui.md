@@ -27,7 +27,7 @@ One review consultant area remains alongside the visualization. Its scripted sam
 
 ## Integration responsibilities
 - Existing production comparison API/results remain authoritative; graph presentation consumes those payloads without recomputing evaluation math.
-- Sam's HAC-161 owns unified intake/copilot routing; the review pane does not replace that runtime.
+- Sam's HAC-161 owns unified intake/copilot routing; the review pane does not replace that runtime. (Scene 1 removed the Copilot; the consultant/intake agent is now the only agent.)
 - Yasser's HAC-148/HAC-88 own real consultant screen dispatch, and HAC-79 owns experiment service control integration.
 - The selected-site registry remains authoritative for actual Matterport scans; schematic review visuals are not scans. HAC-87 owns layout rendering in Matterport.
 - Nessie's existing `read_nessie_cash_buffer` tool and saved result contract own real sandbox reads. Sample account numbers are not vendor results, business cash, sales, financing approval or forecast evidence.

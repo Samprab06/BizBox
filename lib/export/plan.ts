@@ -6,6 +6,14 @@ import {
   type PlanFact,
   type PlanReference,
 } from "@/lib/contracts/plan";
+import {
+  buildSiteLabels,
+  humanizeText,
+  metricLabel,
+  sourceLabels,
+  statusSentence,
+  type SiteLabels,
+} from "./plan-copy";
 
 /**
  * HAC-26: printable location plan. A one-way allowlist projection of HAC-24's grounded plan.
@@ -20,6 +28,9 @@ export type PrintableRow = {
   label: string;
   value: string;
   origins: ExportOrigin[];
+  /** Short, de-duplicated, human source names ("Your answers", "Public data", ...). */
+  sources: string[];
+  /** Raw evidence references; technical details only, never shown inline. */
   citations: string[];
   note?: string;
 };
@@ -40,6 +51,8 @@ export type PrintablePlan = {
   sections: PrintableSection[];
   attributions: { label: string; detail: string }[];
   limitations: string[];
+  /** The profile changed after this comparison ran; the plan still reflects the run. */
+  outdated: boolean;
 };
 
 export class PlanExportRefusal extends Error {
@@ -64,7 +77,7 @@ const ComparisonSchema = z.object({
 });
 export type ExportComparison = z.infer<typeof ComparisonSchema>;
 
-/** Fail closed before rendering: the comparison must be this project's and current. */
+/** Fail closed before rendering: the comparison must be this project's. An outdated one still exports. */
 export function requireCurrentComparison(
   value: unknown,
   projectId: string,
@@ -79,11 +92,6 @@ export function requireCurrentComparison(
     throw new PlanExportRefusal(
       "invalid",
       "The saved comparison could not be verified.",
-    );
-  if (parsed.data.outdated)
-    throw new PlanExportRefusal(
-      "outdated",
-      "This comparison is outdated: the profile changed after it ran. Rerun the comparison before exporting.",
     );
   return parsed.data;
 }
@@ -115,11 +123,21 @@ const LIMITATIONS = [
   "Photos, floor plans, 3D scans and listing remarks are not included until their export terms are confirmed.",
 ];
 
+export const OUTDATED_LIMITATION =
+  "This plan uses your answers as they were when this comparison ran; they've changed since. Rerun the comparison to update these modeled ranges.";
+
 export function referenceLabel(ref: PlanReference): string {
   if ("comparisonId" in ref)
     return `comparison ${ref.comparisonId} · ${ref.metric}`;
   if ("runId" in ref) return `run ${ref.runId} · ${ref.metric}`;
   return `evidence ${ref.evidenceId} · ${ref.metric}`;
+}
+
+/** "<address> — <setting>" for assumption paths that name a site; otherwise just the setting. */
+function assumptionLabel(path: string, labels: SiteLabels): string {
+  const id = Object.keys(labels).find((k) => path.includes(`sites.${k}.`));
+  const name = metricLabel(path);
+  return id ? `${labels[id]} — ${name}` : name;
 }
 
 const number = (v: number) =>
@@ -131,13 +149,26 @@ const number = (v: number) =>
 export function formatFact(fact: PlanFact): string {
   const { low, high } = fact.range;
   const money = /usd|\$|dollar/i.test(fact.unit);
-  const fmt = (v: number) => (money ? `$${number(v)}` : number(v));
+  const share = /^(fraction|share|ratio)$/i.test(fact.unit.trim());
+  const minutes = /^min(ute)?s?$/i.test(fact.unit.trim());
+  const fmt = (v: number) =>
+    money
+      ? `$${number(v)}`
+      : share
+        ? `${Math.round(v * 100)}%`
+        : minutes
+          ? (Math.round(v * 10) / 10).toLocaleString("en-US")
+          : number(v);
   const unit = money
     ? fact.unit
         .replace(/usd/i, "")
         .replace(/^[_\s]+/, "")
         .replaceAll("_", " ")
-    : fact.unit.replaceAll("_", " ");
+    : share
+      ? ""
+      : minutes
+        ? "min"
+        : fact.unit.replaceAll("_", " ");
   const value = low === high ? fmt(low) : `${fmt(low)} – ${fmt(high)}`;
   const label =
     fact.kind === "input" && low === high
@@ -156,14 +187,19 @@ const factRow = (
   label,
   value: formatFact(fact),
   origins: [...new Set(fact.origins)],
+  sources: sourceLabels(fact.origins),
   citations: [
     referenceLabel(fact.reference),
     ...fact.evidenceIds.map((id) => `evidence ${id}`),
   ],
   ...(note ? { note } : {}),
 });
-const metricLabel = (fact: PlanFact) =>
-  fact.reference.metric.replaceAll(/[._]/g, " ");
+/** "<address> — <metric>" for a fact whose reference path starts with `sites.<id>.`. */
+const factLabel = (fact: PlanFact, labels: SiteLabels) => {
+  const metric = fact.reference.metric;
+  const id = Object.keys(labels).find((k) => metric.startsWith(`sites.${k}.`));
+  return id ? `${labels[id]} — ${metricLabel(metric)}` : metricLabel(metric);
+};
 
 export function preparePlanExport(input: {
   projectId: string;
@@ -190,35 +226,52 @@ export function preparePlanExport(input: {
       "The grounded plan does not match this saved comparison.",
     );
   const plan = parsed.data;
-  const site = (id: string | null) =>
-    id ? (input.siteLabels?.[id] ?? id) : null;
+  const labels = buildSiteLabels(
+    [
+      ...new Set([
+        ...plan.why.map((w) => w.siteId),
+        ...(plan.plan.recommendedSiteId ? [plan.plan.recommendedSiteId] : []),
+        ...(plan.runnerUpSiteId ? [plan.runnerUpSiteId] : []),
+        ...plan.tiedSiteIds,
+      ]),
+    ],
+    input.siteLabels,
+  );
+  const site = (id: string | null) => (id ? (labels[id] ?? null) : null);
+  const say = (text: string) => humanizeText(text, labels);
 
   const sections: PrintableSection[] = [
     {
       id: "comparison",
       title: "Why this site",
-      notes: plan.why.map((w) => `${site(w.siteId)}: ${w.explanation}`),
+      notes: [
+        ...new Set(
+          plan.why.map((w) => `${site(w.siteId)}: ${say(w.explanation)}`),
+        ),
+      ],
       rows: plan.why.flatMap((w) =>
-        w.facts.map((f) => factRow(`${site(w.siteId)} · ${metricLabel(f)}`, f)),
+        w.facts.map((f) =>
+          factRow(`${site(w.siteId)} — ${metricLabel(f.reference.metric)}`, f),
+        ),
       ),
     },
     {
       id: "conditions",
       title: "Conditions that change the choice",
       notes: [
-        ...plan.plan.conditions,
-        `Demand model: ${plan.demand.actual === "jev" ? "Jev" : "Huff"}${plan.demand.requested !== plan.demand.actual ? ` (requested ${plan.demand.requested})` : ""}${plan.demand.fallbackReason ? ` · ${plan.demand.fallbackReason}` : ""}. Huff check: ${plan.demand.huffAgreement.replaceAll("_", " ")}.`,
+        ...new Set(plan.plan.conditions.map(say)),
+        `Customer demand model: ${plan.demand.actual === "jev" ? "Jev customer panel" : "Huff gravity model"}${plan.demand.requested !== plan.demand.actual ? ` (the ${plan.demand.requested === "jev" ? "Jev customer panel" : "Huff gravity model"} was requested)` : ""}${plan.demand.fallbackReason ? `. ${say(plan.demand.fallbackReason)}` : ""}. Cross-check with the simpler Huff model: ${plan.demand.huffAgreement.replaceAll("_", " ")}.`,
       ],
       rows: plan.sensitivity.flatMap((s) => [
         factRow(
-          `${s.assumption.replaceAll("_", " ")} · tested range`,
+          `${metricLabel(s.assumption)} — range we tested`,
           s.testedRange,
-          s.conclusion,
+          say(s.conclusion),
         ),
         ...(s.flipBracket
           ? [
               factRow(
-                `${s.assumption.replaceAll("_", " ")} · flips between`,
+                `${metricLabel(s.assumption)} — best site changes between`,
                 s.flipBracket,
               ),
             ]
@@ -229,14 +282,14 @@ export function preparePlanExport(input: {
       id: "lease",
       title: "Lease targets",
       notes: [],
-      rows: plan.leaseTargets.map((f) => factRow(metricLabel(f), f)),
+      rows: plan.leaseTargets.map((f) => factRow(factLabel(f, labels), f)),
     },
     {
       id: "operations",
       title: "Staffing, stations and buildout",
       notes: [],
       rows: [...plan.staffingAndStations, ...plan.buildoutBudget].map((f) =>
-        factRow(metricLabel(f), f),
+        factRow(factLabel(f, labels), f),
       ),
     },
     {
@@ -244,9 +297,10 @@ export function preparePlanExport(input: {
       title: "First 90 days: what to check",
       notes: [],
       rows: plan.firstNinetyDays.map((c) => ({
-        label: c.check,
+        label: say(c.check),
         value: "",
         origins: [],
+        sources: [],
         citations: c.references.map(referenceLabel),
       })),
     },
@@ -255,17 +309,18 @@ export function preparePlanExport(input: {
       title: "Assumptions and where they come from",
       notes: [],
       rows: plan.assumptions.map((a) => ({
-        label: a.path,
+        label: assumptionLabel(a.path, labels),
         value: a.fact
           ? formatFact(a.fact)
           : a.qualitativeValue === null
             ? "unknown"
             : String(a.qualitativeValue),
         origins: [a.origin],
+        sources: sourceLabels([a.origin]),
         citations: [referenceLabel(a.reference)],
         note:
           a.sensitivity.status === "tested"
-            ? a.sensitivity.conclusion
+            ? say(a.sensitivity.conclusion)
             : "Not tested by a sensitivity run.",
       })),
     },
@@ -273,7 +328,7 @@ export function preparePlanExport(input: {
       id: "findings",
       title: "Findings and caveats",
       notes: plan.findings.map((f) =>
-        f.siteId ? `${site(f.siteId)}: ${f.message}` : f.message,
+        f.siteId ? `${site(f.siteId)}: ${say(f.message)}` : say(f.message),
       ),
       rows: [],
     },
@@ -283,12 +338,22 @@ export function preparePlanExport(input: {
     title: "Location plan",
     comparisonId: comparison.comparisonId,
     status: plan.status,
-    recommendation: plan.plan.recommendation,
+    recommendation: statusSentence(plan.status, {
+      recommended: site(plan.plan.recommendedSiteId),
+      tied: plan.tiedSiteIds.map((id) => site(id)!),
+    }),
     recommendedSite: site(plan.plan.recommendedSiteId),
     runnerUp: site(plan.runnerUpSiteId),
     tied: plan.tiedSiteIds.map((id) => site(id)!),
     sections: sections.filter((s) => s.rows.length || s.notes.length),
     attributions: ATTRIBUTIONS,
-    limitations: LIMITATIONS,
+    limitations: [
+      ...new Set(
+        comparison.outdated
+          ? [OUTDATED_LIMITATION, ...LIMITATIONS]
+          : LIMITATIONS,
+      ),
+    ],
+    outdated: comparison.outdated,
   };
 }

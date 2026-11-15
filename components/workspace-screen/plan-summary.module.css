@@ -1,0 +1,404 @@
+/* Scene 1 "Final plan" summary: the workspace's smoked-glass look (workspace-glass.module.css). */
+
+.root {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: grid;
+  gap: 22px;
+  width: 100%;
+  max-width: 1120px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 28px 32px;
+  border: 1px solid var(--color-glass-edge);
+  border-radius: var(--radius-panel);
+  color: var(--color-ink);
+  background: var(--color-glass-fill);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
+  font-variant-numeric: tabular-nums;
+}
+
+.root :is(h2, h3, h4, p, ul, ol, dl, dd) {
+  margin: 0;
+}
+
+.root input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+/* Hero ------------------------------------------------------------------- */
+
+.hero {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.heroTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.eyebrow {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.address {
+  font-size: 32px;
+  font-weight: 550;
+  letter-spacing: -0.9px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rationale {
+  display: grid;
+  gap: 4px;
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.rationaleLabel {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.meta,
+.muted,
+.note {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.muted {
+  font-size: 13px;
+}
+
+/* Sections ---------------------------------------------------------------- */
+
+.block {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.heading {
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.4px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 28px;
+}
+
+.column {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* Metric cards ------------------------------------------------------------ */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.metric {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: calc(var(--radius-panel) * 0.6);
+  background: var(--color-field);
+}
+
+.metricLabel {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.metricValue {
+  /* Scales down in narrow cards instead of breaking a number across lines. */
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.metricRange {
+  font-size: 13px;
+}
+
+.negative {
+  color: var(--color-danger);
+}
+
+.rangeBar {
+  display: block;
+  width: 100%;
+  height: 18px;
+  margin-block: 2px 4px;
+}
+
+.track {
+  fill: rgb(255 255 255 / 5%);
+}
+
+.zero {
+  stroke: rgb(255 255 255 / 50%);
+  stroke-width: 0.4;
+}
+
+.band {
+  fill: var(--color-muted);
+  opacity: 0.55;
+}
+
+.bandNegative {
+  fill: var(--color-danger);
+}
+
+.mean {
+  stroke: var(--color-accent-hover);
+  stroke-width: 1;
+}
+
+/* Tweaks ------------------------------------------------------------------- */
+
+.tweaks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tweak {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+}
+
+.tweak dt {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.tweak dd {
+  margin-top: 3px;
+  font-size: 14px;
+}
+
+/* Runner-up ---------------------------------------------------------------- */
+
+.runnerUp {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.runnerTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.runnerTable :is(th, td) {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}
+
+.runnerTable thead th {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.runnerTable tbody th {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.rowTag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Risks -------------------------------------------------------------------- */
+
+.risks {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.risks li {
+  padding: 10px 12px 10px 14px;
+  border-left: 2px solid var(--color-warn);
+  border-radius: 4px var(--radius-control) var(--radius-control) 4px;
+  background: rgb(255 255 255 / 4%);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Next steps --------------------------------------------------------------- */
+
+.steps {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 26px 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.step label {
+  cursor: pointer;
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-glass-edge);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 4px 0 0;
+}
+
+.stepDone label {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+/* Footer ------------------------------------------------------------------- */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-line);
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.primaryAction {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.primaryAction:hover {
+  background: var(--color-accent-hover);
+}
+
+.secondaryAction {
+  justify-self: start;
+  border: 1px solid var(--color-glass-edge);
+  color: var(--color-ink);
+  background: var(--color-glass-fill);
+}
+
+/* Empty state -------------------------------------------------------------- */
+
+.empty {
+  max-width: 640px;
+  gap: 12px;
+}
+
+.emptyTitle {
+  font-size: 24px;
+  font-weight: 550;
+  letter-spacing: -0.6px;
+}
+
+/* Narrower panes: desktop first, but never break. --------------------------- */
+
+@media (max-width: 1024px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .root {
+    padding: 20px 16px;
+    border-radius: var(--radius-sheet);
+  }
+
+  .metrics,
+  .tweaks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .address {
+    font-size: 26px;
+  }
+}

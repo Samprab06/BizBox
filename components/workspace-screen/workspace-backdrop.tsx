@@ -48,12 +48,13 @@ export function WorkspaceBackdrop({
         address={selected.candidate.address}
       />
     );
-  // The current proxy's collection is Houston-only. HAC77 owns verified LA collection selection.
-  if (coords && city === "Houston")
+  // The 3D collection is Houston-only: other cities render the street map and listing
+  // pins with no tileset, and the map says so.
+  if (coords && city)
     return (
       <Neighborhood
         {...coords}
-        tilesetUrl={tilesetUrl ?? ""}
+        tilesetUrl={city === "Houston" ? (tilesetUrl ?? "") : ""}
         minute={720}
         quality="balanced"
         locationLabel={

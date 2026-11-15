@@ -24,6 +24,50 @@ export type DemandSource = z.infer<typeof DemandSourceSchema>;
 export const MAX_EVALUATION_SITES = 8;
 export const DEFAULT_SEEDS = 30;
 
+/** Scene 1: the guided flow compares at most this many units side by side. */
+export const MAX_COMPARE_UNITS = 3;
+
+/**
+ * Scene 1: per-site changes the founder (or the consultant) applies before a rerun. Each
+ * field replaces that one site's engine/economics input; absent fields keep the profile's
+ * value. Hours use minutes of the modeled day, like the profile's operatingHours.
+ */
+export const SiteTweaksSchema = z
+  .object({
+    hours: z
+      .object({
+        openMinute: z.number().int().min(0).max(1439),
+        closeMinute: z.number().int().min(1).max(1440),
+      })
+      .strict()
+      .refine((h) => h.closeMinute > h.openMinute, {
+        path: ["closeMinute"],
+        message: "Close must follow open within the modeled day",
+      })
+      .optional(),
+    /** Average ticket in USD at this site. */
+    priceUsd: z.number().positive().finite().max(10_000).optional(),
+    /** People on the clock for every open hour at this site. */
+    staff: z.number().int().min(0).max(200).optional(),
+    /** Monthly base rent in USD for this site (e.g. a negotiated rent). */
+    monthlyRentUsd: z
+      .number()
+      .nonnegative()
+      .finite()
+      .max(10_000_000)
+      .optional(),
+  })
+  .strict();
+export type SiteTweaks = z.infer<typeof SiteTweaksSchema>;
+
+/** Candidate ID (`"<propertyId>:<unitId>"`) -> its tweaks. */
+export const SiteTweakMapSchema = z
+  .record(z.string().min(1).max(100), SiteTweaksSchema)
+  .refine((map) => Object.keys(map).length <= MAX_EVALUATION_SITES, {
+    message: `At most ${MAX_EVALUATION_SITES} sites can carry tweaks`,
+  });
+export type SiteTweakMap = z.infer<typeof SiteTweakMapSchema>;
+
 /**
  * How many panel personas Jev answered for one site (HAC-101). Optional everywhere so stored
  * requests and results from before it existed still parse.
@@ -56,6 +100,14 @@ export const EvaluationSiteSchema = z
     jevPersonaSet: PersonaSet.optional(),
     /** Panel coverage when Jev was asked for this site (HAC-101); carried to the result. */
     jevPanel: JevPanelCoverageSchema.optional(),
+    /**
+     * Scene 1: the ticket (USD) this site's cached Jev answers were collected at, set only when
+     * a per-site price tweak replaced `config.prices.avgTicketUsd` with a different price. With
+     * Jev demand the evaluator rescales each persona's visits by its cached price acceptance
+     * from this price to the site's ticket, as the global `overrides.priceUsd` does for every
+     * site. Absent means the ticket is the price Jev was asked at (all earlier requests).
+     */
+    jevBasePriceUsd: z.number().positive().finite().optional(),
     /** Origin of config.service.meanServiceMin (founder when the profile states it). */
     serviceMeanOrigin: z
       .enum(["costar", "public", "founder", "default"])

@@ -749,6 +749,13 @@
     transform: none;
   }
 }
+/* Scene 1: on a phone the navbar keeps the brand and the Get started button; the story
+   chapters stay reachable by scrolling. */
+@media (max-width: 440px) {
+  .root .navbar nav {
+    display: none;
+  }
+}
 @media (max-width: 700px) {
   .root .navbar {
     width: calc(100% - 30px);

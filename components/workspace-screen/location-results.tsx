@@ -7,7 +7,7 @@ import type { WorkspaceCandidate } from "./client-model";
 import { siteDemandLabel } from "@/lib/evaluation/demand-label";
 import styles from "./workspace-glass.module.css";
 import { ComparisonChart } from "./comparison-chart";
-import { unitAddress } from "./client-model";
+import { notModeledUnits, unitAddress } from "./client-model";
 
 const count = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -22,13 +22,20 @@ export function LocationResults({
   payload,
   candidates,
   onSelect,
+  onChoose,
   framed = true,
 }: {
   payload: LiveComparisonPayload;
   candidates: readonly WorkspaceCandidate[];
   onSelect: (id: string) => void;
+  /** Finalizes the plan on this location; shows a "Choose this location" button per row. */
+  onChoose?: (id: string) => void;
   framed?: boolean;
 }) {
+  const notModeled = notModeledUnits(payload, candidates);
+  const topId = payload.result.ranking.find((id) =>
+    payload.result.sites.some((site) => site.siteId === id),
+  );
   return (
     <section
       className={framed ? styles.comparison : undefined}
@@ -70,7 +77,7 @@ export function LocationResults({
           />
         ))}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" data-agent-anchor="comparison_table">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">
             Server-calculated location results with modeled ranges
@@ -81,6 +88,11 @@ export function LocationResults({
               <th scope="col">Est. customers / mo</th>
               <th scope="col">Est. contribution / mo</th>
               <th scope="col">Wait</th>
+              {onChoose && (
+                <th scope="col">
+                  <span className="sr-only">Choose</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -119,12 +131,36 @@ export function LocationResults({
                     </span>
                   </td>
                   <td>{result.weekdayMeanWaitMin.mean.toFixed(1)} min</td>
+                  {onChoose && (
+                    <td>
+                      <button
+                        className={id === topId ? styles.primary : styles.secondary}
+                        aria-label={`Choose ${
+                          candidate
+                            ? unitAddress(candidate, candidates)
+                            : "this location"
+                        }`}
+                        onClick={() => onChoose(id)}
+                      >
+                        Choose this location
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      {notModeled.length > 0 && (
+        <ul className="mt-4 text-xs" aria-label="Units not modeled">
+          {notModeled.map((unit) => (
+            <li key={unit.id}>
+              Not modeled: {unit.address} — {unit.reason}
+            </li>
+          ))}
+        </ul>
+      )}
       <details>
         <summary className="cursor-pointer text-xs">Details</summary>
         <p className="mt-2 text-xs">

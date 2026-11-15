@@ -2,7 +2,6 @@ import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
 import {
   closeConsultant,
-  expandProjectNavigation,
   expect,
   expectNoA11yViolations,
   openConsultant,
@@ -31,6 +30,10 @@ async function mockServices(page: Page) {
   await page.route("**/api/projects/*/intake", async (route) => {
     if (route.request().method() === "GET")
       return route.fulfill({ json: { modelConfigured: true } });
+    // Scene 1: flow events (e.g. arriving in the workspace) are answered at once; only the
+    // founder's messages are held.
+    if (route.request().postDataJSON()?.event)
+      return route.fulfill({ json: reply("Welcome to your workspace.") });
     pending.push(route);
   });
   await page.route("**/api/voice/session", (route) =>
@@ -51,16 +54,33 @@ const composer = (page: Page) =>
 const log = (page: Page) =>
   assistant(page).getByRole("log", { name: "Conversation" });
 
-/** Client-side navigation through the project's own links (never page.goto). */
-async function navigate(page: Page, label: string, path: RegExp) {
+/**
+ * Client-side navigation through the header stepper, the flow's only navigation (never
+ * page.goto). Scene 1: "questions" is the questionnaire, the rest are workspace steps.
+ */
+async function navigate(page: Page, step: string, path: RegExp) {
   // On a phone the open sheet covers the page, so the founder closes it to navigate.
   await closeConsultant(page);
-  await expandProjectNavigation(page);
   await page
-    .getByRole("navigation", { name: "Project views", exact: true })
-    .getByRole("link", { name: label, exact: true })
+    .getByRole("navigation", { name: "Progress" })
+    .locator(`[data-flow-step="${step}"] a`)
     .click();
-  await expect(page).toHaveURL(path);
+  // A first visit compiles the route in dev, so allow it some time.
+  await expect(page).toHaveURL(path, { timeout: 20_000 });
+}
+
+/** Unlocks the workspace's first step, as finishing the questionnaire does. */
+async function reachLocations(page: Page, projectId: string) {
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `bizbox:flow:v1:${id}`,
+      JSON.stringify({
+        reached: ["questions", "locations"],
+        siteTweaks: {},
+        finalPlan: null,
+      }),
+    );
+  }, projectId);
 }
 
 async function expectOneAssistant(page: Page) {
@@ -92,6 +112,8 @@ test("messages, the draft, an in-flight request and the mode survive navigation"
   test.setTimeout(90_000);
   const { pending } = await mockServices(page);
   await page.goto(workspaceHref(projectId, "workspace"));
+  await reachLocations(page, projectId);
+  await page.reload();
   await openConsultant(page);
   await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
   // A marker on window proves every step below is a client navigation, not a reload.
@@ -99,7 +121,7 @@ test("messages, the draft, an in-flight request and the mode survive navigation"
     (window as unknown as { __shell: number }).__shell = 1;
   });
 
-  // A request is in flight while the founder moves to the map.
+  // A request is in flight while the founder goes back to the questionnaire.
   await composer(page).fill("Which block has the most foot traffic?");
   await composer(page).press("Enter");
   await expect.poll(() => pending.length).toBe(1);
@@ -107,7 +129,10 @@ test("messages, the draft, an in-flight request and the mode survive navigation"
     assistant(page).getByRole("button", { name: "Sending message" }),
   ).toBeVisible();
 
-  await navigate(page, "Map", /\/map/);
+  // Scene 1: the questionnaire shows no dock, but the conversation keeps running.
+  await navigate(page, "questions", /\/intake/);
+  await expect(assistant(page)).toHaveCount(0);
+  await navigate(page, "locations", /\/workspace\?step=locations/);
   await openConsultant(page);
   await expectOneAssistant(page);
   await expect(log(page)).toContainText("Which block has the most foot traffic?");
@@ -123,35 +148,21 @@ test("messages, the draft, an in-flight request and the mode survive navigation"
   );
   expect(pending).toHaveLength(1);
 
-  // An unsent draft and the Voice mode come along to every other route.
+  // An unsent draft and the Voice mode come back with the dock.
   await composer(page).fill("Unsent follow-up");
-  for (const [label, path] of [
-    ["Site detail", /\/sites\//],
-    ["Comparison", /\/comparison/],
-    ["Location plan", /\/plan/],
-    ["Intake", /\/intake/],
-    ["Workspace", /\/workspace/],
-  ] as const) {
-    await navigate(page, label, path);
-    await openConsultant(page);
-    await expectOneAssistant(page);
-    await expect(composer(page)).toHaveValue("Unsent follow-up");
-    await expect(log(page)).toContainText(
-      "Westheimer near Montrose has the most foot traffic.",
-    );
-  }
-
   await assistant(page).getByRole("tab", { name: "Voice" }).click();
-  await navigate(page, "Map", /\/map/);
+  await navigate(page, "questions", /\/intake/);
+  await navigate(page, "locations", /\/workspace\?step=locations/);
   await openConsultant(page);
+  await expect(assistant(page)).toHaveCount(1);
   await expect(
     assistant(page).getByRole("tab", { name: "Voice" }),
   ).toHaveAttribute("aria-selected", "true");
-  await expect(
-    page.getByRole("region", { name: "Voice assistant" }),
-  ).toHaveCount(1);
   await assistant(page).getByRole("tab", { name: "Text" }).click();
   await expect(composer(page)).toHaveValue("Unsent follow-up");
+  await expect(log(page)).toContainText(
+    "Westheimer near Montrose has the most foot traffic.",
+  );
 
   expect(
     await page.evaluate(
@@ -204,13 +215,20 @@ for (const width of [390, 768, 1280]) {
       workspaceHref(projectId, "map"),
       workspaceHref(projectId, "comparison"),
       workspaceHref(projectId, "plan"),
-      `${workspaceHref(projectId, "intake")}?mode=form`,
     ]) {
       await page.goto(path);
       await openConsultant(page);
       await expectOneAssistant(page);
       await expectNoHorizontalOverflow(page);
     }
+    // Scene 1: the questionnaire has no dock at all.
+    await page.goto(`${workspaceHref(projectId, "intake")}?mode=form`);
+    await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
+      "data-consultant-layout",
+      "hidden",
+    );
+    await expect(assistant(page)).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
     await page.goto(workspaceHref(projectId, "workspace"));
     await openConsultant(page);
     await expect(

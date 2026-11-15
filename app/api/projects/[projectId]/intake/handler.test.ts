@@ -13,8 +13,6 @@ import {
   UI_FIXTURE,
 } from "@/lib/agent/__fixtures__/scripted-model";
 import { UiActionListSchema } from "@/lib/contracts/agent";
-import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
-import type { ThreadStore } from "@/lib/agent/thread-store";
 
 const context = (projectId = "project-1") => ({
   params: Promise.resolve({ projectId }),
@@ -200,7 +198,7 @@ describe("POST project intake", () => {
       vi.unstubAllEnvs();
     }
   });
-  it("still returns its normal 200 when the copilot thread store throws", async () => {
+  it("still returns its normal 200 when the onCompleted recorder throws", async () => {
     const runAgent = async ({
       session,
     }: Parameters<
@@ -213,14 +211,9 @@ describe("POST project intake", () => {
       new Error('relation "copilot_threads" does not exist: I want a cafe'),
       { code: "42P01" },
     );
-    const store = {
-      ensure: vi.fn(async () => {
-        throw missingTable;
-      }),
-      commit: vi.fn(async () => {
-        throw missingTable;
-      }),
-    } as unknown as ThreadStore;
+    const recorder = vi.fn(async () => {
+      throw missingTable;
+    });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const baseline = await createIntakeHandler({
@@ -228,7 +221,7 @@ describe("POST project intake", () => {
         runAgent,
       })(request({ message: "I want a cafe" }), context());
       for (const onCompleted of [
-        createIntakeThreadRecorder(store),
+        recorder,
         async () => {
           throw new Error("write failed: I want a cafe");
         },
@@ -241,7 +234,7 @@ describe("POST project intake", () => {
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual(await baseline.clone().json());
       }
-      expect(store.ensure).toHaveBeenCalledTimes(1);
+      expect(recorder).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledTimes(2);
       for (const [line] of warn.mock.calls) {
         expect(String(line)).not.toContain("cafe");
@@ -285,7 +278,7 @@ describe("HAC-144 intake UI actions", () => {
       new AIMessage({
         content: "",
         tool_calls: [
-          { id: "1", name: "show_step", args: { stage: "map" } },
+          { id: "1", name: "go_to_step", args: { step: "locations" } },
           {
             id: "2",
             name: "open_site",
@@ -311,7 +304,7 @@ describe("HAC-144 intake UI actions", () => {
     expect(body.assistantMessage).toBe("Here are the Montrose spaces.");
     expect(body.draft.city).toBe("Houston");
     expect(UiActionListSchema.parse(body.actions)).toEqual([
-      { id: "ui_1", type: "navigate", stage: "map" },
+      { id: "ui_1", type: "go_to_step", step: "locations" },
       { id: "ui_2", type: "open_site", siteId: UI_FIXTURE.montroseSiteId },
     ]);
   });

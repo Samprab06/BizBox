@@ -18,10 +18,11 @@ describe("explicit unit comparison", () => {
     expect(unitLabel(b, [a, b, other])).toBe("Unit 2");
     expect(unitLabel(other, [a, b, other])).toBe("Unit 1");
   });
-  it("requires explicit additions, caps at two without replacement and supports removal", () => {
+  it("requires explicit additions, caps at three without replacement and supports removal", () => {
     expect(toggleComparisonUnit([], "a")).toEqual(["a"]);
     expect(toggleComparisonUnit(["a"], "b")).toEqual(["a", "b"]);
-    expect(toggleComparisonUnit(["a", "b"], "c")).toEqual(["a", "b"]);
+    expect(toggleComparisonUnit(["a", "b"], "c")).toEqual(["a", "b", "c"]);
+    expect(toggleComparisonUnit(["a", "b", "c"], "d")).toEqual(["a", "b", "c"]);
     expect(toggleComparisonUnit(["a", "b"], "a")).toEqual(["b"]);
   });
 });

@@ -4,6 +4,7 @@ import { fixture } from "@/lib/agent/__fixtures__/plan";
 import { SITE_A, SITE_B } from "@/lib/demand/fixtures";
 import {
   ATTRIBUTIONS,
+  OUTDATED_LIMITATION,
   formatFact,
   PlanExportRefusal,
   preparePlanExport,
@@ -32,7 +33,7 @@ describe("printable location plan (HAC-26)", () => {
       siteLabels: { [SITE_A.id]: "Site A storefront" },
     });
     expect(out.recommendedSite).toBe("Site A storefront");
-    expect(out.runnerUp).toBe(SITE_B.id);
+    expect(out.runnerUp).toBe("Site 2");
     expect(out.sections.map((s) => s.id)).toEqual(
       expect.arrayContaining(["comparison", "assumptions"]),
     );
@@ -48,6 +49,33 @@ describe("printable location plan (HAC-26)", () => {
     expect(out.limitations.join(" ")).toMatch(/not a sales forecast/);
   });
 
+  it("shows addresses and plain copy: no raw IDs, citation tags or metric paths", () => {
+    const base = inputs();
+    const out = preparePlanExport({
+      ...base,
+      siteLabels: { [SITE_A.id]: "12 Main St", [SITE_B.id]: "34 Oak Ave" },
+    });
+    const shown = JSON.stringify({
+      ...out,
+      sections: out.sections.map((s) => ({
+        ...s,
+        rows: s.rows.map((row) => ({ ...row, citations: [] })),
+      })),
+      comparisonId: undefined,
+    });
+    expect(shown).not.toContain(SITE_A.id);
+    expect(shown).not.toContain(SITE_B.id);
+    expect(shown).not.toMatch(/\[(comparison|run|evidence):/);
+    expect(shown).not.toMatch(/monthlyContributionUsd|sites\./);
+    expect(out.recommendation).toBe(
+      "Recommended: 12 Main St. It's the strongest option within your budget; check the assumptions before you sign.",
+    );
+    const rows = out.sections.find((s) => s.id === "comparison")!.rows;
+    expect(rows[0]!.label).toBe("12 Main St — Monthly operating contribution");
+    expect(rows[0]!.sources.every((x) => /^[A-Z]/.test(x))).toBe(true);
+    expect(new Set(out.limitations).size).toBe(out.limitations.length);
+  });
+
   it("never exports source free text, photos or private payload fields", () => {
     const base = inputs();
     const plan = structuredClone(base.plan) as Record<string, unknown>;
@@ -61,15 +89,18 @@ describe("printable location plan (HAC-26)", () => {
     expect(text).not.toMatch(/matterport|photo url|attachmentUri|broker/i);
   });
 
-  it("refuses an outdated comparison with a rerun prompt", () => {
-    try {
-      preparePlanExport(inputs(true));
-      throw new Error("expected a refusal");
-    } catch (error) {
-      expect(error).toBeInstanceOf(PlanExportRefusal);
-      expect((error as PlanExportRefusal).code).toBe("outdated");
-      expect((error as Error).message).toMatch(/Rerun the comparison/);
-    }
+  it("still exports an outdated comparison, flagged with a limitation", () => {
+    const out = preparePlanExport(inputs(true));
+    expect(out.outdated).toBe(true);
+    expect(out.limitations[0]).toBe(OUTDATED_LIMITATION);
+    expect(out.sections.length).toBeGreaterThan(0);
+    expect(preparePlanExport(inputs()).outdated).toBe(false);
+  });
+
+  it("refuses an unverifiable comparison", () => {
+    expect(() =>
+      preparePlanExport({ ...inputs(), comparison: { nope: true } }),
+    ).toThrow(PlanExportRefusal);
   });
 
   it("refuses a plan or comparison from another project or comparison", () => {

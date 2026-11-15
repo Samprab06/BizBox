@@ -16,6 +16,11 @@ import {
 import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
 import type { JobsPort } from "@/lib/agent/job-tools";
 import {
+  fallbackFlowEventTurn,
+  orderUiActions,
+  type ComparisonResultsPort,
+} from "@/lib/agent/flow-tools";
+import {
   formatViewContext,
   resolveViewContext,
   InvalidViewReferenceError,
@@ -33,6 +38,10 @@ type Dependencies = {
   uiLookups?: IntakeUiLookups;
   /** HAC-151: server ports for the `jobs` tools (shortlist, comparison, investigation, plan). */
   jobs?: JobsPort;
+  /** Scene 1: reads the project's stored comparisons (read_comparison_results, finalize_plan). */
+  comparisonResults?: ComparisonResultsPort;
+  /** Scene 1: whether a model is configured; defaults to OPENAI_API_KEY being set. */
+  modelConfigured?: () => boolean;
   newActionId?: () => string;
   onCompleted?: (
     projectId: string,
@@ -52,6 +61,45 @@ const unavailable = () =>
     },
     503,
   );
+/** The 503 for a failed founder-message turn. */
+function turnFailed(error: unknown) {
+  if (error instanceof ModelRuntimeUnavailableError)
+    return json(
+      {
+        code: "MODEL_RUNTIME_UNAVAILABLE",
+        message:
+          "The intake model runtime could not load. Structured profile edits still work.",
+        field_errors: {},
+        detail: error.detail,
+      },
+      503,
+    );
+  // Operator diagnostic from enumerated fields only (class, HTTP status, provider
+  // error code); never the provider's message text.
+  const e = (error ?? {}) as {
+    name?: unknown;
+    status?: unknown;
+    code?: unknown;
+  };
+  const detail = [
+    typeof e.name === "string" && /^[A-Za-z]{1,40}$/.test(e.name)
+      ? e.name
+      : "Error",
+    typeof e.status === "number" ? `HTTP ${e.status}` : null,
+    typeof e.code === "string" && /^[a-z_]{3,40}$/.test(e.code) ? e.code : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return json(
+    {
+      code: "INTAKE_UNAVAILABLE",
+      message: "Intake is temporarily unavailable. Please try again.",
+      field_errors: {},
+      detail,
+    },
+    503,
+  );
+}
 /** A credential- and content-free tag for a failed thread append (e.g. "42P01"). */
 function threadErrorTag(error: unknown): string {
   if (error && typeof error === "object") {
@@ -153,7 +201,18 @@ export function createIntakeHandler(dependencies: Dependencies) {
     const newId = dependencies.newActionId ?? (() => `ui_${randomUUID()}`);
     // The per-turn collector the UI tools push to; kept when the step budget runs out.
     const actions: UiAction[] = [];
-    if (input.message) {
+    // Scene 1: a browser event (no founder message) is a consultant turn of its own. With a
+    // model it runs the agent; without one, or when the agent fails or stays silent, it gets
+    // a deterministic reply, so the guided flow keeps working offline.
+    const event = input.message ? undefined : input.event;
+    const modelConfigured =
+      dependencies.modelConfigured ??
+      (() => Boolean(process.env.OPENAI_API_KEY?.trim()));
+    const eventUsesModel = Boolean(
+      event && (dependencies.runAgent || modelConfigured()),
+    );
+    let eventNeedsFallback = Boolean(event && !eventUsesModel);
+    if (input.message || eventUsesModel) {
       const controller = new AbortController();
       const signal = AbortSignal.any([request.signal, controller.signal]);
       let onAbort: (() => void) | undefined;
@@ -180,7 +239,9 @@ export function createIntakeHandler(dependencies: Dependencies) {
           signal.throwIfAborted();
           return runAgent({
             session,
-            message: input.message!,
+            message: input.message ?? "",
+            ...(event ? { event } : {}),
+            ...(input.history?.length ? { history: input.history } : {}),
             signal,
             viewContextLine,
             ...(dependencies.uiLookups
@@ -190,6 +251,9 @@ export function createIntakeHandler(dependencies: Dependencies) {
                     lookups: dependencies.uiLookups,
                     view,
                     ...(dependencies.jobs ? { jobs: dependencies.jobs } : {}),
+                    ...(dependencies.comparisonResults
+                      ? { results: dependencies.comparisonResults }
+                      : {}),
                     actions,
                     newId,
                   },
@@ -197,52 +261,51 @@ export function createIntakeHandler(dependencies: Dependencies) {
               : {}),
           });
         };
-        assistantMessage = await Promise.race([runTurn(), aborted]);
+        const reply = await Promise.race([runTurn(), aborted]);
+        if (event && !reply.trim()) eventNeedsFallback = true;
+        else assistantMessage = reply;
       } catch (error) {
         if (error instanceof InvalidViewReferenceError) return invalid(error);
-        if (error instanceof ModelRuntimeUnavailableError)
-          return json(
-            {
-              code: "MODEL_RUNTIME_UNAVAILABLE",
-              message:
-                "The intake model runtime could not load. Structured profile edits still work.",
-              field_errors: {},
-              detail: error.detail,
-            },
-            503,
+        if (event) {
+          // A failed event turn never surfaces as an error; the flow carries on.
+          console.warn(
+            `[intake] flow event ${event.kind} used the fallback reply: ${threadErrorTag(error)}`,
           );
-        // Operator diagnostic from enumerated fields only (class, HTTP status, provider
-        // error code); never the provider's message text.
-        const e = (error ?? {}) as {
-          name?: unknown;
-          status?: unknown;
-          code?: unknown;
-        };
-        const detail = [
-          typeof e.name === "string" && /^[A-Za-z]{1,40}$/.test(e.name)
-            ? e.name
-            : "Error",
-          typeof e.status === "number" ? `HTTP ${e.status}` : null,
-          typeof e.code === "string" && /^[a-z_]{3,40}$/.test(e.code)
-            ? e.code
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        return json(
-          {
-            code: "INTAKE_UNAVAILABLE",
-            message: "Intake is temporarily unavailable. Please try again.",
-            field_errors: {},
-            detail,
-          },
-          503,
-        );
+          actions.length = 0;
+          eventNeedsFallback = true;
+        } else return turnFailed(error);
       } finally {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
       }
-    } else {
+    }
+    if (event && eventNeedsFallback) {
+      let view = validatedView;
+      if (!view && input.view !== undefined) {
+        try {
+          view = await resolveViewContext(
+            projectId,
+            input.view,
+            dependencies.viewContextLookups,
+            session.snapshot().profile,
+          );
+          validatedView = view;
+        } catch (error) {
+          if (error instanceof InvalidViewReferenceError) return invalid(error);
+          view = undefined;
+        }
+      }
+      const fallback = await fallbackFlowEventTurn({
+        event,
+        view,
+        projectId,
+        results: dependencies.comparisonResults,
+        newId,
+      });
+      assistantMessage = fallback.reply;
+      // Keep what a silent model already queued; otherwise use the event's own actions.
+      if (!actions.length) actions.push(...fallback.actions);
+    } else if (!input.message && !event) {
       // No model runs this turn: a rule moves a newly completed profile to the spaces.
       actions.push(
         ...ruleBasedUiActions({
@@ -276,7 +339,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
       {
         ...session.snapshot(),
         assistantMessage,
-        actions: UiActionListSchema.parse(actions),
+        actions: UiActionListSchema.parse(orderUiActions(actions)),
       },
       200,
     );

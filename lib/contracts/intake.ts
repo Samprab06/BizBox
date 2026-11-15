@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { AgentViewContextSchema, UiActionListSchema } from "./agent";
+import {
+  AgentViewContextSchema,
+  FlowEventSchema,
+  UiActionListSchema,
+} from "./agent";
 import { AssumedValueSchema, BusinessProfileSchema } from "./index";
 
 const shape = BusinessProfileSchema.shape;
@@ -80,6 +84,8 @@ export const IntakeStateSchema = z
     assumptions: IntakeAssumptionsSchema,
   })
   .strict();
+/** Scene 1: at most this many earlier turns ride on an intake request. */
+export const MAX_INTAKE_HISTORY = 12;
 export const IntakeRequestSchema = z
   .object({
     state: IntakeStateSchema.optional(),
@@ -87,8 +93,29 @@ export const IntakeRequestSchema = z
     message: z.string().trim().min(1).max(8000).optional(),
     /** HAC-134: the screen the founder is on, so the consultant can act on it. */
     view: AgentViewContextSchema.optional(),
+    /** Scene 1: a browser event for the consultant to react to (sent without `message`). */
+    event: FlowEventSchema.optional(),
+    /**
+     * Scene 1: the most recent turns of the conversation (oldest first), so a reply such as
+     * "yes, compare them" has context. Excludes the current `message`. Untrusted founder text.
+     */
+    history: z
+      .array(
+        z
+          .object({
+            role: z.enum(["founder", "agent"]),
+            text: z.string().trim().min(1).max(2000),
+          })
+          .strict(),
+      )
+      .max(MAX_INTAKE_HISTORY)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((body) => !(body.message && body.event), {
+    path: ["event"],
+    message: "Send either a founder message or a flow event, not both",
+  });
 /**
  * HAC-134: fields the intake reply may add beside the session snapshot and
  * `assistantMessage`. Optional, so replies without them stay valid; the client schema

@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeSession } from "@/components/intake/profile";
-import type { UiAction } from "@/lib/contracts/agent";
+import type { FlowEvent, UiAction } from "@/lib/contracts/agent";
 import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
 import {
   useAgentViewContext,
@@ -12,6 +12,7 @@ import {
 import {
   applyIntakeReply,
   assistantCopy,
+  flowEventRequestBody,
   intakeEndpoint,
   intakeRequestBody,
   intakeStorageKey,
@@ -232,7 +233,7 @@ export function useIntakeConversation(
       if (availability !== "live") {
         setFailure({
           message:
-            "The BizBox assistant is offline, so nothing was sent. Edit your brief in Intake instead.",
+            "The BizBox assistant is offline, so nothing was sent. Edit your brief under Your business in the top bar instead.",
           source: "assistant",
         });
         return Promise.resolve(null);
@@ -272,6 +273,44 @@ export function useIntakeConversation(
     [],
   );
 
+  // Scene 1: the view is read when the event is sent, not when it was queued.
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+  /**
+   * Scene 1: tells the consultant about something that happened in the browser (arriving in
+   * the workspace, a comparison starting, progressing, finishing or failing). Queued with the
+   * founder's messages; the reply is appended to the chat and its actions dispatched. It never
+   * throws and never shows a failure: an offline consultant just stays quiet.
+   */
+  const sendEvent = useCallback(
+    (event: FlowEvent): Promise<string | null> =>
+      enqueue(async () => {
+        const body = flowEventRequestBody(read(), event, viewRef.current);
+        try {
+          const outcome = await postIntakeMessage(fetch, projectId, body);
+          if (!mounted.current || !outcome.ok) return null;
+          // An event is not founder input, so its reply never edits the brief: only the
+          // consultant's message is added (the brief, and every result keyed to it, stay).
+          const text = outcome.result.assistantMessage.trim();
+          if (text) {
+            const now = read();
+            save({
+              ...now,
+              messages: [...now.messages, { role: "agent", text }],
+            });
+          }
+          if (outcome.result.actions?.length)
+            actionsRef.current?.(outcome.result.actions);
+          return outcome.result.assistantMessage;
+        } catch {
+          return null;
+        }
+      }).catch(() => null),
+    [enqueue, projectId, read, save],
+  );
+
   return {
     session,
     view,
@@ -290,6 +329,7 @@ export function useIntakeConversation(
     retry,
     syncEdits,
     report,
+    sendEvent,
   };
 }
 

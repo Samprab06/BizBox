@@ -59,12 +59,16 @@ export function OnboardingFlow({
   onCommit,
   formHref,
   nextHref,
+  onNext,
   notice,
 }: {
   profile: Profile;
   onCommit: (key: QuestionStep, value: string) => void;
   formHref: string;
+  /** Where "Find my locations" leads: the flow's `locations` step. */
   nextHref: string;
+  /** Runs as the founder follows `nextHref` (Scene 1: unlocks the `locations` step). */
+  onNext?: () => void;
   notice?: ReactNode;
 }) {
   const [step, setStep] = useState<Step>(() => resumeStep(profile));
@@ -223,6 +227,7 @@ export function OnboardingFlow({
                   profile={profile}
                   formHref={formHref}
                   nextHref={nextHref}
+                  onNext={onNext}
                   onFix={go}
                 />
               ) : (
@@ -353,13 +358,17 @@ export function OnboardingFlow({
               className="grid grid-cols-2 gap-3"
             >
               {cityChoices.map((option) => (
-                <Button
+                <button
                   key={option.value}
                   type="button"
-                  variant={value === option.value ? "primary" : "glass"}
                   aria-pressed={value === option.value}
                   onClick={() => setDraft(key, option.value)}
-                  className="h-auto flex-col items-stretch gap-0 overflow-hidden rounded-control p-0 text-left"
+                  className={cn(
+                    "flex flex-col overflow-hidden rounded-control border border-glass-edge bg-glass-fill p-0 text-left text-ink backdrop-blur-glass hover:bg-panel-raised",
+                    "aria-pressed:border-accent aria-pressed:bg-white/[0.08] aria-pressed:ring-1 aria-pressed:ring-accent",
+                    pressable,
+                    focusRing,
+                  )}
                 >
                   <span className="relative block aspect-video">
                     <Image
@@ -370,14 +379,14 @@ export function OnboardingFlow({
                       className="object-cover"
                     />
                   </span>
-                  <span className="flex items-center justify-between bg-canvas px-3 py-2 text-sm font-medium text-ink">
+                  <span className="flex items-center justify-between bg-glass-fallback px-3 py-2 text-sm font-medium text-ink">
                     {option.value}
                     <span
                       aria-hidden="true"
-                      className={`h-3 w-3 rounded-full border ${value === option.value ? "border-accent bg-accent" : "border-glass-edge"}`}
+                      className={`h-3 w-3 rounded-full border ${value === option.value ? "border-accent bg-accent ring-2 ring-accent/30" : "border-glass-edge"}`}
                     />
                   </span>
-                </Button>
+                </button>
               ))}
             </div>
             <div
@@ -526,11 +535,13 @@ function ReviewActions({
   profile,
   formHref,
   nextHref,
+  onNext,
   onFix,
 }: {
   profile: Profile;
   formHref: string;
   nextHref: string;
+  onNext?: () => void;
   onFix: (step: Step) => void;
 }) {
   const invalid = questionSteps.find(
@@ -558,6 +569,7 @@ function ReviewActions({
       ) : (
         <Link
           href={nextHref}
+          onClick={onNext}
           className={cn(
             "inline-flex items-center justify-center gap-2 rounded-control",
             buttonVariants.primary,
@@ -566,7 +578,7 @@ function ReviewActions({
             pressable,
           )}
         >
-          Open workspace <span aria-hidden="true">→</span>
+          Find my locations <span aria-hidden="true">→</span>
         </Link>
       )}
     </>

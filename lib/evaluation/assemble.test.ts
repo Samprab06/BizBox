@@ -1,8 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
-import type { AssumedValue } from "@/lib/contracts";
-import { searchSites } from "@/lib/data/sites";
-import { buildCatchment } from "@/lib/data/catchments";
 import { MemoryJevCache } from "@/lib/panel/cache";
 import { fakeJevClient } from "@/lib/panel/__fixtures__";
 import { weightTotals } from "@/lib/panel/personas";
@@ -16,138 +12,20 @@ import {
   type AssembleEvaluationInput,
   type AssemblyDependencies,
 } from "./assemble";
+import {
+  assemblyDependencies,
+  assemblyInput,
+  metric,
+} from "./__fixtures__/assembly";
 
-const metric = (
-  value: number | null,
-  origin: AssumedValue["origin"] = "founder",
-): AssumedValue => ({
-  value,
-  origin,
-  unit: "test",
-  evidenceIds: ["test"],
-  ...(value === null ? { unknownReason: "Unknown" } : {}),
-});
-function input(): AssembleEvaluationInput {
-  const profile = structuredClone(syntheticHoustonFixture.profile);
-  profile.projectId = "test-project";
-  profile.id = "test-profile";
-  for (const f of Object.values(profile.mustHaves)) f.value = false;
-  return {
-    projectId: profile.projectId,
-    profileId: profile.id,
-    profileVersion: profile.version,
-    profile,
-    candidateIds: ["101:1", "102:2", "103:3"],
-    seeds: 1,
-  };
-}
+const input = assemblyInput;
+/** The shared fixture dependencies, with spies so tests can count source reads. */
 function dependencies(raw = input()): AssemblyDependencies {
-  const ids = raw.candidateIds;
-  const source = {
-    origin: "costar" as const,
-    dataset: "Synthetic test inventory",
-    recordId: "1",
-    field: "test",
-  };
+  const deps = assemblyDependencies(raw);
   return {
-    searchSites: vi.fn(async (profile) => ({
-      result: searchSites(
-        { profile, limit: 8 },
-        {
-          properties: ids.map((_, index) => ({
-            id: String(index + 1),
-            city: "Houston",
-            latitude: 29.76 + index * 0.001,
-            longitude: -95.37,
-            data: { propertyRetail: { frontage: [{ frontageInFeet: 25 }] } },
-            source,
-          })),
-          spaces: ids.map((id, index) => ({
-            id,
-            propertyId: String(index + 1),
-            listingId: id.split(":")[0]!,
-            active: true,
-            retail: true,
-            sizeSqFt: 1200 + index * 100,
-            data: {
-              spaceUse: "Retail",
-              position: "Corner",
-              floor: "Ground",
-              askingRentUsdPerSfYearLow: 24 + index,
-              askingRentUsdPerSfYearHigh: 24 + index,
-              serviceTypeName: index === 1 ? "TripleNet" : "FullService",
-            },
-            source,
-          })),
-          tenancies: [],
-          synthetic: true,
-        },
-      ),
-      frontageFt: Object.fromEntries(
-        ids.map((id) => [id, metric(25, "costar")]),
-      ),
-    })),
-    getCatchment: vi.fn(async (id) => ({
-      response: buildCatchment({
-        site: {
-          id,
-          propertyId: "1",
-          projectId: raw.projectId,
-          city: "Houston",
-          latitude: 29.76,
-          longitude: -95.37,
-          frontage: [{ trafficCount: 15000 }],
-          source: {},
-        },
-        radiusMeters: 1000,
-        radiusOrigin: "default",
-        category: "coffee",
-        retrievedAt: "2026-11-14T00:00:00Z",
-        residents: [
-          {
-            geoid: "bg",
-            population: 100,
-            households: 40,
-            medianHouseholdIncome: 60000,
-            ageBands: { "18-34": 30 },
-            areaFraction: 1,
-            source: {},
-          },
-        ],
-        workers: [
-          {
-            geoid: "job",
-            jobs: 20,
-            latitude: 29.76,
-            longitude: -95.37,
-            source: {},
-          },
-        ],
-        venues: [
-          {
-            id: "venue",
-            name: "Synthetic coffee",
-            category: "coffee",
-            latitude: 29.761,
-            longitude: -95.37,
-            origin: "public",
-            source: {},
-          },
-        ],
-        coTenants: [],
-      }),
-      locations: {
-        blockGroups: { bg: { lat: 29.76, lng: -95.37 } },
-        workers: { job: { lat: 29.76, lng: -95.37 } },
-        competitors: {
-          "public:venue": {
-            lat: 29.761,
-            lng: -95.37,
-            origin: "public" as const,
-          },
-        },
-      },
-    })),
+    ...deps,
+    searchSites: vi.fn(deps.searchSites),
+    getCatchment: vi.fn(deps.getCatchment),
   };
 }
 
@@ -192,7 +70,8 @@ describe("evaluation assembly with injected source dependencies", () => {
       leaseTermMonths: 60,
     });
     expect(site.config.stations).toEqual({
-      planned: 13,
+      // Two staff on shift (default) -> two counters; area would fit 13.
+      planned: 2,
       usableSf: 1300,
       sfPerStation: 100,
     });
@@ -349,6 +228,41 @@ describe("evaluation assembly with injected source dependencies", () => {
       ]),
     );
     expect(deps.getCatchment).toHaveBeenCalledTimes(1);
+  });
+  it("includes a unit with unknown opex, assuming it is included in rent", async () => {
+    const raw = input();
+    const deps = dependencies(raw);
+    const search = deps.searchSites;
+    deps.searchSites = async (...args) => {
+      const out = await search(...args);
+      out.result.candidates[0]!.opexCents = metric(null, "costar");
+      return out;
+    };
+    const out = await assembleEvaluation(raw, deps);
+    expect(out.request.sites.map((s) => s.siteId)).toContain("101:1");
+    expect(out.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "OPEX_ASSUMED_INCLUDED",
+          siteId: "101:1",
+        }),
+      ]),
+    );
+    expect(
+      out.findings.filter(
+        (f) => f.code === "SITE_INPUT_UNKNOWN" && f.siteId === "101:1",
+      ),
+    ).toEqual([]);
+    expect(out.assumptions["sites.101:1.monthlyOpexCents"]).toMatchObject({
+      value: 0,
+      origin: "default",
+    });
+    expect(
+      out.assumptions["sites.101:1.config.lease.opexUsdPerSfYear"],
+    ).toMatchObject({ value: 0, origin: "default" });
+    expect(
+      out.request.sites.find((s) => s.siteId === "101:1")!.config.lease,
+    ).toMatchObject({ tripleNet: false, opexUsdPerSfYear: 0 });
   });
   it("reports all excluded sites on AssemblyError when none can be evaluated", async () => {
     const raw = input();

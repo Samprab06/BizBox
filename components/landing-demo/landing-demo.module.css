@@ -166,6 +166,44 @@
 .navCta svg {
   width: 16px;
 }
+/* Scene 1: the solid, high-contrast entry in the navbar (#26333b on #fffdf8 is ~12:1). */
+.root .navStart {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid #fffdf8;
+  border-radius: 11px;
+  background: #fffdf8;
+  color: #26333b;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow: 0 6px 18px -8px rgb(0 0 0/0.55);
+}
+.root .navStart:hover {
+  background: #fff;
+  color: #17222a;
+}
+.root .navStart:focus-visible {
+  outline: 3px solid #fffdf8;
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 3px #26333b,
+    0 6px 18px -8px rgb(0 0 0/0.55);
+}
+.root .navStart:active {
+  scale: 0.98;
+}
+.root .navStart svg {
+  width: 15px;
+  height: 15px;
+}
 .heroCopy,
 .finishCopy {
   position: fixed;
@@ -2152,5 +2190,14 @@
     min-height: 44px;
     padding: 8px;
     font-size: 12px;
+    white-space: nowrap;
+  }
+  .brand {
+    flex-shrink: 0;
+  }
+  .root .navStart {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 13px;
   }
 }

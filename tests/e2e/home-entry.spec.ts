@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { workspaceHref } from "../../lib/client/workspace-routes";
+import { flowStepHref } from "../../lib/client/flow-progress";
 import { expect, test } from "./fixtures";
 
 // Actual homepage coverage. Providers and API writes are intercepted before they reach
@@ -83,6 +83,15 @@ async function finalAction(page: Page) {
   return action;
 }
 
+/** The solid navbar entry, at the top of the page from the first frame. */
+function navbarStart(page: Page) {
+  return page
+    .locator("[data-story-chapter]")
+    .getByRole("link", { name: "Get started", exact: true });
+}
+
+const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 async function seedProfile(page: Page, finished: boolean) {
   await page.evaluate(
     ({ key, currentKey, id, profile }) => {
@@ -151,19 +160,43 @@ test.describe("new BizBox homepage entry", () => {
     expect(errors).toEqual([]);
   });
 
+  test("the navbar's Get started button is visible at the top and leads to the questionnaire", async ({
+    page,
+  }) => {
+    await openHome(page);
+    const start = navbarStart(page);
+    await expect(start).toBeVisible();
+    await expect(start).toBeInViewport();
+    await expect(start).toHaveAttribute("href", "/start");
+    // Solid and high contrast: dark text on a near-white fill, not the glass CTA.
+    expect(
+      await start.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.backgroundColor, style.color];
+      }),
+    ).toEqual(["rgb(255, 253, 248)", "rgb(38, 51, 59)"]);
+    const box = (await start.boundingBox())!;
+    expect(box.y).toBeLessThan(120);
+    expect(box.height).toBeGreaterThanOrEqual(40);
+    await start.click();
+    await expect(page).toHaveURL(
+      new RegExp(`${escape(flowStepHref(PROJECT, "questions"))}$`),
+    );
+    await expect(page.locator("#onboarding-title")).toHaveText(
+      "What are you opening?",
+    );
+    expect(services.projectPosts).toEqual(["POST"]);
+  });
+
   test("keyboard End exposes /start and a first visit creates its own project once", async ({
     page,
   }) => {
     await openHome(page);
     await (await finalAction(page)).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}$`));
-    await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
-      "data-consultant-layout",
-      "focus",
+    await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}/intake$`));
+    await expect(page.locator("#onboarding-title")).toHaveText(
+      "What are you opening?",
     );
-    await expect(
-      page.getByRole("heading", { name: "What are you opening?", exact: true }),
-    ).toBeVisible();
     expect(services.projectPosts).toEqual(["POST"]);
     expect(
       await page.evaluate(
@@ -173,7 +206,7 @@ test.describe("new BizBox homepage entry", () => {
     ).toBe(PROJECT);
   });
 
-  test("a partial profile offers its own conversation and workspace from /start", async ({
+  test("a partial profile offers its own questions and workspace from /start", async ({
     page,
   }) => {
     await seedProfile(page, false);
@@ -184,28 +217,28 @@ test.describe("new BizBox homepage entry", () => {
       page.getByRole("heading", { level: 1, name: "Welcome back to BizBox" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Continue the conversation" }),
-    ).toHaveAttribute("href", `/projects/${PROJECT}`);
+      page.getByRole("link", { name: "Continue the questions" }),
+    ).toHaveAttribute("href", flowStepHref(PROJECT, "questions"));
     await expect(
       page.getByRole("link", { name: "Open your workspace" }),
-    ).toHaveAttribute("href", workspaceHref(PROJECT, "workspace"));
+    ).toHaveAttribute("href", flowStepHref(PROJECT, "locations"));
     expect(services.projectPosts).toHaveLength(0);
   });
 
-  test("a finished profile resumes the founder's own workspace rather than the demo", async ({
+  test("a finished profile resumes the founder's own top locations rather than the demo", async ({
     page,
   }) => {
     await seedProfile(page, true);
     await openHome(page);
     await (await finalAction(page)).click();
-    await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}/workspace$`));
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Workspace", exact: true }),
-    ).toBeVisible();
-    await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
-      "data-consultant-layout",
-      "docked",
+    await expect(page).toHaveURL(
+      new RegExp(`${escape(flowStepHref(PROJECT, "locations"))}$`),
     );
+    await expect(
+      page
+        .getByRole("navigation", { name: "Progress" })
+        .locator('[aria-current="step"]'),
+    ).toContainText("Top locations");
     expect(services.projectPosts).toHaveLength(0);
   });
 
@@ -214,12 +247,13 @@ test.describe("new BizBox homepage entry", () => {
     { width: 768, height: 1024 },
     { width: 1280, height: 800 },
   ]) {
-    test(`fits the hero and return CTA at ${viewport.width}px without overflow`, async ({
+    test(`fits the hero, the navbar start button and return CTA at ${viewport.width}px without overflow`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
       await openHome(page);
       await expectNoOverflow(page);
+      await expect(navbarStart(page)).toBeInViewport();
       const action = await finalAction(page);
       await expect(action).toBeInViewport();
       await expectNoOverflow(page);

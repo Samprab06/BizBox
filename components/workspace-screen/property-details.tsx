@@ -10,8 +10,10 @@ import {
   type WorkspaceCandidate,
   unitLabel,
   unitAddress,
+  rentText,
+  areaText,
+  listingNotes,
 } from "./client-model";
-import { metricText } from "./model";
 import styles from "./workspace-glass.module.css";
 
 export function SearchFilterSummary({
@@ -54,14 +56,8 @@ export function SearchFilterSummary({
   );
 }
 
-const rent = (entry: WorkspaceCandidate) =>
-  entry.baseRentCents.value === null
-    ? "Rent unknown"
-    : metricText(entry.baseRentCents) + "/mo";
-const area = (entry: WorkspaceCandidate) =>
-  entry.candidate.floorAreaSqFt.value === null
-    ? "Size unknown"
-    : metricText(entry.candidate.floorAreaSqFt) + " sq ft";
+const rent = rentText;
+const area = areaText;
 
 export function PropertyDetails({
   selected,
@@ -117,6 +113,7 @@ export function PropertyDetails({
       className={styles.propertyPanel}
       aria-label="Selected location"
       tabIndex={-1}
+      data-agent-anchor="site_summary"
     >
       <div className={styles.panelHeading}>
         <h2>{unitAddress(selected, candidates)}</h2>
@@ -195,7 +192,7 @@ export function PropertyDetails({
       </div>
       {comparisonFull && !comparisonAdded && (
         <p className="mt-3 text-xs">
-          Two units selected. Remove one to add this unit.
+          Three units selected. Remove one to add this unit.
         </p>
       )}
       <details className="mt-5 text-xs">
@@ -206,12 +203,15 @@ export function PropertyDetails({
         <p>
           Unit numbers label this shortlist; they are not broker suite numbers.
         </p>
-        <p>Rent source: {selected.baseRentCents.origin}</p>
-        <p>
-          Property {selected.propertyId} · Listing {selected.listingId}
-        </p>
-        {selected.flags.map((flag) => (
-          <p key={flag}>{flag}</p>
+        {selected.baseRentCents.value !== null && (
+          <p>
+            {selected.baseRentCents.origin === "costar"
+              ? "Rent from the listing"
+              : "Rent estimated"}
+          </p>
+        )}
+        {listingNotes(selected).map((note) => (
+          <p key={note}>{note}</p>
         ))}
         {search && <SearchFilterSummary search={search} />}
       </details>
@@ -229,6 +229,7 @@ export function ListingList({
   onCompareIds,
   onClose,
   maxSelected = Infinity,
+  topIds = [],
 }: {
   candidates: WorkspaceCandidate[];
   selectedId?: string;
@@ -239,10 +240,16 @@ export function ListingList({
   onCompareIds: (ids: string[]) => void;
   onClose: () => void;
   maxSelected?: number;
+  /** Scene 1: the top locations, best first; each row shows its rank. */
+  topIds?: readonly string[];
 }) {
   const markers = candidateMarkers(candidates);
   return (
-    <section className={styles.propertyPanel} aria-label="Location list">
+    <section
+      className={styles.propertyPanel}
+      aria-label="Location list"
+      data-agent-anchor="candidate_list"
+    >
       <div className={styles.panelHeading}>
         <h2>Locations</h2>
         <button
@@ -284,6 +291,11 @@ export function ListingList({
               {/* Facts sit beside the button so its accessible name matches its visible text. */}
               <div className={styles.listFacts}>
                 <span id={"listing-facts-" + entry.candidate.id}>
+                  {topIds.includes(entry.candidate.id) && (
+                    <span className={styles.rankBadge}>
+                      Top {topIds.indexOf(entry.candidate.id) + 1}
+                    </span>
+                  )}
                   {area(entry)} · {rent(entry)}
                 </span>
                 <span className={styles.muted}>

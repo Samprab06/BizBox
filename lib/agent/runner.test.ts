@@ -15,7 +15,8 @@ import {
   INTAKE_RECURSION_LIMIT,
   PATCH_JSON_SCHEMA,
 } from "./runner";
-import { UI_TOOL_NAMES } from "./ui-tools";
+import { FLOW_UI_TOOL_NAMES } from "./ui-tools";
+import { FLOW_TOOL_NAMES } from "./flow-tools";
 
 vi.mock("server-only", () => ({}));
 afterEach(() => vi.restoreAllMocks());
@@ -274,35 +275,39 @@ const toolResults = (model: ScriptedModel) =>
     .map((entry) => String(entry.content));
 
 describe("HAC-144 UI tool group", () => {
-  it("binds save_profile plus the eight UI tools, with deliberate limits", async () => {
+  it("binds save_profile plus the in-workspace UI tools and the flow tools, with deliberate limits", async () => {
     const model = new ScriptedModel([new AIMessage("Hello!")]);
     const { reply } = runWithUi(model, "Hi");
     await reply;
-    expect(model.boundNames).toEqual(["save_profile", ...UI_TOOL_NAMES]);
-    expect(UI_TOOL_NAMES).toEqual([
+    expect(model.boundNames).toEqual([
+      "save_profile",
+      ...FLOW_UI_TOOL_NAMES,
+      ...FLOW_TOOL_NAMES,
+    ]);
+    // Page jumps to the legacy screens are no longer bound.
+    expect(FLOW_UI_TOOL_NAMES).toEqual(["open_site", "focus_map", "highlight"]);
+    for (const legacy of [
       "show_step",
-      "open_site",
-      "focus_map",
       "show_comparison",
       "open_simulator",
       "open_interior",
       "show_plan",
-      "highlight",
-    ]);
+    ])
+      expect(model.boundNames).not.toContain(legacy);
     expect(INTAKE_RECURSION_LIMIT).toBe(16);
     expect(INTAKE_MAX_SAVES).toBe(2);
     const system = JSON.stringify(model.calls[0]?.[0]?.content);
-    expect(system).toContain("only other service you may call");
+    expect(system).toContain("never send the founder to other pages");
   });
 
-  it('"show me spaces in Montrose" produces show_step plus open_site with a valid site ID', async () => {
+  it('"show me spaces in Montrose" produces go_to_step plus open_site with a valid site ID', async () => {
     const view = {
       stage: "workspace",
       candidateIds: [UI_FIXTURE.montroseSiteId, UI_FIXTURE.heightsSiteId],
     };
     const model = new ScriptedModel([
       uiCall([
-        { id: "ui-1", name: "show_step", args: { stage: "map" } },
+        { id: "ui-1", name: "go_to_step", args: { step: "locations" } },
         {
           id: "ui-2",
           name: "open_site",
@@ -317,7 +322,7 @@ describe("HAC-144 UI tool group", () => {
     });
     expect(await reply).toContain("Montrose");
     expect(actions).toEqual([
-      { id: "ui_1", type: "navigate", stage: "map" },
+      { id: "ui_1", type: "go_to_step", step: "locations" },
       { id: "ui_2", type: "open_site", siteId: UI_FIXTURE.montroseSiteId },
     ]);
     // The model saw the founder's screen, so it had real candidate IDs to use.
@@ -340,13 +345,17 @@ describe("HAC-144 UI tool group", () => {
         },
         {
           id: "c",
-          name: "show_plan",
-          args: { comparisonId: UI_FIXTURE.foreignComparisonId },
+          name: "present_top_sites",
+          args: { siteIds: [UI_FIXTURE.montroseSiteId] },
         },
         {
           id: "d",
-          name: "show_comparison",
-          args: { investigationId: "inv_other" },
+          name: "finalize_plan",
+          args: {
+            comparisonId: UI_FIXTURE.foreignComparisonId,
+            chosenSiteId: UI_FIXTURE.montroseSiteId,
+            rationale: "Best fit.",
+          },
         },
         {
           id: "e",
@@ -365,7 +374,9 @@ describe("HAC-144 UI tool group", () => {
     expect(results).toHaveLength(5);
     expect(results.every((text) => text.startsWith("Error:"))).toBe(true);
     expect(results.join(" ")).toContain("not in Houston");
-    expect(results.join(" ")).toContain("does not belong to this project");
+    // Without a view, no candidate can be presented; without a results port nothing finalizes.
+    expect(results.join(" ")).toContain("not one of the founder's candidates");
+    expect(results.join(" ")).toContain("cannot be read right now");
   });
 
   it("caps UI actions at three per turn and keeps them when the step budget runs out", async () => {
@@ -397,17 +408,21 @@ describe("HAC-144 UI tool group", () => {
     const model = new ScriptedModel([
       uiCall([
         { id: "a", name: "highlight", args: { target: "#root" } },
-        { id: "b", name: "show_step", args: { stage: "site" } },
+        {
+          id: "b",
+          name: "set_site_tweaks",
+          args: { candidateId: UI_FIXTURE.montroseSiteId, tweaks: {} },
+        },
       ]),
       new AIMessage("Sorry."),
     ]);
     const { actions, reply } = runWithUi(model, "highlight the root");
     expect(await reply).toBe("Sorry.");
     expect(actions).toEqual([]);
-    // LangChain rejects schema-invalid arguments; the executor rejects a site step with no site.
-    const [badTarget, noSite] = toolResults(model);
+    // LangChain rejects schema-invalid arguments; the executor rejects an empty tweak.
+    const [badTarget, noTweak] = toolResults(model);
     expect(badTarget).toMatch(/^Error/);
-    expect(noSite).toContain("needs a siteId");
+    expect(noTweak).toContain("No changes given");
   });
 });
 

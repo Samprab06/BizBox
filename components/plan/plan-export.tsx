@@ -3,13 +3,24 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
+import { intakeStorageKey } from "@/components/workspace-screen/intake-conversation";
 import { useProjectComparisonId } from "@/lib/client/project-store";
 import {
   planContextSource,
   type WorkspaceObservation,
 } from "@/lib/client/workspace-context";
-import { workspaceHref } from "@/lib/client/workspace-routes";
+import { flowStepHref } from "@/lib/client/flow-steps";
 import {
+  realCandidates,
+  unitAddress,
+} from "@/components/workspace-screen/client-model";
+import { readFlowState } from "@/lib/client/flow-progress";
+import {
+  loadSiteSearch,
+  searchBriefSnapshot,
+} from "@/lib/client/use-site-search";
+import {
+  OUTDATED_LIMITATION,
   PlanExportRefusal,
   preparePlanExport,
   type PrintablePlan,
@@ -18,15 +29,22 @@ import {
 type State =
   | { kind: "loading" }
   | { kind: "ready"; plan: PrintablePlan }
-  | { kind: "outdated" }
   | { kind: "error"; message: string };
 
-const ORIGIN_LABEL: Record<string, string> = {
-  costar: "CoStar",
-  public: "Public data",
-  founder: "Founder",
-  default: "Default",
-};
+/** Addresses the app already knows: the finalized plan's sites, then the project's listing search. */
+function knownAddresses(projectId: string, comparisonId: string) {
+  const out: Record<string, string> = {};
+  try {
+    const final = readFlowState(projectId).finalPlan;
+    if (final && final.comparisonId === comparisonId) {
+      out[final.chosenSiteId] = final.chosenAddress;
+      if (final.runnerUp) out[final.runnerUp.siteId] = final.runnerUp.address;
+    }
+  } catch {
+    /* Storage unavailable: fall back to the search below, then "Site N". */
+  }
+  return out;
+}
 
 /** HAC-26: printable plan for a saved, current comparison. */
 export function PlanExport({
@@ -86,11 +104,34 @@ export function PlanExport({
           }),
         );
         source = planContextSource(comparison, projectId, comparisonId);
+        const siteLabels = knownAddresses(projectId, comparisonId);
+        try {
+          // Read the saved brief once here rather than depending on it: it is reported
+          // asynchronously, and refetching on every report looped the plan requests.
+          const brief = searchBriefSnapshot(
+            localStorage.getItem(intakeStorageKey(projectId)),
+          );
+          const search = await loadSiteSearch(
+            JSON.parse(brief),
+            projectId,
+            fetch,
+            controller.signal,
+          );
+          if (search.mode === "live") {
+            // "<address> · Unit N" keeps two units in one building apart.
+            const listed = realCandidates(search.result.candidates);
+            for (const entry of listed)
+              siteLabels[entry.candidate.id] = unitAddress(entry, listed);
+          }
+        } catch {
+          /* No listing search available; unknown sites read "Site N". */
+        }
         const printable = preparePlanExport({
           projectId,
           comparisonId,
           comparison,
           plan,
+          siteLabels,
         });
         setState({ kind: "ready", plan: printable });
         if (!controller.signal.aborted)
@@ -110,31 +151,25 @@ export function PlanExport({
           owner: contextOwner,
           observation: {
             kind: "plan",
-            phase:
-              error instanceof PlanExportRefusal && error.code === "outdated"
-                ? "outdated"
-                : "error",
+            phase: "error",
             comparisonId,
             siteIds: [],
             ...source,
           },
         });
-        if (error instanceof PlanExportRefusal && error.code === "outdated")
-          setState({ kind: "outdated" });
-        else
-          setState({
-            kind: "error",
-            message:
-              error instanceof PlanExportRefusal
-                ? error.message
-                : "The plan could not be loaded.",
-          });
+        setState({
+          kind: "error",
+          message:
+            error instanceof PlanExportRefusal
+              ? error.message
+              : "The plan could not be loaded.",
+        });
       }
     })();
     return () => controller.abort();
   }, [projectId, comparisonId, investigationId, contextOwner]);
 
-  const comparisonLink = workspaceHref(projectId, "comparison");
+  const comparisonLink = flowStepHref(projectId, "compare");
   if (resolved === undefined) return <p role="status">Preparing the plan…</p>;
   if (!comparisonId)
     return (
@@ -149,22 +184,6 @@ export function PlanExport({
       </p>
     );
   if (state.kind === "loading") return <p role="status">Preparing the plan…</p>;
-  if (state.kind === "outdated")
-    return (
-      <div role="alert" className="rounded-xl border border-line p-4">
-        <p className="font-semibold">This comparison is outdated.</p>
-        <p className="mt-1 text-sm">
-          The profile changed after it ran. Rerun the comparison, then export
-          its plan.
-        </p>
-        <Link
-          className="mt-3 inline-block font-semibold text-accent underline"
-          href={comparisonLink}
-        >
-          Rerun the comparison
-        </Link>
-      </div>
-    );
   if (state.kind === "error")
     return (
       <p role="alert">
@@ -179,6 +198,14 @@ export function PlanExport({
     );
 
   const { plan } = state;
+  const preparedOn = new Date().toLocaleDateString("en-US", {
+    dateStyle: "long",
+  });
+  const citations = [
+    ...new Set(
+      plan.sections.flatMap((s) => s.rows.flatMap((r) => r.citations)),
+    ),
+  ];
   return (
     <article
       aria-labelledby="plan-title"
@@ -186,10 +213,13 @@ export function PlanExport({
     >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="plan-title" className="text-2xl font-semibold">
+          <h2
+            id="plan-title"
+            className="hidden text-2xl font-semibold print:block"
+          >
             {plan.title}
           </h2>
-          <p className="text-sm text-muted">Comparison {plan.comparisonId}</p>
+          <p className="text-sm text-muted">Prepared {preparedOn}</p>
         </div>
         <button
           type="button"
@@ -199,6 +229,17 @@ export function PlanExport({
           Print or save as PDF
         </button>
       </header>
+      {plan.outdated && (
+        <p role="status" className="rounded-xl border border-line p-3 text-sm">
+          {OUTDATED_LIMITATION}{" "}
+          <Link
+            className="font-semibold text-accent underline print:hidden"
+            href={comparisonLink}
+          >
+            Rerun the comparison
+          </Link>
+        </p>
+      )}
       <section
         aria-label="Recommendation"
         className="rounded-xl border border-line p-4 print:border-0 print:p-0"
@@ -232,8 +273,8 @@ export function PlanExport({
           </h3>
           {section.notes.length > 0 && (
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-              {section.notes.map((note) => (
-                <li key={note}>{note}</li>
+              {section.notes.map((note, i) => (
+                <li key={`${i}-${note}`}>{note}</li>
               ))}
             </ul>
           )}
@@ -262,12 +303,7 @@ export function PlanExport({
                       {row.value}
                     </td>
                     <td className="py-1.5 text-xs text-muted break-words">
-                      {row.origins.map((o) => ORIGIN_LABEL[o] ?? o).join(", ")}
-                      {row.citations.length > 0 && (
-                        <span className="block">
-                          {row.citations.join("; ")}
-                        </span>
-                      )}
+                      {row.sources.join(", ")}
                       {row.note && <span className="block">{row.note}</span>}
                     </td>
                   </tr>
@@ -287,10 +323,23 @@ export function PlanExport({
           ))}
         </ul>
         <ul className="mt-3 space-y-1">
-          {plan.limitations.map((l) => (
-            <li key={l}>{l}</li>
-          ))}
+          {plan.limitations
+            .filter((l) => l !== OUTDATED_LIMITATION)
+            .map((l, i) => (
+              <li key={`${i}-${l}`}>{l}</li>
+            ))}
         </ul>
+        <details className="mt-3 print:hidden">
+          <summary className="cursor-pointer font-semibold text-ink">
+            Technical details
+          </summary>
+          <p className="mt-1 break-all">Comparison {plan.comparisonId}</p>
+          <ul className="mt-1 space-y-0.5 break-all">
+            {citations.map((c, i) => (
+              <li key={`${i}-${c}`}>{c}</li>
+            ))}
+          </ul>
+        </details>
       </footer>
     </article>
   );
