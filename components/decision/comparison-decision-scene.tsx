@@ -87,7 +87,7 @@ export function ComparisonDecisionScene({
           </p>
           <button
             type="button"
-            className="mt-2 font-semibold text-pine underline"
+            className="mt-2 font-semibold text-accent underline"
             onClick={() => {
               setState({});
               retry((value) => value + 1);

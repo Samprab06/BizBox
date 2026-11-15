@@ -73,7 +73,7 @@ export function ReplayWorkspace({
       <div className="min-w-0 space-y-5">
         <p role={stored.failed ? "alert" : "status"}>{stored.message}</p>
         <Link
-          className="inline-block text-pine underline"
+          className="inline-block text-accent underline"
           href={workspaceHref(project.id, "comparison")}
         >
           Compare live sites
@@ -81,7 +81,7 @@ export function ReplayWorkspace({
         {stored.failed && (
           <button
             type="button"
-            className="ml-4 rounded bg-pine px-3 py-2 text-white"
+            className="ml-4 rounded bg-accent hover:bg-accent-hover px-3 py-2 text-on-accent"
             onClick={stored.retry}
           >
             Retry comparison

@@ -111,4 +111,57 @@ test.describe("location plan export", () => {
     ).toBeVisible();
     await expect(assistant).toBeHidden();
   });
+  test("printed plan is dark text on white paper and stays dark on screen", async ({
+    page,
+  }) => {
+    await mockPlan(page);
+    await page.goto(`/projects/${PROJECT}/plan?comparison=${comparisonId}`);
+    const article = page.getByRole("article", { name: "Location plan" });
+    await expect(article).toBeVisible();
+
+    // Resolves any CSS color to opaque sRGB channels through a canvas pixel.
+    const colors = () =>
+      page.evaluate(() => {
+        const ctx = document.createElement("canvas").getContext("2d")!;
+        const rgb = (value: string) => {
+          ctx.clearRect(0, 0, 1, 1);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, 1, 1);
+          ctx.fillStyle = value;
+          ctx.fillRect(0, 0, 1, 1);
+          return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+        };
+        const sample = (selector: string) => {
+          const el = document.querySelector(selector) as HTMLElement;
+          return rgb(getComputedStyle(el).color);
+        };
+        return {
+          body: rgb(getComputedStyle(document.body).backgroundColor),
+          heading: sample("article h2"),
+          muted: sample("article dt"),
+          cell: sample("article tbody td"),
+        };
+      });
+    const luminance = ([r, g, b]: number[]) => {
+      const lin = (c: number) => {
+        const v = c / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const contrast = (a: number[], b: number[]) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const screen = await colors();
+    expect(luminance(screen.body)).toBeLessThan(0.1);
+    expect(contrast(screen.heading, screen.body)).toBeGreaterThanOrEqual(4.5);
+
+    await page.emulateMedia({ media: "print" });
+    const print = await colors();
+    expect(print.body).toEqual([255, 255, 255]);
+    for (const text of [print.heading, print.muted, print.cell])
+      expect(contrast(text, print.body)).toBeGreaterThanOrEqual(7);
+  });
 });
