@@ -58,6 +58,53 @@
       "file": "houston-morning.7d668686166f.mp4",
       "bytes": 409620,
       "sha256": "7d668686166f3baf0a7ed75e43ec948c1fb2d5b285622a15f302e3d57a6aa8c2"
+    },
+    {
+      "file": "houston-discovery.65156603b0cd.webp",
+      "bytes": 369272,
+      "sha256": "65156603b0cdf78ec0e27bbbaaf181c02d42f8581c87c68e5fe81835de1e72af"
+    },
+    {
+      "file": "houston-morning-portrait.f97e0713afd9.webp",
+      "bytes": 206784,
+      "sha256": "f97e0713afd9858fd59762b3dd4535a4caa6ea6630fa556e75a375a645b5b601"
+    },
+    {
+      "file": "houston-morning-portrait.ac32fa1713a6.mp4",
+      "bytes": 296548,
+      "sha256": "ac32fa1713a6bd0a8fe8ee56e8877dad384a22276a1c83e1a0d3da55e9fd5eb5"
+    },
+    {
+      "file": "houston-morning-portrait.a6f33be73807.webm",
+      "bytes": 642228,
+      "sha256": "a6f33be73807454d85400cab114a7a2a5f9d2bd3688d13bf1292035f6f421b2e"
+    },
+    {
+      "file": "houston-discovery-portrait.017412ac8610.webp",
+      "bytes": 211382,
+      "sha256": "017412ac8610d1fb5af36d6ed5bd7eac39ad0566059da2e926905877a9baafd7"
     }
-  ]
+  ],
+  "discoveryCapture": "Same original 1314178 renderer/camera with road-flow DOM hidden and viewer entities hidden; screenshot contains no simulation overlays.",
+  "portraitCapture": {
+    "viewport": [480, 960],
+    "anchors": [
+      {
+        "siteId": "montrose",
+        "u": 0.5645833333333333,
+        "v": 0.7510416666666667
+      },
+      {
+        "siteId": "heights",
+        "u": 0.4354166666666667,
+        "v": 0.31145833333333334
+      }
+    ],
+    "rendererSource": "1314178",
+    "duration": 6,
+    "activityViewport": {
+      "top": 260,
+      "height": 500
+    }
+  }
 }

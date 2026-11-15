@@ -6,6 +6,7 @@
  * module only translates between the guided screens and those fields. It adds no schema
  * or store of its own. The field mapping follows the HAC-112 handoff (HANDOFF.md).
  */
+import { areaMapSummary } from "./area-map-data";
 import { operatingHours } from "@/lib/client/intake-business-profile";
 import { fields, missingFields, profileValidationMessage, type Profile } from "@/components/intake/profile";
 import { DEFAULT_RANGE, formatHoursValue, formatTime, parseHoursValue } from "./clock-dial-math";
@@ -223,7 +224,7 @@ export function reviewValue(step: QuestionStep, value: string): string {
   if (step === "category") return categoryChoices.find((choice) => choice.value === value)?.label ?? value;
   if (step === "price") return priceChoices.find((choice) => choice.value === value)?.label ?? value;
   if (step === "areas") {
-    return value.split(";").map((part) => {
+    return areaMapSummary(value).split(";").map((part) => {
       const text = part.trim();
       const match = /^(favor|avoid)(?::\s*|\s+)(.+)$/i.exec(text);
       if (!match) return text;

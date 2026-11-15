@@ -1,5 +1,6 @@
 "use client";
 import { memo, useMemo } from "react";
+import Image from "next/image";
 import type { LocationStoryData } from "./location-data";
 import { Glass, dollars, number } from "../landing-demo/demo-ui";
 import styles from "./landing-story.module.css";
@@ -39,9 +40,10 @@ export const StoryMap = memo(function StoryMap({
   onPlaybackState?: (state: PreparedPlaybackState) => void;
   onPlayRequest?: () => void;
 }) {
-  const media = PREPARED_MEDIA.map;
+  const portrait = viewport.width <= 700 && viewport.height > viewport.width;
+  const media = portrait ? PREPARED_MEDIA.mapPortrait : PREPARED_MEDIA.map;
   const points = useMemo(
-    () => projectMediaAnchors(media.anchors, media, viewport),
+    () => projectMediaAnchors(media.anchors, media, viewport, "contain"),
     [media, viewport],
   );
   const { offsets } = useMemo(
@@ -51,22 +53,36 @@ export const StoryMap = memo(function StoryMap({
   const min = Math.max(480, Math.min(720, minute));
   return (
     <div
-      className={styles.map}
+      className={`${styles.map} ${mediaStyles.mapStage}`}
+      data-map-framing={portrait ? "portrait" : "landscape"}
       data-map-source="prepared-vexcel"
       data-prepared-map
     >
-      <PreparedVideo
-        media={media}
-        label="Recorded neighborhood morning"
-        active={morning}
-        running={running}
-        visible={visible}
-        reduced={reduced}
-        replayRevision={replayRevision}
-        onProgress={onProgress}
-        onPlaybackState={onPlaybackState}
-        onPlayRequest={onPlayRequest}
-      />
+      {morning ? (
+        <PreparedVideo
+          media={media}
+          label="Recorded neighborhood morning"
+          fit="contain"
+          running={running}
+          visible={visible}
+          reduced={reduced}
+          replayRevision={replayRevision}
+          onProgress={onProgress}
+          onPlaybackState={onPlaybackState}
+          onPlayRequest={onPlayRequest}
+        />
+      ) : (
+        <Image
+          src={media.discoveryPoster}
+          className={`${mediaStyles.poster} ${mediaStyles.containedPoster}`}
+          alt="Houston map showing the two example neighborhoods"
+          width={media.width}
+          height={media.height}
+          unoptimized
+          loading="lazy"
+          data-discovery-map
+        />
+      )}
       <div className={styles.mapCards}>
         {!morning && (
           <svg

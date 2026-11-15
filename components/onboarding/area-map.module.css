@@ -1,0 +1,116 @@
+.frame {
+  position: relative;
+  height: clamp(280px, 40vh, 390px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 16px;
+  background: #111a20;
+}
+.surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: crosshair;
+  outline-offset: -4px;
+}
+.surface:focus-visible {
+  outline: 2px solid white;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tool {
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tool[aria-pressed="true"] {
+  border-color: currentColor;
+  background: rgba(255, 255, 255, 0.13);
+}
+.tool:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+.favor {
+  color: #70edaa;
+}
+.avoid {
+  color: #ff9296;
+}
+.caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.city {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  pointer-events: none;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: white;
+  padding: 5px 9px;
+  background: #111a20dc;
+  border-radius: 5px;
+}
+.status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 30px;
+  text-align: center;
+  font-size: 12px;
+  color: white;
+  background: #111a20dd;
+  pointer-events: none;
+}
+.attribution {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.attribution button {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #ffffff55;
+  background: #111a20e6;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.attribution button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+.credits {
+  padding: 5px 8px;
+  background: #111a20f5;
+  color: white;
+  font-size: 10px;
+  border: 1px solid #ffffff55;
+  border-radius: 5px;
+}
+.credits a {
+  text-decoration: underline;
+}

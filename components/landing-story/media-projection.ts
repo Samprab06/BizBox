@@ -14,11 +14,12 @@ export function preparedCardLayout(
   });
 }
 
-/** Same centered cover fit as the recorded image; label clamping happens separately. */
+/** Same centered image/video fit as the recorded image; label clamping happens separately. */
 export function projectMediaAnchors(
   anchors: readonly MediaAnchor[],
   media: Size,
   viewport: Size,
+  fit: "cover" | "contain" = "cover",
 ) {
   if (
     ![media.width, media.height, viewport.width, viewport.height].every(
@@ -26,7 +27,7 @@ export function projectMediaAnchors(
     )
   )
     return [];
-  const scale = Math.max(
+  const scale = (fit === "contain" ? Math.min : Math.max)(
     viewport.width / media.width,
     viewport.height / media.height,
   );

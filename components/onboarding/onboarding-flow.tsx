@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Profile } from "@/components/intake/profile";
+import { AreaMap } from "./area-map";
 import { ClockDial } from "./clock-dial";
 import {
   DEFAULT_RANGE,
@@ -420,11 +421,14 @@ export function OnboardingFlow({
           </>
         );
       case "areas":
-        return text({
-          textarea: true,
-          maxLength: 250,
-          placeholder: "Type your preferences…",
-        });
+        return (
+          <AreaMap
+            key={city}
+            city={city}
+            value={value}
+            onChange={(next) => setDraft(key, next)}
+          />
+        );
       case "rent":
       case "buildout":
       case "staff": {

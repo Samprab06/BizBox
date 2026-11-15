@@ -30,6 +30,11 @@ test("landing uses recorded media without loading a live map", async ({
   const map = page.locator('[data-map-source="prepared-vexcel"]');
   await expect(map).toBeVisible();
   await expect(map.locator("video")).toHaveCount(0);
+  await expect(map.locator("[data-discovery-map]")).toHaveAttribute(
+    "src",
+    /houston-discovery/,
+  );
+  expect(requests.filter((url) => /houston-morning/.test(url))).toEqual([]);
   await expect(
     map.locator("button[data-selected]").filter({ hasText: "Montrose" }),
   ).toBeVisible();
@@ -42,6 +47,7 @@ test("landing uses recorded media without loading a live map", async ({
     "morning",
   );
   const video = map.locator("video");
+  await expect(video).toHaveCSS("object-fit", "contain");
   await expect(video).toBeVisible();
   await expect
     .poll(() =>
@@ -196,6 +202,31 @@ test("autoplay rejection retains a poster and allows a manual retry", async ({
     .toBeGreaterThan(0.1);
 });
 
+test("a morning first mounted while paused plays when the story resumes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await seek(page, 0.301);
+  await page.getByRole("button", { name: "Pause story" }).click();
+  await seek(page, 0.401);
+  const video = page.locator(
+    '[data-prepared-media="Recorded neighborhood morning"] video',
+  );
+  await expect(video).toBeVisible();
+  expect(
+    await video.evaluate((node) => ({
+      paused: (node as HTMLVideoElement).paused,
+      time: (node as HTMLVideoElement).currentTime,
+    })),
+  ).toEqual({ paused: true, time: 0 });
+  await page.getByRole("button", { name: "Resume story" }).click();
+  await expect
+    .poll(() =>
+      video.evaluate((node) => (node as HTMLVideoElement).currentTime),
+    )
+    .toBeGreaterThan(0.1);
+});
+
 test("hidden-tab release preserves playback position and completed morning results", async ({
   page,
 }) => {
@@ -241,7 +272,74 @@ test("hidden-tab release preserves playback position and completed morning resul
   await expect(video).toHaveCount(0);
   await visibility(false);
   await expect(recording).toHaveAttribute("data-media-state", "ended");
+  await expect
+    .poll(() =>
+      video.evaluate((node) => {
+        const element = node as HTMLVideoElement;
+        return (
+          element.readyState >= 2 &&
+          Math.abs(element.duration - element.currentTime) < 0.1
+        );
+      }),
+    )
+    .toBe(true);
   await expect(
     page.getByText("12:00 PM · modeled demand, not measured footfall"),
   ).toBeVisible();
+});
+
+test("the location prompt and sent bubble have no blue refraction cutout", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await seek(page, 0.241);
+  const prompt = page.getByRole("textbox", { name: "Location question" });
+  await expect(prompt).toBeVisible();
+  await page.getByRole("button", { name: "Pause story" }).click();
+  const box = page
+    .locator('[class*="questionScene"] [class*="composer"]')
+    .first();
+  expect(
+    await box.evaluate((n) => getComputedStyle(n, "::before").display),
+  ).toBe("none");
+  await page.getByRole("button", { name: "Send example prompt" }).click();
+  const sent = page.locator('[class*="questionScene"] [data-speaker="user"]');
+  await expect(sent).toBeVisible();
+  expect(
+    await sent.evaluate((n) => getComputedStyle(n, "::before").display),
+  ).toBe("none");
+});
+
+test("portrait map media fits and resumes when rotating to landscape", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await seek(page, 0.401);
+  const map = page.locator("[data-prepared-map]");
+  await expect(map).toHaveAttribute("data-map-framing", "portrait");
+  const video = map.locator("video");
+  await expect(video.locator("source").first()).toHaveAttribute(
+    "src",
+    /houston-morning-portrait/,
+  );
+  await expect
+    .poll(() => video.evaluate((n) => (n as HTMLVideoElement).currentTime))
+    .toBeGreaterThan(0.2);
+  const before = await video.evaluate(
+    (n) => (n as HTMLVideoElement).currentTime,
+  );
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(map).toHaveAttribute("data-map-framing", "landscape");
+  await expect(video.locator("source").first()).toHaveAttribute(
+    "src",
+    /houston-morning\.[a-f0-9]+\.mp4/,
+  );
+  await expect
+    .poll(() => video.evaluate((n) => (n as HTMLVideoElement).currentTime))
+    .toBeGreaterThanOrEqual(before);
+  await expect(page.locator("[data-story-chapter]")).toHaveAttribute(
+    "data-story-chapter",
+    "morning",
+  );
 });

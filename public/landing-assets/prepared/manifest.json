@@ -17,7 +17,8 @@
         "u": 0.5473214285714286,
         "v": 0.325
       }
-    ]
+    ],
+    "discoveryPoster": "/landing-assets/prepared/houston-discovery.65156603b0cd.webp"
   },
   "counters": {
     "current": {
@@ -38,5 +39,26 @@
       "poster": "/landing-assets/prepared/counters-proposed.e3737639f84c.webp",
       "counterCount": 2
     }
+  },
+  "mapPortrait": {
+    "width": 480,
+    "height": 960,
+    "duration": 6,
+    "mp4": "/landing-assets/prepared/houston-morning-portrait.ac32fa1713a6.mp4",
+    "webm": "/landing-assets/prepared/houston-morning-portrait.a6f33be73807.webm",
+    "poster": "/landing-assets/prepared/houston-morning-portrait.f97e0713afd9.webp",
+    "anchors": [
+      {
+        "siteId": "montrose",
+        "u": 0.5645833333333333,
+        "v": 0.7510416666666667
+      },
+      {
+        "siteId": "heights",
+        "u": 0.4354166666666667,
+        "v": 0.31145833333333334
+      }
+    ],
+    "discoveryPoster": "/landing-assets/prepared/houston-discovery-portrait.017412ac8610.webp"
   }
 }

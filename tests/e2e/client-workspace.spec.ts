@@ -16,7 +16,34 @@ import {
 
 // Invented API test responses exercise the production source branches. These are not
 // vendor data or evidence that live inventory, imagery, scans or Jev were verified.
-async function services(page: Page) {
+async function services(
+  page: Page,
+  options: { renderer?: "unavailable" } = {},
+) {
+  if (options.renderer === "unavailable") {
+    // Exercise native conversation/facts with WebGL unavailable. Dedicated map
+    // and geometry cases retain the real renderer; 2D canvas remains native.
+    await page.addInitScript(() => {
+      HTMLCanvasElement.prototype.getContext = new Proxy(
+        HTMLCanvasElement.prototype.getContext,
+        {
+          apply(target, receiver, args) {
+            return /^(webgl2?|experimental-webgl)$/.test(args[0])
+              ? null
+              : Reflect.apply(target, receiver, args);
+          },
+        },
+      );
+    });
+  }
+  const appOrigin = new URL("/", test.info().project.use.baseURL).origin;
+  // This conversation/facts fixture does not verify provider imagery. Keep real
+  // context-tile downloads and decoding out of its native interaction timings.
+  // A later explicit provider fixture (such as Matterport below) takes precedence.
+  await page.route(
+    (url) => /^https?:$/.test(url.protocol) && url.origin !== appOrigin,
+    (route) => route.abort("blockedbyclient"),
+  );
   await mockLiveComparison(page);
   const search = structuredClone(liveComparisonSearch);
   for (const entry of search.candidates) entry.candidate.synthetic = false;
@@ -139,7 +166,7 @@ for (const viewport of [
     test("real-source selection, explicit comparison and interior keep the same conversation", async ({
       page,
     }) => {
-      const { posts } = await services(page);
+      const { posts } = await services(page, { renderer: "unavailable" });
       await page.goto("/projects/houston-coffee/workspace");
       const locations = page.getByRole("group", { name: "Matching locations" });
       await expect(locations).toHaveCount(0);
@@ -332,7 +359,7 @@ test("unavailable inventory never substitutes example properties", async ({
 test("unit labels, explicit selection up to three and failed comparison retain exactly the chosen source facts", async ({
   page,
 }) => {
-  const { search } = await services(page);
+  const { search } = await services(page, { renderer: "unavailable" });
   const a = structuredClone(search.candidates[0]),
     b = structuredClone(search.candidates[1]),
     c = structuredClone(search.candidates[0]);
@@ -424,9 +451,11 @@ test("unit labels, explicit selection up to three and failed comparison retain e
   const comparison = page.getByRole("region", { name: "Unit comparison" });
   await expect(comparison).toContainText("101 Invented St · Unit 2");
   await expect(comparison).toContainText("303 Other St · Unit 1");
+  await openConsultant(page);
   await expect(
     page.getByRole("textbox", { name: "Message the BizBox assistant" }),
   ).toBeVisible();
+  await closeConsultant(page);
   expect(attempts).toEqual([]);
   await page
     .getByRole("button", { name: "Run comparison", exact: true })

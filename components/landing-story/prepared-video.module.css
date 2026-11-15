@@ -43,7 +43,7 @@
   outline: 2px solid #fff;
   outline-offset: 4px;
 }
-.media[data-media-layout="cover"] .play {
+.media:not([data-counter-count]) .play {
   bottom: 210px;
 }
 .pin {
@@ -162,7 +162,7 @@
   }
 }
 @media (max-height: 480px) {
-  .media[data-media-layout="cover"] .play {
+  .media:not([data-counter-count]) .play {
     bottom: 190px;
   }
   .stats {
@@ -174,4 +174,11 @@
     bottom: 12px;
     max-width: calc(100% - 300px);
   }
+}
+
+.mapStage {
+  background: #182833;
+}
+.containedPoster {
+  object-fit: contain;
 }
