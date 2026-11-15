@@ -21,6 +21,7 @@ import { createPostgresCopilotTools } from "./copilot-tools-postgres";
 import { createCopilotInvestigationReads } from "./copilot-investigation-tools";
 import type { CopilotDecisionModel } from "./copilot-model";
 import { loadCopilotModelModule } from "./runtime-loader";
+import { guardCopilotDecision, groundedNumbers } from "./guards";
 import {
   createPostgresThreadStore,
   type ThreadSnapshot,
@@ -374,6 +375,28 @@ export function createCopilotRuntime({
           { costMicrousd: modelCostMicrousd },
           `${turn.id}:model:${state.revision}`,
         );
+        // HAC-91: model prose may only repeat numbers it was given by the founder,
+        // the workspace clock or completed tool calls. Others are stripped and flagged.
+        const guarded = guardCopilotDecision(
+          decision,
+          groundedNumbers([
+            data.message,
+            ...state.messages
+              .filter((entry) => entry.role === "user")
+              .map((entry) => entry.content),
+            { minute: context.minute },
+            ...completed.map((call) => ({
+              input: call.input,
+              output: call.output,
+            })),
+          ]),
+        );
+        const removedNumbers = guarded.removed;
+        decision = {
+          ...decision,
+          reply: guarded.reply,
+          findings: guarded.findings,
+        };
         data.findings = [
           ...new Set([...data.findings, ...decision.findings]),
         ].slice(0, 100);
@@ -405,6 +428,9 @@ export function createCopilotRuntime({
                   role: "assistant",
                   content: decision.reply,
                   turnId: turn.id,
+                  ...(removedNumbers.length
+                    ? { metadata: { numberGuard: { removed: removedNumbers } } }
+                    : {}),
                 },
               ],
             },
