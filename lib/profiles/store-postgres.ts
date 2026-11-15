@@ -1,10 +1,10 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, eq, max } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { BusinessProfileSchema } from "@/lib/contracts";
 import { getDb } from "@/lib/db/client";
 import { profiles, projects } from "@/lib/db/schema";
-import type { ProfileStore } from "./store";
+import { profileContentKey, type ProfileStore } from "./store";
 
 export function createPostgresProfileStore(
   database: typeof getDb = getDb,
@@ -25,9 +25,21 @@ export function createPostgresProfileStore(
           .for("update");
         if (!project) return null;
         const [latest] = await tx
-          .select({ version: max(profiles.version) })
+          .select({ snapshot: profiles.snapshot, version: profiles.version })
           .from(profiles)
-          .where(eq(profiles.projectId, projectId));
+          .where(eq(profiles.projectId, projectId))
+          .orderBy(desc(profiles.version))
+          .limit(1);
+        // Idempotent save: identical content to the latest version reuses it, so
+        // repeated saves never mark existing comparisons outdated.
+        if (latest) {
+          const existing = BusinessProfileSchema.safeParse(latest.snapshot);
+          if (
+            existing.success &&
+            profileContentKey(existing.data) === profileContentKey(profile)
+          )
+            return existing.data;
+        }
         const snapshot = BusinessProfileSchema.parse({
           ...profile,
           id: newId(),

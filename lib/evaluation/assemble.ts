@@ -383,7 +383,6 @@ export async function assembleEvaluation(
     const unknown = [
       ["size", c.floorAreaSqFt.value],
       ["rent", row.baseRentCents.value],
-      ["operating expenses", row.opexCents.value],
       ["latitude", c.latitude.value],
       ["longitude", c.longitude.value],
     ]
@@ -397,6 +396,23 @@ export async function assembleEvaluation(
       );
       continue;
     }
+    // Unknown opex alone (non-NNN lease) is not a reason to drop a unit: assume costs are
+    // included in rent ($0 additional) and say so as a default-origin assumption.
+    const opex: AssumedValue =
+      row.opexCents.value === null
+        ? {
+            value: 0,
+            origin: "default",
+            unit: row.opexCents.unit,
+            evidenceIds: row.opexCents.evidenceIds,
+          }
+        : row.opexCents;
+    if (row.opexCents.value === null)
+      finding(
+        "OPEX_ASSUMED_INCLUDED",
+        "Operating expenses are not listed; assumed included in rent ($0 additional).",
+        id,
+      );
     const sf = c.floorAreaSqFt.value!;
     if (sf <= 0 || Math.floor(sf / sfPerStation) < 1) {
       finding(
@@ -409,7 +425,7 @@ export async function assembleEvaluation(
     const path = `sites.${id}`;
     number(`${path}.sizeSqft`, c.floorAreaSqFt);
     number(`${path}.monthlyBaseRentCents`, row.baseRentCents);
-    number(`${path}.monthlyOpexCents`, row.opexCents);
+    number(`${path}.monthlyOpexCents`, opex);
     number(`${path}.latitude`, c.latitude);
     number(`${path}.longitude`, c.longitude);
     const frontage = number(
@@ -522,7 +538,7 @@ export async function assembleEvaluation(
       );
     trace(
       "lease.opexUsdPerSfYear",
-      (row.opexCents.value! * 12) / 100 / sf,
+      (opex.value! * 12) / 100 / sf,
       `${path}.monthlyOpexCents`,
     );
     trace("lease.buildoutUsd", buildout, "profile.buildoutBudgetCents");
@@ -567,8 +583,8 @@ export async function assembleEvaluation(
       lease: {
         sf,
         askingRentUsdPerSfYear: siteRentUsdPerSfYear,
-        tripleNet: row.opexCents.value! > 0,
-        opexUsdPerSfYear: (row.opexCents.value! * 12) / 100 / sf,
+        tripleNet: opex.value! > 0,
+        opexUsdPerSfYear: (opex.value! * 12) / 100 / sf,
         buildoutUsd: buildout,
         leaseTermMonths: term,
       },

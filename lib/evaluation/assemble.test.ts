@@ -228,6 +228,41 @@ describe("evaluation assembly with injected source dependencies", () => {
     );
     expect(deps.getCatchment).toHaveBeenCalledTimes(1);
   });
+  it("includes a unit with unknown opex, assuming it is included in rent", async () => {
+    const raw = input();
+    const deps = dependencies(raw);
+    const search = deps.searchSites;
+    deps.searchSites = async (...args) => {
+      const out = await search(...args);
+      out.result.candidates[0]!.opexCents = metric(null, "costar");
+      return out;
+    };
+    const out = await assembleEvaluation(raw, deps);
+    expect(out.request.sites.map((s) => s.siteId)).toContain("101:1");
+    expect(out.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "OPEX_ASSUMED_INCLUDED",
+          siteId: "101:1",
+        }),
+      ]),
+    );
+    expect(
+      out.findings.filter(
+        (f) => f.code === "SITE_INPUT_UNKNOWN" && f.siteId === "101:1",
+      ),
+    ).toEqual([]);
+    expect(out.assumptions["sites.101:1.monthlyOpexCents"]).toMatchObject({
+      value: 0,
+      origin: "default",
+    });
+    expect(
+      out.assumptions["sites.101:1.config.lease.opexUsdPerSfYear"],
+    ).toMatchObject({ value: 0, origin: "default" });
+    expect(
+      out.request.sites.find((s) => s.siteId === "101:1")!.config.lease,
+    ).toMatchObject({ tripleNet: false, opexUsdPerSfYear: 0 });
+  });
   it("reports all excluded sites on AssemblyError when none can be evaluated", async () => {
     const raw = input();
     const deps = dependencies(raw);

@@ -8,3 +8,23 @@ export interface ProfileStore {
   ): Promise<BusinessProfile | null>;
   load(projectId: string, profileId: string): Promise<BusinessProfile | null>;
 }
+
+const canonical = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([, v]) => v !== undefined)
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([k, v]) => [k, canonical(v)]),
+        )
+      : value;
+
+/** Stable key of a profile's content; ignores server identity (id, version). */
+export function profileContentKey(profile: BusinessProfile): string {
+  const content: Partial<BusinessProfile> = { ...profile };
+  delete content.id;
+  delete content.version;
+  return JSON.stringify(canonical(content));
+}
