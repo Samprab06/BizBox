@@ -131,8 +131,8 @@
   letter-spacing: -0.035em;
 }
 .brand span {
-  margin-left: -7px;
-  opacity: 0.5;
+  margin: 0;
+  opacity: 1;
 }
 .brand svg {
   width: 23px;
@@ -251,18 +251,7 @@
     linear-gradient(rgb(12 26 39/0.32), rgb(12 26 39/0.32)),
     url("/onboarding/houston-real.jpg") center/cover no-repeat;
 }
-.previewSurface {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  container-name: screen;
-  container-type: size;
-  pointer-events: none;
-  background:
-    linear-gradient(rgb(15 25 38/0.13), rgb(15 25 38/0.13)),
-    url("/onboarding/houston-real.jpg") center/cover;
-}
+
 .frameFallback {
   position: fixed;
   z-index: 1;
@@ -528,25 +517,7 @@
 .montageActions .smallPrimary {
   margin-left: auto;
 }
-.previewSurface .onboardingPanel {
-  top: 50%;
-  width: calc(100% - 44px);
-  height: calc(100% - 40px);
-  padding: 22px;
-}
-.previewSurface .onboardingControls {
-  display: none;
-}
-.previewSurface .questionContent h3 {
-  font-size: 26px;
-}
-.previewSurface .categories > div {
-  min-height: 46px;
-  padding: 9px;
-}
-.previewSurface .questionBrand {
-  margin-bottom: 13px;
-}
+
 .workspace {
   position: absolute;
   inset: 0;
@@ -1583,35 +1554,10 @@
     bottom: 12px;
     font-size: 8px;
   }
-  .screenBase,
-  .previewSurface {
+  .screenBase {
     background-position: 70% center;
   }
-  .previewSurface .onboardingPanel {
-    width: calc(100% - 28px);
-    height: calc(100% - 25px);
-    padding: 15px;
-  }
-  .previewSurface .questionContent h3 {
-    font-size: 20px;
-    margin-bottom: 13px;
-  }
-  .previewSurface .questionBrand {
-    margin-bottom: 10px;
-    font-size: 9px;
-  }
-  .previewSurface .categories {
-    gap: 6px;
-  }
-  .previewSurface .categories > div {
-    font-size: 9px;
-    min-height: 37px;
-    padding: 7px;
-    gap: 5px;
-  }
-  .previewSurface .categories > div svg {
-    width: 14px;
-  }
+
   .workspace[data-mini="true"] .workspaceHeading > span {
     display: none;
   }
@@ -1698,38 +1644,7 @@
     padding: 12px 18px;
     font-size: 13px !important;
   }
-  .previewSurface .onboardingPanel {
-    width: calc(100% - 14px);
-    height: calc(100% - 12px);
-    padding: 10px;
-    border-radius: 14px;
-  }
-  .previewSurface .questionBrand {
-    margin-bottom: 6px;
-    font-size: 8px;
-  }
-  .previewSurface .questionContent h3 {
-    margin-bottom: 9px;
-    font-size: 16px;
-    line-height: 1.15;
-  }
-  .previewSurface .categories {
-    gap: 5px;
-  }
-  .previewSurface .categories > div {
-    min-height: 30px;
-    padding: 6px;
-    gap: 4px;
-    font-size: 8px;
-    border-radius: 8px;
-  }
-  .previewSurface .categories > div svg {
-    width: 12px;
-    height: 12px;
-  }
-  .previewSurface .categories > div svg:last-child:not(:first-child) {
-    width: 10px;
-  }
+
   .screen[data-device-view="fullscreen"] .onboardingPanel {
     top: calc(50% + 62px);
     height: min(450px, calc(100% - 235px));
@@ -2164,4 +2079,78 @@
 .mapMarkers button[aria-pressed="true"] {
   background: rgb(54 125 116 / 0.8);
   box-shadow: 0 0 0 1px rgb(224 255 247 / 0.7);
+}
+
+/* The same question surface persists from the physical display to full screen.
+   Viewport-based tokens avoid container-query layout jumps during the camera move. */
+.brandLogo {
+  width: 116px;
+  height: 32px;
+  object-fit: contain;
+}
+.onboardingCamera {
+  position: absolute;
+  z-index: 5;
+}
+.screen .onboardingCamera .onboardingPanel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  padding: var(--card-padding);
+  transform: none;
+}
+.screen .onboardingCamera .questionBrand {
+  margin-bottom: var(--brand-gap);
+}
+.questionLogo {
+  display: block;
+  width: auto;
+  height: var(--brand-height, 24px);
+}
+.screen .onboardingCamera .questionContent h3,
+.screen .onboardingCamera .questionLeaving h3 {
+  margin-bottom: var(--question-gap);
+  font-size: var(--question-size);
+}
+.screen .onboardingCamera .categories {
+  gap: var(--category-gap);
+}
+.screen .onboardingCamera .categories > div {
+  gap: var(--tile-gap);
+  min-height: var(--category-height);
+  padding: var(--category-padding);
+  font-size: var(--category-size);
+}
+.screen .onboardingCamera .categories > div svg {
+  width: var(--category-icon);
+  height: var(--category-icon);
+}
+.screen .onboardingCamera .categories > div svg:last-child:not(:first-child) {
+  width: 12px;
+  height: 12px;
+}
+.screen .onboardingCamera .onboardingControls {
+  height: var(--controls-height);
+  margin-top: var(--controls-gap);
+  overflow: hidden;
+}
+.onboardingCamera[data-onboarding-ready="false"] .onboardingControls {
+  visibility: hidden;
+}
+@media (max-width: 700px) {
+  .brandLogo {
+    width: 109px;
+    height: 30px;
+  }
+  .navLinks button:not(:first-child) {
+    display: none;
+  }
+  .navLinks button:first-child {
+    display: block;
+    min-height: 44px;
+    padding: 8px;
+    font-size: 12px;
+  }
 }

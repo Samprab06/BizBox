@@ -1,3 +1,5 @@
+> Current hero refinement: [brand, quiet navigation and continuous entry](refinement-v2.md#hero-brand-navigation-and-continuous-entry). Local changes after draftPR139.
+
 > Latest mobile/count follow-up: [current handoff](refinement-v2.md#latest-follow-up-mobile-and-visible-checkout-count). Akshar resumed mobile scope; matching1/2checkout artwork and live customer queue are implemented.
 
 # BizBox guided product demo — HAC-117

@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { cameraAt, type MacbookFrame } from "./camera";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { LandingDemoData } from "./demo-data";
 import {
@@ -10,21 +12,13 @@ import {
   onboardingAt,
   onboardingCanPlay,
   ONBOARDING_MS,
-  smooth,
   type DemoChapter,
   type ExperimentChoice,
 } from "./timeline";
 import { Glass, Icon, Refraction, WordHeading, glassBlur } from "./demo-ui";
-import { Onboarding } from "./onboarding";
+import { OnboardingScene } from "./onboarding";
 import { Workspace } from "./workspace";
 import styles from "./landing-demo.module.css";
-type MacbookFrame = {
-  image: string;
-  width: number;
-  height: number;
-  screenQuad: { x: number; y: number }[];
-  notchClip?: string;
-};
 const entryHref = "/projects/houston-coffee/intake";
 export function LandingDemo({
   demo,
@@ -47,10 +41,7 @@ export function LandingDemo({
   const [failedFrame, setFailedFrame] = useState(false);
   const frame = chapterAt(progress, reduced);
   const choice = experimentChoiceAt(progress, manualChoice);
-  const onboarding = onboardingAt(
-    frame.chapter === "hero" ? 0 : elapsed,
-    reduced,
-  );
+  const onboarding = onboardingAt(elapsed, reduced && frame.onboardingReady);
   const canPlay = onboardingCanPlay(progress, elapsed, {
     paused,
     visible,
@@ -165,76 +156,32 @@ export function LandingDemo({
     return () => document.removeEventListener("keydown", keys);
   }, [progress, reduced]);
 
-  const phonePortrait = viewport.width <= 700 && viewport.height > 480;
-  const phoneLandscape = viewport.width <= 1000 && viewport.height <= 480;
-  const width = phoneLandscape
-    ? Math.min(
-        viewport.width * 0.5,
-        viewport.height * 0.8 * (macbook.width / macbook.height),
-      )
-    : Math.min(
-        viewport.width * (phonePortrait ? 0.96 : 1.37),
-        1000,
-        viewport.height * 0.6 * (macbook.width / macbook.height),
-      );
-  const height = (width * macbook.height) / macbook.width;
-  const left = phoneLandscape
-    ? viewport.width * 0.73 - width / 2
-    : (viewport.width - width) / 2;
-  const top = phonePortrait
-    ? viewport.height * 0.36
-    : phoneLandscape
-      ? (viewport.height - height) / 2 + 24
-      : viewport.height * 0.61 - height / 2;
-  const q = macbook.screenQuad;
-  const initial = {
-    left: left + q[0].x * width,
-    top: top + q[0].y * height,
-    width: (q[1].x - q[0].x) * width,
-    height: (q[3].y - q[0].y) * height,
-  };
-  const zoomMix = smooth(0, 1, frame.entry);
-  const coverScale = Math.max(
-    viewport.width / initial.width,
-    viewport.height / initial.height,
-  );
-  const zoom = 1 + (coverScale - 1) * zoomMix;
-  const centerX =
-    (initial.left + initial.width / 2) * (1 - zoomMix) +
-    (viewport.width / 2) * zoomMix;
-  const centerY =
-    (initial.top + initial.height / 2) * (1 - zoomMix) +
-    (viewport.height / 2) * zoomMix;
-  const uniform = {
-    left: centerX - (initial.width * zoom) / 2,
-    top: centerY - (initial.height * zoom) / 2,
-    width: initial.width * zoom,
-    height: initial.height * zoom,
-  };
-  const fitted =
-    frame.entry === 1 ? 1 : frame.returning ? smooth(0.78, 1, frame.entry) : 0;
-  const rect = {
-    left: uniform.left * (1 - fitted),
-    top: uniform.top * (1 - fitted),
-    width: uniform.width + (viewport.width - uniform.width) * fitted,
-    height: uniform.height + (viewport.height - uniform.height) * fitted,
-  };
-  const hardwareStyle: CSSProperties = {
-    width: width * zoom,
-    height: height * zoom,
-    left: uniform.left - q[0].x * width * zoom,
-    top: uniform.top - q[0].y * height * zoom,
-    opacity: 1 - smooth(0.4, 0.8, frame.entry),
-  };
+  const camera = cameraAt(viewport, macbook, frame.entry);
+  const { initial, hardware: hardwareStyle, screen: rect, card } = camera;
   const screenStyle: CSSProperties = {
     ...rect,
-    borderRadius: frame.entry === 1 ? 0 : 6,
-    clipPath:
-      frame.entry === 1
-        ? "none"
-        : (macbook.notchClip ??
-          "polygon(0 0,45% 0,45.5% 3.2%,54.5% 3.2%,55% 0,100% 0,100% 100%,0 100%)"),
+    borderRadius: camera.borderRadius,
+    clipPath: `polygon(0 0,45% 0,45.5% ${camera.notchDepth}%,54.5% ${camera.notchDepth}%,55% 0,100% 0,100% 100%,0 100%)`,
   };
+  const onboardingStyle = {
+    left: card.left - rect.left,
+    top: card.top - rect.top,
+    width: card.width,
+    height: card.height,
+    "--card-padding": `${card.padding}px`,
+    "--question-size": `${card.questionSize}px`,
+    "--question-gap": `${card.questionGap}px`,
+    "--brand-height": `${card.brandHeight}px`,
+    "--brand-gap": `${card.brandGap}px`,
+    "--category-height": `${card.categoryHeight}px`,
+    "--category-size": `${card.categorySize}px`,
+    "--category-padding": `${card.categoryPadding}px`,
+    "--category-gap": `${card.categoryGap}px`,
+    "--tile-gap": `${card.tileGap}px`,
+    "--category-icon": `${card.iconSize}px`,
+    "--controls-height": `${card.controlsHeight}px`,
+    "--controls-gap": `${card.controlsGap}px`,
+  } as CSSProperties;
   const replayOnboarding = () => {
     setElapsed(0);
     setPaused(false);
@@ -262,24 +209,19 @@ export function LandingDemo({
           onClick={() => goTo("hero")}
           aria-label="BizBox home"
         >
-          <Icon name="sparkle" />
-          BizBox<span>.</span>
+          <BrandLogo onDark priority className={styles.brandLogo} />
         </button>
         <nav className={styles.navLinks} aria-label="Demo navigation">
           <button type="button" onClick={() => goTo("onboarding")}>
-            Business
+            How it works
           </button>
           <button type="button" onClick={() => goTo("location")}>
             Locations
           </button>
           <button type="button" onClick={() => goTo("experiment")}>
-            Sandbox
+            Test a decision
           </button>
         </nav>
-        <Link className={styles.navCta} href={entryHref}>
-          Open BizBox
-          <Icon name="arrow" />
-        </Link>
       </Glass>
       <div
         className={styles.heroCopy}
@@ -315,49 +257,19 @@ export function LandingDemo({
       >
         <div className={styles.screenBase} />
         {frame.scene === "onboarding" && (
-          <>
-            {frame.entry < 1 && (
-              <div
-                className={styles.previewSurface}
-                style={{
-                  width: initial.width,
-                  height: initial.height,
-                  transform: `scale(${zoom})`,
-                  opacity: 1 - smooth(0.86, 1, frame.entry),
-                }}
-              >
-                <Onboarding
-                  demo={demo}
-                  step="category"
-                  done={false}
-                  progress={0}
-                  paused
-                  onPause={() => {}}
-                  onReplay={() => {}}
-                  onSkip={() => {}}
-                  onContinue={() => {}}
-                />
-              </div>
-            )}
-            {frame.onboardingReady && (
-              <>
-                <div className={styles.chapterHeading}>
-                  <WordHeading text="Understand your business" />
-                </div>
-                <Onboarding
-                  demo={demo}
-                  step={onboarding.step}
-                  done={onboarding.done}
-                  progress={onboarding.progress}
-                  paused={paused}
-                  onPause={() => setPaused((v) => !v)}
-                  onReplay={replayOnboarding}
-                  onSkip={() => setElapsed(ONBOARDING_MS)}
-                  onContinue={() => goTo("location")}
-                />
-              </>
-            )}
-          </>
+          <OnboardingScene
+            ready={frame.onboardingReady}
+            style={onboardingStyle}
+            demo={demo}
+            step={onboarding.step}
+            done={onboarding.done}
+            progress={onboarding.progress}
+            paused={paused}
+            onPause={() => setPaused((v) => !v)}
+            onReplay={replayOnboarding}
+            onSkip={() => setElapsed(ONBOARDING_MS)}
+            onContinue={() => goTo("location")}
+          />
         )}
         {frame.scene !== "onboarding" && (
           <Workspace

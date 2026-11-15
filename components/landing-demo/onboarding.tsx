@@ -1,9 +1,47 @@
 "use client";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type CSSProperties } from "react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import type { LandingDemoData } from "./demo-data";
 import type { OnboardingStep } from "./timeline";
-import { Glass, Icon, dollars } from "./demo-ui";
+import { Glass, Icon, WordHeading, dollars } from "./demo-ui";
 import styles from "./landing-demo.module.css";
+type OnboardingProps = {
+  demo: LandingDemoData;
+  step: OnboardingStep;
+  done: boolean;
+  progress: number;
+  paused: boolean;
+  onPause: () => void;
+  onReplay: () => void;
+  onSkip: () => void;
+  onContinue: () => void;
+};
+
+/** This boundary never swaps a preview card for a different full-screen card. */
+export function OnboardingScene({
+  ready,
+  style,
+  ...props
+}: OnboardingProps & { ready: boolean; style: CSSProperties }) {
+  return (
+    <>
+      {ready && (
+        <div className={styles.chapterHeading}>
+          <WordHeading text="Understand your business" />
+        </div>
+      )}
+      <div
+        className={styles.onboardingCamera}
+        style={style}
+        data-onboarding-ready={ready}
+        inert={!ready}
+      >
+        <Onboarding {...props} />
+      </div>
+    </>
+  );
+}
+
 export const Onboarding = memo(function Onboarding({
   demo,
   step,
@@ -14,17 +52,7 @@ export const Onboarding = memo(function Onboarding({
   onReplay,
   onSkip,
   onContinue,
-}: {
-  demo: LandingDemoData;
-  step: OnboardingStep;
-  done: boolean;
-  progress: number;
-  paused: boolean;
-  onPause: () => void;
-  onReplay: () => void;
-  onSkip: () => void;
-  onContinue: () => void;
-}) {
+}: OnboardingProps) {
   const [transition, setTransition] = useState<{
     active: OnboardingStep;
     previous: OnboardingStep | null;
@@ -40,7 +68,7 @@ export const Onboarding = memo(function Onboarding({
     return () => clearTimeout(timer);
   }, [transition.active, transition.previous]);
   return (
-    <Glass className={styles.onboardingPanel}>
+    <Glass className={styles.onboardingPanel} data-onboarding-panel="true">
       <div className={styles.questionStage}>
         {transition.previous && (
           <div
@@ -125,9 +153,9 @@ function QuestionBody({
 }) {
   return (
     <>
-      <span className={styles.questionBrand}>
-        BizBox<span>.</span>
-      </span>
+      <div className={styles.questionBrand}>
+        <BrandLogo onDark className={styles.questionLogo} />
+      </div>
       <h3>{questions[step]}</h3>
       {step === "category" && (
         <div

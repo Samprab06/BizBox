@@ -11,10 +11,7 @@ export default function MobilePreviewPage() {
     <main className={styles.preview}>
       <header className={styles.header}>
         <h1>Mobile preview</h1>
-        <p>
-          390 × 844. Scroll inside the phone. Tap Sandbox to test one or two
-          counters.
-        </p>
+        <p>390 × 844. Scroll inside the phone to play the demo.</p>
         <a href="/landing-demo">Open full page ↗</a>
       </header>
       <div className={styles.phone}>
