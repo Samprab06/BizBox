@@ -12,6 +12,7 @@ import {
   intakeStorageKey,
   parseIntakeSession,
 } from "@/components/workspace-screen/intake-conversation";
+import { entryPath } from "@/components/shell/entry-flow";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { DEMO_PROJECT_ID, isGeneratedProjectId } from "@/lib/projects/ids";
 import { CURRENT_PROJECT_KEY, entryPlan } from "./entry";
@@ -53,8 +54,9 @@ const secondary =
   "rounded-full px-5 py-3 text-sm font-medium text-white/90 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 /**
- * /start: a first visit gets a new project and goes straight into its guided onboarding; a
- * visitor with a saved intake session gets a direct path back into their workspace.
+ * /start: a first visit gets a new project and goes straight into the chat-first entry
+ * (HAC-150); a founder with a complete brief lands docked; one with a started brief chooses
+ * between continuing the chat and the workspace.
  */
 export function StartGate() {
   const router = useRouter();
@@ -68,7 +70,14 @@ export function StartGate() {
         parseIntakeSession(read(intakeStorageKey(projectId))),
       )
     : null;
-  const href = target?.kind === "onboarding" ? target.href : null;
+  // HAC-150: a first visit opens the chat; a returning founder with a complete brief goes
+  // to the same entry, which docks straight onto Spaces.
+  const href =
+    target?.kind === "onboarding"
+      ? target.href
+      : target?.kind === "returning" && target.complete
+        ? target.onboardingHref
+        : null;
   const create = target?.kind === "create";
   const [attempt, setAttempt] = useState(0);
   const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
@@ -86,7 +95,7 @@ export function StartGate() {
     createProject().then(
       (projectId) => {
         rememberProject(projectId);
-        router.replace(workspaceHref(projectId, "intake"));
+        router.replace(entryPath(projectId));
       },
       () => {
         creating.current = false;
@@ -124,7 +133,7 @@ export function StartGate() {
     );
   }
 
-  if (target?.kind !== "returning") {
+  if (target?.kind !== "returning" || target.complete) {
     return (
       <p role="status" className="text-white/80">
         Opening BizBox…
@@ -137,30 +146,16 @@ export function StartGate() {
         Welcome back to BizBox
       </h1>
       <p className="mt-3 max-w-md text-white/75">
-        {target.complete
-          ? "Your business profile is saved on this device. Pick up where you left off."
-          : "You started describing your business. Finish onboarding or jump to your workspace."}
+        You started describing your business. Pick up the conversation or jump
+        to your workspace.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        {target.complete ? (
-          <>
-            <Link href={target.workspaceHref} className={primary}>
-              Open your workspace
-            </Link>
-            <Link href={target.onboardingHref} className={secondary}>
-              Review your answers
-            </Link>
-          </>
-        ) : (
-          <>
-            <Link href={target.onboardingHref} className={primary}>
-              Continue onboarding
-            </Link>
-            <Link href={target.workspaceHref} className={secondary}>
-              Open your workspace
-            </Link>
-          </>
-        )}
+        <Link href={target.onboardingHref} className={primary}>
+          Continue the conversation
+        </Link>
+        <Link href={target.workspaceHref} className={secondary}>
+          Open your workspace
+        </Link>
       </div>
     </>
   );

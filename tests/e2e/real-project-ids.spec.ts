@@ -65,18 +65,18 @@ test("a fresh brief creates its own project, and map, site and plan load for it"
 }) => {
   const creates = await mockServices(page);
 
-  // A first visit to /start creates one project and opens its onboarding.
+  // A first visit to /start creates one project and opens its chat-first entry (HAC-150).
   await page.goto("/start");
-  await expect(page).toHaveURL(new RegExp(`/projects/${NEW_PROJECT}/intake$`));
+  await expect(page).toHaveURL(new RegExp(`/projects/${NEW_PROJECT}$`));
   expect(creates).toHaveLength(1);
   expect(
     await page.evaluate(() =>
       localStorage.getItem("bizbox:current-project:v1"),
     ),
   ).toBe(NEW_PROJECT);
-  await expect(page.locator("#onboarding-title")).toHaveText(
-    "What are you opening?",
-  );
+  await expect(
+    page.getByRole("heading", { name: "What are you opening?" }),
+  ).toBeVisible();
 
   // The brief completes under the new project's own ID.
   await page.evaluate(
@@ -84,11 +84,12 @@ test("a fresh brief creates its own project, and map, site and plan load for it"
     [storageKey, JSON.stringify(completedBrief)],
   );
 
-  // Returning to /start resumes this project rather than creating another.
+  // Returning to /start resumes this project rather than creating another: a finished brief
+  // lands docked on its workspace.
   await page.goto("/start");
-  await expect(
-    page.getByRole("link", { name: "Open your workspace" }),
-  ).toHaveAttribute("href", workspaceHref(NEW_PROJECT, "workspace"));
+  await expect(page).toHaveURL(
+    new RegExp(`${workspaceHref(NEW_PROJECT, "workspace")}$`),
+  );
   expect(creates).toHaveLength(1);
 
   // Map: the live search of this brief, addressed to the new project.
