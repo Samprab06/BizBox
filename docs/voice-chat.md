@@ -45,7 +45,10 @@ prevents late voice output, closes tracks/peer/audio/animation resources, and do
 not undo a message already submitted to the existing business action.
 
 Audio commits define turn order because transcript completions can arrive out of
-order. Each turn captures its question/context; a changed prompt or selected
+order. Commits are queued in the ordered WebRTC data channel's arrival order;
+the provider's conversation-wide predecessor is not required to equal the last
+microphone item. A null or different predecessor cannot shut down playback.
+Each turn captures its question/context; a changed prompt or selected
 context suppresses the stale answer instead of applying it to the next field.
 The owning intake queue rechecks that prompt before applying the answer. Captures
 started while muted remain suppressed even if transcription completes after unmuting.

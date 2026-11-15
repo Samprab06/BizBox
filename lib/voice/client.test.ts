@@ -367,6 +367,33 @@ describe("VoiceClient", () => {
 });
 
 describe("ordered transcription and out-of-band cancellation", () => {
+  it.each([null, "other-conversation-item"])(
+    "keeps playing when the next audio commit has a different conversation predecessor: %s",
+    async (previous) => {
+      const f = fixture();
+      try {
+        await f.client.start();
+        f.complete("A", "Hello");
+        await flush();
+        const request = f.channel.sent.find(e => e.type === "response.create") as { response: { metadata: unknown } };
+        f.event(JSON.stringify({ type: "response.created", response: { id: "speaking", metadata: request.response.metadata } }));
+        f.event(JSON.stringify({ type: "input_audio_buffer.committed", item_id: "B", previous_item_id: previous }));
+        // An empty transcript is not a new request and must not kill the current reply.
+        f.event(completed("B", ""));
+        await flush();
+        expect(f.peer.closed).toBe(false);
+        expect(f.audio.muted).toBe(false);
+        expect(f.client.snapshot.phase).toBe("speaking");
+        f.event(JSON.stringify({ type: "output_audio_buffer.stopped", response_id: "speaking" }));
+        await flush();
+        f.complete("C", "Next question");
+        await flush();
+        expect(f.submit.mock.calls).toEqual([["Hello"], ["Next question"]]);
+      } finally {
+        f.client.stop();
+      }
+    },
+  );
   it("submits committed A then B even when completed B arrives first", async () => {
     const submit = vi.fn(async () => null);
     const f = fixture({ submitTranscript: submit });

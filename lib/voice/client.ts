@@ -57,7 +57,6 @@ type Session = {
   queue: { id: string; text?: string; context: string; discarded: boolean }[];
   captures: Map<string, { context: string; muted: boolean }>;
   committed: Set<string>;
-  lastCommitted?: string;
   cancelEvents: Set<string>;
   cancelSequence: number;
   processing: boolean;
@@ -353,17 +352,9 @@ export class VoiceClient {
         );
         return;
       }
-      if (
-        run.lastCommitted &&
-        event.previous_item_id !== undefined &&
-        event.previous_item_id !== run.lastCommitted
-      ) {
-        this.fail(
-          run,
-          "Voice lost the order of your answers. Please continue by typing or restart voice.",
-        );
-        return;
-      }
+      // The ordered data channel supplies microphone commit order. The provider's
+      // previous_item_id describes the whole conversation, not only audio commits;
+      // another item or a null predecessor must not tear down reply playback.
       let capture = run.captures.get(id);
       try {
         capture ??= {
@@ -379,7 +370,6 @@ export class VoiceClient {
       }
       run.captures.delete(id);
       run.committed.add(id);
-      run.lastCommitted = id;
       // Mute blocks new captures, not words already recorded before the click.
       // Provider commit/transcription events may arrive after tracks are disabled.
       const discarded = capture.muted;
