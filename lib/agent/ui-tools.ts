@@ -20,6 +20,7 @@ import {
   type UiAction,
 } from "@/lib/contracts/agent";
 import type { JobsPort } from "./job-tools";
+import type { ComparisonResultsPort } from "./flow-tools";
 
 /**
  * Trusted lookups. Each answers from server-side stores (the CoStar inventory, the
@@ -44,6 +45,8 @@ export type IntakeUiContext = {
   view?: AgentViewContext;
   /** HAC-151: server-side job ports; binds the `jobs` tool group (lib/agent/job-tools.ts). */
   jobs?: JobsPort;
+  /** Scene 1: reads this project's stored comparisons for the flow tools (flow-tools.ts). */
+  results?: ComparisonResultsPort;
   /** Filled by the tools; the handler returns it even when the turn hits its step budget. */
   actions: UiAction[];
   newId: () => string;
@@ -61,7 +64,7 @@ const SPECS = {
   open_site: {
     schema: actionArgs(OpenSiteActionSchema),
     description:
-      "Open one candidate space's detail view. siteId must come from the screen context or tool results.",
+      "Open one candidate space's property panel inside the workspace. siteId must come from the screen context or tool results.",
   },
   focus_map: {
     schema: actionArgs(FocusMapActionSchema),
@@ -95,6 +98,17 @@ const SPECS = {
 
 export type UiToolName = keyof typeof SPECS;
 export const UI_TOOL_NAMES = Object.keys(SPECS) as UiToolName[];
+/**
+ * Scene 1: the UI tools the guided-flow consultant is given. They act inside the workspace
+ * (property panel, map framing, in-page highlights). The page jumps (show_step,
+ * show_comparison, open_simulator, open_interior, show_plan) lead to legacy pages and are no
+ * longer bound; the flow moves with go_to_step (flow-tools.ts) instead.
+ */
+export const FLOW_UI_TOOL_NAMES: readonly UiToolName[] = [
+  "open_site",
+  "focus_map",
+  "highlight",
+];
 
 /** Model-facing tool definitions: name, description and JSON schema of the arguments. */
 export const UI_TOOL_SPECS = UI_TOOL_NAMES.map((name) => {
@@ -139,6 +153,14 @@ function describe(action: UiAction) {
       return `a shortlist of ${action.siteIds.length} site(s)`;
     case "run_comparison":
       return `a comparison of ${action.siteIds.length} site(s)`;
+    case "present_top_sites":
+      return `the top ${action.siteIds.length} location(s)`;
+    case "set_site_tweaks":
+      return `changes for site ${action.candidateId}`;
+    case "go_to_step":
+      return `the ${action.step} step`;
+    case "finalize_plan":
+      return "the finalized plan";
   }
 }
 

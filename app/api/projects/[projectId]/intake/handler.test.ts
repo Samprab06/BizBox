@@ -278,7 +278,7 @@ describe("HAC-144 intake UI actions", () => {
       new AIMessage({
         content: "",
         tool_calls: [
-          { id: "1", name: "show_step", args: { stage: "map" } },
+          { id: "1", name: "go_to_step", args: { step: "locations" } },
           {
             id: "2",
             name: "open_site",
@@ -304,7 +304,7 @@ describe("HAC-144 intake UI actions", () => {
     expect(body.assistantMessage).toBe("Here are the Montrose spaces.");
     expect(body.draft.city).toBe("Houston");
     expect(UiActionListSchema.parse(body.actions)).toEqual([
-      { id: "ui_1", type: "navigate", stage: "map" },
+      { id: "ui_1", type: "go_to_step", step: "locations" },
       { id: "ui_2", type: "open_site", siteId: UI_FIXTURE.montroseSiteId },
     ]);
   });
