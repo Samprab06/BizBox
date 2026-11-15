@@ -365,23 +365,30 @@ export async function runPanel(opts: RunPanelOptions): Promise<PanelRun> {
  * sites share one cache read (a single round trip) and one write buffer, and all their calls
  * share the client's limiter. `competitorsForSite` (HAC-156) gives each site its own competitor
  * set instead of the shared `competitors`, so a site's prompts and cache keys do not depend on
- * which other candidates are in the run.
+ * which other candidates are in the run. `personaSetForSite` (HAC-159) does the same for the
+ * personas: each site is asked about its own persona set instead of the shared `personaSet`.
  */
 export async function runPanelForSites(
   opts: Omit<RunPanelOptions, "site"> & {
     sites: CandidateSite[];
     competitorsForSite?: (site: CandidateSite) => Competitor[];
+    personaSetForSite?: (site: CandidateSite) => PersonaSet;
   },
 ): Promise<{ tables: BehaviorTable[]; stats: PanelStats; progress: PanelProgress }> {
   const started = performance.now();
-  const { sites, competitorsForSite, ...rest } = opts;
+  const { sites, competitorsForSite, personaSetForSite, ...rest } = opts;
   const runs =
     sites.length === 0
       ? []
       : await runPlans(
           await Promise.all(
             sites.map((site) =>
-              planSite({ ...rest, site, competitors: competitorsForSite?.(site) ?? rest.competitors }),
+              planSite({
+                ...rest,
+                site,
+                competitors: competitorsForSite?.(site) ?? rest.competitors,
+                personaSet: personaSetForSite?.(site) ?? rest.personaSet,
+              }),
             ),
           ),
         );
