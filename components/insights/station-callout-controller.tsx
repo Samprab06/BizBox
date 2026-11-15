@@ -1,4 +1,5 @@
 "use client";
+import { CompactStationPlan } from "./compact-station-plan";
 import { Button } from "@/components/ui/button";
 
 import { useEffect, useRef, useState } from "react";
@@ -49,6 +50,8 @@ type Props = {
   modelVersion?: string;
   /** Business-facing copy for the connected founder workspace. */
   founderLabels?: boolean;
+  /** Concise workspace presentation; shared diagnostics remain under Details. */
+  compact?: boolean;
 };
 export function StationCalloutController({ seeds, ...props }: Props) {
   const seedKey = seeds?.join(",");
@@ -74,6 +77,7 @@ function StationController({
   synthetic,
   modelVersion,
   founderLabels = false,
+  compact = false,
 }: Omit<Props, "seeds"> & { seedKey?: string }) {
   const configurationNames = founderLabels
     ? { ...names, baseline: "Current setup" }
@@ -216,6 +220,23 @@ function StationController({
     visible?.configurations.filter((config) => config.status === "succeeded")
       .length ?? 0;
   const result = visible?.result;
+  function refresh() {
+    setLoading(true);
+    setError(null);
+    setAttempt((value) => value + 1);
+  }
+  if (compact)
+    return (
+      <CompactStationPlan
+        plan={visible}
+        loading={loading}
+        writing={writing}
+        needsRead={needsRead}
+        error={error}
+        onRun={(confirm) => void run(confirm)}
+        onRefresh={refresh}
+      />
+    );
   if (founderLabels)
     return (
       <FounderCounters
@@ -386,11 +407,7 @@ function StationController({
           type="button"
           className={button}
           disabled={loading || writing}
-          onClick={() => {
-            setLoading(true);
-            setError(null);
-            setAttempt((value) => value + 1);
-          }}
+          onClick={refresh}
         >
           {visible ? "Refresh station progress" : "Retry station plan"}
         </Button>
@@ -476,7 +493,9 @@ export function FounderCounters({
                       </span>
                     )}
                   </div>
-                  <p className={styles.sub}>{staffLine(config.staffHeadcount)}</p>
+                  <p className={styles.sub}>
+                    {staffLine(config.staffHeadcount)}
+                  </p>
                   {variant ? (
                     <dl className={styles.metrics}>
                       <Metric
@@ -511,7 +530,8 @@ export function FounderCounters({
                         )}
                       />
                     </dl>
-                  ) : config.id === "baseline" && config.status === "succeeded" ? (
+                  ) : config.id === "baseline" &&
+                    config.status === "succeeded" ? (
                     <p className={styles.sub}>Your starting point.</p>
                   ) : null}
                 </li>

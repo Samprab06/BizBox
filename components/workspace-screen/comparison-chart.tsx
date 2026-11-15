@@ -120,3 +120,25 @@ export function ComparisonChart({
     </figure>
   );
 }
+
+/** A shared range axis fitted to the returned intervals; zero is shown only in range. */
+export function fittedComparisonScale(
+  values: readonly Pick<ComparisonPoint, "mean" | "low" | "high">[],
+) {
+  const finite = values
+    .flatMap((value) => [value.mean, value.low, value.high])
+    .filter(Number.isFinite);
+  const low = finite.length ? Math.min(...finite) : 0;
+  const high = finite.length ? Math.max(...finite) : 1;
+  const padding = (high - low || Math.abs(high) || 1) * 0.08;
+  const min = low - padding,
+    max = high + padding;
+  const position = (value: number) =>
+    Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  return {
+    min,
+    max,
+    position,
+    zero: low <= 0 && high >= 0 ? position(0) : null,
+  };
+}

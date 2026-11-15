@@ -33,6 +33,7 @@ export function WorkspaceShell({
       aria-labelledby={headingId}
       className={styles.shell}
       data-surface="viewport"
+      data-workspace-mode={backdrop ? "locations" : "report"}
     >
       <div className={styles.atmosphere} aria-hidden="true">
         {photo && (

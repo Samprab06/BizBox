@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect as baseExpect, test } from "./fixtures";
 import {
   mockLiveComparison,
@@ -10,6 +10,23 @@ import {
 // Scene 1: the guided flow end to end with one consultant in the dock. Every boundary is a
 // page.route mock: scripted consultant replies and actions, invented listings and a seeded
 // comparison. No model, Jev, database or listing service is called.
+
+// Material parity is a product requirement: preserve onboarding and prevent
+// workspace-specific tint, blur or decorative overlay layers from drifting.
+async function glassMaterial(surface: Locator) {
+  return surface.evaluate((element) => {
+    const css = getComputedStyle(element);
+    return {
+      fill: css.backgroundColor,
+      image: css.backgroundImage,
+      blur: css.backdropFilter,
+      border: css.borderTop,
+      shadow: css.boxShadow,
+      before: getComputedStyle(element, "::before").content,
+      after: getComputedStyle(element, "::after").content,
+    };
+  });
+}
 
 const reply = (
   assistantMessage: string,
@@ -62,7 +79,9 @@ async function services(page: Page) {
         ]),
       });
     if (kind)
-      return route.fulfill({ json: reply(`Noted: ${kind.replace("_", " ")}.`) });
+      return route.fulfill({
+        json: reply(`Noted: ${kind.replace("_", " ")}.`),
+      });
     const text = body.message ?? "";
     if (/compare them/i.test(text))
       return route.fulfill({
@@ -169,14 +188,18 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
   await expect(
     page.getByRole("region", { name: "Comparison shortlist" }),
   ).toContainText("Comparison 3/3");
-  const arrival = posts.find((post) => post.event?.kind === "arrived_workspace");
+  const arrival = posts.find(
+    (post) => post.event?.kind === "arrived_workspace",
+  );
   expect(arrival?.view).toMatchObject({
     stage: "workspace",
     step: "locations",
     candidateIds: [...threeSiteIds],
   });
   expect((arrival?.view?.candidates as unknown[]).length).toBe(3);
-  expect(events(posts).filter((e) => e.kind === "arrived_workspace")).toHaveLength(1);
+  expect(
+    events(posts).filter((e) => e.kind === "arrived_workspace"),
+  ).toHaveLength(1);
 
   // The agent runs the comparison: the compare step shows persona progress.
   const composer = page.getByRole("textbox", {
@@ -287,6 +310,10 @@ test("Scene 1: the questionnaire shows no dock, a manual 3-unit compare reaches 
     page.getByRole("complementary", { name: "Assistant" }),
   ).toHaveCount(0);
 
+  const onboardingMaterial = await glassMaterial(
+    page.locator('[data-backing="glass"]').first(),
+  );
+
   // Results are locked before any comparison: the workspace shows the furthest open step
   // (locations, or compare once the greeting has shortlisted the top 3).
   await page.goto("/projects/houston-coffee/workspace?step=results");
@@ -295,11 +322,54 @@ test("Scene 1: the questionnaire shows no dock, a manual 3-unit compare reaches 
     page.getByRole("complementary", { name: "Assistant" }),
   ).toBeVisible();
   await page.goto("/projects/houston-coffee/workspace?step=locations");
+  // Selecting a map/list location keeps readable street rows beside its details.
+  await page
+    .getByRole("button", { name: /Top 2: view 202 Invented St/ })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Selected location", exact: true }),
+  ).toBeVisible();
+  for (const name of [
+    "Top locations",
+    "Comparison shortlist",
+    "Selected location",
+  ]) {
+    expect(
+      await glassMaterial(page.getByRole("region", { name, exact: true })),
+    ).toEqual(onboardingMaterial);
+  }
+  expect(
+    await glassMaterial(page.getByRole("group", { name: "Workspace view" })),
+  ).toEqual(onboardingMaterial);
+  for (const width of [1440, 1040]) {
+    await page.setViewportSize({ width, height: 960 });
+    const street = page.getByRole("button", {
+      name: /Top 1: view 101 Invented St/,
+    });
+    const box = await street.boundingBox();
+    expect(box?.width).toBeGreaterThan(130);
+    expect(box?.height).toBeLessThan(55);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `/tmp/bizbox-selected-location-${width}.png`,
+    });
+  }
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.getByRole("button", { name: "Close property details" }).click();
   const tray = page.getByRole("region", { name: "Comparison shortlist" });
   await expect(tray).toContainText("Comparison 3/3");
   await tray.getByRole("button", { name: "Compare 3 units" }).click();
   await expect(page).toHaveURL(/step=compare/);
   const comparison = page.getByRole("region", { name: "Unit comparison" });
+  expect(await glassMaterial(comparison)).toEqual(onboardingMaterial);
+  await expect(
+    page.locator('[aria-label="Vexcel 3D neighborhood"]'),
+  ).toHaveCount(0);
+  await page.screenshot({ path: "/tmp/bizbox-structured-compare.png" });
   await expect(
     comparison.getByRole("table", {
       name: "Source listing facts for the three chosen units",
@@ -315,4 +385,27 @@ test("Scene 1: the questionnaire shows no dock, a manual 3-unit compare reaches 
   await expect(
     page.getByRole("region", { name: "Location comparison results" }),
   ).toBeVisible();
+  await expect(
+    page.locator('[aria-label="Vexcel 3D neighborhood"]'),
+  ).toHaveCount(0);
+  await page.screenshot({ path: "/tmp/bizbox-clean-results.png" });
+  // A founder can choose the other street, not only the leading result.
+  let finishPlan!: () => void;
+  const planPending = new Promise<void>((resolve) => {
+    finishPlan = resolve;
+  });
+  await page.route("**/api/comparisons/*/plan?*", async (route) => {
+    await planPending;
+    await route.fulfill({ status: 404, json: {} });
+  });
+  await page
+    .getByRole("button", { name: /Create final plan for 202 Invented St/ })
+    .click();
+  // The optional grounded-plan read is still pending: choosing must already navigate.
+  await expect(page).toHaveURL(/step=finalize/);
+  finishPlan();
+  await expect(
+    page.getByRole("heading", { name: "202 Invented St", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: "/tmp/bizbox-single-glass-plan.png" });
 });

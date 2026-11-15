@@ -1,5 +1,6 @@
 "use client";
 
+import { Glass } from "@/components/ui/glass";
 import Link from "next/link";
 import type { SiteSearchReadiness } from "@/lib/client/use-site-search";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -109,7 +110,8 @@ export function PropertyDetails({
     search?.status === "ready" ? search.profile : undefined,
   );
   return (
-    <section
+    <Glass
+      role="region"
       className={styles.propertyPanel}
       aria-label="Selected location"
       tabIndex={-1}
@@ -215,7 +217,7 @@ export function PropertyDetails({
         ))}
         {search && <SearchFilterSummary search={search} />}
       </details>
-    </section>
+    </Glass>
   );
 }
 
@@ -245,7 +247,8 @@ export function ListingList({
 }) {
   const markers = candidateMarkers(candidates);
   return (
-    <section
+    <Glass
+      role="region"
       className={styles.propertyPanel}
       aria-label="Location list"
       data-agent-anchor="candidate_list"
@@ -326,6 +329,6 @@ export function ListingList({
           );
         })}
       </div>
-    </section>
+    </Glass>
   );
 }

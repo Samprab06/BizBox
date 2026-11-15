@@ -84,15 +84,21 @@ export function VoicePanel({
   return (
     <section
       aria-label={label}
-      className={`my-4 rounded-xl border p-4 ${dark ? "border-viewport-line bg-viewport-surface text-viewport-ink" : "border-line bg-paper"} ${className}`}
+      className={`${compact ? "my-4 px-2 py-4 text-center" : `my-4 rounded-xl border p-4 ${dark ? "border-viewport-line bg-viewport-surface text-viewport-ink" : "border-line bg-paper"}`} ${className}`}
     >
-      <div className="flex items-start gap-4">
+      <div
+        className={
+          compact
+            ? "flex flex-col items-center gap-2"
+            : "flex items-start gap-4"
+        }
+      >
         <GradientOrb
-          className="w-20 shrink-0 sm:w-24"
+          className={compact ? "w-48 shrink-0" : "w-20 shrink-0 sm:w-24"}
           levelRef={level}
-          active={state.microphoneReady}
+          active={compact || state.microphoneReady}
         />
-        <div className="min-w-0 flex-1">
+        <div className={compact ? "w-full min-w-0" : "min-w-0 flex-1"}>
           <h3 className={compact ? "sr-only" : "font-semibold"}>{title}</h3>
           <p className={compact ? "sr-only" : `mt-1 text-xs ${muted}`}>
             Optional AI voice. Starting sends microphone audio for transcription
@@ -113,7 +119,9 @@ export function VoicePanel({
                   : state.message
                 : "Voice is unavailable right now. Select Text to keep typing."}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div
+            className={`mt-3 flex flex-wrap gap-2 ${compact ? "justify-center" : ""}`}
+          >
             {!active ? (
               <button
                 type="button"
