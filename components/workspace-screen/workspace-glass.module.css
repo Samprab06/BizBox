@@ -268,11 +268,6 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  border: 1px solid var(--color-glass-edge);
-  border-radius: 32px;
-  background: var(--color-glass-fill);
-  box-shadow: inset 0 1px 1px #ffffff85;
-  backdrop-filter: blur(16px) saturate(0.78);
 }
 .panelHeading {
   display: flex;
@@ -1180,10 +1175,6 @@
 .shortlist {
   pointer-events: auto;
   padding: 16px;
-  border: 1px solid var(--color-line);
-  border-radius: 24px;
-  background: var(--color-glass-fill);
-  backdrop-filter: blur(16px);
 }
 .shortlistUnits {
   display: grid;
@@ -1213,10 +1204,6 @@
   max-height: calc(100% - 100px);
   margin: 12px;
   padding: 24px;
-  border: 1px solid var(--color-glass-edge);
-  border-radius: 32px;
-  background: var(--color-glass-fill);
-  backdrop-filter: blur(16px);
 }
 .unitFacts {
   width: 100%;
@@ -1370,10 +1357,6 @@
 .topSites {
   pointer-events: auto;
   padding: 14px 16px;
-  border: 1px solid var(--color-glass-edge);
-  border-radius: 24px;
-  background: var(--color-glass-fill);
-  backdrop-filter: blur(16px);
 }
 .topSites ol {
   display: grid;
@@ -1430,4 +1413,520 @@
   align-items: center;
   gap: 10px;
   margin: 18px 0 6px;
+}
+
+/* Results use the same single smoked-glass layer as the questionnaire. */
+.resultsEyebrow {
+  color: var(--color-muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.resultsTableWrap {
+  overflow-x: auto;
+}
+.metricRange {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.negativeMetric {
+  color: var(--color-danger);
+}
+.waitWarning {
+  display: block;
+  max-width: 130px;
+  margin-top: 6px;
+  color: var(--color-warn);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.resultsDetails {
+  margin-top: 12px;
+  border-top: 1px solid var(--color-line);
+}
+.resultsDetails > summary {
+  width: fit-content;
+  padding: 15px 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.resultsDetails > summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.resultsDetails[open] > summary {
+  color: var(--color-ink);
+}
+
+/* Readable location links and source metadata. */
+.resultsAddress {
+  display: block;
+  max-width: 100%;
+  text-align: left;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+  text-underline-offset: 4px;
+}
+.sourceFacts {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.sourceFacts dt {
+  font-weight: 500;
+}
+.sourceFacts dd {
+  margin: 3px 0 0;
+  color: var(--color-muted);
+}
+
+/* Shared-axis interval charts: one ordered row per location, direct values. */
+.sharedChart {
+  margin: 22px 0 0;
+  min-width: 0;
+}
+.sharedChart > figcaption {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.sharedChart > figcaption > span {
+  color: var(--color-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.sharedChartGrid {
+  display: grid;
+  grid-template-columns: minmax(100px, 28%) minmax(80px, 1fr) minmax(95px, 24%);
+  column-gap: 16px;
+  align-items: start;
+}
+.chartLabels,
+.chartValues {
+  display: flex;
+  flex-direction: column;
+}
+.chartStreet {
+  display: flex;
+  height: 46px;
+  align-items: center;
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.35;
+  padding-right: 4px;
+  text-decoration: underline;
+  text-decoration-color: var(--color-line);
+  text-underline-offset: 3px;
+}
+.sharedPlot {
+  display: block;
+  width: 100%;
+  color: var(--color-ink);
+}
+.chartValues > div {
+  display: flex;
+  height: 46px;
+  justify-content: center;
+  flex-direction: column;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.chartValues strong {
+  font-size: 15px;
+  font-weight: 500;
+}
+.chartValues span {
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.sharedAxis {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  margin-top: -17px;
+  font-size: 9px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.waitTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 11px;
+  text-align: left;
+}
+.waitTable caption {
+  text-align: left;
+  padding-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.waitTable thead th {
+  padding: 0 12px 8px 0;
+  font-weight: 400;
+  color: var(--color-muted);
+  font-size: 10px;
+  text-align: left;
+}
+.waitTable tbody :is(th, td) {
+  border-top: 1px solid var(--color-line);
+  padding: 12px 12px 12px 0;
+  text-align: left;
+  vertical-align: top;
+}
+.waitTable tbody th {
+  width: 46%;
+  font-weight: 400;
+}
+.waitTable td:last-child {
+  text-align: right;
+  padding-right: 0;
+}
+.waitTable td strong {
+  font-weight: 500;
+  font-size: 13px;
+}
+.waitTable td > button {
+  padding: 7px 10px;
+  min-height: 34px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.listingInline {
+  display: block;
+  color: var(--color-muted);
+  font-size: 10px;
+  margin-top: 4px;
+}
+.notModeled {
+  margin-top: 12px;
+  color: var(--color-warn);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.technicalDetails {
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+/* The parent sheet supplies all glass material for the final plan. */
+.unitComparison > [data-agent-anchor="plan_summary"] {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (max-width: 600px) {
+  .sharedChartGrid {
+    column-gap: 9px;
+    grid-template-columns: minmax(90px, 28%) minmax(65px, 1fr) minmax(80px, 25%);
+  }
+  .chartValues strong {
+    font-size: 13px;
+  }
+  .sharedChart > figcaption > span {
+    display: none;
+  }
+}
+
+/* All panels use the same shared clear Glass material without a second dark layer. */
+.unitComparison {
+  margin: 12px;
+  padding: 24px;
+}
+.shell[data-workspace-mode="report"] .photo {
+  filter: saturate(0.85) brightness(0.85);
+}
+.shell[data-workspace-mode="report"] .shade {
+  background: linear-gradient(
+    180deg,
+    rgba(16, 17, 21, 0.3),
+    rgba(16, 17, 21, 0.16)
+  );
+  box-shadow: none;
+}
+.viewport:not([data-step="locations"]) {
+  min-height: 0;
+  padding-top: 0;
+}
+.viewport:not([data-step="locations"]) > .unitComparison {
+  max-height: calc(100% - 24px);
+  flex: 1;
+}
+.sidePane {
+  align-self: start;
+  height: auto;
+  max-height: calc(100dvh - 135px);
+}
+.propertyPanel {
+  flex: 0 1 auto;
+  max-height: calc(100dvh - 155px);
+}
+.topSites ol {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  margin-top: 12px;
+}
+.topSite {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+}
+.topSite > div > button {
+  display: block;
+  width: 100%;
+  min-width: 130px;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.45;
+}
+.topSite > div > span {
+  font-size: 10px;
+  overflow-wrap: normal;
+}
+.topSite > label {
+  white-space: nowrap;
+  margin: 0;
+  font-size: 10px;
+}
+.shortlistUnits,
+.shortlistUnits[data-count="3"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.shortlistUnit {
+  padding: 8px 10px;
+  align-items: center;
+}
+.shortlistUnit > button:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1;
+}
+.shortlistUnit > button:first-child strong {
+  font-size: 11px;
+  overflow-wrap: normal;
+}
+.shortlistUnit > button:first-child span {
+  font-size: 10px;
+  margin: 0;
+  white-space: nowrap;
+}
+.reportHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 20px;
+}
+.reportHeader h2 {
+  margin-top: 7px;
+  font-size: clamp(20px, 2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.6px;
+  line-height: 1.25;
+  overflow-wrap: normal;
+}
+.reportHeader > p {
+  flex-shrink: 0;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--color-muted);
+}
+.reportZone {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-line);
+}
+.reportZoneHeading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.reportZoneHeading > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px 10px;
+}
+.reportZoneHeading h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+.reportZoneHeading > div > p:last-child {
+  flex-basis: 100%;
+}
+.reportNumber {
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: 8px;
+  color: var(--color-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-weight: 400;
+}
+.reportListings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.reportListings > div {
+  min-width: 0;
+}
+.reportListings dt {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.reportListings dd {
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.reportListings dd > span {
+  display: block;
+}
+.reportChartTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.reportChartTitle small {
+  display: block;
+  color: var(--color-muted);
+  font-size: 10px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+.sharedChart {
+  padding-top: 18px;
+  border-top: 1px solid var(--color-line);
+}
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 36%);
+    gap: 14px;
+  }
+  .topSites {
+    padding: 12px;
+  }
+  .shortlist {
+    padding: 12px;
+  }
+  .unitComparison {
+    padding: 20px;
+  }
+}
+.reportViewing {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--color-muted);
+}
+.reportSubline {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+.counterHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.counterHeading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.counterSelect {
+  min-width: 0;
+  max-width: 100%;
+}
+.counterSelect select {
+  max-width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 6px 28px 6px 10px;
+  background: var(--color-field);
+  color: var(--color-ink);
+  font-size: 11px;
+}
+.counterSelect select:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+.staleStatus {
+  width: fit-content;
+  margin-bottom: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--color-warn);
+  font-size: 11px;
+}
+
+/* Top-location chrome uses onboarding Glass; controls stay unbacked. */
+.viewTabs[data-location-controls] {
+  padding: 4px;
+}
+.viewTabs[data-location-controls] > button {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.viewTabs[data-location-controls] > button:hover:not(:disabled),
+.propertyPanel .secondary:hover:not(:disabled),
+.shortlist .secondary:hover:not(:disabled),
+.paneTabs button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.propertyPanel .secondary,
+.shortlist .secondary,
+.paneTabs button {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.paneTabs button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
 }

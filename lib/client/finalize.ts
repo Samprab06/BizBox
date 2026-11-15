@@ -20,6 +20,7 @@ export async function finalizeChosenSite({
   addresses,
   tweaks,
   fetchPlan = fetchGroundedPlan,
+  onEnriched,
 }: {
   projectId: string;
   payload: LiveComparisonPayload | null;
@@ -28,19 +29,16 @@ export async function finalizeChosenSite({
   addresses: Record<string, string>;
   tweaks?: SiteTweakMap;
   fetchPlan?: typeof fetchGroundedPlan;
+  /** Optional grounded details arrive after the caller can show the chosen location. */
+  onEnriched?: (summary: FinalPlanSummary) => void;
 }): Promise<FinalPlanSummary | null> {
   if (
     !payload ||
     !payload.result.sites.some((site) => site.siteId === chosenSiteId)
   )
     return null;
-  // The grounded plan only enriches the summary, so a slow /plan never holds it up.
-  const plan = await fetchPlan(payload.comparisonId, {
-    projectId,
-    signal: AbortSignal.timeout(8_000),
-  });
   try {
-    return buildFinalPlanSummary({
+    const input = {
       projectId,
       comparisonId: payload.comparisonId,
       chosenSiteId,
@@ -48,9 +46,33 @@ export async function finalizeChosenSite({
       result: payload.result,
       addresses,
       tweaks,
-      plan,
       outdated: payload.outdated,
-    });
+    };
+    const summary = buildFinalPlanSummary({ ...input, plan: null });
+    // Choosing a location is local. The optional read must never gate navigation.
+    if (onEnriched) {
+      void Promise.resolve()
+        .then(() =>
+          fetchPlan(payload.comparisonId, {
+            projectId,
+            signal: AbortSignal.timeout(8_000),
+          }),
+        )
+        .then((plan) => {
+          if (plan)
+            onEnriched(
+              buildFinalPlanSummary({
+                ...input,
+                plan,
+                now: new Date(summary.finalizedAt),
+              }),
+            );
+        })
+        .catch(() => {
+          /* Keep the valid comparison-based summary on enrichment failure. */
+        });
+    }
+    return summary;
   } catch {
     return null;
   }

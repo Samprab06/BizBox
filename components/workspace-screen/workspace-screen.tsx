@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -96,6 +97,11 @@ export function WorkspaceScreen({
   navigation?: ReactNode;
   tilesetUrl?: string;
 }) {
+  const [choiceNotice, setChoiceNotice] = useState<{
+    error: boolean;
+    text: string;
+  } | null>(null);
+  const choiceRequest = useRef(0);
   const consultant = useConsultant();
   // Outside a project layout (no shell) the saved session is read directly.
   const raw = useContextIntake(projectId);
@@ -404,23 +410,58 @@ export function WorkspaceScreen({
    * action and the "Choose this location" button.
    */
   async function finalize(chosenSiteId: string, rationale?: string) {
-    const summary = await finalizeChosenSite({
-      projectId,
-      payload: finishedComparison(controller.payload),
-      chosenSiteId,
-      rationale,
-      addresses: Object.fromEntries(
-        candidates.map((entry) => [
-          entry.candidate.id,
-          entry.candidate.address,
-        ]),
-      ),
-      tweaks: readFlowState(projectId).siteTweaks,
+    const request = ++choiceRequest.current;
+    const address = candidates.find(
+      (entry) => entry.candidate.id === chosenSiteId,
+    )?.candidate.address;
+    setChoiceNotice({
+      error: false,
+      text: `Preparing your plan${address ? ` for ${address}` : ""}…`,
     });
-    if (!summary) return;
-    flow.setFinalPlan(summary);
-    goStep("finalize");
+    try {
+      const summary = await finalizeChosenSite({
+        projectId,
+        payload: finishedComparison(controller.payload),
+        chosenSiteId,
+        rationale,
+        addresses: Object.fromEntries(
+          candidates.map((entry) => [
+            entry.candidate.id,
+            entry.candidate.address,
+          ]),
+        ),
+        tweaks: readFlowState(projectId).siteTweaks,
+        onEnriched: (enriched) => {
+          if (request !== choiceRequest.current) return;
+          const current = readFlowState(projectId).finalPlan;
+          if (
+            current?.chosenSiteId === chosenSiteId &&
+            current.comparisonId === enriched.comparisonId
+          )
+            flow.setFinalPlan(enriched);
+        },
+      });
+      // A later click is the founder's latest choice, even if an earlier request finishes last.
+      if (request !== choiceRequest.current) return;
+      if (!summary) {
+        setChoiceNotice({
+          error: true,
+          text: "This location could not be finalized. Rerun the comparison and choose it again.",
+        });
+        return;
+      }
+      flow.setFinalPlan(summary);
+      setChoiceNotice(null);
+      goStep("finalize");
+    } catch {
+      if (request === choiceRequest.current)
+        setChoiceNotice({
+          error: true,
+          text: "Your plan could not be prepared. Please choose the location again.",
+        });
+    }
   }
+
   useConsultantActions((actions: UiAction[]) => {
     const effects = planWorkspaceActions(actions, {
       candidateIds,
@@ -454,15 +495,17 @@ export function WorkspaceScreen({
         )
       }
       backdrop={
-        <WorkspaceBackdrop
-          city={header.city}
-          interior={locations && interior}
-          selected={selected}
-          tilesetUrl={tilesetUrl}
-          candidates={shown}
-          onSelect={select}
-          cameraRequest={cameraRequest}
-        />
+        locations ? (
+          <WorkspaceBackdrop
+            city={header.city}
+            interior={locations && interior}
+            selected={selected}
+            tilesetUrl={tilesetUrl}
+            candidates={shown}
+            onSelect={select}
+            cameraRequest={cameraRequest}
+          />
+        ) : undefined
       }
       assistant={
         sidePaneOpen ? (
@@ -533,6 +576,14 @@ export function WorkspaceScreen({
         ) : undefined
       }
     >
+      {choiceNotice && (
+        <p
+          role={choiceNotice.error ? "alert" : "status"}
+          className="pointer-events-auto relative z-30 mx-3 mb-2 rounded-control border border-glass-edge bg-glass-fill px-4 py-3 text-sm backdrop-blur-glass"
+        >
+          {choiceNotice.text}
+        </p>
+      )}
       <LocationExperience
         key={projectId}
         projectId={projectId}

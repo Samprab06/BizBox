@@ -9,6 +9,7 @@ Akshar rejected the exposed review controls and ambiguous comparison UX. `/revie
 The earlier sample review described below remains implementation history, not the current client route.
 
 ## Scope
+
 This UI pass follows Akshar's accepted desktop flow while database access is blocked. It preserves the onboarding/workspace smoked-glass system. The canonical project workspace continues to use its actual services and explicit errors. The separate `/review/client-flow` page uses deterministic illustrative sample data and local state so all screens can be reviewed without credentials, data writes or paid calls.
 
 The shared brand uses the existing project logo from `public/landing-preview/assets/bizbox-logo.png`, rendered in off-white with CSS masking, with a readable BizBox wordmark. The same asset supplies browser icons. This is brand integration, not a new identity. Concurrent onboarding files are outside this change.
@@ -16,6 +17,7 @@ The shared brand uses the existing project logo from `public/landing-preview/ass
 Client functionality is in scope: existing comparison controller wiring, property selection, local review state, graph presentation, draft continuity, navigation and loading/retry/error states. New service/runtime implementations remain with their assigned owners.
 
 ## Screen sequence
+
 1. Location selection and property facts.
 2. Location comparison, with listing facts distinct from modeled outcome charts and ranges.
 3. Outdoor what-if setup and before/after results.
@@ -26,6 +28,7 @@ Client functionality is in scope: existing comparison controller wiring, propert
 One review consultant area remains alongside the visualization. Its scripted sample replies do not call a model; voice-unavailable state does not imply a functioning realtime session. Review changes are temporary, not saved to the business profile or simulation database.
 
 ## Integration responsibilities
+
 - Existing production comparison API/results remain authoritative; graph presentation consumes those payloads without recomputing evaluation math.
 - Sam's HAC-161 owns unified intake/copilot routing; the review pane does not replace that runtime. (Scene 1 removed the Copilot; the consultant/intake agent is now the only agent.)
 - Yasser's HAC-148/HAC-88 own real consultant screen dispatch, and HAC-79 owns experiment service control integration.
@@ -34,6 +37,7 @@ One review consultant area remains alongside the visualization. Its scripted sam
 - The aerial overview request is a separate imagery task. No provider/imagery behavior is changed by this screen pass.
 
 ## Verification
+
 Exact-source lint, typecheck and production build passed in the isolated verification snapshot; 1,431 unit tests passed (43 existing skips). The full affected Chromium desktop suite passed 77 cases (2 existing skips), including the six-stage review test, accessibility, stale-run invalidation, cash and chat continuity, negative/zero graph scales, 500 px overflow and zero API calls from the review. The source matches the working candidate; only the unrelated preserved interrupted prototype/onboarding WIP was excluded from that snapshot. The existing recorded-example filesystem tracing warning remains.
 
 The actual IAB on port 4201 was visually checked at 1300 px and its natural 499 px desktop pane. All stages render, property context persists, cash input 70000 survives Cash → Compare → Cash, Text/Voice keep history, and the compact document width equals its viewport. Screenshots: `/tmp/bizbox-client-flow-comparison-final.png` and `/tmp/bizbox-client-flow-cash-final.png`. The viewport override was reset.
@@ -82,3 +86,71 @@ this UI does not add spatial filtering or ranking enforcement to the backend.
 The existing OpenFreeMap/OpenStreetMap vector provider requires internet and WebGL.
 No imagery or terrain is loaded. Attribution is available from the small info button
 in the map corner. If loading fails, the existing skip action remains available.
+
+## Shared-axis results and canonical glass
+
+Results retain the workspace/assistant layout. Operating contribution/month and
+customers served/month each use one full-width dot-range chart, one shared x-axis,
+and one row per location in the saved ranking order. Every row includes its exact
+mean and low/high values alongside the plot. Axes fit actual returned ranges instead
+of forcing unrelated zero values; a zero reference appears when the intervals cross it.
+These are means and modeled intervals, never invented medians or quartiles.
+
+A compact table keeps weekday waits and ranges, capacity cautions, clickable street
+names, rent/size facts and every Choose action visible. Changes, service-counter
+experiments, comparison freshness and rerun controls remain available. The first view
+uses a concise demand-source badge and factual caveat chips. Raw assembly findings
+and field paths are preserved under Assumptions & sources → Technical details,
+without dumping diagnostic prose into the analytics. Exact source notes and input
+provenance remain inspectable there. Only explicit source codes produce factual
+chips such as Parking unverified; defaults do not become blanket calibration claims.
+
+### Report structure, glass and backdrop
+
+Top locations is the only workspace step that mounts the map/3D renderer or selected
+interior. Compare, Results and Final plan unmount it and expose the existing city-photo
+workspace background; no substitute imagery or canvas is introduced. The left content,
+right assistant and project stepper keep their existing macro layout.
+
+Compare and Results share a framed Location report header, phase title, selected-street
+context and selection count. Results use concise section titles: Listing facts, Financial performance,
+Customer demand, Operations & choice and Counter setup, without numerical indexes.
+Facts, shared-axis plots and direct values align inside one outer glass sheet. Source
+assumptions stay inspectable without dumping diagnostic field paths into the report.
+
+Onboarding remains unchanged. Report sheets, property panels, top locations, trays
+and the view toolbar now reuse the exact onboarding component,
+`components/ui/glass.tsx`, and its foundation tokens. The extra workspace underlay,
+decorative gradients, inset rims and refraction are removed. There are no workspace
+fill or blur overrides. Nested final plan content contributes no second material layer.
+
+When a property opens, top-three cards remain full-width horizontal rows with ordinary
+word wrapping, readable street names and compact inline comparison controls. The property
+pane follows its content height and scrolls at the viewport limit instead of stretching
+into a tall empty sheet. The selected location, list, interior and comparison controls
+continue using the existing candidate identities and controllers.
+
+Location finalization now opens the comparison-based summary immediately. Grounded
+plan details load independently and enrich only the same active choice; a slow or
+failed plan read cannot block selection, and an older response cannot replace a
+newer choice.
+
+### Concise results and counter copy
+
+The results report uses one phase header and concise section titles. Modeled/source
+labels, parking provenance, fallback explanations and other caveats live in the existing
+Assumptions & sources disclosure; complete diagnostics remain in Technical details.
+Wait/capacity cautions remain alongside the numbers. Outdated comparisons show a short
+Out of date status, with one footer Rerun action rather than duplicate controls.
+
+Counter setup has one heading and a site dropdown. Only configurations returned by the
+existing service appear as Current/+1/+2 summaries; the existing batch comparison and
+explicit budget-confirmation handlers remain unchanged. Workspace-only compact copy
+shows short loading/error/no-room messages, omits meaningless zero-of-zero progress,
+and keeps simulation identities, seed/profile provenance, methods and full returned
+plan under Details. Other station-controller callers retain their original presentation.
+
+Top-location controls sit inside one onboarding Glass group. Buttons stay unbacked;
+secondary property/pane/tray controls use a light surface rather than another dark glass
+layer. Primary/active states and all existing labels, selection handlers and layout
+remain unchanged.

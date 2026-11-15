@@ -1,4 +1,5 @@
 "use client";
+import { Glass } from "@/components/ui/glass";
 import type {
   LiveComparisonController,
   LiveComparisonPayload,
@@ -23,7 +24,7 @@ import { LocationResults } from "./location-results";
 import { ComparisonProgress } from "./comparison-progress";
 import { SiteTweakChips } from "./site-tweaks";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useId, useState } from "react";
 import styles from "./workspace-glass.module.css";
 
 const StationCalloutController = dynamic(
@@ -58,7 +59,11 @@ export function ComparisonTray({
   const ready =
     units.length >= MIN_COMPARE_UNITS && units.length <= MAX_COMPARE_UNITS;
   return (
-    <section className={styles.shortlist} aria-label="Comparison shortlist">
+    <Glass
+      role="region"
+      className={styles.shortlist}
+      aria-label="Comparison shortlist"
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm">
           Comparison {units.length}/{MAX_COMPARE_UNITS}
@@ -96,7 +101,7 @@ export function ComparisonTray({
           </div>
         ))}
       </div>
-    </section>
+    </Glass>
   );
 }
 
@@ -106,6 +111,7 @@ export function ComparisonTray({
  */
 export function UnitComparison({
   units,
+  selectedId,
   candidates,
   controller,
   payload,
@@ -117,6 +123,7 @@ export function UnitComparison({
   onChooseSite,
 }: {
   units: WorkspaceCandidate[];
+  selectedId?: string;
   candidates: WorkspaceCandidate[];
   controller: LiveComparisonController;
   /** The finished comparison matching these units and tweaks, if any. */
@@ -144,13 +151,24 @@ export function UnitComparison({
     controller.tweaksKey,
   );
   return (
-    <section className={styles.unitComparison} aria-label="Unit comparison">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <Glass
+      role="region"
+      className={styles.unitComparison}
+      aria-label="Unit comparison"
+    >
+      <ReportHeader
+        phase="Compare"
+        units={units}
+        candidates={candidates}
+        selectedId={selectedId}
+      />
+      <div className={styles.reportZoneHeading}>
         <div>
-          <h2 className="text-2xl font-semibold">
+          <p className={styles.reportNumber}>01</p>
+          <h3>Listing facts</h3>
+          <p className="mt-1 text-xs opacity-75">
             {compareLabel(units.length)}
-          </h2>
-          <p className="mt-2 text-xs opacity-75">Listing facts</p>
+          </p>
         </div>
         <button
           className={styles.secondary}
@@ -161,12 +179,13 @@ export function UnitComparison({
         </button>
       </div>
       {!ready ? (
-        <p>
-          Select two or three units from the map or list.
-        </p>
+        <p>Select two or three units from the map or list.</p>
       ) : (
         <>
-          <table className={styles.unitFacts} data-agent-anchor="comparison_table">
+          <table
+            className={styles.unitFacts}
+            data-agent-anchor="comparison_table"
+          >
             <caption className="sr-only">
               Source listing facts for the {unitsWord(units.length)} chosen
               units
@@ -285,7 +304,38 @@ export function UnitComparison({
           )}
         </>
       )}
-    </section>
+    </Glass>
+  );
+}
+
+function ReportHeader({
+  phase,
+  units,
+  candidates,
+  selectedId,
+}: {
+  phase: string;
+  units: WorkspaceCandidate[];
+  candidates: WorkspaceCandidate[];
+  selectedId?: string;
+}) {
+  const selected =
+    units.find((unit) => unit.candidate.id === selectedId) ?? units[0];
+  return (
+    <header className={styles.reportHeader}>
+      <div>
+        <p className={styles.resultsEyebrow}>Location report</p>
+        <h2>
+          {phase === "Compare" ? "Compare locations" : "Results & refine"}
+        </h2>
+        {selected && (
+          <p className={styles.reportViewing}>
+            Viewing: {unitAddress(selected, candidates)}
+          </p>
+        )}
+      </div>
+      <p>{units.length} selected locations</p>
+    </header>
   );
 }
 
@@ -297,6 +347,7 @@ export function ResultsStep({
   projectId,
   payload,
   units,
+  selectedId,
   candidates,
   tweaks,
   loading,
@@ -314,6 +365,7 @@ export function ResultsStep({
   /** Why this run is not for the current choices, if it is. Never hides the results. */
   stale?: Staleness;
   units: WorkspaceCandidate[];
+  selectedId?: string;
   candidates: WorkspaceCandidate[];
   tweaks: SiteTweakMap;
   loading: boolean;
@@ -327,14 +379,21 @@ export function ResultsStep({
     (unit) => Object.keys(tweaks[unit.candidate.id] ?? {}).length > 0,
   );
   return (
-    <section
+    <Glass
+      role="region"
       className={styles.unitComparison}
       aria-label="Results"
       data-agent-anchor="comparison_recommendation"
     >
+      <ReportHeader
+        phase="Results"
+        units={units}
+        candidates={candidates}
+        selectedId={selectedId}
+      />
       {payload ? (
         <>
-          <StaleBanner stale={stale} onRerun={onRerun} running={running} />
+          <StaleBanner stale={stale} />
           <LocationResults
             payload={payload}
             candidates={candidates}
@@ -351,11 +410,13 @@ export function ResultsStep({
         </p>
       )}
       {projectId && payload && !payload.comparison?.synthetic && (
-        <ServiceCounters
-          projectId={projectId}
-          payload={payload}
-          candidates={candidates}
-        />
+        <div className={styles.reportZone}>
+          <ServiceCounters
+            projectId={projectId}
+            payload={payload}
+            candidates={candidates}
+          />
+        </div>
       )}
       {tweaked.length > 0 && (
         <div className="mt-5">
@@ -386,11 +447,16 @@ export function ResultsStep({
         >
           Change a site
         </button>
-        <button className={styles.primary} onClick={onRerun} disabled={running}>
-          Rerun
+        <button
+          className={styles.primary}
+          aria-label="Rerun"
+          onClick={onRerun}
+          disabled={running}
+        >
+          {stale ? "Rerun to update" : "Rerun"}
         </button>
       </div>
-    </section>
+    </Glass>
   );
 }
 
@@ -407,6 +473,7 @@ function ServiceCounters({
   const modeled = payload.result.ranking.filter((id) =>
     payload.result.sites.some((site) => site.siteId === id),
   );
+  const selectId = useId();
   const [picked, setPicked] = useState<string | null>(null);
   const siteId = picked && modeled.includes(picked) ? picked : modeled[0];
   if (!siteId) return null;
@@ -416,26 +483,27 @@ function ServiceCounters({
   };
   return (
     <div className="mt-6" data-service-counters>
-      <h3 className="text-base font-semibold">Service counters</h3>
-      {modeled.length > 1 && (
-        <div
-          className="mb-3 flex flex-wrap gap-2"
-          role="group"
-          aria-label="Site for service counters"
-        >
-          {modeled.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={styles.secondary}
-              aria-pressed={id === siteId}
-              onClick={() => setPicked(id)}
+      <div className={styles.counterHeading}>
+        <h3>Counter setup</h3>
+        {modeled.length > 1 && (
+          <div className={styles.counterSelect}>
+            <label htmlFor={selectId} className="sr-only">
+              Counter setup location
+            </label>
+            <select
+              id={selectId}
+              value={siteId}
+              onChange={(event) => setPicked(event.target.value)}
             >
-              {label(id)}
-            </button>
-          ))}
-        </div>
-      )}
+              {modeled.map((id) => (
+                <option key={id} value={id}>
+                  {label(id)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
       <StationCalloutController
         projectId={projectId}
         comparisonId={payload.comparisonId}
@@ -446,33 +514,22 @@ function ServiceCounters({
         synthetic={false}
         modelVersion={payload.result.modelVersion}
         founderLabels
+        compact
       />
     </div>
   );
 }
 
 /** A non-blocking note that the results on screen are for earlier choices. */
-function StaleBanner({
-  stale,
-  onRerun,
-  running = false,
-}: {
-  stale: Staleness;
-  onRerun?: () => void;
-  running?: boolean;
-}) {
+function StaleBanner({ stale }: { stale: Staleness }) {
   if (!stale) return null;
   return (
     <div
       role="status"
-      className="mb-4 flex flex-wrap items-center gap-3 text-sm"
+      className={styles.staleStatus}
+      title={staleMessage(stale)}
     >
-      <span>{staleMessage(stale)}</span>
-      {onRerun && (
-        <button className={styles.secondary} onClick={onRerun} disabled={running}>
-          Rerun
-        </button>
-      )}
+      Out of date
     </div>
   );
 }

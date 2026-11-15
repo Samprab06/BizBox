@@ -1,5 +1,6 @@
 "use client";
 
+import { Glass } from "@/components/ui/glass";
 import { MAX_COMPARE_UNITS } from "@/lib/contracts/evaluation";
 import { unitAddress, type WorkspaceCandidate } from "./client-model";
 import { metricText } from "./model";
@@ -34,7 +35,8 @@ export function TopSites({
   if (!units.length) return null;
   const full = selectedIds.length >= MAX_COMPARE_UNITS;
   return (
-    <section
+    <Glass
+      role="region"
       className={styles.topSites}
       aria-label="Top locations"
       data-agent-anchor="candidate_list"
@@ -67,21 +69,21 @@ export function TopSites({
                   {metricText(unit.baseRentCents)}/mo ·{" "}
                   {metricText(unit.candidate.floorAreaSqFt)} sq ft
                 </span>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={chosen}
-                    disabled={running || (!chosen && full)}
-                    onChange={() => onToggle(unit.candidate.id)}
-                    aria-label={`Compare top ${index + 1}: ${label}`}
-                  />
-                  Compare
-                </label>
               </div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={chosen}
+                  disabled={running || (!chosen && full)}
+                  onChange={() => onToggle(unit.candidate.id)}
+                  aria-label={`Compare top ${index + 1}: ${label}`}
+                />
+                Compare
+              </label>
             </li>
           );
         })}
       </ol>
-    </section>
+    </Glass>
   );
 }

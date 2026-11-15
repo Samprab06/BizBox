@@ -1,5 +1,6 @@
 "use client";
 
+import { Glass } from "@/components/ui/glass";
 import { Button } from "@/components/ui/button";
 
 import Link from "next/link";
@@ -27,12 +28,13 @@ import { SearchFilterSummary } from "./property-details";
 /**
  * The workspace's view for one guided-flow step (Scene 1): `locations` is the map, the top
  * locations and the shortlist tray; `compare` the chosen units and the run; `results` the
- * comparison with its changes; `finalize` the plan summary. The map stays behind them all.
+ * comparison with its changes; `finalize` the plan summary. The map is mounted only in the locations step.
  */
 export function LocationExperience({
   projectId,
   controller,
   candidates,
+  selected,
   shownCount,
   onSelect,
   step,
@@ -101,38 +103,42 @@ export function LocationExperience({
       data-agent-anchor="map"
       data-step={step}
     >
-      <div className={styles.viewToolbar} data-map-toolbar>
-        <div
-          className={styles.viewTabs}
-          role="group"
-          aria-label="Workspace view"
-        >
-          {locations && interior && (
-            <Button variant="glass" onClick={() => onInteriorChange(false)}>
-              Locations
-            </Button>
-          )}
-          {map && markers.length > 0 && onOverview && (
-            <Button variant="glass" onClick={onOverview}>
-              All locations
-            </Button>
-          )}
-          {locations && candidates.length > 0 && (
-            <Button
-              variant="glass"
-              data-show-location-list
-              aria-expanded={listOpen}
-              onClick={onShowList}
-            >
-              Show list ({shownCount ?? candidates.length} units)
-            </Button>
-          )}
+      {locations && (
+        <div className={styles.viewToolbar} data-map-toolbar>
+          <Glass
+            className={styles.viewTabs}
+            data-location-controls
+            role="group"
+            aria-label="Workspace view"
+          >
+            {locations && interior && (
+              <Button variant="quiet" onClick={() => onInteriorChange(false)}>
+                Locations
+              </Button>
+            )}
+            {map && markers.length > 0 && onOverview && (
+              <Button variant="quiet" onClick={onOverview}>
+                All locations
+              </Button>
+            )}
+            {locations && candidates.length > 0 && (
+              <Button
+                variant="quiet"
+                data-show-location-list
+                aria-expanded={listOpen}
+                onClick={onShowList}
+              >
+                Show list ({shownCount ?? candidates.length} units)
+              </Button>
+            )}
+          </Glass>
         </div>
-      </div>
+      )}
 
       {step === "compare" && (
         <UnitComparison
           units={selectedUnits}
+          selectedId={selected?.candidate.id}
           candidates={candidates}
           controller={controller}
           payload={matching}
@@ -155,6 +161,7 @@ export function LocationExperience({
           )}
           onChooseSite={onChooseSite}
           units={selectedUnits}
+          selectedId={selected?.candidate.id}
           candidates={candidates}
           tweaks={tweaks}
           loading={controller.phase === "loading"}
@@ -166,9 +173,9 @@ export function LocationExperience({
         />
       )}
       {step === "finalize" && (
-        <div className={styles.unitComparison}>
+        <Glass className={styles.unitComparison}>
           <PlanSummary projectId={projectId} />
-        </div>
+        </Glass>
       )}
       {map && candidates.length > 0 && selectedUnits.length === 0 && (
         <div className="pointer-events-auto mx-3 flex items-center justify-between gap-3">

@@ -21,6 +21,16 @@ const base = {
 };
 
 describe("finalizeChosenSite", () => {
+  it("opens the selected site without waiting for a stalled optional plan", async () => {
+    const fetchPlan = vi.fn(() => new Promise<null>(() => {}));
+    const summary = await finalizeChosenSite({
+      ...base,
+      fetchPlan,
+      onEnriched: vi.fn(),
+    });
+    expect(summary?.chosenSiteId).toBe(chosen);
+  }, 1000);
+
   it("builds the summary with the default rationale for a manual choice", async () => {
     const summary = await finalizeChosenSite(base);
     expect(summary).toMatchObject({

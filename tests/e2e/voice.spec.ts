@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { closeConsultant, expect, openConsultant, test } from "./fixtures";
 
+import { mockLiveComparison, threeSiteSearch } from "./live-comparison-fixtures";
+
 type Harness = {
   deny: boolean;
   failureName: string | null;
@@ -716,4 +718,31 @@ test("losing the live microphone stops owned resources and offers retry", async 
   ).toBeEnabled();
   expect(await page.evaluate(() => window.__voice.stopped)).toBe(1);
   expect(await page.evaluate(() => window.__voice.peersClosed)).toBe(1);
+});
+
+
+test("workspace voice orb is transparent before microphone activation and keeps its controls", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await mockLiveComparison(page);
+  const setups = await mockVoice(page);
+  await page.route("**/api/sites", (route) => route.fulfill({ json: threeSiteSearch }));
+  await page.goto("/projects/houston-coffee/workspace?step=locations");
+  await openConsultant(page);
+  await page.getByRole("tab", { name: "Voice", exact: true }).click();
+  const panel = voice(page);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("status", { name: "Voice status" })).toHaveText("Ready");
+  expect(await page.evaluate(() => window.__voice.gets)).toBe(0);
+  expect(setups()).toBe(0);
+  const orb = panel.locator("[data-orb-mode]");
+  await expect(orb).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await page.screenshot({ path: "/tmp/bizbox-workspace-orb.png" });
+  await start(page);
+  await expect(panel.getByRole("button", { name: "Mute microphone" })).toBeEnabled();
+  await panel.getByRole("button", { name: "Mute microphone" }).click();
+  await expect(panel.getByRole("button", { name: "Unmute microphone" })).toBeVisible();
+  await panel.getByRole("button", { name: "Stop voice", exact: true }).click();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(orb).toHaveAttribute("data-orb-mode", "static");
+  await expect(panel.getByRole("button", { name: "Start voice", exact: true })).toBeEnabled();
 });
