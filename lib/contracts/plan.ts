@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LocationPlanSchema, OriginSchema } from ".";
+import { DemandSourceSchema, SiteTweaksSchema } from "./evaluation";
 
 const id = z.string().min(1).max(300);
 export const PlanReferenceSchema = z.union([
@@ -114,3 +115,50 @@ export const GroundedLocationPlanSchema = z
   })
   .strict();
 export type GroundedLocationPlan = z.infer<typeof GroundedLocationPlanSchema>;
+
+/** A modeled range (mean with a low-high interval across seeds). */
+const SummaryRangeSchema = z
+  .object({
+    mean: z.number().finite(),
+    low: z.number().finite(),
+    high: z.number().finite(),
+  })
+  .strict()
+  .refine((v) => v.low <= v.high, "low must not exceed high");
+
+/**
+ * Scene 1: what the "Final plan" step shows once the founder and the consultant finalize.
+ * Built on the client from the stored comparison (+ its /plan) and the `finalize_plan`
+ * action, then kept in the project's flow store. Ranges are modeled, not measured traffic.
+ */
+export const FinalPlanSummarySchema = z
+  .object({
+    projectId: id,
+    comparisonId: id,
+    chosenSiteId: id,
+    chosenAddress: z.string().min(1).max(300),
+    rationale: z.string().min(1).max(2000),
+    finalizedAt: z.string().datetime(),
+    demandSource: DemandSourceSchema,
+    metrics: z
+      .object({
+        monthlyServedCustomers: SummaryRangeSchema,
+        monthlyContributionUsd: SummaryRangeSchema,
+        weekdayMeanWaitMin: SummaryRangeSchema.optional(),
+      })
+      .strict(),
+    /** Per-site changes that were applied in the finalized comparison. */
+    tweaks: SiteTweaksSchema.optional(),
+    runnerUp: z
+      .object({
+        siteId: id,
+        address: z.string().min(1).max(300),
+        monthlyContributionUsd: SummaryRangeSchema,
+      })
+      .strict()
+      .nullable(),
+    risks: z.array(z.string().min(1).max(500)).max(8),
+    nextSteps: z.array(z.string().min(1).max(500)).min(1).max(8),
+  })
+  .strict();
+export type FinalPlanSummary = z.infer<typeof FinalPlanSummarySchema>;

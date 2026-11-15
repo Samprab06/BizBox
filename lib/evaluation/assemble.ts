@@ -9,6 +9,7 @@ import type { CatchmentResponse } from "@/lib/contracts/catchment";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import {
   EvaluationRequestSchema,
+  SiteTweakMapSchema,
   type EvaluationRequest,
   type EvaluationSite,
 } from "@/lib/contracts/evaluation";
@@ -51,6 +52,8 @@ export const AssemblyShortcutSchema = z
       ),
     demandSource: z.enum(["huff", "jev"]).default("huff"),
     seeds: z.number().int().min(1).max(100).optional(),
+    /** Scene 1: per-site hours/price/staff/rent, keyed by candidate ID. */
+    siteTweaks: SiteTweakMapSchema.optional(),
   })
   .strict();
 export const AssemblyInputSchema = AssemblyShortcutSchema.extend({
