@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -24,6 +25,7 @@ import {
   type RenderQuality,
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
+import { readRenderPalette } from "./render-palette";
 import {
   describeCityLoad,
   initialCityLoad,
@@ -138,6 +140,7 @@ export default function Neighborhood({
     const roadRequests = new AbortController();
     const element = container.current;
     if (!element || !hasBeenVisible || skipped) return;
+    const palette = readRenderPalette();
     dispatchLoad({ type: "start", at: Date.now() });
     const decoderWarmup = new AbortController();
     const disposers: (() => void)[] = [];
@@ -455,10 +458,10 @@ export default function Neighborhood({
           color.setValue(
             Color.fromCssColorString(
               congestion >= 0.7
-                ? "#ff3e47"
+                ? palette.danger
                 : congestion >= 0.38
-                  ? "#ffb522"
-                  : "#2fdf92",
+                  ? palette.warn
+                  : palette.accent,
             ).withAlpha(0.82),
           );
         }
@@ -470,7 +473,7 @@ export default function Neighborhood({
             qualityRef.current === "balanced" ? 65 : 18 + 47 * level,
           );
           color.setValue(
-            Color.fromCssColorString(anchor.color).withAlpha(
+            Color.fromCssColorString(palette[anchor.color]).withAlpha(
               0.05 + 0.45 * level,
             ),
           );
@@ -481,7 +484,7 @@ export default function Neighborhood({
         if (city.scene.sun) city.scene.sun.show = atmosphereRef.current;
         if (!atmosphereRef.current) {
           city.scene.backgroundColor = Color.fromCssColorString(
-            listingOptions.current ? "#17181d" : "#101b16",
+            listingOptions.current ? palette["on-accent"] : palette.canvas,
           );
           previousMinute = -1;
           return;
@@ -751,7 +754,7 @@ export default function Neighborhood({
     <div
       id="neighborhood"
       data-city-stage={view.stage}
-      className="relative h-full w-full overflow-hidden bg-viewport-canvas text-viewport-ink"
+      className="relative h-full w-full overflow-hidden bg-canvas text-ink"
     >
       <div
         className="absolute inset-0"
@@ -766,11 +769,12 @@ export default function Neighborhood({
 
       {(showLocationLabel || status === "failed") && (
         <div
-          className={`absolute ${showLocationLabel ? "top-3" : "top-20"} left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted`}
+          className={`absolute ${showLocationLabel ? "top-3" : "top-20"} left-3 z-10 max-w-[60%] rounded bg-panel-raised p-2 text-xs text-muted`}
         >
           {showLocationLabel && <span>{locationLabel}</span>}
           {status === "failed" && (
-            <button
+            <Button
+              variant="quiet"
               type="button"
               className="ml-2 underline"
               onClick={() => {
@@ -779,7 +783,7 @@ export default function Neighborhood({
               }}
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -787,27 +791,28 @@ export default function Neighborhood({
       {status !== "ready" && (
         <div
           data-city-overlay
-          className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-viewport-muted"
+          className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-sm text-muted"
         >
           {load.phase === "failed" ? (
             <p role="status">{view.title}</p>
           ) : skipped ? (
-            <div className="pointer-events-auto grid justify-items-center gap-2 rounded bg-viewport-surface px-4 py-3 text-center">
+            <div className="pointer-events-auto grid justify-items-center gap-2 rounded bg-panel-raised px-4 py-3 text-center">
               <p role="status">
                 {view.title}. The timeline and replay still work.
               </p>
-              <button
+              <Button
+                variant="quiet"
                 type="button"
                 className="underline"
                 onClick={() => dispatchLoad({ type: "start", at: Date.now() })}
               >
                 Load 3D neighborhood
-              </button>
+              </Button>
             </div>
           ) : (
-            <div className="pointer-events-auto grid max-w-sm justify-items-center gap-1.5 rounded bg-viewport-surface/85 px-4 py-3 text-center">
+            <div className="pointer-events-auto grid max-w-sm justify-items-center gap-1.5 rounded bg-panel-raised/90 px-4 py-3 text-center">
               <div role="status" className="grid justify-items-center gap-1.5">
-                <span className="flex items-center gap-3 text-viewport-ink">
+                <span className="flex items-center gap-3 text-ink">
                   <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-white/15 border-t-white/70" />
                   Loading 3D neighborhood: {view.title}
                 </span>
@@ -825,13 +830,14 @@ export default function Neighborhood({
               {view.offerSkip && (
                 <p className="text-xs">
                   Taking longer than usual.{" "}
-                  <button
+                  <Button
+                    variant="quiet"
                     type="button"
                     className="underline"
                     onClick={() => dispatchLoad({ type: "skip" })}
                   >
                     Skip 3D view
-                  </button>
+                  </Button>
                 </p>
               )}
             </div>
@@ -842,7 +848,7 @@ export default function Neighborhood({
       {load.phase === "visible" && (
         <p
           role="status"
-          className="pointer-events-none absolute top-3 left-1/2 z-10 w-max max-w-[min(30rem,50%)] -translate-x-1/2 rounded bg-viewport-surface px-2 py-1 text-center text-[11px] text-viewport-muted"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 w-max max-w-[min(30rem,50%)] -translate-x-1/2 rounded bg-panel-raised px-2 py-1 text-center text-[11px] text-muted"
         >
           {view.title} · {view.detail} · first buildings after{" "}
           {view.elapsedSeconds} s
@@ -869,7 +875,7 @@ export default function Neighborhood({
                 setTrafficVisible(show);
                 trafficEntities.current(show);
               }}
-              className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
+              className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-accent/90" : "bg-white/15"}`}
             >
               <span
                 className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
@@ -877,11 +883,11 @@ export default function Neighborhood({
             </button>
           </div>
           <div
-            className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
+            className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-accent via-warn to-danger transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
           />
 
           {trafficVisible && roadStatus !== "ready" && (
-            <p role="status" className="mt-2 text-[11px] text-viewport-muted">
+            <p role="status" className="mt-2 text-[11px] text-muted">
               {roadStatus === "loading"
                 ? "Loading nearby roads…"
                 : "Some roads didn’t load. Move the map or toggle to retry."}
@@ -904,7 +910,7 @@ export default function Neighborhood({
                 return (
                   <li
                     key={anchor.label}
-                    className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
+                    className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-muted"
                     title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
                   >
                     {anchor.label}
@@ -913,7 +919,7 @@ export default function Neighborhood({
                         className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
                         style={{
                           width: `${Math.max(3, level * 100)}%`,
-                          backgroundColor: anchor.color,
+                          backgroundColor: `var(--color-${anchor.color})`,
                         }}
                       />
                     </span>
@@ -936,7 +942,7 @@ export default function Neighborhood({
 
       {children}
 
-      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-viewport-muted sm:right-6">
+      <p className="absolute right-4 bottom-2 z-10 text-[10px] text-muted sm:right-6">
         © Vexcel Imaging · © Microsoft · © OpenStreetMap via OpenFreeMap
       </p>
     </div>

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { expandProjectNavigation } from "./fixtures";
+import { closeConsultant, expandProjectNavigation, openConsultant } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/vexcel/**", (route) =>
@@ -36,28 +36,24 @@ test("legacy simulator links retain replay state inside the workspace", async ({
       .getByRole("navigation", { name: "Project views" })
       .getByRole("link", { name: "Simulator", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  const context = page.getByRole("complementary", {
-    name: "Project context",
-    exact: true,
-  });
+  // An explicit broken permalink stays a recovery state, even with no local database.
   await expect(
-    context
-      .getByText("Example", { exact: true })
-      .filter({ visible: true })
-      .first(),
+    page.getByRole("heading", {
+      name: /Comparison (not found|temporarily unavailable)/,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("Modeled monthly contribution change", { exact: true }),
-  ).toBeVisible();
-  await page
-    .getByText("Time basis and included costs", { exact: true })
-    .click();
+  ).toHaveCount(0);
   await expect(
-    page
-      .getByText(
-        /22 weekdays · ingredients, labor, rent, buildout amortization/,
-      )
-      .first(),
+    page.getByRole("link", { name: "Back to workspace", exact: true }),
+  ).toHaveAttribute("href", "/projects/houston-coffee/workspace");
+  await page
+    .getByRole("link", { name: "Open the example", exact: true })
+    .click();
+  await expect(page).toHaveURL(/simulator\?example=1$/);
+  await expect(
+    page.getByText("Modeled monthly contribution change", { exact: true }),
   ).toBeVisible();
 });
 
@@ -85,7 +81,9 @@ test("live statistics use the selected scenario and shared replay clock", async 
   await expect(stats.getByRole("img")).toHaveAccessibleName(baseline!);
 
   await scenario.selectOption("1");
-  await expect(stats.getByRole("heading")).toContainText("Two staffed counters");
+  await expect(stats.getByRole("heading")).toContainText(
+    "Two staffed counters",
+  );
   await seek.press("End");
   await expect(stats.getByRole("img")).not.toHaveAccessibleName(baseline!);
   await expect(
@@ -170,4 +168,85 @@ test("unavailable WebGL keeps the neighborhood fallback and Retry inside the wor
     page.getByRole("heading", { name: "Simulator", exact: true }),
   ).toBeAttached();
   expect(errors).toEqual([]);
+});
+
+// No database, imagery, model or provider service is needed for these recovery checks.
+test("bogus comparison keeps its URL and retry path without showing seeded example values", async ({
+  page,
+}) => {
+  await page.route("**/api/**", (route) =>
+    route.fulfill({ status: 503, json: { message: "Offline test" } }),
+  );
+  await page.goto(
+    "/projects/houston-coffee/simulator?comparison=does-not-exist&site=chosen-site",
+  );
+  await expect(
+    page.getByRole("heading", {
+      name: /Comparison (not found|temporarily unavailable)/,
+    }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/comparison=does-not-exist&site=chosen-site$/);
+  await expect(
+    page.getByText("Modeled monthly contribution change", { exact: true }),
+  ).toHaveCount(0);
+  const retry = page.getByRole("link", { name: "Retry", exact: true });
+  if (await retry.count())
+    await expect(retry).toHaveAttribute(
+      "href",
+      "/projects/houston-coffee/simulator?comparison=does-not-exist&site=chosen-site",
+    );
+});
+
+test("invalid comparison recovery reveals a saved-focus view only once and explicit example escapes saved restoration", async ({
+  page,
+}) => {
+  await page.route("**/api/**", (route) =>
+    route.fulfill({ status: 503, json: { message: "Offline test" } }),
+  );
+  await page.addInitScript(() => {
+    sessionStorage.setItem(
+      "bizbox:consultant-layout:v1:houston-coffee",
+      "focus",
+    );
+    localStorage.setItem(
+      "sitework:comparison:v1:houston-coffee",
+      JSON.stringify({
+        projectId: "houston-coffee",
+        comparisonId: "invalid-saved-id",
+        profileId: "test-profile",
+        profileVersion: 1,
+        intakeFingerprint: "test-fingerprint",
+      }),
+    );
+  });
+  // An explicitly empty ID is deterministic not_found without any database access.
+  await page.goto("/projects/houston-coffee/simulator?comparison=");
+  await expect(
+    page.getByRole("heading", { name: "Comparison not found", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
+  // A later deliberate focus choice survives the recovery component's rerender.
+  await openConsultant(page);
+  await page
+    .getByRole("button", { name: "Expand the assistant", exact: true })
+    .click();
+  await expect(page.locator("[data-consultant-layout]")).toHaveAttribute(
+    "data-consultant-layout",
+    "focus",
+  );
+  await page
+    .getByRole("button", { name: "Show the current step", exact: true })
+    .click();
+  await closeConsultant(page);
+  await page
+    .getByRole("link", { name: "Open the example", exact: true })
+    .click();
+  await expect(page).toHaveURL(/simulator\?example=1$/);
+  await expect(
+    page.getByText("Modeled monthly contribution change", { exact: true }),
+  ).toBeVisible();
+  await expect(page).not.toHaveURL(/invalid-saved-id/);
 });

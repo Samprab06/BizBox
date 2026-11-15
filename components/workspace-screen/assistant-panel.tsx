@@ -8,6 +8,11 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { ChatBubble } from "@/components/ui/chat";
+import { Pill } from "@/components/ui/pill";
+import { focusRing, pressable } from "@/components/ui/cn";
 import { Markdown } from "@/components/ui/markdown";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
@@ -55,9 +60,6 @@ function MicIcon() {
   );
 }
 
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink";
-
 function Conversation({
   conversation,
   id,
@@ -82,29 +84,28 @@ function Conversation({
       className={`min-h-0 flex-1 overflow-y-auto px-5 py-4 text-sm ${focusRing}`}
     >
       {count === 0 ? (
-        <p className="text-viewport-muted">
+        <p className="text-muted">
           Ask BizBox about this space or your brief. Replies come from the
           BizBox intake assistant.
         </p>
       ) : (
         <ol className="space-y-3">
           {conversation.messages.map((entry, index) => (
-            <li
-              key={index}
-              className={
-                entry.role === "founder"
-                  ? "ml-8 rounded-2xl bg-viewport-ink px-3 py-2 text-viewport-canvas"
-                  : "mr-6 text-viewport-ink"
-              }
-            >
-              <span className="sr-only">
-                {entry.role === "founder" ? "You: " : "BizBox: "}
-              </span>
-              {entry.role === "founder" ? (
-                <span className="whitespace-pre-wrap break-words">{entry.text}</span>
-              ) : (
-                <Markdown text={entry.text} className="break-words" />
-              )}
+            <li key={index}>
+              <ChatBubble
+                role={entry.role === "founder" ? "user" : "assistant"}
+              >
+                <span className="sr-only">
+                  {entry.role === "founder" ? "You: " : "BizBox: "}
+                </span>
+                {entry.role === "founder" ? (
+                  <span className="whitespace-pre-wrap break-words">
+                    {entry.text}
+                  </span>
+                ) : (
+                  <Markdown text={entry.text} className="break-words" />
+                )}
+              </ChatBubble>
             </li>
           ))}
         </ol>
@@ -112,7 +113,7 @@ function Conversation({
       <p
         aria-live="polite"
         data-testid="assistant-thinking"
-        className="mr-6 mt-3 text-viewport-muted"
+        className="mr-6 mt-3 text-muted"
       >
         {pending && (
           <>
@@ -172,7 +173,8 @@ export function AssistantPanel({
   const { availability, busy } = conversation;
   const offline = availability === "offline";
 
-  const failure = conversation.failure?.source === "assistant" ? conversation.failure : null;
+  const failure =
+    conversation.failure?.source === "assistant" ? conversation.failure : null;
 
   function select(next: AssistantMode, focus: boolean) {
     onModeChange(next);
@@ -196,9 +198,9 @@ export function AssistantPanel({
   return (
     <aside
       aria-labelledby={`${base}-heading`}
-      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border border-viewport-line bg-viewport-canvas/95 text-viewport-ink ${className}`}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-panel border border-glass-edge bg-glass-fill text-ink shadow-glass backdrop-blur-glass ${className}`}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-viewport-line px-5 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="flex items-center gap-2">
           <h2
             id={`${base}-heading`}
@@ -206,71 +208,73 @@ export function AssistantPanel({
           >
             Assistant
           </h2>
-          <span
+          <Pill
             data-agent-availability={availability}
-            className="rounded border border-viewport-line px-1.5 py-0.5 text-[11px] text-viewport-muted"
+            className="text-[11px] font-normal"
           >
             {status}
-          </span>
+          </Pill>
         </div>
         <div className="flex items-center gap-2">
-        <div
-          role="tablist"
-          aria-label="Assistant mode"
-          className="flex rounded-full border border-viewport-line p-1"
-        >
-          {assistantModes.map((value) => (
-            <button
-              key={value}
-              ref={(element) => {
-                tabs.current[value] = element;
-              }}
-              id={tabId(value)}
-              type="button"
-              role="tab"
-              aria-selected={mode === value}
-              aria-controls={panelId(value)}
-              tabIndex={mode === value ? 0 : -1}
-              onClick={() => select(value, false)}
-              onKeyDown={onTabKey}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${focusRing} ${
-                mode === value
-                  ? "bg-viewport-ink text-viewport-canvas"
-                  : "text-viewport-muted hover:text-viewport-ink"
-              }`}
-            >
-              {value === "text" ? <ChatIcon /> : <MicIcon />}
-              {MODE_LABEL[value]}
-            </button>
-          ))}
-        </div>
-        {actions}
+          <div
+            role="tablist"
+            aria-label="Assistant mode"
+            className="flex rounded-control border border-glass-edge bg-field p-1"
+          >
+            {assistantModes.map((value) => (
+              <button
+                key={value}
+                ref={(element) => {
+                  tabs.current[value] = element;
+                }}
+                id={tabId(value)}
+                type="button"
+                role="tab"
+                aria-selected={mode === value}
+                aria-controls={panelId(value)}
+                tabIndex={mode === value ? 0 : -1}
+                onClick={() => select(value, false)}
+                onKeyDown={onTabKey}
+                className={`flex items-center gap-1.5 rounded-control px-3 py-1.5 text-xs font-medium ${focusRing} ${pressable} ${
+                  mode === value
+                    ? "bg-accent text-on-accent"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {value === "text" ? <ChatIcon /> : <MicIcon />}
+                {MODE_LABEL[value]}
+              </button>
+            ))}
+          </div>
+          {actions}
         </div>
       </header>
-      <p className="border-b border-viewport-line px-5 py-2 text-xs text-viewport-muted">
+      <p className="border-b border-line px-5 py-2 text-xs text-muted">
         Staffing changes and Keep/Revert are not connected yet.
       </p>
 
       {failure && (
         <div
           role="alert"
-          className="mx-5 mt-3 rounded-xl border border-viewport-line bg-viewport-surface p-3 text-sm"
+          className="mx-5 mt-3 rounded-control border border-line bg-panel-raised p-3 text-sm"
         >
-          <p className="text-viewport-warn">{failure.message}</p>
+          <p className="text-warn">{failure.message}</p>
           {failure.retry !== undefined && (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={conversation.retry}
-              className={`mt-2 rounded-lg border border-viewport-line px-3 py-1 text-viewport-ink disabled:opacity-60 ${focusRing}`}
+              variant="glass"
+              size="sm"
+              className="mt-2"
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}
       {conversation.storageError && (
-        <p role="alert" className="mx-5 mt-3 text-sm text-viewport-warn">
+        <p role="alert" className="mx-5 mt-3 text-sm text-warn">
           This browser could not save the conversation.
         </p>
       )}
@@ -287,7 +291,7 @@ export function AssistantPanel({
             <Conversation conversation={conversation} id={`${base}-log-text`} />
             {inline}
             <form
-              className="border-t border-viewport-line p-4"
+              className="border-t border-line p-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 const text = draft.trim();
@@ -297,7 +301,7 @@ export function AssistantPanel({
                 void conversation.submit(text);
               }}
             >
-              <div className="flex items-end gap-2 rounded-2xl border border-viewport-line bg-viewport-surface p-1.5 pl-4 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-viewport-ink">
+              <div className="flex items-end gap-2 rounded-control border border-glass-edge bg-field p-1.5 pl-4 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus-ring">
                 <textarea
                   ref={field}
                   rows={1}
@@ -317,13 +321,13 @@ export function AssistantPanel({
                       event.currentTarget.form?.requestSubmit();
                     }
                   }}
-                  className="max-h-40 min-w-0 flex-1 resize-none bg-transparent py-2 text-sm text-viewport-ink placeholder:text-viewport-muted focus-visible:outline-none"
+                  className="max-h-40 min-w-0 flex-1 resize-none bg-transparent py-2 text-sm text-ink placeholder:text-muted focus-visible:outline-none"
                 />
-                <button
+                <IconButton
                   type="submit"
+                  variant="primary"
                   disabled={busy || availability === "checking"}
                   aria-label={busy ? "Sending message" : "Send message"}
-                  className={`grid size-9 shrink-0 place-items-center rounded-full bg-viewport-ink text-viewport-canvas disabled:opacity-60 ${focusRing}`}
                 >
                   <svg
                     viewBox="0 0 20 20"
@@ -339,10 +343,10 @@ export function AssistantPanel({
                       strokeLinejoin="round"
                     />
                   </svg>
-                </button>
+                </IconButton>
               </div>
               {offline && (
-                <p className="mt-2 text-xs text-viewport-muted">
+                <p className="mt-2 text-xs text-muted">
                   The BizBox assistant is offline. Your brief can still be
                   edited in Intake.
                 </p>
@@ -372,7 +376,7 @@ export function AssistantPanel({
             <details
               open={historyOpen}
               onToggle={(event) => setHistoryOpen(event.currentTarget.open)}
-              className="mt-auto flex min-h-0 flex-col border-t border-viewport-line"
+              className="mt-auto flex min-h-0 flex-col border-t border-line"
             >
               <summary
                 // State-driven (not the async native toggle) so a quick tab switch keeps it.

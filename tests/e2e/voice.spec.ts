@@ -4,6 +4,11 @@ import { closeConsultant, expect, openConsultant, test } from "./fixtures";
 
 type Harness = {
   deny: boolean;
+  failureName: string | null;
+  pendingMic: boolean;
+  releaseMicrophone(): void;
+  disconnectMicrophone(): void;
+  disconnectPeer(): void;
   gets: number;
   stopped: number;
   peersClosed: number;
@@ -24,15 +29,37 @@ declare global {
 /** Browser boundaries only: no microphone, peer network or paid service is used. */
 async function mockVoice(
   page: Page,
-  options: { configured?: boolean; denied?: boolean; noWebGL?: boolean } = {},
+  options: {
+    configured?: boolean;
+    denied?: boolean;
+    noWebGL?: boolean;
+    pendingMic?: boolean;
+    failureName?: string;
+    unsupported?: boolean;
+  } = {},
 ) {
   await page.addInitScript(
-    ({ denied, noWebGL }) => {
+    ({ denied, noWebGL, pendingMic, failureName, unsupported }) => {
       let channel: FakeChannel;
+      let disconnectPeer = () => {};
+      let track: FakeTrack;
+      let releaseMicrophone: (() => void) | undefined;
       let previous: string | null = null;
       let responseId = 0;
       const h: Harness = (window.__voice = {
         deny: denied,
+        failureName: failureName ?? null,
+        pendingMic,
+        releaseMicrophone() {
+          releaseMicrophone?.();
+        },
+        disconnectMicrophone() {
+          track.readyState = "ended";
+          track.dispatchEvent(new Event("ended"));
+        },
+        disconnectPeer() {
+          disconnectPeer();
+        },
         gets: 0,
         stopped: 0,
         peersClosed: 0,
@@ -90,9 +117,15 @@ async function mockVoice(
         }
       }
       class FakePeer {
+        constructor() {
+          disconnectPeer = () => {
+            this.connectionState = "disconnected";
+            this.onconnectionstatechange?.();
+          };
+        }
         connectionState = "connected";
         ontrack = null;
-        onconnectionstatechange = null;
+        onconnectionstatechange: (() => void) | null = null;
         addTrack() {}
         createDataChannel() {
           channel = new FakeChannel();
@@ -145,20 +178,37 @@ async function mockVoice(
         value: FakeAudioContext,
         configurable: true,
       });
+      class FakeTrack extends EventTarget {
+        enabled = true;
+        readyState: MediaStreamTrackState = "live";
+        stop() {
+          this.readyState = "ended";
+          h.stopped++;
+        }
+      }
       Object.defineProperty(navigator, "mediaDevices", {
-        value: {
-          async getUserMedia() {
-            h.gets++;
-            if (h.deny) throw new DOMException("Denied", "NotAllowedError");
-            const track = {
-              enabled: true,
-              stop() {
-                h.stopped++;
+        value: unsupported
+          ? undefined
+          : {
+              async getUserMedia() {
+                h.gets++;
+                if (h.pendingMic)
+                  await new Promise<void>((resolve) => {
+                    releaseMicrophone = resolve;
+                  });
+                if (h.deny) throw new DOMException("Denied", "NotAllowedError");
+                if (h.failureName)
+                  throw new DOMException(
+                    "Private device details",
+                    h.failureName,
+                  );
+                track = new FakeTrack();
+                return {
+                  getTracks: () => [track],
+                  getAudioTracks: () => [track],
+                };
               },
-            };
-            return { getTracks: () => [track], getAudioTracks: () => [track] };
-          },
-        },
+            },
         configurable: true,
       });
       if (noWebGL) {
@@ -172,7 +222,13 @@ async function mockVoice(
         } as typeof getContext;
       }
     },
-    { denied: options.denied ?? false, noWebGL: options.noWebGL ?? false },
+    {
+      denied: options.denied ?? false,
+      noWebGL: options.noWebGL ?? false,
+      pendingMic: options.pendingMic ?? false,
+      failureName: options.failureName,
+      unsupported: options.unsupported ?? false,
+    },
   );
   let setups = 0;
   await page.route("**/api/voice/session", (route) => {
@@ -295,7 +351,7 @@ test("permission denial permits retry and leaves typed input available", async (
   await openIntakeForm(page);
   await voice(page).getByRole("button", { name: "Start voice" }).click();
   await expect(voice(page).getByRole("status")).toContainText(
-    "microphone access was denied",
+    "Microphone permission was denied",
   );
   expect(setups()).toBe(0);
   await profileConcept(page).fill("Still editable");
@@ -526,4 +582,138 @@ test("a manual edit between speech capture and transcription cannot move the ans
       .getByRole("list", { name: "Conversation", exact: true })
       .getByText("Spoken coffee", { exact: true }),
   ).toHaveCount(0);
+});
+
+test("pending microphone access disables mute and speech, while cancel disposes a late stream", async ({
+  page,
+}) => {
+  const setups = await mockVoice(page, { pendingMic: true });
+  await openIntakeForm(page);
+  await voice(page)
+    .getByRole("button", { name: "Start voice", exact: true })
+    .click();
+  await expect(voice(page).getByRole("status")).toContainText(
+    "Waiting for microphone access",
+  );
+  await expect(
+    voice(page).getByRole("button", { name: "Mute microphone", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    voice(page).getByRole("button", { name: "Stop speaking", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    voice(page).getByRole("button", { name: "Stop voice", exact: true }),
+  ).toBeEnabled();
+  expect(setups()).toBe(0);
+  await voice(page)
+    .getByRole("button", { name: "Stop voice", exact: true })
+    .click();
+  await page.evaluate(() => window.__voice.releaseMicrophone());
+  await expect.poll(() => page.evaluate(() => window.__voice.stopped)).toBe(1);
+  expect(setups()).toBe(0);
+  await expect(
+    voice(page).getByRole("button", { name: "Start voice", exact: true }),
+  ).toBeEnabled();
+});
+
+test("a live microphone supports mute during connection, speech waits for readiness, and disconnect clears controls", async ({
+  page,
+}) => {
+  await mockVoice(page);
+  let setup!: import("@playwright/test").Route;
+  await page.route("**/api/voice/session", async (route) => {
+    if (route.request().method() === "GET") return route.fallback();
+    setup = route;
+  });
+  await openIntakeForm(page);
+  await voice(page)
+    .getByRole("button", { name: "Start voice", exact: true })
+    .click();
+  await expect(voice(page).getByRole("status")).toContainText(
+    "Connecting voice",
+  );
+  await expect(
+    voice(page).getByRole("button", { name: "Mute microphone", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    voice(page).getByRole("button", { name: "Stop speaking", exact: true }),
+  ).toBeDisabled();
+  await expect.poll(() => Boolean(setup)).toBe(true);
+  await setup.fulfill({
+    json: { answerSdp: "v=0\r\nmock-answer", sessionSeconds: 180 },
+  });
+  await expect(voice(page).getByRole("status")).toContainText("Listening");
+  await expect(
+    voice(page).getByRole("button", { name: "Stop speaking", exact: true }),
+  ).toBeEnabled();
+  await page.evaluate(() => window.__voice.disconnectPeer());
+  await expect(voice(page).getByRole("status")).toContainText(
+    "Voice disconnected",
+  );
+  await expect(
+    voice(page).getByRole("button", { name: "Mute microphone", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    voice(page).getByRole("button", { name: "Stop speaking", exact: true }),
+  ).toHaveCount(0);
+  expect(await page.evaluate(() => window.__voice.stopped)).toBe(1);
+});
+
+for (const [failureName, message] of [
+  ["NotAllowedError", "Microphone permission was denied"],
+  ["NotFoundError", "No microphone was found"],
+  ["NotReadableError", "microphone could not be opened"],
+  ["NotSupportedError", "Microphone access is not supported"],
+]) {
+  test(`${failureName} gives specific recovery guidance and Text is one click away with its draft`, async ({
+    page,
+  }) => {
+    const setups = await mockVoice(page, {
+      failureName,
+      unsupported: failureName === "NotSupportedError",
+    });
+    await openIntakeForm(page);
+    const assistant = page.getByRole("complementary", {
+      name: "Assistant",
+      exact: true,
+    });
+    await assistant.getByRole("tab", { name: "Text", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Message the BizBox assistant" })
+      .fill("Keep my draft");
+    await assistant.getByRole("tab", { name: "Voice", exact: true }).click();
+    await voice(page)
+      .getByRole("button", { name: "Start voice", exact: true })
+      .click();
+    const status = voice(page).getByRole("status");
+    await expect(status).toContainText(message);
+    await expect(status).toContainText("Text");
+    if (failureName === "NotAllowedError")
+      await expect(status).toContainText("site settings");
+    if (failureName === "NotFoundError")
+      await expect(status).toContainText("Connect or select");
+    await expect(status).not.toContainText("Private device details");
+    expect(setups()).toBe(0);
+    await assistant.getByRole("tab", { name: "Text", exact: true }).click();
+    await expect(
+      page.getByRole("textbox", { name: "Message the BizBox assistant" }),
+    ).toHaveValue("Keep my draft");
+  });
+}
+
+test("losing the live microphone stops owned resources and offers retry", async ({
+  page,
+}) => {
+  await mockVoice(page);
+  await openIntakeForm(page);
+  await start(page);
+  await page.evaluate(() => window.__voice.disconnectMicrophone());
+  await expect(voice(page).getByRole("status")).toContainText(
+    "microphone disconnected",
+  );
+  await expect(
+    voice(page).getByRole("button", { name: "Start voice", exact: true }),
+  ).toBeEnabled();
+  expect(await page.evaluate(() => window.__voice.stopped)).toBe(1);
+  expect(await page.evaluate(() => window.__voice.peersClosed)).toBe(1);
 });

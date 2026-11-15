@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import { useEffect, useState } from "react";
 import {
   InteriorResponseSchema,
@@ -58,7 +60,8 @@ export function SelectedInterior({
     return (
       <div className={styles.empty}>
         <h2>Interior unavailable</h2>
-        <button
+        <Button
+          variant="glass"
           className={styles.secondary}
           onClick={() => {
             setPhase("loading");
@@ -66,7 +69,7 @@ export function SelectedInterior({
           }}
         >
           Retry interior
-        </button>
+        </Button>
       </div>
     );
   if (scan)

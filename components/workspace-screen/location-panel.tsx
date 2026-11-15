@@ -3,11 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useId } from "react";
+import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Pill } from "@/components/ui/pill";
+import { Glass } from "@/components/ui/glass";
+import { focusRing } from "@/components/ui/cn";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { CityPhoto, SelectedSpace } from "./model";
-
-const focusRing =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink";
 
 function PinIcon() {
   return (
@@ -26,11 +28,7 @@ function PinIcon() {
 }
 
 function Badge({ children }: { children: string }) {
-  return (
-    <span className="rounded border border-viewport-line px-1.5 py-0.5 text-[11px] font-normal text-viewport-muted">
-      {children}
-    </span>
-  );
+  return <Pill className="text-[11px] font-normal">{children}</Pill>;
 }
 
 /**
@@ -54,7 +52,7 @@ export function LocationPanel({
   return (
     <section
       aria-label="Selected location"
-      className="relative isolate flex min-h-[420px] min-w-0 flex-col justify-end overflow-hidden rounded-3xl border border-viewport-line bg-viewport-surface p-3 text-viewport-ink sm:p-4"
+      className="relative isolate flex min-h-[420px] min-w-0 flex-col justify-end overflow-hidden rounded-panel border border-line bg-panel-raised p-3 text-ink sm:p-4"
     >
       {photo && (
         <Image
@@ -67,13 +65,17 @@ export function LocationPanel({
         />
       )}
       <div className="absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-2 sm:inset-x-4 sm:top-4">
-        <span className="rounded-full border border-viewport-line bg-viewport-canvas/90 px-3 py-1.5 text-xs">
+        <Glass
+          backing="backed"
+          radius="control"
+          className="px-3 py-1.5 text-xs"
+        >
           City preview · photo, not a map
-        </span>
+        </Glass>
         {photo && (
           <a
             href="/workspace/credits.html"
-            className={`rounded-full bg-viewport-canvas/90 px-3 py-1.5 text-[11px] text-viewport-muted underline underline-offset-2 ${focusRing}`}
+            className={`rounded-control border border-glass-edge bg-glass-fallback px-3 py-1.5 text-[11px] text-muted underline underline-offset-2 ${focusRing}`}
           >
             Photo: {photo.credit} · {photo.license}
           </a>
@@ -81,19 +83,21 @@ export function LocationPanel({
       </div>
 
       {space.kind === "space" && (
-        <button
+        <IconButton
           type="button"
+          variant="primary"
+          size="lg"
           aria-label={`${expanded ? "Hide" : "Show"} details for ${space.name}`}
           aria-expanded={expanded}
           aria-controls={detailsId}
           onClick={() => onExpandedChange(!expanded)}
-          className={`absolute left-1/2 top-[38%] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white bg-viewport-ink text-viewport-canvas shadow-lg ${focusRing}`}
+          className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2"
         >
           <PinIcon />
-        </button>
+        </IconButton>
       )}
 
-      <div className="relative mt-24 rounded-2xl border border-viewport-line bg-viewport-canvas/90 backdrop-blur-md">
+      <Glass backing="backed" className="relative mt-24">
         {space.kind === "loading" && (
           <p role="status" className="p-5 text-sm">
             Loading candidate spaces…
@@ -102,7 +106,7 @@ export function LocationPanel({
         {space.kind === "none" && (
           <div className="p-5 text-sm">
             <h2 className="text-base font-semibold">No space selected</h2>
-            <p className="mt-1 text-viewport-muted">{space.message}</p>
+            <p className="mt-1 text-muted">{space.message}</p>
             <Link
               href={workspaceHref(projectId, "map")}
               prefetch={false}
@@ -119,7 +123,7 @@ export function LocationPanel({
                 <h2 className="text-base font-semibold tracking-tight [overflow-wrap:anywhere]">
                   {space.name}
                 </h2>
-                <span className="flex flex-wrap items-center gap-2 text-xs text-viewport-muted">
+                <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
                   {space.subtitle}
                   {space.example && <Badge>Example</Badge>}
                 </span>
@@ -127,13 +131,11 @@ export function LocationPanel({
               <dl className="col-span-2 row-start-2 flex flex-wrap gap-x-6 gap-y-2 tabular-nums sm:col-span-1 sm:col-start-2 sm:row-start-1">
                 {space.stats.map((stat) => (
                   <div key={stat.label}>
-                    <dt className="text-[11px] text-viewport-muted">
-                      {stat.label}
-                    </dt>
+                    <dt className="text-[11px] text-muted">{stat.label}</dt>
                     <dd className="text-base font-medium whitespace-nowrap">
                       {stat.value}
                       {stat.note && (
-                        <span className="ml-1 text-[11px] font-normal text-viewport-muted">
+                        <span className="ml-1 text-[11px] font-normal text-muted">
                           {stat.note}
                         </span>
                       )}
@@ -141,12 +143,14 @@ export function LocationPanel({
                   </div>
                 ))}
               </dl>
-              <button
+              <Button
                 type="button"
+                variant="quiet"
+                size="sm"
                 aria-expanded={expanded}
                 aria-controls={detailsId}
                 onClick={() => onExpandedChange(!expanded)}
-                className={`col-start-2 row-start-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-viewport-muted hover:text-viewport-ink sm:col-start-3 ${focusRing}`}
+                className="col-start-2 row-start-1 gap-1 text-xs sm:col-start-3"
               >
                 Details
                 <svg
@@ -159,14 +163,14 @@ export function LocationPanel({
                 >
                   <path d="m6 8 4 4 4-4" />
                 </svg>
-              </button>
+              </Button>
             </div>
             <div
               id={detailsId}
               hidden={!expanded}
               className="px-4 pb-4 text-sm sm:px-5 sm:pb-5"
             >
-              <ul className="space-y-1 text-viewport-muted">
+              <ul className="space-y-1 text-muted">
                 {space.details.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
@@ -190,7 +194,7 @@ export function LocationPanel({
             </div>
           </>
         )}
-      </div>
+      </Glass>
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { readRenderPalette } from "../simulator/render-palette";
 import type * as Three from "three";
 import type { interiorFrame } from "../simulator/interior-state";
 import { scanLayout } from "./scan-layout";
@@ -92,6 +93,7 @@ export class ReplayComponent {
   }
   onInit() {
     const THREE = this.context.three;
+    const palette = readRenderPalette();
     this.textures = markerTextures(THREE);
     this.geometries = [
       new THREE.SphereGeometry(0.4, 24, 16),
@@ -101,18 +103,18 @@ export class ReplayComponent {
     ];
     this.materials = [
       new THREE.MeshMatcapMaterial({
-        color: "#60a5fa",
+        color: palette["agent-customer"],
         matcap: this.textures[0],
         depthTest: true,
       }),
       new THREE.MeshMatcapMaterial({
-        color: "#c084fc",
+        color: palette["agent-employee"],
         matcap: this.textures[0],
         depthTest: true,
       }),
-      new THREE.MeshBasicMaterial({ color: "#f8fafc", depthTest: true }),
+      new THREE.MeshBasicMaterial({ color: palette.ink, depthTest: true }),
       new THREE.MeshBasicMaterial({
-        color: "#5eead4",
+        color: palette.accent,
         transparent: true,
         opacity: 0.4,
         depthWrite: false,

@@ -1,3 +1,4 @@
+import { fixtureRenderPalette } from "../simulator/render-palette.fixture";
 import { expect, it, vi } from "vitest";
 import * as Three from "three";
 import { makeDemo } from "../simulator/fixture";
@@ -162,3 +163,8 @@ it("does not register anything once already aborted", async () => {
   ).rejects.toThrow("cancelled");
   expect(register).not.toHaveBeenCalled();
 });
+
+vi.mock("../simulator/render-palette", async (original) => ({
+  ...(await original<typeof import("../simulator/render-palette")>()),
+  readRenderPalette: () => fixtureRenderPalette(),
+}));

@@ -23,7 +23,7 @@ const block = (re: RegExp) => {
     ]),
   );
 };
-const theme = block(/@theme\s*\{([^}]+)\}/);
+const theme = block(/@theme(?:\s+static)?\s*\{([^}]+)\}/);
 const print = block(/@media print\s*\{\s*:root\s*\{([^}]+)\}/);
 
 describe("design token map", () => {

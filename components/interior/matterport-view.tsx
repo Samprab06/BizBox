@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DayResult } from "@/lib/sim/contracts";
@@ -163,14 +164,14 @@ export default function MatterportView({
             ? "Scanned interior connected · simulation dots active."
             : "Scanned interior connected. Starting simulation dots…";
   const button =
-    "min-h-11 rounded-full border border-white/20 px-4 text-sm text-white/80 hover:bg-white/10";
+    "min-h-11 rounded-full border border-glass-edge px-4 text-sm text-muted hover:bg-field";
   return (
     <div
       ref={container}
-      className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30"
+      className="mt-4 overflow-hidden rounded-2xl border border-glass-edge bg-panel-raised"
       aria-label="Scanned simulation"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-white/65">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-muted">
         <span>
           {embed
             ? "Plain public embed · public café reference"
@@ -183,7 +184,8 @@ export default function MatterportView({
       </div>
       <div className="mx-4 mb-3 flex flex-wrap gap-2">
         {sdk && config.viewpoint && (
-          <button
+          <Button
+            variant="quiet"
             type="button"
             onClick={() => {
               camera.current?.founderInput();
@@ -192,19 +194,21 @@ export default function MatterportView({
             className={button}
           >
             Show service area
-          </button>
+          </Button>
         )}
         {sdk && config.placement && overlay === "failed" && (
-          <button
+          <Button
+            variant="quiet"
             type="button"
             onClick={() => session.current?.retryOverlay()}
             className={button}
           >
             Retry simulation dots
-          </button>
+          </Button>
         )}
         {failed && (
-          <button
+          <Button
+            variant="quiet"
             type="button"
             onClick={() => {
               session.current?.restart();
@@ -213,14 +217,14 @@ export default function MatterportView({
             className={button}
           >
             Retry scanned interior
-          </button>
+          </Button>
         )}
       </div>
       {sdk && pickAnchorEnabled() && "Pointer" in sdk && (
         <PickAnchorPanel sdk={sdk as unknown as PointerSdk} />
       )}
       {focusFailed && (
-        <p className="px-4 pb-3 text-xs text-white/65">
+        <p className="px-4 pb-3 text-xs text-muted">
           The service-area view could not be restored. You can still navigate
           the scan manually.
         </p>
@@ -230,7 +234,7 @@ export default function MatterportView({
         data-overlay-status={overlay}
         data-viewer-status={connection}
         data-viewer-failure={failure}
-        className="px-4 pb-3 text-sm text-white/75"
+        className="px-4 pb-3 text-sm text-muted"
       >
         {status}
         {failed && localhostUrl && (
@@ -254,7 +258,7 @@ export default function MatterportView({
             className="h-96 w-full border-0 sm:h-[32rem]"
           />
         ) : failed ? (
-          <div className="flex h-96 items-center justify-center px-6 text-center text-sm text-white/65 sm:h-[32rem]">
+          <div className="flex h-96 items-center justify-center px-6 text-center text-sm text-muted sm:h-[32rem]">
             Scanned interior unavailable. The modeled replay is unaffected.
           </div>
         ) : (
@@ -272,9 +276,9 @@ export default function MatterportView({
             className="h-96 w-full border-0 sm:h-[32rem]"
           />
         ))}
-      <p className="px-4 py-3 text-xs leading-relaxed text-white/55">
+      <p className="px-4 py-3 text-xs leading-relaxed text-muted">
         Blue customer dots and purple employee dots are simulated. Translucent
-        mint counter markers are proposed overlays; captured furniture stays
+        counter markers are proposed overlays; captured furniture stays
         unchanged. This public scan is a visual reference, not the selected
         Houston property.
       </p>

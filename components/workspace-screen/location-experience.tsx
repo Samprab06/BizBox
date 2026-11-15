@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState } from "react";
@@ -133,32 +135,38 @@ export function LocationExperience({
           role="group"
           aria-label="Workspace view"
         >
-          <button
+          <Button
+            variant="glass"
             aria-pressed={view === "locations"}
             onClick={() => setView("locations")}
           >
             Locations
-          </button>
+          </Button>
           {view === "locations" && markers.length > 0 && onOverview && (
-            <button onClick={onOverview}>All locations</button>
+            <Button variant="glass" onClick={onOverview}>
+              All locations
+            </Button>
           )}
-          <button
+          <Button
+            variant="glass"
             aria-pressed={view === "interior"}
             disabled={!selected}
             onClick={() => setView("interior")}
           >
             Interior
-          </button>
+          </Button>
           {payload && (
-            <button
+            <Button
+              variant="glass"
               aria-pressed={view === "results"}
               onClick={() => setView("results")}
             >
               Results
-            </button>
+            </Button>
           )}
         </div>
-        <button
+        <Button
+          variant="primary"
           className={styles.primary}
           disabled={!canCompare}
           onClick={() => {
@@ -167,7 +175,7 @@ export function LocationExperience({
           }}
         >
           {running ? "Comparing…" : "Compare locations"}
-        </button>
+        </Button>
       </div>
 
       <div
@@ -213,14 +221,15 @@ export function LocationExperience({
                   </p>
                 )}
               </div>
-              <button
+              <Button
+                variant="glass"
                 className={styles.secondary}
                 aria-expanded={expanded}
                 aria-controls="workspace-listing-details"
                 onClick={() => setExpanded((value) => !value)}
               >
                 Details
-              </button>
+              </Button>
             </div>
             <dl>
               <div>
@@ -232,12 +241,13 @@ export function LocationExperience({
                 <dd>{metricText(selected.candidate.floorAreaSqFt)} sq ft</dd>
               </div>
             </dl>
-            <button
+            <Button
+              variant="primary"
               className={styles.primary}
               onClick={() => setView("interior")}
             >
               View interior
-            </button>
+            </Button>
             <div
               id="workspace-listing-details"
               hidden={!expanded}
@@ -297,12 +307,13 @@ export function LocationExperience({
               </div>
             ) : (
               <div className="mt-3">
-                <button
+                <Button
+                  variant="glass"
                   className={styles.secondary}
                   onClick={() => setView("locations")}
                 >
                   Compare locations first
-                </button>
+                </Button>
               </div>
             )}
           </details>
@@ -316,9 +327,13 @@ export function LocationExperience({
             <div className="flex flex-wrap items-center gap-4">
               <p>{searchUi.label}</p>
               {searchUi.action === "retry" && (
-                <button className={styles.secondary} onClick={controller.retry}>
+                <Button
+                  variant="glass"
+                  className={styles.secondary}
+                  onClick={controller.retry}
+                >
                   Retry
-                </button>
+                </Button>
               )}
               {searchUi.action === "finish_brief" && (
                 <Link
@@ -374,8 +389,9 @@ export function LocationExperience({
                     }
                     key={entry.candidate.id}
                   >
-                    <button
-                      className="text-left"
+                    <Button
+                      variant="quiet"
+                      className="h-auto justify-start p-0 text-left"
                       aria-pressed={
                         entry.candidate.id === selected?.candidate.id
                       }
@@ -385,7 +401,7 @@ export function LocationExperience({
                       <strong className="block">
                         {entry.candidate.address}
                       </strong>
-                    </button>
+                    </Button>
                     <span className={styles.muted}>
                       {marker
                         ? `Map ${marker.index}${marker.members.length > 1 ? ` · Space ${unit} of ${marker.members.length}` : ""}`

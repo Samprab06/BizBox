@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
@@ -237,7 +239,7 @@ export function SimulatorDemo({
             )}
             {robustness && (
               <details>
-                <summary className="cursor-pointer font-semibold text-pine">
+                <summary className="cursor-pointer font-semibold text-accent">
                   Decision evidence
                 </summary>
                 {robustness.robustTo.length > 0 && (
@@ -261,7 +263,7 @@ export function SimulatorDemo({
         scene={
           <section aria-label="Decision scene" className="min-w-0 space-y-1">
             <div className="flex min-w-0 items-center gap-2">
-              <select
+              <Select
                 aria-label="Decision replay scenario"
                 value={previewIndex}
                 onChange={(event) => {
@@ -274,7 +276,7 @@ export function SimulatorDemo({
                     )?.timeMin ?? data[index].run.metrics.openMin,
                   );
                 }}
-                className="min-w-0 rounded border border-muted bg-surface p-1 text-xs text-ink"
+                className="min-w-0 rounded border border-muted bg-panel-raised p-1 text-xs text-ink"
               >
                 {data.map((_, index) => (
                   <option key={index} value={index}>
@@ -283,7 +285,7 @@ export function SimulatorDemo({
                       : `Baseline · ${story.scenarioLabels[index]}`}
                   </option>
                 ))}
-              </select>
+              </Select>
               <input
                 aria-label="Decision operating replay time"
                 aria-valuetext={clock(previewMinute)}
@@ -292,7 +294,7 @@ export function SimulatorDemo({
                 max={previewRun.metrics.closeMin}
                 value={previewMinute}
                 step="0.01"
-                className="min-w-0 flex-1 accent-pine"
+                className="min-w-0 flex-1 accent-accent"
                 onChange={(event) => {
                   setPlaying(false);
                   setMinute(Number(event.target.value));
@@ -300,7 +302,7 @@ export function SimulatorDemo({
               />
               <a
                 href="#operating-plan"
-                className="shrink-0 text-xs font-semibold text-pine underline"
+                className="shrink-0 text-xs font-semibold text-accent underline"
               >
                 Full replay
               </a>
@@ -334,7 +336,7 @@ export function SimulatorDemo({
           ) &&
           !outdated ? (
             <a
-              className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine"
+              className="rounded-lg bg-accent px-4 py-2 font-semibold text-on-accent"
               href={`/projects/${encodeURIComponent(projectId)}/comparison?${new URLSearchParams({ comparison: context.comparisonId, sensitivity: robustness.mostInfluential.assumption, ...(context.siteId ? { site: context.siteId } : {}) })}#comparison-sensitivity`}
             >
               Change{" "}
@@ -353,7 +355,7 @@ export function SimulatorDemo({
           ) : (
             <a
               href="#simulator-decision-evidence"
-              className="rounded-lg bg-pine px-4 py-2 font-semibold text-on-pine"
+              className="rounded-lg bg-accent px-4 py-2 font-semibold text-on-accent"
             >
               Open assumptions and evidence
             </a>
@@ -432,17 +434,17 @@ export function SimulatorDemo({
                   <div>
                     <label className="flex flex-wrap items-center gap-2 text-xs">
                       Graphics
-                      <select
+                      <Select
                         aria-label="Graphics quality"
                         value={quality}
                         onChange={(event) =>
                           setQuality(event.target.value as RenderQuality)
                         }
-                        className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
+                        className="rounded border border-muted bg-panel-raised p-2 text-ink"
                       >
                         <option value="balanced">Balanced</option>
                         <option value="detailed">Detailed</option>
-                      </select>
+                      </Select>
                     </label>
                     {insightsControl}
                   </div>
@@ -530,7 +532,7 @@ export function SimulatorDemo({
         ].map((chip) => (
           <li
             key={chip}
-            className="rounded border border-line bg-surface px-3 py-2"
+            className="rounded border border-line bg-panel-raised px-3 py-2"
           >
             {chip}
           </li>
@@ -549,16 +551,14 @@ export function SimulatorDemo({
           <span className="flex items-center gap-2">
             <span
               aria-hidden
-              className="size-3 rounded-full"
-              style={{ background: "#60a5fa" }}
+              className="size-3 rounded-full bg-agent-customer"
             />
             Customer
           </span>
           <span className="flex items-center gap-2">
             <span
               aria-hidden
-              className="size-3 rounded-full ring-2 ring-ink ring-offset-2 ring-offset-surface"
-              style={{ background: "#c084fc" }}
+              className="size-3 rounded-full bg-agent-employee ring-2 ring-ink ring-offset-2 ring-offset-panel-raised"
             />
             Employee · ring
           </span>
@@ -596,7 +596,8 @@ export function SimulatorDemo({
               setMinute(value);
             }}
           />
-          <button
+          <Button
+            variant="glass"
             type="button"
             aria-label="Reset shared playback"
             onClick={() => {
@@ -605,19 +606,20 @@ export function SimulatorDemo({
               setMinute(openMin);
               select("");
             }}
-            className="min-h-11 rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine"
+            className="min-h-11 rounded-lg border border-accent bg-panel-raised px-4 py-3 text-sm font-medium text-accent"
           >
             Reset
-          </button>
+          </Button>
           {interiorMode === "modeled" && (
-            <button
+            <Button
+              variant="glass"
               type="button"
               aria-pressed={cutaway}
               onClick={() => setCutaway(!cutaway)}
-              className="rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine aria-pressed:bg-mint"
+              className="rounded-lg border border-accent bg-panel-raised px-4 py-3 text-sm font-medium text-accent aria-pressed:bg-field"
             >
               Focus on shop
-            </button>
+            </Button>
           )}
         </div>
         <StatsCard
@@ -657,23 +659,25 @@ export function SimulatorDemo({
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <Button
+              variant="glass"
               type="button"
               aria-pressed={interiorMode === "scan"}
               disabled={!matterport}
               onClick={() => setInteriorMode("scan")}
-              className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine disabled:opacity-40 aria-pressed:bg-mint"
+              className="min-h-11 rounded-lg border border-accent bg-panel-raised px-4 text-sm font-medium text-accent disabled:opacity-40 aria-pressed:bg-field"
             >
               Scanned interior
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="glass"
               type="button"
               aria-pressed={interiorMode === "modeled"}
               onClick={() => setInteriorMode("modeled")}
-              className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine aria-pressed:bg-mint"
+              className="min-h-11 rounded-lg border border-accent bg-panel-raised px-4 text-sm font-medium text-accent aria-pressed:bg-field"
             >
               Modeled layout
-            </button>
+            </Button>
           </div>
           {!matterport && (
             <p className="text-xs text-muted">
@@ -729,7 +733,7 @@ export function SimulatorDemo({
                         ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
                         [next]?.focus();
                     }}
-                    className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine aria-checked:bg-mint"
+                    className="min-h-11 rounded-lg border border-accent bg-panel-raised px-4 text-sm font-medium text-accent aria-checked:bg-field"
                   >
                     {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
                   </button>
@@ -852,15 +856,16 @@ export function SimulatorDemo({
                         ),
                       },
                       (_, employee) => (
-                        <button
+                        <Button
+                          variant="glass"
                           key={employee}
                           type="button"
                           aria-pressed={selected === `employee-${employee + 1}`}
                           onClick={() => select(`employee-${employee + 1}`)}
-                          className="min-h-11 rounded-full border border-pine px-3 text-xs text-pine aria-pressed:bg-mint"
+                          className="min-h-11 rounded-full border border-accent px-3 text-xs text-accent aria-pressed:bg-field"
                         >
                           Employee {employee + 1} · counter {employee + 1}
-                        </button>
+                        </Button>
                       ),
                     )}
                   </div>
@@ -869,7 +874,7 @@ export function SimulatorDemo({
                   <p
                     role="status"
                     aria-label="Person inspection"
-                    className="mt-3 rounded-lg bg-paper p-3 text-xs text-muted"
+                    className="mt-3 rounded-lg bg-canvas p-3 text-xs text-muted"
                   >
                     {selected.startsWith("employee-")
                       ? `Employee ${selected.slice(9)}`
@@ -915,8 +920,8 @@ export function SimulatorDemo({
             data.length > 1 && (
               <label className="grid gap-1 text-sm font-medium">
                 Scenario
-                <select
-                  className="rounded-lg border border-line bg-surface p-2 text-ink"
+                <Select
+                  className="rounded-lg border border-line bg-panel-raised p-2 text-ink"
                   value={inspectIndex}
                   onChange={(event) =>
                     setInspectIndex(Number(event.target.value))
@@ -927,7 +932,7 @@ export function SimulatorDemo({
                       {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )
           }
@@ -988,12 +993,13 @@ function Timeline({
   const action = running ? "Pause" : ended ? "Replay" : "Play";
   const content = (
     <>
-      <button
+      <Button
+        variant="primary"
         type="button"
         aria-label={action}
         title={action}
         onClick={onToggle}
-        className="grid size-11 shrink-0 place-items-center rounded-full bg-pine text-on-pine hover:opacity-90"
+        className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-on-accent hover:opacity-90"
       >
         <svg
           aria-hidden
@@ -1016,7 +1022,7 @@ function Timeline({
             <path d="M6.5 4v12l9.5-6z" />
           )}
         </svg>
-      </button>
+      </Button>
       <span className="w-[4.75rem] shrink-0 text-sm font-medium tabular-nums">
         {time}
       </span>
@@ -1036,7 +1042,8 @@ function Timeline({
         aria-valuetext={time}
         onChange={(event) => onSeek(Number(event.target.value))}
       />
-      <button
+      <Button
+        variant="quiet"
         type="button"
         aria-label={`Speed ${speed}×`}
         title="Change speed"
@@ -1047,10 +1054,10 @@ function Timeline({
             ],
           )
         }
-        className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-mint"
+        className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-field"
       >
         {speed}×
-      </button>
+      </Button>
     </>
   );
   const classes = `flex items-center gap-2 !p-2 ${className}`;

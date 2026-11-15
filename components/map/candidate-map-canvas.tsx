@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { readRenderPalette } from "@/components/simulator/render-palette";
 import Map, {
   Layer,
   Marker,
@@ -11,6 +12,8 @@ import Map, {
   type MarkerInstance,
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { StyleSpecification } from "maplibre-gl";
+import { candidateMapStyleUrl, prepareCandidateMapStyle } from "./map-style";
 import {
   catchmentRadiusMiles,
   competitors,
@@ -96,6 +99,7 @@ export default function CandidateMapCanvas({
   onMounted: () => void;
   onFailed: () => void;
 }) {
+  const [palette] = useState(readRenderPalette);
   const key = mapStorageKey(projectId, sites, example);
   const located = sites.filter(
     (site): site is Site & { latitude: number; longitude: number } =>
@@ -116,6 +120,7 @@ export default function CandidateMapCanvas({
     () => restored ?? { ...initialView, ...center },
   );
   const loaded = useRef(false);
+  const [mapStyle, setMapStyle] = useState<StyleSpecification>();
   const selected =
     example && selectedId ? getSiteFixture(selectedId) : undefined;
 
@@ -123,12 +128,34 @@ export default function CandidateMapCanvas({
     onMounted();
   }, [onMounted]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(candidateMapStyleUrl, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error(`Map style request failed: ${response.status}`);
+        return prepareCandidateMapStyle(
+          await response.json(),
+          response.url || candidateMapStyleUrl,
+        );
+      })
+      .then((style) => {
+        if (!controller.signal.aborted) setMapStyle(style);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) onFailed();
+      });
+    return () => controller.abort();
+  }, [onFailed]);
+
+  if (!mapStyle) return null;
+
   return (
     <>
       <Map
         {...view}
         style={{ width: "100%", height: "100%" }}
-        mapStyle="https://tiles.openfreemap.org/styles/liberty"
+        mapStyle={mapStyle}
         onMove={({ viewState }) => setView(viewState)}
         onMoveEnd={({ viewState }) => {
           try {
@@ -137,6 +164,10 @@ export default function CandidateMapCanvas({
         }}
         onLoad={(event) => {
           loaded.current = true;
+          // The shell can reveal a zero-width mount before MapLibre's first
+          // ResizeObserver delivery, which MapLibre intentionally skips. Reconcile
+          // that initial fallback size once; its own observer handles later changes.
+          event.target.resize();
           if (!example && !restored && located.length)
             event.target.fitBounds(
               [
@@ -177,14 +208,15 @@ export default function CandidateMapCanvas({
               id="catchment-fill"
               type="fill"
               paint={{
-                "fill-color": overlay === "residents" ? "#43a386" : "#7262bd",
+                "fill-color":
+                  overlay === "residents" ? palette.accent : palette.muted,
                 "fill-opacity": 0.23,
               }}
             />
             <Layer
               id="catchment-outline"
               type="line"
-              paint={{ "line-color": "#1b4937", "line-width": 2 }}
+              paint={{ "line-color": palette.canvas, "line-width": 2 }}
             />
           </Source>
         )}
@@ -202,7 +234,7 @@ export default function CandidateMapCanvas({
             >
               <span
                 title={competitor.name}
-                className="block size-3 rounded-full border-2 border-white bg-orange-600 shadow"
+                className="block size-3 rounded-full border-2 border-canvas bg-warn shadow"
               />
             </Marker>
           ))}
@@ -221,7 +253,7 @@ export default function CandidateMapCanvas({
                 href={site.href}
                 aria-label={`Open ${site.address}`}
                 aria-current={site.id === selectedId || undefined}
-                className="rounded-full border-2 border-white bg-pine px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-white shadow aria-[current=true]:ring-4 aria-[current=true]:ring-amber-400"
+                className="rounded-full border-2 border-canvas bg-accent px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-on-accent shadow focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas aria-[current=true]:ring-4 aria-[current=true]:ring-focus-ring aria-[current=true]:ring-offset-2 aria-[current=true]:ring-offset-canvas"
               >
                 {site.address}
               </Link>

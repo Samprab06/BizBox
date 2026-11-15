@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -36,7 +37,7 @@ export function SiteScreen({
           These are example listing details.{" "}
           <Link
             href={workspaceHref(project.id, "map")}
-            className="text-pine underline"
+            className="text-accent underline"
           >
             Search with your completed intake
           </Link>{" "}
@@ -87,15 +88,16 @@ function LiveSiteDetail({
         <p role={state.failed ? "alert" : "status"}>
           {state.message} The requested listing cannot be verified.
         </p>
-        <button
-          className="mt-3 rounded bg-pine px-3 py-2 text-white"
+        <Button
+          variant="primary"
+          className="mt-3 rounded bg-accent px-3 py-2 text-on-accent"
           type="button"
           onClick={retry}
         >
           Retry search
-        </button>
+        </Button>
         <Link
-          className="ml-4 text-pine underline"
+          className="ml-4 text-accent underline"
           href={workspaceHref(project.id, "intake")}
         >
           Review intake
@@ -124,13 +126,14 @@ function LiveSiteDetail({
           candidate or review your intake.
         </p>
         <BackToMap projectId={project.id} siteId={siteId} />
-        <button
-          className="mt-3 rounded bg-pine px-3 py-2 text-white"
+        <Button
+          variant="primary"
+          className="mt-3 rounded bg-accent px-3 py-2 text-on-accent"
           type="button"
           onClick={retry}
         >
           Retry search
-        </button>
+        </Button>
       </>
     );
   return (
@@ -274,16 +277,17 @@ function SiteCatchment({
                 ? "Catchment unavailable: this site was not found."
                 : "Catchment unavailable. Resident, worker and traffic values have not been substituted."}
             </p>
-            <button
+            <Button
+              variant="primary"
               type="button"
-              className="mt-3 rounded bg-pine px-3 py-2 text-white"
+              className="mt-3 rounded bg-accent px-3 py-2 text-on-accent"
               onClick={() => {
                 setState({ kind: "loading" });
                 setAttempt((value) => value + 1);
               }}
             >
               Retry catchment
-            </button>
+            </Button>
             {!state.notFound && (
               <details className="mt-4 rounded-lg border border-line p-4">
                 <summary className="cursor-pointer font-semibold">
@@ -392,7 +396,7 @@ function BackToMap({
   return (
     <Link
       href={workspaceHref(projectId, "map", siteId)}
-      className="mt-3 block text-sm font-semibold text-pine underline"
+      className="mt-3 block text-sm font-semibold text-accent underline"
     >
       Back to map
     </Link>

@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,7 +21,7 @@ export default function PickAnchorPanel({ sdk }: { sdk: PointerSdk }) {
     };
   }, [sdk]);
   return (
-    <details className="mx-4 mb-3 rounded-lg border border-dashed border-white/25 p-3 text-xs text-white/70">
+    <details className="mx-4 mb-3 rounded-lg border border-dashed border-white/25 p-3 text-xs text-muted">
       <summary>Dev: pick placement anchors</summary>
       <p className="mt-2" aria-live="polite">
         {state.next
@@ -28,22 +29,24 @@ export default function PickAnchorPanel({ sdk }: { sdk: PointerSdk }) {
           : "All anchors recorded."}
       </p>
       <div className="mt-2 flex gap-2">
-        <button
+        <Button
+          variant="glass"
           type="button"
           className="rounded border border-white/25 px-2 py-1 disabled:opacity-40"
           disabled={!state.next}
           onClick={() => picker.current?.record()}
         >
           Record anchor
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="glass"
           type="button"
           className="rounded border border-white/25 px-2 py-1 disabled:opacity-40"
           disabled={state.picked.length === 0}
           onClick={() => picker.current?.undo()}
         >
           Undo
-        </button>
+        </Button>
       </div>
       {state.error && (
         <p role="alert" className="mt-2 text-red-300">

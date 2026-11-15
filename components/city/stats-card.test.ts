@@ -35,7 +35,9 @@ it("disables unavailable area data and does not present a site total as area sta
     createElement(StatsCard, { ...props, scope: "area", playing: true }),
   );
   expect(html).toMatch(/aria-pressed="true"[^>]*>This site/);
-  expect(html).toMatch(/aria-pressed="false" disabled=""[^>]*>Area overview/);
+  const area = html.match(/<button\b[^>]*>Area overview<\/button>/)?.[0];
+  expect(area).toContain('aria-pressed="false"');
+  expect(area).toContain('disabled=""');
   expect(html).toContain('aria-label="Pause playback"');
 });
 

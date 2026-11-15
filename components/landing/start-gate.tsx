@@ -1,13 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Button, buttonVariants, buttonSizes } from "@/components/ui/button";
+import { cn, focusRing, pressable } from "@/components/ui/cn";
 import { useRouter } from "next/navigation";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   intakeStorageKey,
   parseIntakeSession,
@@ -48,10 +45,20 @@ async function createProject(): Promise<string> {
   return body.id;
 }
 
-const primary =
-  "rounded-full bg-white px-6 py-3 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
-const secondary =
-  "rounded-full px-5 py-3 text-sm font-medium text-white/90 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+const primary = cn(
+  "inline-flex items-center justify-center rounded-control",
+  buttonVariants.primary,
+  buttonSizes.lg,
+  focusRing,
+  pressable,
+);
+const secondary = cn(
+  "inline-flex items-center justify-center rounded-control underline underline-offset-4",
+  buttonVariants.quiet,
+  buttonSizes.lg,
+  focusRing,
+  pressable,
+);
 
 /**
  * /start: a first visit gets a new project and goes straight into the chat-first entry
@@ -110,18 +117,18 @@ export function StartGate() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           BizBox could not start your project
         </h1>
-        <p role="alert" className="mt-3 max-w-md text-white/75">
+        <p role="alert" className="mt-3 max-w-md text-muted">
           Your new project could not be created just now. Try again, or look
           around the example project first.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <button
+          <Button
             type="button"
-            className={primary}
+            size="lg"
             onClick={() => setAttempt((n) => n + 1)}
           >
             Try again
-          </button>
+          </Button>
           <Link
             href={workspaceHref(DEMO_PROJECT_ID, "intake")}
             className={secondary}
@@ -135,7 +142,7 @@ export function StartGate() {
 
   if (target?.kind !== "returning" || target.complete) {
     return (
-      <p role="status" className="text-white/80">
+      <p role="status" className="text-muted">
         Opening BizBox…
       </p>
     );
@@ -145,7 +152,7 @@ export function StartGate() {
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
         Welcome back to BizBox
       </h1>
-      <p className="mt-3 max-w-md text-white/75">
+      <p className="mt-3 max-w-md text-muted">
         You started describing your business. Pick up the conversation or jump
         to your workspace.
       </p>
