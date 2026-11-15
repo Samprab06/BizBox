@@ -47,3 +47,12 @@ Akshar then authorized showing real location matches from their saved onboarding
 - [x] Exact isolated delivery source: lint/typecheck/build pass; 1,405 unit tests pass with two workers, 43 existing skips. Desktop Chromium regression: 69 passed /2 existing skips. New client cases and backend proxy guards passed. Preserve unrelated onboarding/prototype work; no phone QA, push, PR, merge or deployment.
 
 Current native QA uses a clearly identified sample brief at local port 4201; the personal workspace remains port 4197 and asks to finish a missing brief. `docs/client-workspace.md` records data semantics and the transitional development connection. Full consultant/runtime/building-picking tickets remain separate.
+
+## Actual shortlist in a bird’s-eye view
+
+Akshar requested the real returned locations in Cesium, specifically from above. Frontend owns the bounded listing annotation attachment, pure grouping/framing helpers, Neighborhood option and workspace selection bridge. Manager owns integration, actual-provider QA, documentation and final verification. Existing shared URL selection remains canonical; no new store, clock, provider or simulation API.
+
+- [x] Group exact source coordinates, keep every eligible geocoded location, link numbered pins/cards, fit the unobscured map area, add All locations and honor reduced motion/manual interruption.
+- [x] Preserve the single existing Viewer during selection; leave broad mesh picking/runtime to HAC-77.
+- [x] Diagnose actual wide-view disappearance: empty-root Vexcel tileset stops traversal at normal screen error. Retain globe-free rendering for negative source elevations; use a bounded listing-only quality adaptation.
+- [x] Complete actual-provider overview/card/pin verification, exact-source four checks and affected desktop regressions. Final source: lint/typecheck/build pass, 1,413 unit tests pass /43 existing skips, 69 desktop Chromium pass /2 existing skips. Actual scene settled with zero pending/processing tiles at about326MiB; manager approved listing-only256+128MiB budget and desired-LOD policy, retaining other consumers’ budgets. Pin/card selections retained the same canvas and selected URL/details; All locations restored overhead framing. No publication authorized.

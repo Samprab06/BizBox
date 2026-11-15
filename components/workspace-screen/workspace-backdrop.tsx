@@ -1,7 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { candidateCoordinates, type WorkspaceCandidate } from "./client-model";
+import { useMemo } from "react";
+import { candidateMarkers, type WorkspaceCandidate } from "./client-model";
+import type {
+  ListingCameraRequest,
+  MapViewport,
+} from "@/components/city/listing-markers";
 import { supportedCity } from "./model";
 import { SelectedInterior } from "./selected-interior";
 
@@ -19,15 +24,22 @@ export function WorkspaceBackdrop({
   interior,
   selected,
   tilesetUrl,
+  candidates = [],
+  onSelect = () => {},
+  cameraRequest = { kind: "overview", revision: 0 },
 }: {
   city: string;
   interior: boolean;
   selected?: WorkspaceCandidate;
   tilesetUrl?: string;
+  candidates?: WorkspaceCandidate[];
+  onSelect?: (siteId: string) => void;
+  cameraRequest?: ListingCameraRequest;
 }) {
   const city = supportedCity(label);
-  const coords =
-    candidateCoordinates(selected) ?? (city ? centers[city] : null);
+  const markers = useMemo(() => candidateMarkers(candidates), [candidates]);
+  // Selection never changes the renderer anchor or reconstructs its Viewer.
+  const coords = city ? centers[city] : null;
   if (interior && selected)
     return (
       <SelectedInterior
@@ -50,6 +62,13 @@ export function WorkspaceBackdrop({
         illustrativeOverlays={false}
         birdseye
         showLocationLabel={false}
+        listingLayer={{
+          markers,
+          selectedSiteId: selected?.candidate.id,
+          onSelectSite: onSelect,
+          cameraRequest,
+          viewport: listingViewport,
+        }}
       >
         {null}
       </Neighborhood>
@@ -62,4 +81,33 @@ export function WorkspaceBackdrop({
       {city ? "Map unavailable" : "Choose a city"}
     </div>
   );
+}
+
+/** Measure actual HTML occlusion; the scene spans under the assistant glass. */
+function listingViewport(canvas: HTMLCanvasElement): MapViewport {
+  const full = canvas.getBoundingClientRect();
+  const workspace =
+    canvas.closest("#neighborhood")?.parentElement?.parentElement;
+  const pane = workspace
+    ?.querySelector("[data-map-viewport]")
+    ?.getBoundingClientRect();
+  const toolbar = workspace
+    ?.querySelector("[data-map-toolbar]")
+    ?.getBoundingClientRect();
+  const sheet = workspace
+    ?.querySelector("[data-map-sheet]")
+    ?.getBoundingClientRect();
+  const left = (pane ? pane.left - full.left : 0) + 40;
+  const top = Math.max(24, toolbar ? toolbar.bottom - full.top + 42 : 96);
+  const right = (pane ? pane.right - full.left : full.width * 0.68) - 40;
+  const bottom = Math.min(
+    pane ? pane.bottom - full.top - 24 : full.height - 24,
+    sheet ? sheet.top - full.top - 30 : full.height - 30,
+  );
+  return {
+    left,
+    top,
+    width: Math.max(100, right - left),
+    height: Math.max(100, bottom - top),
+  };
 }

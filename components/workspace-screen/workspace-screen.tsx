@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
@@ -13,6 +13,7 @@ import { realCandidates, comparisonMatchesSelection } from "./client-model";
 import { useIntakeConversation } from "./use-intake-conversation";
 import { LocationExperience } from "./location-experience";
 import { WorkspaceBackdrop } from "./workspace-backdrop";
+import type { ListingCameraRequest } from "@/components/city/listing-markers";
 
 /** Reuses the current service controllers and one conversation; no alternate store. */
 export function WorkspaceScreen({
@@ -34,7 +35,14 @@ export function WorkspaceScreen({
     "locations",
   );
   const search = useSearchParams();
-  const candidates = realCandidates(controller.candidates);
+  const [cameraRequest, setCameraRequest] = useState<ListingCameraRequest>({
+    kind: "overview",
+    revision: 0,
+  });
+  const candidates = useMemo(
+    () => realCandidates(controller.candidates),
+    [controller.candidates],
+  );
   const requested = search.get("site") ?? siteId;
   const selected =
     candidates.find((entry) => entry.candidate.id === requested) ??
@@ -77,6 +85,10 @@ export function WorkspaceScreen({
     // Let Next publish this user-driven URL change to useSearchParams. Passing
     // its private history state marks the call as internal and skips that update.
     window.history.replaceState(null, "", url);
+    setCameraRequest((request) => ({
+      kind: "selection",
+      revision: request.revision + 1,
+    }));
   }
   return (
     <WorkspaceShell
@@ -108,6 +120,9 @@ export function WorkspaceScreen({
           interior={view === "interior"}
           selected={selected}
           tilesetUrl={tilesetUrl}
+          candidates={candidates}
+          onSelect={select}
+          cameraRequest={cameraRequest}
         />
       }
       assistant={
@@ -128,6 +143,13 @@ export function WorkspaceScreen({
         onSelect={select}
         view={view}
         onViewChange={setView}
+        onOverview={() => {
+          setView("locations");
+          setCameraRequest((request) => ({
+            kind: "overview",
+            revision: request.revision + 1,
+          }));
+        }}
       />
     </WorkspaceShell>
   );

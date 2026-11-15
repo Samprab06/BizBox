@@ -1,6 +1,10 @@
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type { LiveComparisonPayload } from "@/lib/client/live-comparison";
 import type { InteriorResponse } from "@/lib/contracts/interior";
+import {
+  groupListingMarkers,
+  validListingCoordinates,
+} from "@/components/city/listing-markers";
 
 export type WorkspaceCandidate = SiteSearchResult["candidates"][number];
 
@@ -14,9 +18,22 @@ export function candidateCoordinates(entry: WorkspaceCandidate | undefined) {
   return typeof latitude === "number" &&
     Number.isFinite(latitude) &&
     typeof longitude === "number" &&
-    Number.isFinite(longitude)
+    Number.isFinite(longitude) &&
+    validListingCoordinates(longitude, latitude)
     ? { latitude, longitude }
     : null;
+}
+
+export function candidateMarkers(candidates: readonly WorkspaceCandidate[]) {
+  return groupListingMarkers(
+    realCandidates(candidates).map((entry) => ({
+      siteId: entry.candidate.id,
+      propertyId: entry.propertyId,
+      address: entry.candidate.address,
+      longitude: entry.candidate.longitude.value,
+      latitude: entry.candidate.latitude.value,
+    })),
+  );
 }
 
 /** A previous comparison must never masquerade as the newly selected locations. */

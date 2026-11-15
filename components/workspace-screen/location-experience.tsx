@@ -8,6 +8,7 @@ import { workspaceHref } from "@/lib/client/workspace-routes";
 import {
   comparisonMatchesSelection,
   candidateFitReasons,
+  candidateMarkers,
   searchFilterLabel,
   searchPresentation,
   type WorkspaceCandidate,
@@ -69,6 +70,7 @@ export function LocationExperience({
   onSelect,
   view,
   onViewChange: setView,
+  onOverview,
 }: {
   projectId: string;
   controller: LiveComparisonController;
@@ -77,8 +79,13 @@ export function LocationExperience({
   onSelect: (id: string) => void;
   view: "locations" | "interior" | "results";
   onViewChange: (view: "locations" | "interior" | "results") => void;
+  onOverview?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const markers = candidateMarkers(candidates);
+  const missingCoordinates =
+    candidates.length -
+    markers.reduce((count, marker) => count + marker.members.length, 0);
   const payload =
     controller.phase === "ready" &&
     comparisonMatchesSelection(controller.payload, controller.selectedIds)
@@ -118,8 +125,9 @@ export function LocationExperience({
     <section
       className={styles.viewport}
       aria-label="Location and interior workspace"
+      data-map-viewport
     >
-      <div className={styles.viewToolbar}>
+      <div className={styles.viewToolbar} data-map-toolbar>
         <div
           className={styles.viewTabs}
           role="group"
@@ -131,6 +139,9 @@ export function LocationExperience({
           >
             Locations
           </button>
+          {view === "locations" && markers.length > 0 && onOverview && (
+            <button onClick={onOverview}>All locations</button>
+          )}
           <button
             aria-pressed={view === "interior"}
             disabled={!selected}
@@ -159,7 +170,10 @@ export function LocationExperience({
         </button>
       </div>
 
-      <div className="pointer-events-none relative z-20 mt-auto flex min-h-0 flex-col gap-3 p-3 pb-8 sm:p-4 sm:pb-8">
+      <div
+        data-map-sheet
+        className="pointer-events-none relative z-20 mt-auto flex min-h-0 flex-col gap-3 p-3 pb-8 sm:p-4 sm:pb-8"
+      >
         {view === "results" && (
           <div className="pointer-events-auto max-h-[430px] overflow-y-auto">
             {running ? (
@@ -230,6 +244,16 @@ export function LocationExperience({
               className="mt-3 text-xs"
             >
               <p>{selected.candidate.name}</p>
+              <p className="mt-2">
+                Property-level listing coordinates; 3D imagery coverage varies.
+              </p>
+              {missingCoordinates > 0 && (
+                <p className="mt-2">
+                  {missingCoordinates}{" "}
+                  {missingCoordinates === 1 ? "space has" : "spaces have"} no
+                  mapped coordinates.
+                </p>
+              )}
               <p className="mt-2">
                 Rent source: {selected.baseRentCents.origin}
               </p>
@@ -329,53 +353,74 @@ export function LocationExperience({
               role="group"
               aria-label="Matching locations"
             >
-              {candidates.map((entry) => (
-                <div
-                  className={
-                    styles.candidate +
-                    (entry.candidate.id === selected?.candidate.id
-                      ? " " + styles.selectedCandidate
-                      : "")
-                  }
-                  key={entry.candidate.id}
-                >
-                  <button
-                    className="text-left"
-                    aria-pressed={entry.candidate.id === selected?.candidate.id}
-                    aria-label={"View " + entry.candidate.address}
-                    onClick={() => select(entry.candidate.id)}
+              {candidates.map((entry) => {
+                const marker = markers.find((group) =>
+                  group.members.some(
+                    (member) => member.siteId === entry.candidate.id,
+                  ),
+                );
+                const unit = marker
+                  ? marker.members.findIndex(
+                      (member) => member.siteId === entry.candidate.id,
+                    ) + 1
+                  : 0;
+                return (
+                  <div
+                    className={
+                      styles.candidate +
+                      (entry.candidate.id === selected?.candidate.id
+                        ? " " + styles.selectedCandidate
+                        : "")
+                    }
+                    key={entry.candidate.id}
                   >
-                    <strong className="block">{entry.candidate.address}</strong>
-                  </button>
-                  <span className="block">
-                    {entry.baseRentCents.value === null
-                      ? "Rent unknown"
-                      : metricText(entry.baseRentCents) + "/mo"}
-                  </span>
-                  {entry.candidate.floorAreaSqFt.value !== null && (
-                    <span>
-                      {metricText(entry.candidate.floorAreaSqFt)} sq ft
-                    </span>
-                  )}
-                  {candidateFitReasons(entry, searchProfile).length > 0 && (
-                    <span className={styles.muted}>
-                      {candidateFitReasons(entry, searchProfile).join(" · ")}
-                    </span>
-                  )}
-                  <label className="mt-2 flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      aria-label={"Compare " + entry.candidate.address}
-                      checked={selectedIds.includes(entry.candidate.id)}
-                      disabled={running}
-                      onChange={(event) =>
-                        compareId(entry.candidate.id, event.target.checked)
+                    <button
+                      className="text-left"
+                      aria-pressed={
+                        entry.candidate.id === selected?.candidate.id
                       }
-                    />
-                    Compare
-                  </label>
-                </div>
-              ))}
+                      aria-label={"View " + entry.candidate.address}
+                      onClick={() => select(entry.candidate.id)}
+                    >
+                      <strong className="block">
+                        {entry.candidate.address}
+                      </strong>
+                    </button>
+                    <span className={styles.muted}>
+                      {marker
+                        ? `Map ${marker.index}${marker.members.length > 1 ? ` · Space ${unit} of ${marker.members.length}` : ""}`
+                        : "Coordinates unavailable"}
+                    </span>
+                    <span className="block">
+                      {entry.baseRentCents.value === null
+                        ? "Rent unknown"
+                        : metricText(entry.baseRentCents) + "/mo"}
+                    </span>
+                    {entry.candidate.floorAreaSqFt.value !== null && (
+                      <span>
+                        {metricText(entry.candidate.floorAreaSqFt)} sq ft
+                      </span>
+                    )}
+                    {candidateFitReasons(entry, searchProfile).length > 0 && (
+                      <span className={styles.muted}>
+                        {candidateFitReasons(entry, searchProfile).join(" · ")}
+                      </span>
+                    )}
+                    <label className="mt-2 flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        aria-label={"Compare " + entry.candidate.address}
+                        checked={selectedIds.includes(entry.candidate.id)}
+                        disabled={running}
+                        onChange={(event) =>
+                          compareId(entry.candidate.id, event.target.checked)
+                        }
+                      />
+                      Compare
+                    </label>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

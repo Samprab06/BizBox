@@ -25,6 +25,14 @@ import {
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
 import { createAnimatedColor } from "./animated-color";
+import {
+  createListingLayer,
+  type ListingLayerOptions,
+} from "@/components/city/listing-layer";
+import {
+  listingTileError,
+  LISTING_TILE_BUDGET,
+} from "@/components/city/listing-markers";
 
 export default function Neighborhood({
   longitude,
@@ -38,6 +46,7 @@ export default function Neighborhood({
   illustrativeOverlays = true,
   birdseye = false,
   showLocationLabel = true,
+  listingLayer,
 }: {
   longitude: number;
   latitude: number;
@@ -52,6 +61,8 @@ export default function Neighborhood({
   birdseye?: boolean;
   /** The workspace already names the city/selected space in its own controls. */
   showLocationLabel?: boolean;
+  /** Optional real-listing annotations; does not replace the existing renderer. */
+  listingLayer?: ListingLayerOptions;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -62,6 +73,14 @@ export default function Neighborhood({
   const atmosphereRef = useRef(atmosphereEnabled);
   const visibleRef = useRef(visible);
   const viewerRef = useRef<Viewer | undefined>(undefined);
+  const listingOptions = useRef(listingLayer);
+  const listingAttachment = useRef<
+    ReturnType<typeof createListingLayer> | undefined
+  >(undefined);
+  useEffect(() => {
+    listingOptions.current = listingLayer;
+    if (listingLayer) listingAttachment.current?.update(listingLayer);
+  }, [listingLayer]);
   const updateScene = useRef<() => void>(() => {});
   useEffect(() => {
     timeRef.current = minute;
@@ -96,6 +115,7 @@ export default function Neighborhood({
     const roadRequests = new AbortController();
     const element = container.current;
     if (!element || !hasBeenVisible) return;
+    setStatus("loading");
     const disposers: (() => void)[] = [];
     const dispose = () => {
       disposers.splice(0).forEach((stop) => stop());
@@ -105,6 +125,7 @@ export default function Neighborhood({
 
     async function load(target: HTMLDivElement) {
       Object.assign(window, { CESIUM_BASE_URL: "/cesium/" });
+      const sdk = await import("cesium");
       const {
         Viewer,
         Cesium3DTileset,
@@ -123,10 +144,12 @@ export default function Neighborhood({
         Cesium3DTileStyle,
         Expression,
         Math: CesiumMath,
-      } = await import("cesium");
+      } = sdk;
       if (closed) return;
       viewer = new Viewer(target, {
         baseLayer: false,
+        // Preserve source mesh below the ellipsoid: a height-zero globe can
+        // occlude negative-elevation Vexcel geometry.
         globe: false,
         skyBox: false,
         skyAtmosphere: false,
@@ -162,7 +185,10 @@ export default function Neighborhood({
       controls.inertiaZoom = 0.4;
       controls.zoomFactor = 8;
       controls.maximumMovementRatio = 0.2;
-      const initialSettings = RENDER_SETTINGS[qualityRef.current];
+      const initialSettings = {
+        ...RENDER_SETTINGS[qualityRef.current],
+        ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
+      };
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
         maximumScreenSpaceError: initialSettings.tileError,
@@ -171,6 +197,10 @@ export default function Neighborhood({
         shadows: ShadowMode.DISABLED,
         lightColor: new Cartesian3(0.22, 0.22, 0.22),
         dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
+        // Regional shortlists need the desired coarse LOD, not every intermediate
+        // ancestor held by replacement traversal. Regional cache remains bounded.
+        skipLevelOfDetail: Boolean(listingOptions.current),
+        immediatelyLoadDesiredLevelOfDetail: Boolean(listingOptions.current),
       });
       if (closed) {
         tileset.destroy();
@@ -307,8 +337,36 @@ export default function Neighborhood({
       const lightingStyle = new Cesium3DTileStyle();
       tileset.style = lightingStyle;
       let previousTint = "";
+      const applyTileError = () => {
+        const baseline = RENDER_SETTINGS[qualityRef.current].tileError;
+        const frustum = city.camera.frustum;
+        const fovy =
+          ("fovy" in frustum ? frustum.fovy : undefined) ?? Math.PI / 3;
+        const error = listingOptions.current
+          ? listingTileError(
+              baseline,
+              tileset.root.geometricError,
+              Math.max(
+                1,
+                city.camera.positionCartographic.height,
+                Cartesian3.distance(
+                  city.camera.positionWC,
+                  tileset.boundingSphere.center,
+                ) - tileset.boundingSphere.radius,
+              ),
+              city.scene.canvas.clientHeight,
+              fovy,
+            )
+          : baseline;
+        // Avoid resetting Cesium's memory-adjusted error on unchanged frames.
+        if (Math.abs(tileset.maximumScreenSpaceError - error) > 0.01)
+          tileset.maximumScreenSpaceError = error;
+      };
       const applyQuality = () => {
-        const settings = RENDER_SETTINGS[qualityRef.current];
+        const settings = {
+          ...RENDER_SETTINGS[qualityRef.current],
+          ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
+        };
         const resolutionScale = resolutionScaleFor(
           window.devicePixelRatio,
           settings.maxPixelRatio,
@@ -318,9 +376,7 @@ export default function Neighborhood({
         }
         // The tile-error setter also resets Cesium's memory-adjusted error;
         // preserve that adaptive state during ordinary timeline updates.
-        if (tileset.maximumScreenSpaceError !== settings.tileError) {
-          tileset.maximumScreenSpaceError = settings.tileError;
-        }
+        applyTileError();
         if (
           tileset.dynamicScreenSpaceError !== settings.dynamicScreenSpaceError
         ) {
@@ -383,7 +439,9 @@ export default function Neighborhood({
         lowClouds.show = atmosphereRef.current;
         if (city.scene.sun) city.scene.sun.show = atmosphereRef.current;
         if (!atmosphereRef.current) {
-          city.scene.backgroundColor = Color.fromCssColorString("#101b16");
+          city.scene.backgroundColor = Color.fromCssColorString(
+            listingOptions.current ? "#17181d" : "#101b16",
+          );
           previousMinute = -1;
           return;
         }
@@ -464,6 +522,22 @@ export default function Neighborhood({
           roll: 0,
         },
       });
+      if (listingOptions.current) {
+        // Reuses Cesium's own render loop. No polling, private SDK state or
+        // external root patch: only a public presentation threshold changes.
+        disposers.push(city.scene.preRender.addEventListener(applyTileError));
+        const attachment = createListingLayer(
+          viewer,
+          sdk,
+          listingOptions.current,
+        );
+        listingAttachment.current = attachment;
+        disposers.push(() => {
+          attachment.destroy();
+          if (listingAttachment.current === attachment)
+            listingAttachment.current = undefined;
+        });
+      }
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
       let revision = 0;
