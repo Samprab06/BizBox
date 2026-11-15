@@ -14,6 +14,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import type { ArrivalSchedule, SimEvent } from "@/lib/sim/contracts";
 import {
   arrivedCustomers,
+  customerDisplayName,
   filterCustomers,
   inspectCustomer,
   personaIdAt,
@@ -123,11 +124,16 @@ function CustomerCard({
   scenarioLabel?: string;
 }) {
   const { persona, travel, arrival, wait, service, answers } = card;
+  const customerName = customerDisplayName(card.customerId, persona.label);
+  const activityMinute =
+    card.activity === "served" || card.activity === "left"
+      ? card.departureMin
+      : card.minute;
   if (card.activity === "not_arrived")
     return (
       <p role="status" className="text-sm text-muted">
-        {card.customerId} has not arrived by {clock(card.minute)}. Details
-        appear once they arrive; nothing later in the day is shown.
+        {customerName} has not arrived by {clock(card.minute)}. Details appear
+        once they arrive; nothing later in the day is shown.
       </p>
     );
   const personaParts = [
@@ -149,8 +155,11 @@ function CustomerCard({
   return (
     <div className="space-y-3">
       <p className="text-sm" role="status" aria-label="Customer activity">
-        <span className="font-semibold">{card.customerId}</span> ·{" "}
-        {activityText(card)} at {clock(card.minute)}
+        <span className="font-semibold">{customerName}</span> ·{" "}
+        {activityText(card)}
+        {activityMinute === null
+          ? " · time unavailable"
+          : ` at ${clock(activityMinute)}`}
         {scenarioLabel ? ` · ${scenarioLabel}` : ""}
       </p>
       <p className="rounded-lg bg-paper p-3 text-sm" aria-label="Why">
@@ -163,7 +172,8 @@ function CustomerCard({
             persona.id && persona.label ? `Persona ${persona.id}` : undefined
           }
         >
-          {persona.label ?? persona.id ?? UNAVAILABLE}
+          {persona.label ??
+            (persona.id ? customerDisplayName(persona.id) : UNAVAILABLE)}
           {anyPersonaDetail !== null ? (
             <span className="block">{personaParts.join(" · ")}</span>
           ) : (
@@ -304,7 +314,10 @@ export function InspectPanel({
   const customerId = known.has(selectedId) ? selectedId : "";
   const labelFor = (customer: string) => {
     const personaId = personaIdAt(events, minute, customer, schedule);
-    return personas?.find((persona) => persona.id === personaId)?.label;
+    return customerDisplayName(
+      customer,
+      personas?.find((persona) => persona.id === personaId)?.label,
+    );
   };
   const listed = filterCustomers(arrived, query, labelFor);
   const options =
@@ -359,7 +372,7 @@ export function InspectPanel({
             <option value="">Choose an arrival</option>
             {options.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {labelFor(option)}
                 {arrived.includes(option) ? "" : " (not arrived yet)"}
               </option>
             ))}
