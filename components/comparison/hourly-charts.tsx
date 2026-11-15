@@ -75,8 +75,11 @@ export function PeakSparkline({ data }: { data: SiteHours }) {
 /** Hourly p90 wait of each site's representative run, overlaid on one chart. */
 export function WaitOverlayChart({
   sites,
+  runNote,
 }: {
   sites: { label: string; data: SiteHours }[];
+  /** HAC-176: says the chart is one seeded run per site, not an average. */
+  runNote?: string;
 }) {
   const width = 640;
   const height = 220;
@@ -192,6 +195,7 @@ export function WaitOverlayChart({
         })}
       </svg>
       <figcaption>
+        {runNote && <p className="mt-2 text-xs text-muted">{runNote}</p>}
         <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted">
           {sites.map(({ label, data }, index) => {
             const { color, dash } = styleFor(index);
@@ -218,7 +222,9 @@ export function WaitOverlayChart({
           does not clip its rows in browsers, which widened the page at phone width. */}
       <div className="sr-only">
         <table>
-          <caption>Hourly p90 wait in minutes</caption>
+          <caption>
+            Hourly p90 wait in minutes{runNote ? `. ${runNote}` : ""}
+          </caption>
           <thead>
             <tr>
               <th scope="col">Hour</th>
