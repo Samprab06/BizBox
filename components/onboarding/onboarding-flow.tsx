@@ -357,13 +357,17 @@ export function OnboardingFlow({
               className="grid grid-cols-2 gap-3"
             >
               {cityChoices.map((option) => (
-                <Button
+                <button
                   key={option.value}
                   type="button"
-                  variant={value === option.value ? "primary" : "glass"}
                   aria-pressed={value === option.value}
                   onClick={() => setDraft(key, option.value)}
-                  className="h-auto flex-col items-stretch gap-0 overflow-hidden rounded-control p-0 text-left"
+                  className={cn(
+                    "flex flex-col overflow-hidden rounded-control border border-glass-edge bg-glass-fill p-0 text-left text-ink backdrop-blur-glass hover:bg-panel-raised",
+                    "aria-pressed:border-accent aria-pressed:bg-white/[0.08] aria-pressed:ring-1 aria-pressed:ring-accent",
+                    pressable,
+                    focusRing,
+                  )}
                 >
                   <span className="relative block aspect-video">
                     <Image
@@ -374,14 +378,14 @@ export function OnboardingFlow({
                       className="object-cover"
                     />
                   </span>
-                  <span className="flex items-center justify-between bg-canvas px-3 py-2 text-sm font-medium text-ink">
+                  <span className="flex items-center justify-between bg-glass-fallback px-3 py-2 text-sm font-medium text-ink">
                     {option.value}
                     <span
                       aria-hidden="true"
-                      className={`h-3 w-3 rounded-full border ${value === option.value ? "border-accent bg-accent" : "border-glass-edge"}`}
+                      className={`h-3 w-3 rounded-full border ${value === option.value ? "border-accent bg-accent ring-2 ring-accent/30" : "border-glass-edge"}`}
                     />
                   </span>
-                </Button>
+                </button>
               ))}
             </div>
             <div
