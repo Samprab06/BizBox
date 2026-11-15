@@ -1092,3 +1092,228 @@
     top: 102px;
   }
 }
+
+/* Nessie stays inside the same glass conversation; only the active check is shown. */
+.nessieConversation .composer::before,
+.nessieConversation .bubble::before,
+.nessieWorkspace::before {
+  display: none;
+}
+.nessieWorkspace {
+  width: 100%;
+  min-height: 255px;
+  padding: 26px;
+  border-radius: 24px !important;
+  background: rgb(14 29 37 / 0.48) !important;
+  animation: bubble-in 240ms ease-out both;
+}
+.nessieHeader {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.nessieHeader > span {
+  font-size: clamp(17px, 2vw, 22px);
+  line-height: 1.3;
+  font-weight: 550;
+  letter-spacing: -0.025em;
+}
+.nessieLogo {
+  flex-shrink: 0;
+  width: 72px;
+  height: 40px;
+  object-fit: contain;
+}
+.nessieChecking {
+  display: flex;
+  gap: 9px;
+  padding: 45px 0 34px;
+}
+.nessieChecking i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c1e8dc;
+}
+.nessieSnapshot {
+  padding: 24px 0 7px;
+  animation: bubble-in 240ms ease-out both;
+}
+.nessieSnapshot > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.nessieSnapshot span,
+.nessieComparison > p:first-child {
+  font-size: 13px;
+  color: #d6e3e4;
+}
+.nessieSnapshot strong {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 550;
+  letter-spacing: -0.04em;
+}
+.nessieSnapshot p {
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 17px 0;
+}
+.nessieSnapshot p strong {
+  font-size: inherit;
+  letter-spacing: inherit;
+}
+.nessieComparison {
+  animation: bubble-in 240ms ease-out both;
+}
+.nessieComparison > p:first-child {
+  margin: 21px 0 16px;
+}
+.nessieColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+.nessieColumns h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 550;
+}
+.nessieColumns strong {
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 550;
+  letter-spacing: -0.045em;
+}
+.nessieColumns span {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #d6e3e4;
+}
+.nessieTrack {
+  height: 5px;
+  background: rgb(255 255 255 / 0.13);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 11px;
+}
+.nessieTrack i {
+  display: block;
+  height: 100%;
+  background: #b9ead9;
+  border-radius: inherit;
+}
+.nessieColumns > div:nth-child(2) .nessieTrack i {
+  background: #b9dcef;
+}
+.nessieDifference {
+  font-size: 16px;
+  margin: 22px 0 10px;
+  line-height: 1.4;
+}
+.nessieDifference strong {
+  color: #d0f6e8;
+}
+.nessieDemoNote {
+  margin: 18px 0 0;
+  font-size: 10px;
+  color: #c0d1d6;
+}
+.nessieAttribution {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 17px;
+  color: #d6e3e4;
+  font-size: 11px;
+}
+.nessieAttribution .nessieLogo {
+  width: 43px;
+  height: 26px;
+}
+.nessieAssumptions {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #d6e3e4;
+}
+.nessieAssumptions summary {
+  width: fit-content;
+  cursor: pointer;
+  padding: 5px 0;
+}
+.nessieAssumptions p {
+  font-size: 12px;
+  margin-top: 7px;
+}
+@media (max-width: 700px) {
+  .nessieWorkspace {
+    padding: 20px;
+    min-height: 250px;
+  }
+  .nessieHeader {
+    gap: 12px;
+  }
+  .nessieHeader .nessieLogo {
+    width: 58px;
+  }
+  .nessieSnapshot > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .nessieColumns {
+    gap: 16px;
+  }
+  .nessieColumns h3 {
+    font-size: 13px;
+  }
+  .nessieColumns span {
+    font-size: 11px;
+  }
+  .nessieDifference {
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nessieWorkspace,
+  .nessieSnapshot,
+  .nessieComparison,
+  .nessieChecking i {
+    animation: none;
+  }
+}
+
+.nessieBrand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.nessieBrand strong {
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.nessieBrand .nessieLogo {
+  width: 54px;
+  height: 35px;
+}
+.nessieHeader > span {
+  font-size: 16px;
+  font-weight: 450;
+  color: #d6e3e4;
+}
+@media (max-width: 700px) {
+  .nessieBrand strong {
+    font-size: 20px;
+  }
+  .nessieBrand .nessieLogo {
+    width: 42px;
+    height: 30px;
+  }
+  .nessieHeader > span {
+    font-size: 14px;
+  }
+}

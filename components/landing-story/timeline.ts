@@ -7,7 +7,7 @@ export const CHAPTERS = [
   { id: "locations", at: 0.3, label: "Locations" },
   { id: "morning", at: 0.4, label: "The same morning" },
   { id: "analytics", at: 0.49, label: "Compare results" },
-  { id: "consultant", at: 0.58, label: "Consultant" },
+  { id: "consultant", at: 0.58, label: "Nessie finances" },
   { id: "interior", at: 0.66, label: "See inside" },
   { id: "counter-question", at: 0.76, label: "Test a change" },
   { id: "counters", at: 0.82, label: "One or two counters" },
