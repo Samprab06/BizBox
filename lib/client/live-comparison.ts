@@ -12,7 +12,8 @@ import {
   SensitivityResultSchema,
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
-import { useSiteSearch } from "./use-site-search";
+import { useSiteSearch, type SiteSearchReadiness } from "./use-site-search";
+import { INTAKE_UPDATED_EVENT } from "./intake-events";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type {
   DemandSource,
@@ -43,6 +44,8 @@ export type LiveComparisonPayload = {
 export type LiveComparisonController = {
   phase: "loading" | "ready" | "running" | "example";
   candidates: SiteSearchResult["candidates"];
+  /** Inventory readiness and real filter metadata; optional for existing consumers. */
+  search?: SiteSearchReadiness;
   selectedIds: string[];
   setSelectedIds: (ids: string[]) => void;
   payload: LiveComparisonPayload | null;
@@ -261,7 +264,23 @@ export function useStoredComparison(
   const activeId = useRef<string | null>(null);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   useEffect(() => {
+    let previous = JSON.stringify(readIntake(projectId).profile);
     const refresh = (event: Event) => {
+      if (event.type === INTAKE_UPDATED_EVENT) {
+        const key = (event as CustomEvent<{ key?: unknown }>).detail?.key;
+        if (key !== intakeKey(projectId)) return;
+        const next = JSON.stringify(readIntake(projectId).profile);
+        if (next === previous) return;
+        previous = next;
+        setState({
+          phase: "loading",
+          payload: null,
+          message: "Loading comparison…",
+          failed: false,
+        });
+        retry();
+        return;
+      }
       if (
         !(event instanceof StorageEvent) ||
         !event.key ||
@@ -273,9 +292,11 @@ export function useStoredComparison(
     };
     window.addEventListener("storage", refresh);
     window.addEventListener("focus", refresh);
+    window.addEventListener(INTAKE_UPDATED_EVENT, refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener(INTAKE_UPDATED_EVENT, refresh);
     };
   }, [projectId, retry]);
   useEffect(() => {
@@ -401,8 +422,7 @@ export function useLiveComparison(
   initialComparisonId?: string,
 ): LiveComparisonController {
   const [attempt, setAttempt] = useState(0);
-  const [intakeVersion, setIntakeVersion] = useState(0);
-  const search = useSiteSearch(projectId, attempt + intakeVersion);
+  const search = useSiteSearch(projectId, attempt);
   const stored = useStoredComparison(projectId, initialComparisonId);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [capability, setCapability] = useState<{
@@ -442,28 +462,6 @@ export function useLiveComparison(
       sensitivityOperation.current?.abort();
     };
   }, []);
-  useEffect(() => {
-    let previous = JSON.stringify(readIntake(projectId).profile);
-    const refresh = (event: Event) => {
-      if (
-        event instanceof StorageEvent &&
-        event.key &&
-        event.key !== intakeKey(projectId)
-      )
-        return;
-      const next = JSON.stringify(readIntake(projectId).profile);
-      if (next !== previous) {
-        previous = next;
-        setIntakeVersion((n) => n + 1);
-      }
-    };
-    window.addEventListener("storage", refresh);
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [projectId]);
   useEffect(() => {
     const controller = new AbortController();
     let disposed = false;
@@ -638,6 +636,7 @@ export function useLiveComparison(
   return {
     phase,
     candidates,
+    search: search.readiness,
     selectedIds,
     setSelectedIds,
     payload: stored.payload,

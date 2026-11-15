@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
@@ -39,6 +39,21 @@ export function WorkspaceScreen({
   const selected =
     candidates.find((entry) => entry.candidate.id === requested) ??
     candidates[0];
+  const selectedId = selected?.candidate.id;
+  useEffect(() => {
+    // If changed criteria exclude the old space, its URL must follow the new
+    // eligible selection just like the details, map and consultant context.
+    if (
+      controller.search?.status !== "ready" ||
+      !requested ||
+      !selectedId ||
+      requested === selectedId
+    )
+      return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("site", selectedId);
+    window.history.replaceState(null, "", url);
+  }, [controller.search?.status, requested, selectedId]);
   const header = workspaceHeader(conversation.session, project);
   const summary = [
     "City: " + header.city,

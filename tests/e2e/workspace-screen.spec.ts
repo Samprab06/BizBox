@@ -111,7 +111,7 @@ for (const viewport of VIEWPORTS) {
       const location = page.getByRole("region", {
         name: "Location and interior workspace",
       });
-      await expect(location.getByText("No spaces available")).toBeVisible();
+      await expect(location.getByText("Complete your brief")).toBeVisible();
       await expect(
         page.getByRole("heading", { name: "Montrose storefront" }),
       ).toHaveCount(0);
@@ -183,7 +183,7 @@ for (const viewport of VIEWPORTS) {
       await expect(textLog).toContainText(
         "Street parking is limited near Montrose.",
       );
-      await expect(location.getByText("No spaces available")).toBeVisible();
+      await expect(location.getByText("Complete your brief")).toBeVisible();
 
       // Later messages carry the round-tripped intake state, as the intake screen does.
       await composer(page).press("Enter");

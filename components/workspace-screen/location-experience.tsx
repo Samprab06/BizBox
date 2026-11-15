@@ -7,11 +7,15 @@ import type { LiveComparisonController } from "@/lib/client/live-comparison";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import {
   comparisonMatchesSelection,
+  candidateFitReasons,
+  searchFilterLabel,
+  searchPresentation,
   type WorkspaceCandidate,
 } from "./client-model";
 import { metricText } from "./model";
 import { LocationResults } from "./location-results";
 import styles from "./workspace-glass.module.css";
+import type { SiteSearchReadiness } from "@/lib/client/use-site-search";
 
 const StationCalloutController = dynamic(
   () =>
@@ -20,6 +24,42 @@ const StationCalloutController = dynamic(
     ),
   { ssr: false },
 );
+
+function SearchFilterSummary({ search }: { search: SiteSearchReadiness }) {
+  return (
+    <div className="mt-3 space-y-2 text-xs">
+      {search.status === "empty" || search.status === "ready" ? (
+        <>
+          {search.emptyReason && <p>{search.emptyReason}</p>}
+          <p>
+            {search.totalMatched.toLocaleString("en-US")} listings matched the
+            saved filters.
+          </p>
+          <ul className="space-y-1">
+            {search.filters.map((filter) => (
+              <li key={filter.name}>
+                {searchFilterLabel(filter.name)}:{" "}
+                {filter.before.toLocaleString("en-US")} →{" "}
+                {filter.after.toLocaleString("en-US")}
+              </li>
+            ))}
+          </ul>
+          {search.mostRestrictiveFilter && (
+            <p>
+              Largest reduction:{" "}
+              {searchFilterLabel(search.mostRestrictiveFilter)}
+            </p>
+          )}
+          {search.notes.map((note, index) => (
+            <p key={index}>{note}</p>
+          ))}
+        </>
+      ) : (
+        <p>{search.message}</p>
+      )}
+    </div>
+  );
+}
 
 export function LocationExperience({
   projectId,
@@ -48,6 +88,15 @@ export function LocationExperience({
     (entry) => entry.siteId === selected?.candidate.id,
   );
   const running = controller.phase === "running";
+  const search = controller.search;
+  const searchUi = searchPresentation(search, controller.phase === "loading");
+  const searchProfile =
+    search?.status === "ready" || search?.status === "empty"
+      ? search.profile
+      : undefined;
+  const selectedFit = selected
+    ? candidateFitReasons(selected, searchProfile)
+    : [];
   const selectedIds = controller.selectedIds.filter((id) =>
     candidates.some((entry) => entry.candidate.id === id),
   );
@@ -144,6 +193,11 @@ export function LocationExperience({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2>{selected.candidate.address}</h2>
+                {selectedFit.length > 0 && (
+                  <p className={styles.muted + " mt-2 text-xs"}>
+                    {selectedFit.join(" · ")}
+                  </p>
+                )}
               </div>
               <button
                 className={styles.secondary}
@@ -179,6 +233,7 @@ export function LocationExperience({
               <p className="mt-2">
                 Rent source: {selected.baseRentCents.origin}
               </p>
+              {search && <SearchFilterSummary search={search} />}
               {selected.flags.length > 0 && (
                 <p className="mt-2">{selected.flags.join(" · ")}</p>
               )}
@@ -231,22 +286,39 @@ export function LocationExperience({
 
         {view !== "interior" && !candidates.length && (
           <div
-            className={
-              styles.notice +
-              " pointer-events-auto flex max-w-fit items-center gap-4"
-            }
+            className={styles.notice + " pointer-events-auto max-w-fit"}
             role="status"
           >
-            <p>
-              {controller.phase === "loading"
-                ? "Finding spaces…"
-                : "No spaces available"}
-            </p>
-            {controller.phase !== "loading" && (
-              <button className={styles.secondary} onClick={controller.retry}>
-                Retry
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-4">
+              <p>{searchUi.label}</p>
+              {searchUi.action === "retry" && (
+                <button className={styles.secondary} onClick={controller.retry}>
+                  Retry
+                </button>
+              )}
+              {searchUi.action === "finish_brief" && (
+                <Link
+                  className={styles.secondary}
+                  href={workspaceHref(projectId, "intake")}
+                >
+                  Finish brief
+                </Link>
+              )}
+              {searchUi.action === "revise" && (
+                <Link
+                  className={styles.secondary}
+                  href={workspaceHref(projectId, "intake")}
+                >
+                  Revise criteria
+                </Link>
+              )}
+              {search && search.status !== "loading" && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer">Details</summary>
+                  <SearchFilterSummary search={search} />
+                </details>
+              )}
+            </div>
           </div>
         )}
 
@@ -280,7 +352,16 @@ export function LocationExperience({
                       ? "Rent unknown"
                       : metricText(entry.baseRentCents) + "/mo"}
                   </span>
-                  <span className={styles.muted}>{entry.candidate.city}</span>
+                  {entry.candidate.floorAreaSqFt.value !== null && (
+                    <span>
+                      {metricText(entry.candidate.floorAreaSqFt)} sq ft
+                    </span>
+                  )}
+                  {candidateFitReasons(entry, searchProfile).length > 0 && (
+                    <span className={styles.muted}>
+                      {candidateFitReasons(entry, searchProfile).join(" · ")}
+                    </span>
+                  )}
                   <label className="mt-2 flex items-center gap-2 text-xs">
                     <input
                       type="checkbox"

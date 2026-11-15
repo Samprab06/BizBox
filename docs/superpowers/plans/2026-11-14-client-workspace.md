@@ -36,3 +36,14 @@ The initial local-ready design at c6193df was rejected. Akshar explicitly select
 ## Authorized live Vexcel connection
 
 Akshar subsequently requested connecting Vexcel and displaying it in the location screen. Loaded the existing server key into ignored local env, ran the existing Cesium asset preparation, and visually verified real Houston mesh/tile loading. The earlier blank-renderer symptom was missing decoder WASM assets from starting `next dev` directly instead of the repository's `pnpm dev` script. Kept the corrected glass design and removed only the duplicated renderer caption (optional prop defaults unchanged elsewhere). No competing HAC77 building picker, provider collection mapping, runtime or store was introduced. Listing matching and full consultant actions are not established by this imagery check.
+
+## Real listing options from onboarding
+
+Akshar then authorized showing real location matches from their saved onboarding. Reuse the existing intake conversion/search engine; do not seed personal answers, widen criteria or add a recommendation engine.
+
+- [x] Frontend owns the inventory hook/controller and workspace readiness/cards: typed loading/needs-brief/error/empty/ready state; same-tab profile changes refetch; chat-only saves do not; old results are invalidated; source facts and concise fit reasons retain provenance.
+- [x] Backend owns the development-only read-through to the existing deployed `/api/sites`: exact allow-listed origin, development and absent-DB guards, original strict request/provenance preserved, bounded abort, validated real project-scoped CoStar response, no cookies/auth forwarding, no-store and sanitized errors. Production/test/default DB path unchanged. No hosted migration/import or production credentials copied.
+- [x] Manager verified the original source kit read-only (3,339 properties / 3,955 spaces) and all eight supported city/category request cases through the real endpoint. Separate browser context: sample Houston $4,500 ceiling →115 matches/8 shown; $3,500 →112/8, exact changed criteria, draft retained, zero model POSTs. Original personal brief untouched. A separate local-origin QA page also visually confirmed actual listing cards over the corresponding rendered Vexcel neighborhood.
+- [x] Exact isolated delivery source: lint/typecheck/build pass; 1,405 unit tests pass with two workers, 43 existing skips. Desktop Chromium regression: 69 passed /2 existing skips. New client cases and backend proxy guards passed. Preserve unrelated onboarding/prototype work; no phone QA, push, PR, merge or deployment.
+
+Current native QA uses a clearly identified sample brief at local port 4201; the personal workspace remains port 4197 and asks to finish a missing brief. `docs/client-workspace.md` records data semantics and the transitional development connection. Full consultant/runtime/building-picking tickets remain separate.

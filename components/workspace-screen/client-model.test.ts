@@ -65,3 +65,82 @@ describe("founder workspace source boundaries", () => {
     ).toBe("abcdefghijk");
   });
 });
+
+import {
+  candidateFitReasons,
+  searchFilterLabel,
+  searchPresentation,
+} from "./client-model";
+import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
+import { liveComparisonSearch } from "@/tests/e2e/live-comparison-fixtures";
+
+describe("listing explanations and readiness actions", () => {
+  it("explains known rent/features, never treats unknowns as a confirmed fit", () => {
+    const profile = structuredClone(syntheticHoustonFixture.profile);
+    profile.economics.monthlyRentCeilingCents.value = 400000;
+    profile.mustHaves.groundFloor.value = true;
+    const entry = structuredClone(liveComparisonSearch.candidates[0]!);
+    entry.baseRentCents = {
+      value: 300000,
+      unit: "USD cents/month",
+      origin: "costar",
+      evidenceIds: ["test-rent"],
+    };
+    entry.candidate.features.groundFloor = {
+      value: true,
+      unit: "boolean",
+      origin: "costar",
+      evidenceIds: ["test-ground"],
+    };
+    expect(candidateFitReasons(entry, profile)).toEqual([
+      "Within rent limit",
+      "Ground floor listed",
+    ]);
+    entry.baseRentCents = {
+      value: null,
+      unit: "USD cents/month",
+      origin: "default",
+      evidenceIds: [],
+      unknownReason: "Not supplied",
+    };
+    entry.candidate.features.groundFloor.value = null;
+    expect(candidateFitReasons(entry, profile)).not.toContain(
+      "Within rent limit",
+    );
+    expect(candidateFitReasons(entry, profile)).not.toContain(
+      "Ground floor listed",
+    );
+    expect(candidateFitReasons(entry, undefined)).toEqual([]);
+  });
+
+  it("offers the appropriate action for brief, service and actual no-match states", () => {
+    expect(
+      searchPresentation(
+        { status: "needs_brief", message: "Complete intake" },
+        false,
+      ),
+    ).toEqual({ label: "Complete your brief", action: "finish_brief" });
+    expect(
+      searchPresentation({ status: "error", message: "Service failed" }, false),
+    ).toEqual({ label: "Listings unavailable", action: "retry" });
+    expect(
+      searchPresentation(
+        {
+          status: "empty",
+          message: "",
+          profile: syntheticHoustonFixture.profile,
+          filters: [],
+          mostRestrictiveFilter: null,
+          emptyReason: null,
+          totalMatched: 0,
+          notes: [],
+        },
+        false,
+      ),
+    ).toEqual({ label: "No matching spaces", action: "revise" });
+    expect(
+      searchPresentation({ status: "loading", message: "" }, true).action,
+    ).toBeNull();
+    expect(searchFilterLabel("rentCeiling")).toBe("Rent limit");
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useWorkspaceReport } from "./use-workspace-context";
+import { useContextIntake, useWorkspaceReport } from "./use-workspace-context";
 import type { WorkspaceObservation } from "./workspace-context";
 import type { BusinessProfile } from "@/lib/contracts";
 import {
@@ -10,9 +10,29 @@ import {
 } from "@/lib/contracts/sites";
 import { profileFromIntake } from "./intake-business-profile";
 
-type SearchState =
+/** Additive client readiness; legacy consumers retain the loading/example/live modes. */
+export type SiteSearchReadiness =
+  | { status: "loading" | "needs_brief" | "error"; message: string }
+  | {
+      status: "empty" | "ready";
+      message: string;
+      profile: BusinessProfile;
+      filters: SiteSearchResult["filters"];
+      mostRestrictiveFilter: string | null;
+      emptyReason: string | null;
+      totalMatched: number;
+      notes: string[];
+    };
+
+export type SiteSearchState =
   | { mode: "loading" }
-  | { mode: "example"; message: string; failed: boolean; notes: string[] }
+  | {
+      mode: "example";
+      reason: "needs_brief" | "error";
+      message: string;
+      failed: boolean;
+      notes: string[];
+    }
   | {
       mode: "live";
       result: SiteSearchResult;
@@ -20,80 +40,132 @@ type SearchState =
       notes: string[];
     };
 
+const LOADING: SiteSearchState = { mode: "loading" };
+
+/** Only founder criteria drive inventory requests; chat history does not. */
+export function searchBriefSnapshot(raw: string | null): string {
+  try {
+    const session: unknown = JSON.parse(raw ?? "null");
+    const profile =
+      session && typeof session === "object" && "profile" in session
+        ? session.profile
+        : null;
+    return JSON.stringify({ profile, messages: [] });
+  } catch {
+    return "null";
+  }
+}
+
+/** Actual saved intake → existing inventory endpoint. Never widens or seeds the criteria. */
+export async function loadSiteSearch(
+  rawSession: unknown,
+  projectId: string,
+  fetcher: typeof fetch = fetch,
+  signal?: AbortSignal,
+): Promise<Exclude<SiteSearchState, { mode: "loading" }>> {
+  const converted = profileFromIntake(rawSession, projectId);
+  if (!converted.profile)
+    return {
+      mode: "example",
+      reason: "needs_brief",
+      message: converted.reason ?? "Complete your brief to search listings.",
+      failed: false,
+      notes: converted.notes,
+    };
+  try {
+    const response = await fetcher("/api/sites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile: converted.profile, limit: 8 }),
+      signal,
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("Listing service unavailable");
+    const result = SiteSearchResultSchema.parse(await response.json());
+    if (
+      result.candidates.some(
+        ({ candidate }) => candidate.projectId !== projectId,
+      )
+    )
+      throw new Error("Search identity mismatch");
+    return {
+      mode: "live",
+      result,
+      profile: converted.profile,
+      notes: converted.notes,
+    };
+  } catch {
+    return {
+      mode: "example",
+      reason: "error",
+      message: "Listings could not be loaded. Retry your search.",
+      failed: true,
+      notes: converted.notes,
+    };
+  }
+}
+
+export function siteSearchReadiness(
+  state: SiteSearchState,
+): SiteSearchReadiness {
+  if (state.mode === "loading")
+    return { status: "loading", message: "Finding spaces…" };
+  if (state.mode === "example")
+    return { status: state.reason, message: state.message };
+  if (
+    state.result.candidates.length > 0 &&
+    state.result.candidates.every(({ candidate }) => candidate.synthetic)
+  )
+    return {
+      status: "error",
+      message:
+        "Verified listings are unavailable. Example properties are not shown here.",
+    };
+  return {
+    status: state.result.candidates.length ? "ready" : "empty",
+    message: state.result.candidates.length
+      ? "Listings loaded"
+      : "No matching spaces",
+    profile: state.profile,
+    filters: state.result.filters,
+    mostRestrictiveFilter: state.result.mostRestrictiveFilter,
+    emptyReason: state.result.emptyReason,
+    totalMatched: state.result.totalMatched,
+    notes: state.notes,
+  };
+}
+
 /** Browser intake is local to this device; search never claims to persist a project. */
 export function useSiteSearch(projectId: string, revision = 0) {
-  const [state, setState] = useState<SearchState>({ mode: "loading" });
+  // This existing observer handles same-tab INTAKE_UPDATED_EVENT and cross-tab edits.
+  const raw = useContextIntake(projectId);
+  const brief = useMemo(() => searchBriefSnapshot(raw), [raw]);
   const [attempt, setAttempt] = useState(0);
+  const requestKey = JSON.stringify([projectId, brief, revision, attempt]);
+  const [snapshot, setSnapshot] = useState<{
+    key: string;
+    value: SiteSearchState;
+  }>({ key: "", value: LOADING });
+  // Hide old criteria immediately, before the effect or a previous request can settle.
+  const state = snapshot.key === requestKey ? snapshot.value : LOADING;
+
   useEffect(() => {
     const controller = new AbortController();
     let disposed = false;
     const timeout = setTimeout(() => controller.abort(), 15_000);
-    async function load() {
-      let raw: unknown = null;
-      let storageMessage: string | null = null;
-      try {
-        raw = JSON.parse(
-          localStorage.getItem(`sitework:intake:v1:${projectId}`) ?? "null",
-        );
-      } catch {
-        storageMessage =
-          "Saved intake could not be read. Complete or review your intake to search live listings.";
-      }
-      const converted = profileFromIntake(raw, projectId);
-      if (!converted.profile) {
-        if (!disposed)
-          setState({
-            mode: "example",
-            message:
-              storageMessage ??
-              converted.reason ??
-              "Complete your intake to search live listings.",
-            failed: false,
-            notes: converted.notes,
-          });
-        return;
-      }
-      try {
-        const response = await fetch("/api/sites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profile: converted.profile, limit: 8 }),
-          signal: controller.signal,
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("search unavailable");
-        const result = SiteSearchResultSchema.parse(await response.json());
-        if (
-          result.candidates.some(
-            ({ candidate }) => candidate.projectId !== projectId,
-          )
-        )
-          throw new Error("Search identity mismatch");
-        if (!disposed)
-          setState({
-            mode: "live",
-            result,
-            profile: converted.profile,
-            notes: converted.notes,
-          });
-      } catch {
-        if (!disposed)
-          setState({
-            mode: "example",
-            message:
-              "Candidate search unavailable. Showing examples while the listing service is unavailable.",
-            failed: true,
-            notes: converted.notes,
-          });
-      }
-    }
-    void load().finally(() => clearTimeout(timeout));
+    void loadSiteSearch(JSON.parse(brief), projectId, fetch, controller.signal)
+      .then((value) => {
+        if (!disposed) setSnapshot({ key: requestKey, value });
+      })
+      .finally(() => clearTimeout(timeout));
     return () => {
       disposed = true;
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [projectId, attempt, revision]);
+  }, [projectId, brief, requestKey]);
+
+  const readiness = useMemo(() => siteSearchReadiness(state), [state]);
   const context = useMemo<WorkspaceObservation>(
     () => ({
       kind: "search",
@@ -110,9 +182,7 @@ export function useSiteSearch(projectId: string, revision = 0) {
   useWorkspaceReport(projectId, context);
   return {
     state,
-    retry: () => {
-      setState({ mode: "loading" });
-      setAttempt((value) => value + 1);
-    },
+    readiness,
+    retry: () => setAttempt((value) => value + 1),
   };
 }

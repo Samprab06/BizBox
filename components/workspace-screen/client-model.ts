@@ -46,3 +46,79 @@ export function showcaseUrl(
     query.set("applicationKey", scan.showcaseParams.sdkKey);
   return `https://my.matterport.com/show/?${query}`;
 }
+
+/** Small explanations of known listing facts, not an AI score or an exact-fit promise. */
+export function candidateFitReasons(
+  entry: WorkspaceCandidate,
+  profile: import("@/lib/contracts").BusinessProfile | undefined,
+): string[] {
+  if (!profile) return [];
+  const reasons: string[] = [];
+  const ceiling = profile.economics.monthlyRentCeilingCents.value;
+  const rent = entry.baseRentCents;
+  if (
+    rent.value !== null &&
+    rent.unit === "USD cents/month" &&
+    rent.origin !== "default" &&
+    ceiling !== null &&
+    rent.value <= ceiling
+  )
+    reasons.push("Within rent limit");
+  const labels = {
+    groundFloor: "Ground floor listed",
+    parking: "Building parking listed",
+    frontage: "Building frontage listed",
+    corner: "Building corner listed",
+  } as const;
+  for (const feature of Object.keys(labels) as (keyof typeof labels)[]) {
+    const fact = entry.candidate.features[feature];
+    if (profile.mustHaves[feature].value !== true) continue;
+    if (fact.value === true && fact.origin === "costar")
+      reasons.push(labels[feature]);
+    else if (feature === "corner" && entry.position === "EndCap")
+      reasons.push("End-cap listing");
+  }
+  if (
+    entry.candidate.city.trim().toLowerCase() ===
+    profile.city.trim().toLowerCase()
+  )
+    reasons.push(`In ${entry.candidate.city}`);
+  return reasons.slice(0, 2);
+}
+
+export function searchFilterLabel(name: string): string {
+  return (
+    {
+      city: "City",
+      activeForLease: "Active lease listings",
+      retailUse: "Retail use",
+      size: "Size",
+      rentCeiling: "Rent limit",
+      "mustHave.groundFloor": "Ground floor",
+      "mustHave.corner": "Corner or end-cap",
+      "mustHave.frontage": "Frontage",
+      "mustHave.parking": "Parking",
+    }[name] ?? name
+  );
+}
+
+export function searchPresentation(
+  search:
+    import("@/lib/client/use-site-search").SiteSearchReadiness | undefined,
+  loading: boolean,
+) {
+  switch (search?.status) {
+    case "needs_brief":
+      return { label: "Complete your brief", action: "finish_brief" } as const;
+    case "error":
+      return { label: "Listings unavailable", action: "retry" } as const;
+    case "empty":
+      return { label: "No matching spaces", action: "revise" } as const;
+    case "loading":
+      return { label: "Finding spaces…", action: null } as const;
+    default:
+      return loading
+        ? ({ label: "Finding spaces…", action: null } as const)
+        : ({ label: "Listings unavailable", action: "retry" } as const);
+  }
+}

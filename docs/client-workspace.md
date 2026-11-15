@@ -5,7 +5,7 @@ The client entry is `/projects/[projectId]/workspace`. This implementation appli
 ## Owner flow
 
 1. Finish the business brief, including plain typed areas to favor or avoid.
-2. Browse matching listing cards alongside a bird’s-eye Vexcel scene. Selecting a card preserves the actual site ID in the URL, details, navigation and voice context. Card selection is available now; building picking remains HAC-77.
+2. The saved brief is converted through the existing intake adapter and sent to `POST /api/sites`. Browse actual CoStar listing cards alongside the bird’s-eye scene. Saving changed criteria refetches listings; conversation-only edits do not. Selecting a card preserves the actual site ID in the URL, details, navigation and voice context. Card selection is available now; building picking remains HAC-77.
 3. Select two or more locations and explicitly choose **Compare locations**. The existing comparison controller calculates the result. Results distinguish modeled customers/contribution from observed data, report demand provenance and disappear when their selected-location set becomes stale. There is no separate baseline screen or required replay.
 4. Open **Interior** for a selected listing. The existing interior registry must return a matching, non-demo scan before a Matterport viewer appears. Parent-building scans are labeled separately from exact-space scans. A floor plan or unavailable state appears otherwise.
 5. After a saved comparison includes this site, expand **Indoor experiment · Test service capacity**. The existing station experiment controller compares the current setup with additional stations/staff, preserving its original seeds, service calls and budget confirmation. This is an operations comparison; it does not claim to edit a Matterport model or simulate arbitrary renovations.
@@ -23,6 +23,28 @@ The client entry is `/projects/[projectId]/workspace`. This implementation appli
 | Indoor experiment  | Existing saved-comparison station experiment controller; founder-facing “Current setup” copy    | HAC-79/84 / Yasser and runtime owners: broader controls, spatial feedback and persisted Keep/Discard flow. No unsupported local Keep success is fabricated                                                                                             |
 
 The client adds no server contract, environment variable, dependency, simulation engine, agent runtime or alternate data store. The two new Neighborhood flags default to the previous behavior for existing consumers. The optional station controller copy flag also preserves existing callers.
+
+## Real options from onboarding
+
+`useSiteSearch` retains its existing loading/example/live interface and adds typed search readiness to the comparison controller. Missing/invalid/unsupported onboarding displays **Complete your brief → Finish brief**, HTTP/network/schema failures display **Listings unavailable → Retry**, and a successful empty result displays **No matching spaces → Revise criteria**. Only an actual search response establishes that no locations matched. Filter counts, the server's empty reason and unsupported typed-note limitations stay under Details.
+
+The existing intake observer handles same-tab saves and cross-tab storage updates. A profile-only fingerprint avoids refetching when only chat history changes, immediately hides old criteria results, and aborts obsolete requests. Saved comparison results are invalidated when criteria change. A selected space remains selected while eligible; when changed filters remove it, the fallback eligible selection and URL update together. Candidate cards retain actual listing IDs, source rent/size and at most two fact-grounded reasons such as **Within rent limit** or a requested, listed building feature; no new score or inferred business suitability is introduced.
+
+The underlying search applies city, active-for-lease status in the supplied kit, retail use, explicit size bounds, known base-rent ceiling and supported ground-floor/corner-or-endcap/frontage/parking requirements. Unknown rents remain labeled unknown. Typed area/customer notes are preserved but do not become geographic or audience filters; staffing, price tier and operating economics belong to later comparisons. This does not verify current broker availability, zoning, licensed use or demand.
+
+### Local development data connection
+
+When a populated development database is available, configure its existing `DATABASE_URL` normally. This always takes precedence. For the current local preview, the existing deployed app already serves the read-only CoStar search, so ignored `.env.local` may instead contain:
+
+```dotenv
+SITE_SEARCH_DEV_ORIGIN=https://hackprincetonweb.vercel.app
+```
+
+The new wrapper activates only when `NODE_ENV=development`, `DATABASE_URL` is absent and the origin is exactly that trusted value. It forwards only a schema-validated original search body to the fixed `/api/sites` endpoint, preserving omitted-versus-explicit NNN assumptions. It forwards no cookies/auth headers, refuses redirects, uses a 15-second abort and no-store, validates returned source/project identities, and rejects synthetic results. Production/test/default paths remain the existing database-backed handler. No other endpoint is proxied. No production DB credential was copied, no new service was provisioned and no hosted migration/import was run.
+
+The manager verified the actual endpoint, not mocked inventory: sample Houston coffee-shop criteria at $4,500 base rent returned 115 matches and 8 real CoStar cards; changing the saved ceiling to $3,500 returned 112 and refreshed the cards without losing the draft. A separate Playwright context supplied the explicitly labeled sample plan; the personal browser's saved answers were untouched. All eight Houston/LA × supported-category request cases returned real listings. These are fit-filter checks against the supplied kit, not industry-specific success forecasts; no model/comparison POST was made.
+
+Final checks for this feature: lint/typecheck/build passed on the exact isolated delivery source; `pnpm test --maxWorkers=2` passed 1,405 tests with 43 existing skips. Desktop Chromium regression passed 69 cases with 2 existing skips, including missing brief, unsupported input, service failure/retry, true empty/filter diagnostics, criteria-only refresh, draft continuity, and removal of an ineligible selected space. Actual source/browser checks are separate from mocked regression fixtures. The personal preview remains at port 4197; a separate local-origin sample-plan preview at port 4201 preserves personal storage and demonstrates actual CoStar listings over the rendered neighborhood. Source/prototype exclusions and existing build warning below remain unchanged.
 
 ## Visual rules
 
