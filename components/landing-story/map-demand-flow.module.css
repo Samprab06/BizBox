@@ -1,0 +1,10 @@
+.dot {
+  /* Position samples already follow street segments. Tweening transforms would
+     draw unsourced chords across corners and across route wraps. */
+  transition: opacity 125ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    transition: none;
+  }
+}

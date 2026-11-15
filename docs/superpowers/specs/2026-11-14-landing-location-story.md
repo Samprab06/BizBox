@@ -1,0 +1,11 @@
+# Landing location story
+
+Akshar approved implementing the discussed café journey and explicitly requires the existing design. Latest correction: the consultant has its own screen after analytics, with a speech bubble followed by revealed text. This is a local review, not push/merge/deployment authorization.
+
+Use existing canonical BrandLogo, Geist, Houston imagery, Glass/WordHeading, MacBook cameraAt and OnboardingScene. Keep the current `/landing-demo` available and create `/landing-story` for review. Flow: hero → 7-second business understanding after entry → typed location question → two pins expanding to translucent glass facts → same café/morning at both → map-free plain-English results → separate consultant speech screen → See inside pointer/property preview to GPT interior → counter question over the same room → simultaneous one/two-counter comparison → MacBook return.
+
+One full-bleed Vexcel/Cesium map replaces the stage backdrop outdoors; no nested GPT aerial. Use existing provider route and renderer, balanced quality, one visible viewport, bounded updates, pause/reduced/hidden behavior, lazy mount/unmount. No decorative movement implying street routing. Show only real road-aligned movement if supported; otherwise use clearly modeled demand indicators without pretending to track walking people. Demo site positions represent neighborhoods, not verified storefront entrances.
+
+Prepare deterministic location runs with the existing engine/economics. Rent, size and demand are explicitly illustrative assumptions, never researched listings or measured footfall. Same menu/prices/staff/hours; compare customers served and contribution for the same four-hour modeled morning. Derive consultant wording from results. Explain included costs and repeated-morning conversion behind Details. No blank dashboard or invented winner. Existing counter fixture remains unchanged. Generated interior is illustrative, with no Matterport claim or runtime request.
+
+No fluff labels, repeated prose, alternating panels, opaque feature cards or new aesthetic. Facts retain units and provenance. User/consultant speech is visibly distinct. Preserve keyboard/reverse seeks, phone layouts, pause/replay, reduced motion and closing selected result.
