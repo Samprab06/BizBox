@@ -113,14 +113,22 @@ export function WorkspaceScreen({
     requestedStep,
     loaded ? flow.reachable : FLOW_STEP_IDS,
   );
+  /**
+   * Moves between the workspace's steps. They are one page, so the URL changes through the
+   * history API (which Next syncs with useSearchParams) without a server round trip; only
+   * the questionnaire is a real navigation.
+   */
   const goStep = useCallback(
-    (next: FlowStep, siteId?: string) =>
-      router.push(
+    (next: FlowStep, siteId?: string, replace = false) => {
+      const href =
         flowStepHref(projectId, next) +
-          (siteId && next !== "questions"
-            ? `&site=${encodeURIComponent(siteId)}`
-            : ""),
-      ),
+        (siteId && next !== "questions"
+          ? `&site=${encodeURIComponent(siteId)}`
+          : "");
+      if (next === "questions") return router.push(href);
+      if (replace) window.history.replaceState(null, "", href);
+      else window.history.pushState(null, "", href);
+    },
     [projectId, router],
   );
   const sendEvent = consultant?.conversation.sendEvent;
@@ -179,9 +187,8 @@ export function WorkspaceScreen({
 
   // A locked step (e.g. results after a tweak) shows the furthest step the founder may open.
   useEffect(() => {
-    if (loaded && step !== requestedStep)
-      router.replace(flowStepHref(projectId, step));
-  }, [loaded, step, requestedStep, router, projectId]);
+    if (loaded && step !== requestedStep) goStep(step, undefined, true);
+  }, [loaded, step, requestedStep, goStep]);
   // The questionnaire marks `locations` reached; a brief completed elsewhere counts too.
   const briefComplete = isBriefComplete(session?.profile);
   const { reach } = flow;
