@@ -72,6 +72,12 @@ The default view contains essential actions and content only. Assistant headings
 
 Akshar subsequently scoped the entire project to desktop-only. Do not spend additional work on phone/mobile layouts, polish, screenshots or QA unless he resumes it; the preference is recorded in project `AGENTS.md` and on the team board. Existing responsive behavior remains in place. Blur and opacity stay fixed across view changes; no liquid deformation or blur animation runs. Keyboard focus and existing reduced-motion handling remain intact. This is a UI-only correction: it does not connect the intake chatbot to map actions, change 3D availability, or implement provider/runtime work from the tickets above.
 
+## Requirement text and search flags — HAC-168
+
+Guided setup and the detailed intake form keep the founder's original must-have sentence and founder origin in the existing browser intake profile. A successful form sync or an unchanged-feature assistant reply preserves that wording in review, form and storage; the search adapter still derives its existing frontage/corner/parking/ground-floor flags and retains the sentence verbatim in the canonical profile objective. Numbers such as “parking for 6 cars” remain visible context, not an added parking-count filter or verified listing guarantee.
+
+A chat reply that actually changes feature values can replace the displayed requirements with the returned feature summary, while newer pending form edits remain authoritative over an in-flight reply. Flag-only server replies cannot reconstruct changed free-text details (including a changed number with the same feature flags); no heuristic extraction, new storage or API field is introduced here. Founders can edit the requirements field to save revised wording.
+
 ## Verification and limits
 
 The UI correction passed a fresh desktop-only Chromium regression: 60 passed, 2 skipped. Existing selection, comparison scope, shared draft/history, keyboard, accessibility and retry behaviors remain covered. Lint, typecheck, 1,364 unit tests and production build passed again for the isolated delivery source. Both the unmocked desktop Text/Voice views and populated API-fixture layouts were visually compared with the actual onboarding. Phone work stopped on Akshar's subsequent project-wide instruction.
