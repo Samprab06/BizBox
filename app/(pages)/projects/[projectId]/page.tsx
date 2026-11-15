@@ -1,16 +1,12 @@
 import { redirect } from "next/navigation";
-import { workspaceHref } from "@/lib/client/workspace-routes";
+import { flowStepHref } from "@/lib/client/flow-steps";
 
-/**
- * Scene 1: the project's entry route opens the flow's first step, the questionnaire. The
- * path is `flowStepHref(projectId, "questions")`; that helper lives in a client module, so
- * this server page builds the same `/intake` URL with `workspaceHref`.
- */
+/** Scene 1: the project's entry route opens the flow's first step, the questionnaire. */
 export default async function ProjectEntryPage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  redirect(workspaceHref(projectId, "intake"));
+  redirect(flowStepHref(projectId, "questions"));
 }
