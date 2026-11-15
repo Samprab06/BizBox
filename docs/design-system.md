@@ -107,11 +107,15 @@ primitive as a dialog or page wrapper.
 
 A narrow compatibility rule maps legacy white `header`, `section`, `input`,
 `select` and `textarea` backgrounds, plus `button.border-line.bg-white`, to the
-raised surface. It leaves onboarding's white action buttons and marks intact.
+raised surface. Legacy input/select/textarea `border-line` boundaries use
+`glass-edge` for 3:1 control contrast. It leaves onboarding's white action buttons and marks intact.
 Legacy `.bg-pine.text-white` actions (including the existing aria-current page
 variant) use `on-accent`. Remove these bridges as DS-8–DS-10 replace hard-coded
 white backgrounds/text with semantic tokens; do not expand into a blanket white
-utility override.
+utility override. The compact decision replay and comparison chart literals now
+use semantic text/station/baseline tokens, and detailed intake validation uses
+`danger`; these narrowly scoped fixes keep existing content readable after the
+surface change. Chart data, series dash patterns, labels and behaviors are unchanged.
 
 ### Print and contrast verification
 
