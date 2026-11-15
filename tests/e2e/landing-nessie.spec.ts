@@ -60,6 +60,18 @@ for (const width of [390, 1440]) {
       "data-interior-mix",
       "1",
     );
+    const interiorImage = page.locator("[data-shared-interior] img");
+    await expect(interiorImage).toHaveAttribute(
+      "src",
+      /\/landing-assets\/optimized\/cafe-interior-v1\.9ae3d6d7c0\.webp(?:\?.*)?$/,
+    );
+    await expect
+      .poll(() =>
+        interiorImage.evaluate(
+          (image) => (image as HTMLImageElement).naturalWidth,
+        ),
+      )
+      .toBeGreaterThan(0);
     expect(bankRequests).toEqual([]);
   });
 }

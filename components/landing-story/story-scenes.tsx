@@ -389,6 +389,7 @@ export function ConsultantScene({
             transform: `scale(${1 + 0.04 * pan}) translateX(${-pan * 0.6}%)`,
           }}
           fill
+          unoptimized
           sizes="100vw"
           priority
         />
