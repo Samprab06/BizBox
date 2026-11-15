@@ -7,13 +7,14 @@ import {
 import { syntheticModelApiResponse as wire } from "./__fixtures__/model-api";
 
 describe("verified Matterport Model API boundary", () => {
-  it("maps native XY floor coordinates and Z elevation to Y-up bounds with explicit metric conversion", () => {
+  it("maps API north +Y to SDK -Z, preserving ordered bounds and metric area", () => {
     const dimensions = normalizeMatterportDimensions(wire, "Synthetic01");
     expect(dimensions?.floors[0]?.rooms[0]?.bounds).toEqual({
-      min: { x: -5, y: 2, z: -4 },
-      max: { x: 5, y: 5, z: 6 },
+      min: { x: -5, y: 2, z: -6 },
+      max: { x: 5, y: 5, z: 4 },
     });
     expect(dimensions?.floors[0]?.areaSqFt).toBeCloseTo(1076.3910416709722);
+    expect(dimensions?.coordinateFrame).toBe("showcase-y-up-v1");
     expect(dimensions?.provenance).toMatchObject({
       origin: "matterport",
       provider: "matterport",

@@ -40,36 +40,58 @@ describe("agent view from workspace registry", () => {
     });
   });
   it("Scene 1: adds the step, the visible listings' facts and the shortlist", () => {
-    const view = agentViewForRoute(projectId, pathname, "step=compare&site=site-1", {
-      search: {
-        projectId,
-        routeKey: `${pathname}?step=compare&site=site-1`,
-        observation: {
-          kind: "search",
-          phase: "live",
-          candidates: [listing, { ...listing, id: "site-2" }],
+    const view = agentViewForRoute(
+      projectId,
+      pathname,
+      "step=compare&site=site-1",
+      {
+        search: {
+          projectId,
+          routeKey: `${pathname}?step=compare&site=site-1`,
+          observation: {
+            kind: "search",
+            phase: "live",
+            candidates: [listing, { ...listing, id: "site-2" }],
+          },
+        },
+        comparison: {
+          projectId,
+          routeKey: `${pathname}?step=compare&site=site-1`,
+          observation: {
+            kind: "comparison",
+            phase: "ready",
+            siteIds: [],
+            shortlistIds: ["site-2", "elsewhere"],
+            candidates: [
+              {
+                ...listing,
+                address: "1 Main St",
+                monthlyRentUsd: 4200,
+                sqft: 1200,
+                score: 71,
+              },
+              {
+                ...listing,
+                id: "site-2",
+                address: "2 Main St",
+                sqft: Number.NaN,
+              },
+            ],
+          },
         },
       },
-      comparison: {
-        projectId,
-        routeKey: `${pathname}?step=compare&site=site-1`,
-        observation: {
-          kind: "comparison",
-          phase: "ready",
-          siteIds: [],
-          shortlistIds: ["site-2", "elsewhere"],
-          candidates: [
-            { ...listing, address: "1 Main St", monthlyRentUsd: 4200, sqft: 1200, score: 71 },
-            { ...listing, id: "site-2", address: "2 Main St", sqft: Number.NaN },
-          ],
-        },
-      },
-    });
+    );
     expect(view).toMatchObject({
       step: "compare",
       candidateIds: ["site-1", "site-2"],
       candidates: [
-        { id: "site-1", address: "1 Main St", monthlyRentUsd: 4200, sqft: 1200, score: 71 },
+        {
+          id: "site-1",
+          address: "1 Main St",
+          monthlyRentUsd: 4200,
+          sqft: 1200,
+          score: 71,
+        },
         { id: "site-2", address: "2 Main St" },
       ],
       shortlistIds: ["site-2"],
@@ -210,4 +232,59 @@ it("does not claim a different live site when the displayed workspace selection 
     },
   });
   expect(view.siteId).toBeUndefined();
+});
+
+import { createSpatialDraft } from "@/lib/spatial";
+it("publishes only the scoped interior visible in this workspace route", () => {
+  const draft = createSpatialDraft({
+    projectId,
+    siteId: "site-1",
+    city: "houston",
+    category: "coffee",
+  });
+  const spatial = {
+    comparisonId: "comparison-1",
+    baseline: draft,
+    draft,
+    reviewed: false,
+  };
+  const routeKey = `${pathname}?step=interior&site=site-1`;
+  const visible: Record<string, WorkspaceReport> = {
+    interior: {
+      projectId,
+      routeKey,
+      observation: { kind: "interior", phase: "ready", spatial },
+    },
+  };
+  expect(
+    agentViewForRoute(
+      projectId,
+      pathname,
+      "step=interior&site=site-1",
+      visible,
+    ),
+  ).toMatchObject({
+    step: "interior",
+    siteId: "site-1",
+    comparisonId: "comparison-1",
+    spatial,
+  });
+  expect(
+    agentViewForRoute(projectId, pathname, "step=results", visible).spatial,
+  ).toBeUndefined();
+  const wrong = {
+    ...visible,
+    interior: {
+      ...visible.interior!,
+      observation: {
+        kind: "interior" as const,
+        phase: "ready" as const,
+        spatial: { ...spatial, draft: { ...draft, projectId: "other" } },
+      },
+    },
+  };
+  expect(
+    agentViewForRoute(projectId, pathname, "step=interior&site=site-1", wrong)
+      .spatial,
+  ).toBeUndefined();
 });

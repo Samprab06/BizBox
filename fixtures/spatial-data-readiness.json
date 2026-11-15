@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "checkedAt": "2026-11-15",
+  "scope": "Local source inventory only; no database or vendor credential requests",
+  "catalog": {
+    "provider": "Poly Haven",
+    "items": 4,
+    "localAssetFiles": 20,
+    "localAssetBytes": 4759804,
+    "status": "prepared-local",
+    "source": "public/furniture/manifest.json",
+    "license": "CC0-1.0",
+    "businessSpecifications": "not-provided",
+    "prices": "unknown"
+  },
+  "licensedSource": {
+    "kitPresent": true,
+    "source": "costar-hackathon-kit/commercial-properties.csv (ignored original checkout)",
+    "propertyRecords": 3339,
+    "modelMappingRows": 13147,
+    "furnitureItemCatalog": "not-provided",
+    "scopeLimitation": "Property-level mappings do not establish exact suite identity, current access, geometry, or display/export rights."
+  },
+  "publicSources": {
+    "census": {
+      "documentedPreparedBlockGroups": 12816,
+      "documentedHoustonBlockGroups": 4176,
+      "documentedLosAngelesBlockGroups": 8640,
+      "vintage": "2024 ACS 5-year",
+      "source": "docs/census-download-verification.json",
+      "currentDatabaseVerified": false,
+      "localCachePresent": false
+    },
+    "lodes": {
+      "importerExists": true,
+      "localCachePresent": false,
+      "currentDatabaseVerified": false
+    },
+    "overture": {
+      "importerExists": true,
+      "localCachePresent": false,
+      "currentDatabaseVerified": false
+    }
+  },
+  "cityCoverage": [
+    {
+      "cityId": "houston",
+      "name": "Houston",
+      "timezone": "America/Chicago",
+      "propertyMappings": 7163,
+      "uniqueProperties": 1758,
+      "uniqueModelIds": 7075,
+      "scanRenderingVerified": false,
+      "suiteGeometryVerified": false
+    },
+    {
+      "cityId": "los-angeles",
+      "name": "Los Angeles",
+      "timezone": "America/Los_Angeles",
+      "propertyMappings": 5984,
+      "uniqueProperties": 1581,
+      "uniqueModelIds": 5921,
+      "scanRenderingVerified": false,
+      "suiteGeometryVerified": false
+    }
+  ],
+  "situations": [
+    {
+      "cityId": "houston",
+      "category": "coffee",
+      "defaultSource": "fixtures/categories/coffee.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "houston",
+      "category": "quick_food",
+      "defaultSource": "fixtures/categories/quick_food.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "houston",
+      "category": "salon_barber",
+      "defaultSource": "fixtures/categories/salon_barber.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "houston",
+      "category": "fitness",
+      "defaultSource": "fixtures/categories/fitness.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "los-angeles",
+      "category": "coffee",
+      "defaultSource": "fixtures/categories/coffee.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "los-angeles",
+      "category": "quick_food",
+      "defaultSource": "fixtures/categories/quick_food.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "los-angeles",
+      "category": "salon_barber",
+      "defaultSource": "fixtures/categories/salon_barber.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    },
+    {
+      "cityId": "los-angeles",
+      "category": "fitness",
+      "defaultSource": "fixtures/categories/fitness.json",
+      "defaultStatus": "authored-scenario-assumptions",
+      "sharedFurnitureStatus": "prepared-local",
+      "specialtyEquipmentStatus": "not-provided",
+      "geometryStatus": "authored-proxy-required",
+      "behaviorStatus": "unvalidated-for-interior",
+      "calibrationStatus": "not-provided",
+      "scanStatus": "mapping-only-access-unverified",
+      "readiness": "assumption-based-model-only"
+    }
+  ],
+  "missingForCalibratedExperiments": [
+    "Verified unit geometry and baseline furniture inventory",
+    "Authorized scan display/geometry access",
+    "Business arrivals/POS/service and dwell observations",
+    "Category-specific equipment specifications and costs",
+    "Approved isolated development database with imported source tables"
+  ]
+}

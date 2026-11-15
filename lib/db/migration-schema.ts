@@ -23,3 +23,10 @@ export {
   scenarioRuns,
   projectActiveScenario,
 } from "./schema";
+
+export {
+  interiorJevGrants,
+  interiorJevReservations,
+  interiorJevPolicyCache,
+  interiorJevPolicyClaims,
+} from "./interior-policy-schema";

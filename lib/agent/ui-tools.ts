@@ -50,6 +50,21 @@ export type IntakeUiContext = {
   /** Filled by the tools; the handler returns it even when the turn hits its step budget. */
   actions: UiAction[];
   newId: () => string;
+  /** Server verifier, never supplied by browser context. */
+  verifyInteriorPolicies?: (input: {
+    projectId: string;
+    comparisonId: string;
+    baseline: import("@/lib/contracts/spatial").SpatialDraft;
+    variant: import("@/lib/contracts/spatial").SpatialDraft;
+    policies: import("@/lib/contracts/spatial").SpatialPolicies;
+    receipt: import("@/lib/contracts/spatial").SpatialPolicyReceipt;
+  }) => Promise<boolean>;
+  readInteriorAffordability?: (
+    projectId: string,
+    input: import("@/lib/contracts/interior-affordability").InteriorAffordabilityRequest,
+  ) => Promise<
+    import("@/lib/contracts/interior-affordability").InteriorAffordabilityAssessment
+  >;
 };
 
 const actionArgs = <T extends z.ZodObject>(schema: T) =>
@@ -77,8 +92,7 @@ const SPECS = {
   },
   open_simulator: {
     schema: actionArgs(OpenSimulatorActionSchema),
-    description:
-      "Open the simulator for a stored comparison and/or one site.",
+    description: "Open the simulator for a stored comparison and/or one site.",
   },
   open_interior: {
     schema: actionArgs(OpenInteriorActionSchema),
@@ -91,8 +105,7 @@ const SPECS = {
   },
   highlight: {
     schema: actionArgs(HighlightActionSchema),
-    description:
-      "Point at one named element on the founder's current screen.",
+    description: "Point at one named element on the founder's current screen.",
   },
 } as const;
 
@@ -107,6 +120,7 @@ export const UI_TOOL_NAMES = Object.keys(SPECS) as UiToolName[];
 export const FLOW_UI_TOOL_NAMES: readonly UiToolName[] = [
   "open_site",
   "focus_map",
+  "open_interior",
   "highlight",
 ];
 
@@ -225,7 +239,9 @@ export function createUiToolExecutor(
       if (action.stage === "site" && !action.siteId)
         throw new Rejected("The site step needs a siteId; use open_site.");
       if (action.stage === "interior" && !action.siteId)
-        throw new Rejected("The interior step needs a siteId; use open_interior.");
+        throw new Rejected(
+          "The interior step needs a siteId; use open_interior.",
+        );
     }
   };
 

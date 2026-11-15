@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import * as Three from "three";
 import { makeDemo } from "../simulator/fixture";
 import { interiorFrame } from "../simulator/interior-state";
+import { scanLayout } from "./scan-layout";
 import {
   attachReplayScene,
   type MatterportSceneSdk,
@@ -141,7 +142,11 @@ it("projects actual customer/employee dots and proposed counters through the ifr
     (child) => child.userData.role === "customer",
   );
   expect(employees).toHaveLength(2);
-  expect(customers).toHaveLength(replay.frame.customers.length);
+  expect(customers).toHaveLength(
+    scanLayout(replay.frame, replay.stationCount).people.filter(
+      (person) => person.role === "customer",
+    ).length,
+  );
   expect(
     root.children.filter((child) => child.userData.role === "proposed-counter"),
   ).toHaveLength(2);
@@ -197,7 +202,11 @@ it("updates one/two plans and backward seeks without retained meshes or independ
   ).toHaveLength(1);
   expect(
     root.children.filter((child) => child.userData.role === "customer"),
-  ).toHaveLength(oneInput.frame.customers.length);
+  ).toHaveLength(
+    scanLayout(oneInput.frame, oneInput.stationCount).people.filter(
+      (person) => person.role === "customer",
+    ).length,
+  );
   expect(
     root.children.filter((child) => child.userData.role === "proposed-counter"),
   ).toHaveLength(1);
@@ -306,10 +315,7 @@ it("renders 0.8m spheres resting on the floor independently of placement scale",
       ).toBeCloseTo(currentPlacement.origin.y, 6);
     }
     const standing = root.children.filter(
-      (child) =>
-        child.userData.role === "employee" ||
-        child.userData.state === "waiting" ||
-        child.userData.state === "serving",
+      (child) => child.userData.role === "employee",
     );
     standing.forEach((person, index) => {
       const position = person.getWorldPosition(new Three.Vector3());
@@ -331,3 +337,73 @@ vi.mock("../simulator/render-palette", async (original) => ({
   ...(await original<typeof import("../simulator/render-palette")>()),
   readRenderPalette: () => fixtureRenderPalette(),
 }));
+
+it("keeps one SDK scene object for a customer through service completion and departure motion", async () => {
+  const fake = fakeSdk(),
+    { run } = makeDemo()[0]!,
+    event = run.events.find((e) => e.type === "completion")!;
+  const replay = (minute: number) => ({
+    frame: interiorFrame(run, minute, 1),
+    selected: "",
+    stationCount: 1,
+  });
+  const session = await attachReplayScene(
+    fake.sdk,
+    placement,
+    replay(event.timeMin - 1e-6),
+    () => {},
+  );
+  const root = fake.component.outputs.objectRoot!,
+    before = root.children.find((c) => c.userData.id === event.customerId)!;
+  const position = before.position.clone();
+  session.update(replay(event.timeMin + 1e-6));
+  const after = root.children.find((c) => c.userData.id === event.customerId)!;
+  expect(after).toBe(before);
+  expect(after.position.distanceTo(position)).toBeLessThan(0.002);
+  session.dispose();
+});
+
+it("uses generic selected-room projection and never invents reference positions", async () => {
+  const fake = fakeSdk();
+  const { run } = makeDemo()[1];
+  const replay = {
+    frame: interiorFrame(run, 504, 2),
+    selected: "",
+    stationCount: 2,
+    projectedLayout: {
+      people: [
+        {
+          id: "selected-person",
+          role: "customer" as const,
+          state: "walking",
+          x: 12,
+          z: 7,
+        },
+      ],
+      stations: [{ x: 13, z: 8 }],
+    },
+  };
+  const session = await attachReplayScene(
+    fake.sdk,
+    { origin: { x: 0, y: 0, z: 0 }, rotationY: 0, scale: 1 },
+    replay,
+    () => {},
+  );
+  const root = fake.component.outputs.objectRoot!;
+  const people = root.children.filter(
+    (child) => child.userData.role === "customer",
+  );
+  expect(people).toHaveLength(1);
+  expect(people[0]!.position.x).toBe(12);
+  expect(people[0]!.position.z).toBe(7);
+  session.update({ ...replay, projectedLayout: { people: [], stations: [] } });
+  expect(
+    root.children.filter(
+      (child) =>
+        child.userData.role === "customer" ||
+        child.userData.role === "employee" ||
+        child.userData.role === "proposed-counter",
+    ),
+  ).toHaveLength(0);
+  session.dispose();
+});

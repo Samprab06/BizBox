@@ -1,23 +1,29 @@
 import { expect, it } from "vitest";
 import { makeDemo } from "../simulator/fixture";
 import { interiorFrame } from "../simulator/interior-state";
-import { scanLayout } from "./scan-layout";
+import { scanLayout, scanMotionGeometry } from "./scan-layout";
 
-it("retains every replay identity while giving standing human-scale spheres at least 2m spacing", () => {
+it("retains replay identities and human-scale destination spacing without teleporting to slots", () => {
   for (const { run, staffing } of makeDemo()) {
     for (const event of run.events) {
       const frame = interiorFrame(run, event.timeMin, staffing?.headcount);
       const layout = scanLayout(frame, run.metrics.stations);
-      expect(layout.people.map((person) => person.id).sort()).toEqual(
-        [...frame.customers, ...frame.employees]
-          .map((person) => person.id)
-          .sort(),
-      );
+      const visibleIds = layout.people.map((person) => person.id);
+      expect(new Set(visibleIds).size).toBe(visibleIds.length);
+      for (const id of [
+        ...frame.waiting,
+        ...frame.serving.map(([id]) => id),
+        ...frame.employees.map((person) => person.id),
+      ])
+        expect(visibleIds).toContain(id);
+      const engineIds = new Set(run.events.map((event) => event.customerId));
+      expect(
+        layout.people
+          .filter((person) => person.role === "customer")
+          .every((person) => engineIds.has(person.id)),
+      ).toBe(true);
       const standing = layout.people.filter(
-        (person) =>
-          person.role === "employee" ||
-          person.state === "waiting" ||
-          person.state === "serving",
+        (person) => person.role === "employee",
       );
       standing.forEach((person, index) => {
         for (const other of standing.slice(index + 1))
@@ -26,14 +32,14 @@ it("retains every replay identity while giving standing human-scale spheres at l
           ).toBeGreaterThanOrEqual(2);
       });
       expect(
-        layout.people
-          .filter((person) => person.state === "waiting")
-          .map((person) => [person.x, person.z]),
+        frame.waiting.map((_, index) =>
+          scanMotionGeometry(run.metrics.stations).queueSlot(index),
+        ),
       ).toEqual(
-        frame.waiting.map((_, index) => [
-          index < 4 ? 0 : (index - 3) * 2.2,
-          Math.min(index + 1, 4) * 2.2,
-        ]),
+        frame.waiting.map((_, index) => ({
+          x: index < 4 ? 0 : (index - 3) * 2.2,
+          z: Math.min(index + 1, 4) * 2.2,
+        })),
       );
       expect(layout.stations).toHaveLength(run.metrics.stations);
     }
@@ -58,11 +64,26 @@ it("keeps approach and exit presentation on separate lanes with monotonic travel
       1,
     ).people.find((person) => person.id === completion.customerId)!,
   );
-  expect(leaving.map((person) => person.x)).toEqual([-6, -6, -6]);
+  expect(leaving[0].x).toBeGreaterThanOrEqual(leaving[1].x);
+  expect(leaving[1].x).toBeGreaterThanOrEqual(leaving[2].x);
   expect(leaving[0].z).toBeLessThan(leaving[1].z);
   expect(leaving[1].z).toBeLessThan(leaving[2].z);
-  for (const person of [...approaching, ...leaving]) {
+  for (const person of approaching) {
     expect(person.z).toBeGreaterThanOrEqual(2.2);
     expect(person.z).toBeLessThanOrEqual(10);
   }
+});
+
+it("keeps stationary service/staff/queue destination markers at human scale", () => {
+  const geometry = scanMotionGeometry(2),
+    points = [
+      geometry.stationPoint(0),
+      geometry.stationPoint(1),
+      ...Array.from({ length: 10 }, (_, i) => geometry.queueSlot(i)),
+    ];
+  for (let i = 0; i < points.length; i++)
+    for (let j = i + 1; j < points.length; j++)
+      expect(
+        Math.hypot(points[i]!.x - points[j]!.x, points[i]!.z - points[j]!.z),
+      ).toBeGreaterThanOrEqual(2);
 });

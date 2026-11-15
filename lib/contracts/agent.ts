@@ -1,5 +1,15 @@
 import { z } from "zod";
+import { InteriorResponseSchema } from "./interior";
+import { InteriorAffordabilityAssessmentSchema } from "./interior-affordability";
 import { MAX_COMPARE_UNITS, SiteTweaksSchema } from "./evaluation";
+import {
+  SpatialCommandSchema,
+  SpatialScanContextSchema,
+  ControlledInteriorFindingSchema,
+  SpatialDraftSchema,
+  SpatialPoliciesSchema,
+  SpatialPolicyReceiptSchema,
+} from "./spatial";
 
 /**
  * HAC-134 (AGT-14): what the consultant sees of the current screen and the UI actions it
@@ -52,6 +62,7 @@ export const FLOW_STEP_IDS = [
   "locations",
   "compare",
   "results",
+  "interior",
   "finalize",
 ] as const;
 export const FlowStepSchema = z.enum(FLOW_STEP_IDS);
@@ -78,6 +89,32 @@ export const AgentViewContextSchema = z
     comparisonId: Id.optional(),
     investigationId: Id.optional(),
     scenarioId: Id.optional(),
+    spatial: z
+      .object({
+        comparisonId: Id,
+        source: InteriorResponseSchema.optional(),
+        policies: SpatialPoliciesSchema.optional(),
+        policyReceipt: SpatialPolicyReceiptSchema.optional(),
+        affordability: InteriorAffordabilityAssessmentSchema.optional(),
+        affordabilityAccountId: Id.optional(),
+        baseline: SpatialDraftSchema,
+        draft: SpatialDraftSchema,
+        ranRevision: z.number().int().nonnegative().nullable().optional(),
+        scanContext: SpatialScanContextSchema.optional(),
+        experimentQuestion: z.string().min(1).max(1000).optional(),
+        finding: ControlledInteriorFindingSchema.optional(),
+        reviewed: z.boolean(),
+        reference: z
+          .object({
+            modelId: z.literal("qfmMbTLt4Bo"),
+            selectedPlan: z.union([z.literal(0), z.literal(1)]),
+            reviewed: z.boolean(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     candidateIds: z.array(Id).max(MAX_VIEW_CANDIDATES).optional(),
     /** Scene 1: facts for the candidates in `candidateIds` order (ranked best first). */
     candidates: z
@@ -224,6 +261,66 @@ export const FinalizePlanActionSchema = z
   })
   .strict();
 
+const spatialScope = {
+  siteId: Id,
+  comparisonId: Id,
+  draftId: Id,
+  expectedRevision: z.number().int().nonnegative(),
+};
+export const InteriorAffordabilityActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("set_interior_affordability"),
+    ...spatialScope,
+    assessment: InteriorAffordabilityAssessmentSchema,
+    accountId: Id.optional(),
+  })
+  .strict();
+export const SpatialEditActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("spatial_edit"),
+    ...spatialScope,
+    command: SpatialCommandSchema,
+  })
+  .strict();
+export const RunSpatialExperimentActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("run_spatial_experiment"),
+    behavior: z.enum(["jev", "assumed"]).optional(),
+    ...spatialScope,
+  })
+  .strict();
+export const ProposeInteriorExperimentActionSchema = z.object({
+ ...actionId, type:z.literal("propose_interior_experiment"), ...spatialScope,
+ question:z.string().trim().min(1).max(1000),catalogId:Id,
+ position:z.object({x:z.number().finite(),z:z.number().finite()}).strict().optional(),
+}).strict();
+
+export const ReviewInteriorActionSchema = z
+  .object({ ...actionId, type: z.literal("review_interior"), ...spatialScope })
+  .strict();
+
+export const ReferenceCafeStateSchema = z
+  .object({
+    modelId: z.literal("qfmMbTLt4Bo"),
+    selectedPlan: z.union([z.literal(0), z.literal(1)]),
+    reviewed: z.boolean(),
+  })
+  .strict();
+
+export const SetReferenceCafeActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("set_reference_cafe"),
+    expectedReference: ReferenceCafeStateSchema.nullable(),
+    ...spatialScope,
+    selectedPlan: z.union([z.literal(0), z.literal(1)]),
+    reviewed: z.boolean(),
+  })
+  .strict();
+
 export const UiActionSchema = z.discriminatedUnion("type", [
   NavigateActionSchema,
   OpenSiteActionSchema,
@@ -239,6 +336,12 @@ export const UiActionSchema = z.discriminatedUnion("type", [
   SetSiteTweaksActionSchema,
   GoToStepActionSchema,
   FinalizePlanActionSchema,
+  SpatialEditActionSchema,
+  ProposeInteriorExperimentActionSchema,
+  RunSpatialExperimentActionSchema,
+  InteriorAffordabilityActionSchema,
+  ReviewInteriorActionSchema,
+  SetReferenceCafeActionSchema,
 ]);
 export type UiAction = z.infer<typeof UiActionSchema>;
 export type UiActionType = UiAction["type"];
@@ -253,6 +356,7 @@ export const UiActionListSchema = z.array(UiActionSchema).max(MAX_UI_ACTIONS);
  * replies as a normal turn, e.g. greeting with the top 3 or narrating a running comparison.
  */
 export const FlowEventSchema = z.discriminatedUnion("kind", [
+ z.object({kind:z.literal("interior_experiment_finished"),siteId:Id,comparisonId:Id,draftRevision:z.number().int().nonnegative()}).strict(),
   z.object({ kind: z.literal("arrived_workspace") }).strict(),
   z
     .object({

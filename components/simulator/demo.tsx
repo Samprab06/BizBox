@@ -1,4 +1,5 @@
 "use client";
+import type { SpatialDraft } from "@/lib/contracts/spatial";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 
@@ -7,6 +8,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
 import { interiorFrame } from "./interior-state";
+import { advancePlaybackMinute } from "./playback-clock";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
 import { DecisionHeader } from "@/components/decision/decision-header";
@@ -65,7 +67,7 @@ export const EXAMPLE_STORY: SimulatorStory = {
   scenarioLabels: ["One staffed counter", "Two staffed counters"],
   compare: true,
   footnote:
-    "Example data, not a researched property: 110 generated customers at a fixture site. Modeled layout, not a Matterport scan. Dot travel paths are illustrative two-minute entry/exit animations, not measured walking or collision simulation. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
+    "Example data, not a researched property: 110 generated customers at a fixture site. Modeled layout, not a Matterport scan. Dot travel paths are illustrative continuous walking paths, not measured walking or collision simulation. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
 };
 
 export function SimulatorDemo({
@@ -82,6 +84,9 @@ export function SimulatorDemo({
   insightsUnavailableReason,
   profileVersion,
   matterport,
+  furnitureProposal,
+  selectedPlan,
+  onSelectedPlanChange,
 }: {
   projectId: string;
   robustness?: RobustnessSummary | null;
@@ -98,6 +103,9 @@ export function SimulatorDemo({
   story?: SimulatorStory;
   /** Public-demo scan only; the SDK key is client-permitted and domain-restricted. */
   matterport?: MatterportConfig;
+  furnitureProposal?: SpatialDraft;
+  selectedPlan?: 0 | 1;
+  onSelectedPlanChange?: (plan: 0 | 1) => void;
 }) {
   useWorkspaceReport(projectId, context);
   const { openMin, closeMin } = data[0].run.metrics;
@@ -109,11 +117,17 @@ export function SimulatorDemo({
       : (data[0].run.events.find((event) => event.type === "service_start")
           ?.timeMin ?? openMin),
   );
-  const [previewIndex, setPreviewIndex] = useState(0);
+  const [internalPreviewIndex, setInternalPreviewIndex] = useState(0);
+  const previewIndex = selectedPlan ?? internalPreviewIndex;
+  const setPreviewIndex = (index: number) => {
+    setInternalPreviewIndex(index);
+    onSelectedPlanChange?.(index as 0 | 1);
+  };
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   // Both views share a clock; the controller that starts it chooses its stop.
   const [playbackEnd, setPlaybackEnd] = useState(end);
+  const [operatingPlayback, setOperatingPlayback] = useState(!coordinates);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
   const [inspectIndex, setInspectIndex] = useState(0);
@@ -142,9 +156,13 @@ export function SimulatorDemo({
         accumulated = 0;
         committed = now - ((now - committed) % playbackFrameInterval);
         setMinute((value) =>
-          Math.min(
+          advancePlaybackMinute(
+            value,
+            elapsedForFrame,
+            speed,
             playbackEnd,
-            value + (elapsedForFrame * speed) / (coordinates ? 55 : 125),
+            operatingPlayback,
+            Boolean(coordinates),
           ),
         );
       }
@@ -163,7 +181,7 @@ export function SimulatorDemo({
       cancelAnimationFrame(request);
       document.removeEventListener("visibilitychange", resumeWhenVisible);
     };
-  }, [running, playbackEnd, speed, coordinates]);
+  }, [running, playbackEnd, speed, coordinates, operatingPlayback]);
 
   const [base, alternative] = data;
   const gain = alternative
@@ -401,6 +419,7 @@ export function SimulatorDemo({
               onSpeed={setSpeed}
               onToggle={() => {
                 setPlaybackEnd(previewRun.metrics.closeMin);
+                setOperatingPlayback(true);
                 if (
                   minute >= previewRun.metrics.closeMin ||
                   minute < previewRun.metrics.openMin
@@ -464,6 +483,7 @@ export function SimulatorDemo({
                   onSpeed={setSpeed}
                   onToggle={() => {
                     setPlaybackEnd(end);
+                    setOperatingPlayback(false);
                     if (minute >= end) setMinute(start);
                     setPlaying(!running);
                   }}
@@ -568,7 +588,7 @@ export function SimulatorDemo({
           Customers approach the same shop, queue, receive service and leave.
           Employee dots mark staffed counters; movement paths illustrate replay
           events. Adding furniture without staffing does not add modeled service
-          capacity.
+          capacity. At 1×, one modeled minute plays in one second.
         </p>
         <div className="flex flex-wrap gap-2">
           <Timeline
@@ -584,6 +604,7 @@ export function SimulatorDemo({
             onSpeed={setSpeed}
             onToggle={() => {
               setPlaybackEnd(closeMin);
+              setOperatingPlayback(true);
               if (minute >= closeMin || minute < openMin) {
                 setMinute(openMin);
                 setPlaying(true);
@@ -603,6 +624,7 @@ export function SimulatorDemo({
             onClick={() => {
               setPlaying(false);
               setPlaybackEnd(closeMin);
+              setOperatingPlayback(true);
               setMinute(openMin);
               select("");
             }}
@@ -643,6 +665,7 @@ export function SimulatorDemo({
               setMinute(previewRun.metrics.openMin);
             }
             setPlaybackEnd(previewRun.metrics.closeMin);
+            setOperatingPlayback(true);
             setPlaying(value);
           }}
           onSpeedChange={setSpeed}
@@ -741,6 +764,7 @@ export function SimulatorDemo({
               </div>
               <MatterportView
                 config={matterport}
+                furnitureProposal={furnitureProposal}
                 run={previewRun}
                 minute={previewMinute}
                 employeeCount={data[previewIndex].staffing?.headcount}

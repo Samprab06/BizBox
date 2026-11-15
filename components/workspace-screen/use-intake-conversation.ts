@@ -301,7 +301,7 @@ export function useIntakeConversation(
               messages: [...now.messages, { role: "agent", text }],
             });
           }
-          if (outcome.result.actions?.length)
+          if (event.kind !== "interior_experiment_finished" && outcome.result.actions?.length)
             actionsRef.current?.(outcome.result.actions);
           return outcome.result.assistantMessage;
         } catch {

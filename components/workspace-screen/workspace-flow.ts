@@ -19,6 +19,7 @@ const WORKSPACE_STEPS: readonly WorkspaceStep[] = [
   "locations",
   "compare",
   "results",
+  "interior",
   "finalize",
 ];
 

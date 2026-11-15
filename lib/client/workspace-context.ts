@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import { intakeSessionSchema } from "@/components/intake/profile";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { workspaceHref } from "./workspace-routes";
@@ -14,6 +15,11 @@ export type ContextListing = {
   score?: number;
 };
 export type WorkspaceObservation =
+  | {
+      kind: "interior";
+      phase: "ready" | "missing";
+      spatial?: NonNullable<AgentViewContext["spatial"]>;
+    }
   | {
       kind: "simulator";
       phase: "ready" | "example";

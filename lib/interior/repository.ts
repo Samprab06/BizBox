@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import {
   FloorPlanUriSchema,
+  InteriorDiscoverySchema,
   InteriorDimensionsSchema,
   InteriorProvenanceSchema,
   MatterportModelIdSchema,
@@ -22,8 +23,23 @@ export async function readInteriorSite(
 ): Promise<InteriorSite | null> {
   const site = rows(
     await db.execute(sql`
-    SELECT id, property_id, coalesce(data->'floorPlan'->>'attachmentUri', data->'floorPlan'->>'uri') AS floor_plan_uri
-    FROM costar_spaces WHERE id=${siteId} LIMIT 1
+    SELECT s.id, s.property_id, coalesce(s.data->'floorPlan'->>'attachmentUri', s.data->'floorPlan'->>'uri') AS floor_plan_uri,
+    (SELECT coalesce(jsonb_agg(d), '[]'::jsonb) FROM (
+      SELECT a.value->>'videoKey' AS "modelId", 'property' AS scope,
+        'attachments.'||(a.ordinality-1)::text||'.videoKey' AS "sourceField"
+      FROM costar_properties p CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.data->'attachments')='array' THEN p.data->'attachments' ELSE '[]'::jsonb END) WITH ORDINALITY a(value,ordinality)
+      WHERE p.id=s.property_id AND a.value->>'videoExternalReferenceType' IN ('36','234')
+      UNION ALL
+      SELECT a.value->>'videoKey', 'space', 'attachments.'||(a.ordinality-1)::text||'.videoKey'
+      FROM jsonb_array_elements(CASE WHEN jsonb_typeof(s.data->'attachments')='array' THEN s.data->'attachments' ELSE '[]'::jsonb END) WITH ORDINALITY a(value,ordinality)
+      WHERE a.value->>'videoExternalReferenceType' IN ('36','234')
+      UNION ALL
+      SELECT a.data->>'matterportModelId','property',coalesce(a.source->>'field','normalized attachment')
+      FROM costar_attachments a WHERE a.property_id=s.property_id AND a.data->>'matterportModelId' IS NOT NULL AND a.source->>'origin'='costar' AND a.source->>'dataset' IN ('commercial-property','commercial-listing-summary')
+      ORDER BY scope DESC, "modelId"
+      LIMIT 9
+    ) d) AS discovered
+    FROM costar_spaces s WHERE s.id=${siteId} LIMIT 1
   `),
   )[0];
   if (!site) return null;
@@ -40,8 +56,53 @@ export async function readInteriorSite(
   const floorPlan = FloorPlanUriSchema.safeParse(site.floor_plan_uri);
   return {
     siteId: site.id,
+    trustedDiscovery: true,
     propertyId: site.property_id,
     floorPlanUri: floorPlan.success ? floorPlan.data : null,
+    discovery: InteriorDiscoverySchema.parse({
+      models: (Array.isArray(site.discovered) ? site.discovered : [])
+        .filter(
+          (raw): raw is Record<string, unknown> =>
+            !!raw && typeof raw === "object",
+        )
+        .filter(
+          (raw) =>
+            MatterportModelIdSchema.safeParse(raw.modelId).success &&
+            (raw.scope === "space" || raw.scope === "property") &&
+            typeof raw.sourceField === "string",
+        )
+        .filter(
+          (raw, index, all) =>
+            all.findIndex(
+              (other) =>
+                other.modelId === raw.modelId && other.scope === raw.scope,
+            ) === index,
+        )
+        .slice(0, 8)
+        .map((raw) => {
+          const approved = models.some(
+            (m) =>
+              m.model_id === raw.modelId &&
+              m.display_approved === true &&
+              m.is_public === true &&
+              (raw.scope === "property"
+                ? m.costar_space_id === null
+                : m.costar_space_id === siteId),
+          );
+          return {
+            ...raw,
+            displayApproved: approved,
+            reason: approved
+              ? "Reviewed public registry mapping available"
+              : "Source model found; current public verification required for automatic viewing",
+          };
+        }),
+      truncated: Array.isArray(site.discovered) && site.discovered.length > 8,
+      limitations: [
+        "Discovery is bounded source metadata, not account-wide search or proof of SDK access, exact-suite geometry, calibration or Defurnish availability.",
+        "Parent-property attachments do not identify the selected lease suite.",
+      ],
+    }),
     models: models.map((model) => ({
       modelId: MatterportModelIdSchema.parse(model.model_id),
       spaceId:

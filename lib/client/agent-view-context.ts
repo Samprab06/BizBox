@@ -35,6 +35,30 @@ export function agentViewForRoute(
     projectId,
     `${pathname}?${search}`,
   );
+  const interior = observations.find((entry) => entry.kind === "interior");
+  if (
+    (step === "interior" || step === "finalize") &&
+    interior?.kind === "interior" &&
+    interior.phase === "ready" &&
+    interior.spatial
+  ) {
+    const spatial = interior.spatial;
+    if (
+      spatial.draft.projectId === projectId &&
+      spatial.baseline.projectId === projectId &&
+      spatial.baseline.siteId === spatial.draft.siteId
+    ) {
+      const parsed = AgentViewContextSchema.safeParse({
+        ...view,
+        phase: "ready",
+        siteId: spatial.draft.siteId,
+        comparisonId: spatial.comparisonId,
+        candidateIds: [spatial.draft.siteId],
+        spatial,
+      });
+      if (parsed.success) return parsed.data;
+    }
+  }
   const query = new URLSearchParams(search);
   const one = (key: string) =>
     query.getAll(key).length === 1 ? query.get(key) || undefined : undefined;

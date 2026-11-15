@@ -12,6 +12,17 @@ export type ScanReplay = {
   frame: ReturnType<typeof interiorFrame>;
   selected: string;
   stationCount: number;
+  /** Native metric positions from a selected saved spatial run; never café remapping. */
+  projectedLayout?: {
+    people: {
+      id: string;
+      role: "customer" | "employee";
+      state: string;
+      x: number;
+      z: number;
+    }[];
+    stations: { x: number; z: number }[];
+  };
 };
 
 type SceneObject = {
@@ -144,7 +155,8 @@ export class ReplayComponent {
     );
     root.rotation.y = placement.rotationY;
     root.scale.setScalar(placement.scale);
-    const layout = scanLayout(replay.frame, replay.stationCount);
+    const layout =
+      replay.projectedLayout ?? scanLayout(replay.frame, replay.stationCount);
     const desired = layout.people;
     const ids = new Set(desired.map((dot) => dot.id));
     for (const [id, group] of this.dots)
@@ -186,9 +198,9 @@ export class ReplayComponent {
         dot.role === "employee" || dot.id === replay.selected;
       group.children[1].scale.setScalar(dot.id === replay.selected ? 1.35 : 1);
     }
-    while (this.counters.length > replay.stationCount)
+    while (this.counters.length > layout.stations.length)
       root.remove(this.counters.pop()!);
-    while (this.counters.length < replay.stationCount) {
+    while (this.counters.length < layout.stations.length) {
       const counter = new THREE.Mesh(this.geometries[2], this.materials[3]);
       counter.userData.role = "proposed-counter";
       root.add(counter);

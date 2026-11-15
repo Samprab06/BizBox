@@ -48,7 +48,20 @@ async function services(page: Page) {
   await page.route("**/api/sites/*/interior", (route) =>
     route.fulfill({ status: 404, json: {} }),
   );
+  await page.route("**/matterport/showcase.html?*", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<html><body>Offline scan boundary test</body></html>",
+    }),
+  );
+  await page.route("https://my.matterport.com/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<html><body>Offline scan boundary test</body></html>",
+    }),
+  );
   const posts: IntakePost[] = [];
+  let finalizations = 0;
   await page.route("**/api/projects/*/intake", (route) => {
     if (route.request().method() === "GET")
       return route.fulfill({ json: { modelConfigured: true } });
@@ -62,7 +75,9 @@ async function services(page: Page) {
         ]),
       });
     if (kind)
-      return route.fulfill({ json: reply(`Noted: ${kind.replace("_", " ")}.`) });
+      return route.fulfill({
+        json: reply(`Noted: ${kind.replace("_", " ")}.`),
+      });
     const text = body.message ?? "";
     if (/compare them/i.test(text))
       return route.fulfill({
@@ -85,6 +100,7 @@ async function services(page: Page) {
       return route.fulfill({
         json: reply("Great choice. Here is your plan.", [
           {
+            id: `act-finalize-${++finalizations}`,
             type: "finalize_plan",
             comparisonId: "comparison-scene-1-run-2",
             chosenSiteId: threeSiteIds[0],
@@ -169,14 +185,18 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
   await expect(
     page.getByRole("region", { name: "Comparison shortlist" }),
   ).toContainText("Comparison 3/3");
-  const arrival = posts.find((post) => post.event?.kind === "arrived_workspace");
+  const arrival = posts.find(
+    (post) => post.event?.kind === "arrived_workspace",
+  );
   expect(arrival?.view).toMatchObject({
     stage: "workspace",
     step: "locations",
     candidateIds: [...threeSiteIds],
   });
   expect((arrival?.view?.candidates as unknown[]).length).toBe(3);
-  expect(events(posts).filter((e) => e.kind === "arrived_workspace")).toHaveLength(1);
+  expect(
+    events(posts).filter((e) => e.kind === "arrived_workspace"),
+  ).toHaveLength(1);
 
   // The agent runs the comparison: the compare step shows persona progress.
   const composer = page.getByRole("textbox", {
@@ -258,10 +278,59 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
     results.getByRole("button", { name: "Rerun", exact: true }),
   ).toBeVisible();
 
-  // The agent finalizes: the final plan step shows the chosen site.
+  // Choosing a site enters its interior; unavailable scan data must not bypass review.
   await composer.fill("Let's go with 101 Invented St");
   await composer.press("Enter");
+  await expect(page).toHaveURL(/step=interior/);
+  const interior = page.getByRole("region", {
+    name: "Selected building interior",
+    exact: true,
+  });
+  await expect(interior).toContainText("No viewable interior is available");
+  await expect(
+    interior.getByRole("button", { name: "Keep result", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    interior.getByRole("button", { name: "Continue to report", exact: true }),
+  ).toHaveCount(0);
+  await expect(stepStatus(page, "finalize")).toHaveAttribute(
+    "data-flow-status",
+    "locked",
+  );
+  const unreviewed = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("bizbox:flow:v1:houston-coffee")!),
+  );
+  expect(unreviewed.finalPlan).toBeNull();
+  expect(unreviewed.interior.siteId).toBe(threeSiteIds[0]);
+  expect(unreviewed.interior.ranRevision).toBeNull();
+  expect(unreviewed.interior.reviewedRevision).toBeNull();
+
+  // Report precondition only: supply a reviewed local scenario snapshot. This does not
+  // claim scan rendering or live Jev execution; those have separate opt-in coverage.
+  await page.evaluate(() => {
+    const key = "bizbox:flow:v1:houston-coffee";
+    const state = JSON.parse(localStorage.getItem(key)!);
+    state.interior.ranRevision = state.interior.draft.revision;
+    state.interior.reviewedRevision = state.interior.draft.revision;
+    localStorage.setItem(key, JSON.stringify(state));
+  });
+  await page.reload();
+  await expect(interior).toBeVisible();
+  await composer.fill(
+    "Let's go with 101 Invented St now that the scenario is reviewed",
+  );
+  await composer.press("Enter");
   await expect(page).toHaveURL(/step=finalize/);
+  await expect(
+    page.getByRole("region", { name: "Reference café counter findings" }),
+  ).toHaveCount(0);
+  const finalized = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("bizbox:flow:v1:houston-coffee")!),
+  );
+  expect(finalized.finalPlan.interior.reviewedRevision).toBe(
+    finalized.finalPlan.interior.draft.revision,
+  );
+  expect(finalized.finalPlan.referenceCafe).toBeUndefined();
   await expect(stepStatus(page, "finalize")).toHaveAttribute(
     "data-flow-status",
     "current",

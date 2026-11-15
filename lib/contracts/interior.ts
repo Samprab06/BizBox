@@ -46,6 +46,8 @@ export const InteriorDimensionsSchema = z
     coordinateUnit: z.literal("meters"),
     areaUnit: z.literal("square_feet"),
     upAxis: z.literal("y"),
+    /** Absent on legacy caches that predate the explicit API-to-SDK handedness fix. */
+    coordinateFrame: z.literal("showcase-y-up-v1").optional(),
     floors: z.array(room.extend({ rooms: z.array(room) })).min(1),
     provenance: InteriorProvenanceSchema,
   })
@@ -119,6 +121,29 @@ export const FloorPlanUriSchema = z.string().refine((value) => {
     return false;
   }
 }, "Use an HTTPS floor plan or the built-in synthetic fixture");
+/** Public CoStar-linked viewing is user-authorized; registry approval remains separate. */
+export const InteriorDiscoverySchema = z
+  .object({
+    models: z
+      .array(
+        z
+          .object({
+            modelId: MatterportModelIdSchema,
+            scope: z.enum(["space", "property"]),
+            sourceField: z.string().min(1).max(300),
+            displayApproved: z.boolean(),
+            publicStatus: z.enum(["public", "private", "unknown"]).optional(),
+            viewingEligible: z.boolean().optional(),
+            reason: z.string().min(1),
+          })
+          .strict(),
+      )
+      .max(8),
+    truncated: z.boolean(),
+    limitations: z.array(z.string()),
+  })
+  .strict();
+export type InteriorDiscovery = z.infer<typeof InteriorDiscoverySchema>;
 export const InteriorResponseSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -129,6 +154,7 @@ export const InteriorResponseSchema = z.discriminatedUnion("kind", [
       /** HAC-138: absent means the overlay falls back to Modeled layout. */
       placement: ScanPlacementSchema.optional(),
       provenance: InteriorProvenanceSchema,
+      discovery: InteriorDiscoverySchema.optional(),
     })
     .strict(),
   z
@@ -136,12 +162,14 @@ export const InteriorResponseSchema = z.discriminatedUnion("kind", [
       kind: z.literal("floorplan"),
       floorPlanUri: FloorPlanUriSchema,
       provenance: InteriorProvenanceSchema,
+      discovery: InteriorDiscoverySchema.optional(),
     })
     .strict(),
   z
     .object({
       kind: z.literal("modeled"),
       provenance: InteriorProvenanceSchema,
+      discovery: InteriorDiscoverySchema.optional(),
     })
     .strict(),
 ]);
