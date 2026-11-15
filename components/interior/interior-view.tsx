@@ -1,4 +1,5 @@
 "use client";
+import { Card } from "@/components/ui/card";
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -130,10 +131,11 @@ export function InteriorView({
   ].filter((note): note is string => !!note);
 
   return (
-    <section
+    <Card
+      role="region"
       aria-label="Interior view"
       data-interior-source={display.kind}
-      className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4 text-white"
+      className="space-y-3 rounded-2xl border border-glass-edge bg-panel-raised p-4 text-ink"
     >
       <header className="flex flex-wrap items-center justify-between gap-2">
         <p
@@ -143,7 +145,7 @@ export function InteriorView({
           <span className="sr-only">Interior source: </span>
           {display.label}
         </p>
-        <span className="text-xs text-white/65">
+        <span className="text-xs text-muted">
           {stations} {stations === 1 ? "station" : "stations"} · simulated
           customers, not observed traffic
         </span>
@@ -159,8 +161,8 @@ export function InteriorView({
               ["Left", counts.left],
             ] as const
           ).map(([label, value]) => (
-            <div key={label} className="rounded-lg bg-white/5 px-3 py-2">
-              <dt className="text-xs text-white/60">{label}</dt>
+            <div key={label} className="rounded-lg bg-field px-3 py-2">
+              <dt className="text-xs text-muted">{label}</dt>
               <dd className="text-lg font-semibold tabular-nums">{value}</dd>
             </div>
           ))}
@@ -201,7 +203,7 @@ export function InteriorView({
       {display.kind !== "scan" && (
         <ul
           aria-label="Layout markers"
-          className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70"
+          className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted"
         >
           <li>
             <span aria-hidden className="text-amber-300">
@@ -220,7 +222,7 @@ export function InteriorView({
       <p
         role="status"
         aria-label="Interior inspection"
-        className="text-sm text-white/80"
+        className="text-sm text-muted"
       >
         {selected
           ? chosen
@@ -243,13 +245,13 @@ export function InteriorView({
       {notes.length > 0 && (
         <ul
           aria-label="Interior source notes"
-          className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-white/55"
+          className="list-disc space-y-1 pl-5 text-xs leading-relaxed text-muted"
         >
           {notes.map((note) => (
             <li key={note}>{note}</li>
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

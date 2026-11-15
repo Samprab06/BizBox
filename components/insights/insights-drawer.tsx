@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 import dynamic from "next/dynamic";
 import { useId, useRef, useState } from "react";
@@ -52,12 +54,13 @@ export function InsightsDrawer({
     ) : undefined;
   return (
     <>
-      <button
+      <Button
+        variant="glass"
         type="button"
         ref={trigger}
         aria-haspopup="dialog"
         aria-controls={id}
-        className="mt-3 min-h-10 rounded border border-[var(--sw-baseline)] px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)]"
+        className="mt-3 min-h-10 rounded border border-[var(--sw-baseline)] px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring"
         onClick={() => {
           onOpen?.();
           setOpen(true);
@@ -66,14 +69,14 @@ export function InsightsDrawer({
         }}
       >
         Open site insights
-      </button>
+      </Button>
       <dialog
         ref={dialog}
         id={id}
         aria-labelledby={id + "-title"}
         aria-describedby={`${id}-description${outdated ? ` ${id}-stale` : ""}${profileVersionUnknown ? ` ${id}-freshness` : ""}`}
         data-surface="viewport"
-        className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-3xl overflow-y-auto overscroll-contain border-l border-viewport-line bg-viewport-surface p-4 text-viewport-ink backdrop:bg-black/50 sm:p-6"
+        className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-3xl overflow-y-auto overscroll-contain border-l border-line bg-panel-raised p-4 text-ink backdrop:bg-black/50 sm:p-6"
         onKeyDown={(event) => {
           // Let the dialog close natively without the viewport exiting fullscreen.
           if (event.key === "Escape") event.stopPropagation();
@@ -83,14 +86,14 @@ export function InsightsDrawer({
           trigger.current?.focus({ preventScroll: true });
         }}
       >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-viewport-line bg-viewport-surface pb-3">
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-line bg-panel-raised pb-3">
           <div className="min-w-0">
             <h2 id={id + "-title"} className="text-xl font-semibold">
               Site insights
             </h2>
             <p
               id={id + "-description"}
-              className="mt-1 break-words text-sm text-viewport-muted"
+              className="mt-1 break-words text-sm text-muted"
             >
               Selected site: {siteId}.{" "}
               {matching
@@ -98,18 +101,19 @@ export function InsightsDrawer({
                 : "Cross-seed data is not available for this selection."}
             </p>
             {profileVersion !== undefined && (
-              <p className="mt-1 text-xs text-viewport-muted">
+              <p className="mt-1 text-xs text-muted">
                 Saved profile v{profileVersion}
               </p>
             )}
           </div>
-          <button
+          <Button
+            variant="glass"
             type="button"
-            className="min-h-10 shrink-0 rounded border border-viewport-muted px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-baseline"
+            className="min-h-10 shrink-0 rounded border border-muted px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-baseline"
             onClick={() => dialog.current?.close()}
           >
             Close insights
-          </button>
+          </Button>
         </header>
         {outdated && (
           <p
@@ -143,14 +147,14 @@ export function InsightsDrawer({
           />
         ) : (
           <>
-            <p role="status" className="mt-5 text-sm text-viewport-muted">
+            <p role="status" className="mt-5 text-sm text-muted">
               {unavailableReason ??
                 "This saved comparison has no retained cross-seed insights. Representative replay data cannot supply honest seed bands."}
             </p>
             {stationController && (
-              <div className="mt-5 rounded-card border border-viewport-line p-4">
+              <Card className="mt-5 rounded-card border border-line p-4">
                 {stationController}
-              </div>
+              </Card>
             )}
           </>
         )}

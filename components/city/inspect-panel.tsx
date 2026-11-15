@@ -1,4 +1,7 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input, Select } from "@/components/ui/input";
 
 /**
  * HAC-93 (SIM-9): Inspect tab. Searchable customer list, Follow toggle and a card for the
@@ -153,7 +156,7 @@ function CustomerCard({
         {activityText(card)} at {clock(card.minute)}
         {scenarioLabel ? ` · ${scenarioLabel}` : ""}
       </p>
-      <p className="rounded-lg bg-paper p-3 text-sm" aria-label="Why">
+      <p className="rounded-lg bg-canvas p-3 text-sm" aria-label="Why">
         {card.why}
       </p>
       <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -332,7 +335,8 @@ export function InspectPanel({
   }
 
   return (
-    <section
+    <Card
+      role="region"
       aria-label="Inspect customers"
       className={`min-w-0 space-y-3 rounded-xl border border-line p-4 ${className}`}
       onKeyDown={onKeyDown}
@@ -340,19 +344,19 @@ export function InspectPanel({
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid min-w-0 gap-1 text-sm font-medium">
           Search customers
-          <input
+          <Input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="ID or persona"
             aria-describedby={`${id}-count`}
-            className="min-w-0 rounded-lg border border-line bg-surface p-2 text-ink"
+            className="min-w-0 rounded-lg border border-line bg-panel-raised p-2 text-ink"
           />
         </label>
         <label className="grid min-w-0 gap-1 text-sm font-medium">
           Inspect a customer
-          <select
-            className="min-w-0 max-w-full rounded-lg border border-line bg-surface p-2 text-ink"
+          <Select
+            className="min-w-0 max-w-full rounded-lg border border-line bg-panel-raised p-2 text-ink"
             value={customerId}
             onChange={(event) => onSelect(event.target.value)}
           >
@@ -363,18 +367,19 @@ export function InspectPanel({
                 {arrived.includes(option) ? "" : " (not arrived yet)"}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {customerId &&
           (onFollowChange && !followUnavailableReason ? (
-            <button
+            <Button
+              variant="glass"
               type="button"
               aria-pressed={following}
               onClick={() => onFollowChange(!following)}
-              className="min-h-11 rounded-lg border border-pine px-4 text-sm font-semibold text-pine aria-pressed:bg-mint"
+              className="min-h-11 rounded-lg border border-accent px-4 text-sm font-semibold text-accent aria-pressed:bg-field"
             >
               {following ? "Stop following" : "Follow"}
-            </button>
+            </Button>
           ) : (
             <p className="text-xs text-muted">
               Follow unavailable:{" "}
@@ -399,6 +404,6 @@ export function InspectPanel({
           Choose a customer from the list, or click one in the view.
         </p>
       )}
-    </section>
+    </Card>
   );
 }

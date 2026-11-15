@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -221,7 +223,8 @@ function ConsultantActivity({
       entry.attempt === state.job.attempt,
   );
   return (
-    <section
+    <Card
+      role="region"
       aria-labelledby={headingId}
       className="rounded-xl border border-line p-4"
     >
@@ -296,17 +299,18 @@ function ConsultantActivity({
           <p role="alert" className="text-sm">
             {state?.job.reason ?? "The investigation stopped before finishing."}
           </p>
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={retry}
             disabled={retrying}
-            className="mt-2 rounded bg-pine px-3 py-1.5 text-sm text-white"
+            className="mt-2 rounded bg-accent px-3 py-1.5 text-sm text-on-accent"
           >
             Retry investigation
-          </button>
+          </Button>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 

@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useState } from "react";
 import {
@@ -400,20 +401,21 @@ export function RevenueChart({ day }: { day: InsightsDay }) {
         className="mb-3 flex flex-wrap gap-2"
       >
         {([false, true] as const).map((value) => (
-          <button
+          <Button
+            variant={cumulative === value ? "primary" : "glass"}
             key={String(value)}
             type="button"
             aria-pressed={cumulative === value}
             className={
-              "rounded-lg border px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--sw-baseline)] text-xs font-semibold " +
+              "rounded-lg border px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus-ring text-xs font-semibold " +
               (cumulative === value
-                ? "border-pine bg-pine text-on-pine"
+                ? "border-accent bg-accent text-on-accent"
                 : "border-[var(--sw-muted)]")
             }
             onClick={() => setCumulative(value)}
           >
             {value ? "Cumulative revenue" : "Hourly revenue"}
-          </button>
+          </Button>
         ))}
       </div>
       <HourlyPlot day={day} kind={cumulative ? "cumulative" : "revenue"} />

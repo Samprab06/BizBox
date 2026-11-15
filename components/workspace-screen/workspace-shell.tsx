@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { buttonVariants } from "@/components/ui/button";
+import { cn, focusRing, pressable } from "@/components/ui/cn";
 import Link from "next/link";
 import { useId, type ReactNode } from "react";
 import { workspaceHref } from "@/lib/client/workspace-routes";
@@ -67,7 +69,12 @@ export function WorkspaceShell({
           <Link
             href={workspaceHref(projectId, "intake", selectedSiteId)}
             prefetch={false}
-            className={styles.editBrief}
+            className={cn(
+              styles.editBrief,
+              buttonVariants.glass,
+              focusRing,
+              pressable,
+            )}
           >
             Edit brief
             <svg viewBox="0 0 20 20" aria-hidden="true">

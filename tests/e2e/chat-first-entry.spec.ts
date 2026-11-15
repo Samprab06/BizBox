@@ -2,7 +2,12 @@ import type { Page, Route } from "@playwright/test";
 import { founderAnswers } from "../../lib/agent/__fixtures__/founder";
 import type { IntakeState } from "../../lib/contracts/intake";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, openConsultant, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
 // HAC-150: a project opens as a full-screen chat; the guided answer cards sit inline; the
 // shell docks onto Spaces once the brief is complete or the agent navigates. Every network
@@ -19,11 +24,15 @@ const assistant = (page: Page) =>
 const log = (page: Page) =>
   assistant(page).getByRole("log", { name: "Conversation" });
 const composer = (page: Page) =>
-  assistant(page).getByRole("textbox", { name: "Message the BizBox assistant" });
-const card = (page: Page, title: string) =>
-  assistant(page).getByRole("region", { name: "Answer card" }).filter({
-    has: page.getByRole("heading", { name: title }),
+  assistant(page).getByRole("textbox", {
+    name: "Message the BizBox assistant",
   });
+const card = (page: Page, title: string) =>
+  assistant(page)
+    .getByRole("region", { name: "Answer card" })
+    .filter({
+      has: page.getByRole("heading", { name: title }),
+    });
 
 const defaultValue = (value: number, unit: string) => ({
   value,
@@ -46,8 +55,14 @@ function response(
   const draft = {
     ...previous,
     ...fields,
-    capacity: { ...previous.capacity, ...(patch.capacity as object | undefined) },
-    economics: { ...previous.economics, ...(patch.economics as object | undefined) },
+    capacity: {
+      ...previous.capacity,
+      ...(patch.capacity as object | undefined),
+    },
+    economics: {
+      ...previous.economics,
+      ...(patch.economics as object | undefined),
+    },
     derivedDefaults: { ...previous.derivedDefaults },
     ...(previous.category || patch.category
       ? { category: (patch.category ?? previous.category) as "coffee" }
@@ -100,38 +115,50 @@ const script = [
     reply: "When will you be open, and how many people on shift?",
   },
   { patch: founderAnswers[5], reply: "Anything the space must have?" },
-  { patch: founderAnswers[6], reply: "Your brief is complete. Here are spaces." },
+  {
+    patch: founderAnswers[6],
+    reply: "Your brief is complete. Here are spaces.",
+  },
 ] as const;
 
 async function mockModel(page: Page, navigateAt?: number) {
   const posts: { message?: string }[] = [];
   let state: IntakeState | undefined;
-  await page.route(`**/api/projects/${PROJECT}/intake`, async (route: Route) => {
-    if (route.request().method() === "GET")
-      return route.fulfill({ json: { modelConfigured: true } });
-    const request = route.request().postDataJSON() as { message?: string };
-    posts.push(request);
-    const turn = script[posts.length - 1]!;
-    const last = posts.length === script.length;
-    const reply = response(
-      state,
-      turn.patch,
-      turn.reply,
-      last,
-      posts.length === navigateAt
-        ? [{ id: "nav-1", type: "navigate", stage: "map" }]
-        : undefined,
-    );
-    state = { draft: reply.draft, assumptions: reply.assumptions } as IntakeState;
-    await route.fulfill({ json: reply });
-  });
+  await page.route(
+    `**/api/projects/${PROJECT}/intake`,
+    async (route: Route) => {
+      if (route.request().method() === "GET")
+        return route.fulfill({ json: { modelConfigured: true } });
+      const request = route.request().postDataJSON() as { message?: string };
+      posts.push(request);
+      const turn = script[posts.length - 1]!;
+      const last = posts.length === script.length;
+      const reply = response(
+        state,
+        turn.patch,
+        turn.reply,
+        last,
+        posts.length === navigateAt
+          ? [{ id: "nav-1", type: "navigate", stage: "map" }]
+          : undefined,
+      );
+      state = {
+        draft: reply.draft,
+        assumptions: reply.assumptions,
+      } as IntakeState;
+      await route.fulfill({ json: reply });
+    },
+  );
   return posts;
 }
 
 async function mockServices(page: Page) {
   await page.route("**/api/projects", (route) =>
     route.request().method() === "POST"
-      ? route.fulfill({ status: 201, json: { id: PROJECT, name: "New project" } })
+      ? route.fulfill({
+          status: 201,
+          json: { id: PROJECT, name: "New project" },
+        })
       : route.fallback(),
   );
   await page.route("**/api/voice/session", (route) =>
@@ -146,23 +173,37 @@ async function mockServices(page: Page) {
 
 async function type(page: Page, text: string, turn: number, posts: unknown[]) {
   await composer(page).fill(text);
+  // Recording the previous POST can precede its reply and the composer becoming ready.
+  await expect(
+    assistant(page).getByRole("button", { name: "Send message", exact: true }),
+  ).toBeEnabled();
   await composer(page).press("Enter");
   await expect.poll(() => posts.length).toBe(turn);
 }
 
 /** Answers every question with the cards and typed messages. Stops before the last turn when asked. */
-async function answerBrief(page: Page, posts: unknown[], through: number = script.length) {
+async function answerBrief(
+  page: Page,
+  posts: unknown[],
+  through: number = script.length,
+) {
   await expect(layout(page)).toHaveAttribute("data-consultant-layout", "focus");
-  await expect(log(page)).toContainText("What kind of business are you opening?");
+  await expect(log(page)).toContainText(
+    "What kind of business are you opening?",
+  );
   // Turn 1: the category chips.
-  await card(page, "What are you opening?").getByRole("button", { name: "Coffee shop" }).click();
+  await card(page, "What are you opening?")
+    .getByRole("button", { name: "Coffee shop" })
+    .click();
   await expect.poll(() => posts.length).toBe(1);
   if (through < 2) return;
   await expect(log(page)).toContainText("Who is it for?");
   await type(page, "Nearby residents and commuters.", 2, posts);
   if (through < 3) return;
   // Turn 3: the city chips.
-  await card(page, "Where are you looking?").getByRole("button", { name: "Houston" }).click();
+  await card(page, "Where are you looking?")
+    .getByRole("button", { name: "Houston" })
+    .click();
   await expect.poll(() => posts.length).toBe(3);
   if (through < 4) return;
   // Turn 4: the curved ruler's starting amount ($4,500) is confirmed.
@@ -200,7 +241,10 @@ async function seedFinishedBrief(page: Page) {
   await page.evaluate(
     ([key, value]) => {
       localStorage.setItem(key!, value!);
-      localStorage.setItem("bizbox:current-project:v1", "p-0123456789abcdef0123");
+      localStorage.setItem(
+        "bizbox:current-project:v1",
+        "p-0123456789abcdef0123",
+      );
     },
     [
       STORAGE_KEY,
@@ -218,7 +262,9 @@ async function seedFinishedBrief(page: Page) {
           staff: founder("3"),
           requirements: founder("Vent hood"),
         },
-        messages: [{ role: "agent", text: "What kind of business are you opening?" }],
+        messages: [
+          { role: "agent", text: "What kind of business are you opening?" },
+        ],
       }),
     ],
   );
@@ -243,15 +289,24 @@ test("first visit: landing, full-screen chat, answer cards, then the docked Spac
   const saved = JSON.parse(
     (await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY))!,
   );
-  expect(saved.profile.category).toEqual({ value: "Coffee shop", origin: "founder" });
+  expect(saved.profile.category).toEqual({
+    value: "Coffee shop",
+    origin: "founder",
+  });
   expect(saved.profile.city).toEqual({ value: "Houston", origin: "founder" });
   await expect(layout(page)).toHaveAttribute("data-consultant-layout", "focus");
 
   // The last answer completes the brief: no navigation by the founder.
   await type(page, "Frontage and ground floor required.", script.length, posts);
   await expect(page).toHaveURL(SPACES);
-  await expect(layout(page)).toHaveAttribute("data-consultant-layout", "docked");
-  await expect(layout(page)).toHaveAttribute("data-dock-transition", "animated");
+  await expect(layout(page)).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
+  await expect(layout(page)).toHaveAttribute(
+    "data-dock-transition",
+    "animated",
+  );
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
@@ -268,7 +323,10 @@ test("the agent's first navigate action docks the consultant and opens that step
   await expect(page).toHaveURL(ENTRY);
   await answerBrief(page, posts, 2);
   await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}/map$`));
-  await expect(layout(page)).toHaveAttribute("data-consultant-layout", "docked");
+  await expect(layout(page)).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
   // The conversation continues in the dock with its history.
   await openConsultant(page);
   await expect(log(page)).toContainText("Great. Who is it for?");
@@ -280,7 +338,10 @@ test("a returning founder with a complete brief lands docked on Spaces", async (
   await seedFinishedBrief(page);
   await page.goto("/start");
   await expect(page).toHaveURL(SPACES);
-  await expect(layout(page)).toHaveAttribute("data-consultant-layout", "docked");
+  await expect(layout(page)).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
   await expect(layout(page)).toHaveAttribute("data-dock-transition", "none");
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
@@ -288,7 +349,10 @@ test("a returning founder with a complete brief lands docked on Spaces", async (
   // The project's entry route does the same.
   await page.goto(`/projects/${PROJECT}`);
   await expect(page).toHaveURL(SPACES);
-  await expect(layout(page)).toHaveAttribute("data-consultant-layout", "docked");
+  await expect(layout(page)).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
   // The guided intake stays reachable as the "Edit brief" view.
   await page.goto(workspaceHref(PROJECT, "intake"));
   await expect(page.locator("#onboarding-title")).toBeVisible();
@@ -302,7 +366,10 @@ test("reduced motion swaps the dock animation for a cut", async ({ page }) => {
   await answerBrief(page, posts, script.length - 1);
   await type(page, "Frontage and ground floor required.", script.length, posts);
   await expect(page).toHaveURL(SPACES);
-  await expect(layout(page)).toHaveAttribute("data-consultant-layout", "docked");
+  await expect(layout(page)).toHaveAttribute(
+    "data-consultant-layout",
+    "docked",
+  );
   await expect(layout(page)).toHaveAttribute("data-dock-transition", "cut");
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
 });

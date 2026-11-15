@@ -27,6 +27,10 @@ import {
   Vector3,
   type Texture,
 } from "three";
+import {
+  readRenderPalette,
+  type RenderPalette,
+} from "../simulator/render-palette";
 import type { InteriorLayout } from "@/lib/sim/interior-layout";
 import { useSceneVisibility } from "../simulator/use-scene-visibility";
 import type { InteriorAgent } from "./interior-replay";
@@ -35,17 +39,16 @@ import type { InteriorAgent } from "./interior-replay";
 const sphere = new SphereGeometry(0.22, 12, 8);
 const ring = new TorusGeometry(0.34, 0.04, 5, 20);
 const roleMaterial = {
-  customer: new MeshStandardMaterial({ color: "#60a5fa", roughness: 0.7 }),
-  employee: new MeshStandardMaterial({ color: "#c084fc", roughness: 0.7 }),
+  customer: new MeshStandardMaterial({ roughness: 0.7 }),
+  employee: new MeshStandardMaterial({ roughness: 0.7 }),
 };
-const selectionMaterial = new MeshStandardMaterial({ color: "#f8fafc" });
+const selectionMaterial = new MeshStandardMaterial();
 const stationMaterial = new MeshBasicMaterial({
-  color: "#a5b4fc",
   transparent: true,
   opacity: 0.8,
 });
-const entranceMaterial = new MeshBasicMaterial({ color: "#fbbf24" });
-const queueMaterial = new LineBasicMaterial({ color: "#a5b4fc" });
+const entranceMaterial = new MeshBasicMaterial();
+const queueMaterial = new LineBasicMaterial();
 const scratch = new Object3D();
 
 function Unavailable() {
@@ -102,9 +105,11 @@ function FitCamera({ layout }: { layout: InteriorLayout }) {
 function Floor({
   layout,
   texture,
+  palette,
 }: {
   layout: InteriorLayout;
   texture: Texture | null;
+  palette: RenderPalette;
 }) {
   const { minX, maxX, minZ, maxZ } = layout.bounds;
   return (
@@ -116,13 +121,19 @@ function Floor({
       {texture ? (
         <meshBasicMaterial map={texture} />
       ) : (
-        <meshStandardMaterial color="#2b2f45" />
+        <meshStandardMaterial color={palette["panel-raised"]} />
       )}
     </mesh>
   );
 }
 
-function Markers({ layout }: { layout: InteriorLayout }) {
+function Markers({
+  layout,
+  palette,
+}: {
+  layout: InteriorLayout;
+  palette: RenderPalette;
+}) {
   const { from, to } = layout.counter;
   const length = Math.hypot(to.x - from.x, to.z - from.z);
   const angle = Math.atan2(to.z - from.z, to.x - from.x);
@@ -141,7 +152,11 @@ function Markers({ layout }: { layout: InteriorLayout }) {
         rotation={[0, -angle, 0]}
       >
         <boxGeometry args={[Math.max(0.2, length), 0.9, 0.6]} />
-        <meshStandardMaterial color="#4c5578" transparent opacity={0.85} />
+        <meshStandardMaterial
+          color={palette.muted}
+          transparent
+          opacity={0.85}
+        />
       </mesh>
       {layout.stations.map((p, index) => (
         <mesh
@@ -267,6 +282,16 @@ export default function LayoutScene({
   floorPlanUri?: string;
   onFloorPlanFailed?: () => void;
 }) {
+  const [palette] = useState(() => {
+    const palette = readRenderPalette();
+    roleMaterial.customer.color.set(palette["agent-customer"]);
+    roleMaterial.employee.color.set(palette["agent-employee"]);
+    selectionMaterial.color.set(palette.ink);
+    stationMaterial.color.set(palette.accent);
+    entranceMaterial.color.set(palette.warn);
+    queueMaterial.color.set(palette.accent);
+    return palette;
+  });
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
   const floor = useFloorTexture(floorPlanUri);
@@ -286,14 +311,14 @@ export default function LayoutScene({
             dpr={1}
             fallback={<Unavailable />}
             onCreated={({ scene }) => {
-              scene.background = new Color("#141726");
+              scene.background = new Color(palette.canvas);
             }}
           >
             <FitCamera layout={layout} />
             <ambientLight intensity={1.6} />
             <directionalLight position={[4, 10, 7]} intensity={1.8} />
-            <Floor layout={layout} texture={floor.texture} />
-            <Markers layout={layout} />
+            <Floor layout={layout} texture={floor.texture} palette={palette} />
+            <Markers layout={layout} palette={palette} />
             <RoleInstances
               agents={agents}
               role="customer"

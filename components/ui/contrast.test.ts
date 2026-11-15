@@ -9,7 +9,7 @@ const css = readFileSync(
 type Rgb = [number, number, number];
 type Rgba = [...Rgb, number];
 type Tokens = Map<string, string>;
-const theme = css.match(/@theme\s*\{([^}]+)\}/)?.[1];
+const theme = css.match(/@theme(?:\s+static)?\s*\{([^}]+)\}/)?.[1];
 if (!theme) throw new Error("Missing @theme color foundation");
 const tokens: Tokens = new Map(
   Array.from(theme.matchAll(/--color-([\w-]+):\s*([^;]+);/g), (match) => [
@@ -262,6 +262,15 @@ for (const [mode, palette] of [
         }
       });
     }
+    for (const role of ["agent-customer", "agent-employee"]) {
+      it(`${role} marks stay visible on supported canvas surfaces at 3:1`, () => {
+        for (const background of surfaces()) {
+          expect(
+            contrast(rgb(role, background, palette), background),
+          ).toBeGreaterThanOrEqual(3);
+        }
+      });
+    }
     it("focus and control boundaries meet 3:1", () => {
       for (const background of surfaces()) {
         for (const foreground of ["focus-ring", "glass-edge"]) {
@@ -289,7 +298,7 @@ for (const [mode, palette] of [
 }
 
 it("generates Tailwind utilities for every foundation token", async () => {
-  const foundation = css.match(/@theme\s*\{[^}]+\}/)?.[0];
+  const foundation = css.match(/@theme(?:\s+static)?\s*\{[^}]+\}/)?.[0];
   expect(foundation).toBeDefined();
   const compiler = await compile(`${foundation}\n@tailwind utilities;`);
   const utilities = [
@@ -307,4 +316,15 @@ it("generates Tailwind utilities for every foundation token", async () => {
   ];
   const output = compiler.build(utilities);
   for (const utility of utilities) expect(output).toContain(`.${utility} {`);
+});
+
+// The engines read these at runtime; production CSS must retain them without DOM classes.
+it("retains renderer-only colors without requesting their utilities", async () => {
+  const foundation = css.match(/@theme\s+static\s*\{[^}]+\}/)?.[0];
+  expect(foundation).toBeDefined();
+  const compiler = await compile(`${foundation}\n@tailwind utilities;`);
+  const output = compiler.build(["bg-canvas"]);
+  for (const role of ["agent-customer", "agent-employee"]) {
+    expect(output).toContain(`--color-${role}: ${tokens.get(role)};`);
+  }
 });

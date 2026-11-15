@@ -1,4 +1,6 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/input";
 
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
@@ -20,7 +22,7 @@ const CandidateMapCanvas = dynamic(() => import("./candidate-map-canvas"), {
   loading: () => (
     <p
       role="status"
-      className="grid h-full place-items-center rounded-lg bg-paper"
+      className="grid h-full place-items-center rounded-lg bg-canvas"
     >
       Loading map…
     </p>
@@ -61,15 +63,16 @@ export default function CandidateMap({
 
   if (failed)
     return (
-      <div className="rounded-lg bg-paper p-4">
+      <div className="rounded-lg bg-canvas p-4">
         <p role="alert">The map is unavailable. Choose a candidate below.</p>
-        <button
+        <Button
+          variant="primary"
           type="button"
-          className="mt-3 rounded bg-pine px-3 py-2 text-white"
+          className="mt-3 rounded bg-accent px-3 py-2 text-on-accent"
           onClick={() => setFailed(false)}
         >
           Retry map
-        </button>
+        </Button>
       </div>
     );
 
@@ -80,7 +83,7 @@ export default function CandidateMap({
           {ready && (
             <label className="flex items-center gap-2 text-sm font-medium">
               Catchment layer
-              <select
+              <Select
                 className="rounded border border-line px-2 py-1"
                 value={overlay}
                 onChange={(event) => {
@@ -94,7 +97,7 @@ export default function CandidateMap({
               >
                 <option value="residents">Residents</option>
                 <option value="workers">Workers</option>
-              </select>
+              </Select>
             </label>
           )}
         </div>
@@ -112,7 +115,7 @@ export default function CandidateMap({
       </div>
       {example ? (
         <p className="mt-2 text-sm text-muted">
-          Orange markers show example competitors.
+          Outlined dots show example competitors.
           {selected &&
             ` The ring contains an estimated ${selected[overlay].toLocaleString("en-US")} ${overlay} in this fixture.`}
         </p>

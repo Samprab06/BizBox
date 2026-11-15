@@ -1,4 +1,5 @@
 "use client";
+import { Button } from "@/components/ui/button";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GlassControl } from "@/components/ui/glass-control";
@@ -54,7 +55,7 @@ export function SimulatorViewport({
           void document.exitFullscreen().catch(() => {});
         }
       }}
-      className={`sw-viewport relative w-full overflow-hidden rounded-card border border-viewport-line text-viewport-ink ${expanded ? "!h-dvh !max-h-none !rounded-none" : className}`}
+      className={`sw-viewport relative w-full overflow-hidden rounded-card border border-line text-ink ${expanded ? "!h-dvh !max-h-none !rounded-none" : className}`}
       data-surface="viewport"
     >
       {children}
@@ -63,7 +64,8 @@ export function SimulatorViewport({
         aria-label={`${label} view controls`}
         className="absolute top-3 right-3 z-30 !p-1"
       >
-        <button
+        <Button
+          variant="quiet"
           ref={expand}
           type="button"
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
@@ -72,12 +74,12 @@ export function SimulatorViewport({
           className="min-h-10 rounded px-3 text-sm"
         >
           {expanded ? "Collapse" : "Expand"}
-        </button>
+        </Button>
       </GlassControl>
       {error && (
         <p
           role="status"
-          className="absolute inset-x-3 top-16 z-30 rounded bg-viewport-surface p-2 text-xs"
+          className="absolute inset-x-3 top-16 z-30 rounded bg-panel-raised p-2 text-xs"
         >
           {error}
         </p>
