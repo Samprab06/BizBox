@@ -5,7 +5,8 @@ import { ScriptedModel } from "./__fixtures__/scripted-model";
 import { founderAnswers } from "./__fixtures__/founder";
 import {
   createJobsPort,
-  JOB_TOOL_NAMES,
+  createJobToolExecutor,
+  FLOW_JOB_TOOL_NAMES,
   MAX_INVESTIGATION_STARTS_PER_DAY,
   type InvestigationCounts,
   type JobsPort,
@@ -29,8 +30,6 @@ const lookups: IntakeUiLookups = {
     return true;
   },
 };
-const call = (name: string, args: Record<string, unknown>, id = name) =>
-  new AIMessage({ content: "", tool_calls: [{ id, name, args }] });
 const calls = (
   list: { name: string; args: Record<string, unknown>; id: string }[],
 ) => new AIMessage({ content: "", tool_calls: list });
@@ -79,12 +78,13 @@ function setup(
 }
 
 describe("jobs tool group (HAC-151)", () => {
-  it("is bound only with a jobs port, after the ui tools", async () => {
+  it("is bound only with a jobs port, after the ui and flow tools", async () => {
     const model = new ScriptedModel([new AIMessage("hi")]);
     await setup(model).reply;
-    expect(model.boundNames.slice(-JOB_TOOL_NAMES.length)).toEqual([
-      ...JOB_TOOL_NAMES,
+    expect(model.boundNames.slice(-FLOW_JOB_TOOL_NAMES.length)).toEqual([
+      ...FLOW_JOB_TOOL_NAMES,
     ]);
+    expect(FLOW_JOB_TOOL_NAMES).toEqual(["set_shortlist", "run_comparison"]);
   });
 
   it('"compare my top three" sets the shortlist then runs the comparison', async () => {
@@ -135,31 +135,73 @@ describe("jobs tool group (HAC-151)", () => {
     expect(results[1]).toContain("profile is not complete");
   });
 
+  it("caps the comparison at three units and falls back to the view's shortlist", async () => {
+    const model = new ScriptedModel([
+      calls([
+        { id: "1", name: "set_shortlist", args: { siteIds: SITES } },
+        { id: "2", name: "run_comparison", args: {} },
+      ]),
+      new AIMessage("ok"),
+    ]);
+    const { actions, reply } = setup(model, {
+      view: { stage: "workspace", candidateIds: SITES, shortlistIds: [SITES[3]!, SITES[1]!] },
+    });
+    await reply;
+    // Four sites is over MAX_COMPARE_UNITS, so the shortlist is refused...
+    expect(toolResults(model)[0]).toMatch(/did not match expected schema/);
+    // ...and run_comparison uses the view's shortlist rather than all candidates.
+    expect(actions).toEqual([
+      { id: "a1", type: "run_comparison", siteIds: [SITES[3], SITES[1]] },
+    ]);
+  });
+
+  it("binds only set_shortlist and run_comparison of the job tools", async () => {
+    const model = new ScriptedModel([new AIMessage("hi")]);
+    await setup(model).reply;
+    expect(model.boundNames).not.toContain("start_investigation");
+    expect(model.boundNames).not.toContain("open_plan");
+  });
+});
+
+/** The unbound legacy job tools still validate as before when called directly. */
+describe("legacy job tools (executor only)", () => {
+  function direct(options: { complete?: boolean; port?: JobsPort; view?: object } = {}) {
+    const session = createIntakeSession(PROJECT);
+    for (const answer of options.complete === false ? [] : founderAnswers)
+      session.saveProfile(answer);
+    const actions: UiAction[] = [];
+    let n = 0;
+    const run = createJobToolExecutor(
+      {
+        projectId: PROJECT,
+        lookups,
+        view: options.view as never,
+        jobs: options.port ?? fakePort().port,
+        actions,
+        newId: () => `a${++n}`,
+      },
+      {
+        profile: () => session.snapshot().profile,
+        missing: () => session.snapshot().missingRequiredFields,
+        draftCity: () => session.snapshot().draft.city,
+      },
+    );
+    return { run, actions };
+  }
+
   it("start_investigation needs a complete profile and lists what is missing", async () => {
     const { port } = fakePort();
-    const model = new ScriptedModel([
-      call("start_investigation", {}),
-      new AIMessage("What is your city?"),
-    ]);
-    const { actions, reply } = setup(model, { complete: false, port });
-    await reply;
+    const { run, actions } = direct({ complete: false, port });
+    expect(await run("start_investigation", {})).toContain("Missing:");
     expect(port.saveProfile).not.toHaveBeenCalled();
     expect(port.startInvestigation).not.toHaveBeenCalled();
     expect(actions).toEqual([]);
-    expect(toolResults(model)[0]).toContain("Missing:");
   });
 
   it("start_investigation persists the profile once, creates the job and shows it", async () => {
     const { port, started } = fakePort();
-    const model = new ScriptedModel([
-      calls([
-        { id: "1", name: "start_investigation", args: {} },
-        { id: "2", name: "start_investigation", args: {} },
-      ]),
-      new AIMessage("Started."),
-    ]);
-    const { actions, reply } = setup(model, { port });
-    await reply;
+    const { run, actions } = direct({ port });
+    await Promise.all([run("start_investigation", {}), run("start_investigation", {})]);
     expect(port.saveProfile).toHaveBeenCalledTimes(1);
     expect(started).toEqual([
       expect.objectContaining({ projectId: PROJECT, profileId: "profile_1" }),
@@ -169,47 +211,35 @@ describe("jobs tool group (HAC-151)", () => {
     ]);
   });
 
-  it("reports an active job or the daily limit as a tool error", async () => {
-    for (const status of [
-      { status: "daily_limit" as const, limit: 3 },
-    ]) {
-      const { port } = fakePort({ startInvestigation: async () => status });
-      const model = new ScriptedModel([
-        call("start_investigation", {}),
-        new AIMessage("Limit reached."),
-      ]);
-      const { actions, reply } = setup(model, { port });
-      await reply;
-      expect(actions).toEqual([]);
-      expect(toolResults(model)[0]).toContain("daily limit of 3");
-    }
-    const { port } = fakePort({
-      startInvestigation: async () => ({
-        status: "active" as const,
-        investigationId: "inv_old",
-      }),
+  it("reports the daily limit as a tool error and shows an active job", async () => {
+    const limited = direct({
+      port: fakePort({
+        startInvestigation: async () => ({ status: "daily_limit" as const, limit: 3 }),
+      }).port,
     });
-    const model = new ScriptedModel([
-      call("start_investigation", {}),
-      new AIMessage("Already running."),
-    ]);
-    const { actions, reply } = setup(model, { port });
-    await reply;
-    expect(actions).toEqual([
+    expect(await limited.run("start_investigation", {})).toContain("daily limit of 3");
+    expect(limited.actions).toEqual([]);
+    const active = direct({
+      port: fakePort({
+        startInvestigation: async () => ({
+          status: "active" as const,
+          investigationId: "inv_old",
+        }),
+      }).port,
+    });
+    await active.run("start_investigation", {});
+    expect(active.actions).toEqual([
       { id: "a1", type: "show_comparison", investigationId: "inv_old" },
     ]);
   });
 
   it("open_plan uses the screen's comparison and checks it belongs to the project", async () => {
-    const own = new ScriptedModel([call("open_plan", {}), new AIMessage("Plan.")]);
-    const a = setup(own, { view: { stage: "comparison", comparisonId: "cmp_1" } });
-    await a.reply;
+    const a = direct({ view: { stage: "comparison", comparisonId: "cmp_1" } });
+    await a.run("open_plan", {});
     expect(a.actions).toEqual([{ id: "a1", type: "show_plan", comparisonId: "cmp_1" }]);
-    const foreign = new ScriptedModel([call("open_plan", {}), new AIMessage("No.")]);
-    const b = setup(foreign, { view: { stage: "comparison", comparisonId: "cmp_x" } });
-    await b.reply;
+    const b = direct({ view: { stage: "comparison", comparisonId: "cmp_x" } });
+    expect(await b.run("open_plan", {})).toContain("does not belong");
     expect(b.actions).toEqual([]);
-    expect(toolResults(foreign)[0]).toContain("does not belong");
   });
 });
 

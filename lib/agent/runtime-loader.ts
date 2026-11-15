@@ -3,13 +3,17 @@
  * a model call is about to happen, so request validation, 404s and job reads never depend on
  * them (HAC-58). Import failures become a typed error that routes report as a 503.
  */
+import type { FlowEvent } from "@/lib/contracts/agent";
 import type { IntakeSession } from "./intake";
 import type { IntakeUiContext } from "./ui-tools";
 
 export const INTAKE_TIMEOUT_MS = 20_000;
 export type IntakeRunner = (input: {
   session: IntakeSession;
+  /** The founder's words. Empty on a browser-event turn. */
   message: string;
+  /** Scene 1: a browser event to react to instead of a founder message. */
+  event?: FlowEvent;
   signal: AbortSignal;
   /** Bounded line assembled only after server scope validation. */
   viewContextLine?: string;
