@@ -55,3 +55,30 @@ A read-only rebuild of the current two-unit plan requires50personas ×4orders ×
 ## One-request Jev live verification
 
 Akshar approved one request first. Exactly one generation HTTPPOST from the original current panel plan succeeded: status200,152ms, requested jev-latest and received jev-1.14.0. The existing client validated all9requested answers. HTTP retries were0, concurrency1, timeout20s, redirects rejected and a second-attempt guard enforced the one-request limit. The successful exact response was saved through the existing project-scoped cache adapter. No full panel/comparison or additional generation requests were run, and no product code changed. This verifies provider/auth/wire compatibility, not a completed Jev-backed location comparison.
+
+### Area preference selections
+
+The guided intake’s “Which areas should we favor or avoid?” question uses a flat,
+white street-outline map centered on the selected Houston or Los Angeles city.
+Nine curated neighborhood/place anchors per city come from the existing provider’s
+OpenFreeMap/OpenStreetMap z14 `place` tiles (snapshot `20261101_080013_pt`).
+Curated anchors keep central neighborhoods visible even when lower-zoom vector
+tiles omit them. Sparse labels use those real geographic anchors,
+with a small dot paired to each name and collision spacing to keep them apart.
+Labels sit above selection fills and do not intercept selection gestures.
+Choose green **Favor** or red **Avoid**, then drag a rectangle over an area.
+Add any number of rectangles; there is no selection cap. **Erase** removes
+selections under a click or intersecting a dragged box. **Reset** clears them.
+Arrow keys move the cursor; Space/Enter sets the first corner and then the second
+corner, and Escape cancels. Existing typed preferences remain visible and preserved.
+
+Geographic rectangle bounds use compact coordinate arrays in the existing intake
+`areas` answer, restoring on return and remaining attached to the map when resized.
+Legacy brush marks remain visible and erasable. Review shows a readable summary;
+changing city clears selections from the previous city. There is no silent truncation.
+Very large answers remain subject to existing downstream intake message limits;
+this UI does not add spatial filtering or ranking enforcement to the backend.
+
+The existing OpenFreeMap/OpenStreetMap vector provider requires internet and WebGL.
+No imagery or terrain is loaded. Attribution is available from the small info button
+in the map corner. If loading fails, the existing skip action remains available.
