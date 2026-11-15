@@ -428,6 +428,7 @@ export function WorkspaceScreen({
       selectedIds: controller.selectedIds,
       flow: readFlowState(projectId),
       handled: handledActions,
+      step,
     });
     for (const action of actions) handledActions.add(action.id);
     for (const effect of effects) apply(effect);

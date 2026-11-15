@@ -104,6 +104,38 @@ describe("planWorkspaceActions", () => {
     ]);
   });
 
+  it("moves to a step at most once per reply, and never to the step on screen", () => {
+    // C's typical "yes": set_shortlist, run_comparison, go_to_step compare.
+    expect(
+      planWorkspaceActions(
+        [
+          act({ type: "set_shortlist", siteIds: ["1:1", "2:2"] }),
+          act({ type: "run_comparison", siteIds: ["1:1", "2:2"] }),
+          act({ type: "go_to_step", step: "compare" }),
+        ],
+        {
+          candidateIds: ids,
+          selectedIds: [],
+          flow: atLocations,
+          step: "locations",
+        },
+      ),
+    ).toEqual([
+      { kind: "select", siteIds: ["1:1", "2:2"] },
+      { kind: "step", step: "compare" },
+      { kind: "run", siteIds: ["1:1", "2:2"] },
+    ]);
+    // comparison_finished's go_to_step results after the client already opened results.
+    expect(
+      planWorkspaceActions([act({ type: "go_to_step", step: "results" })], {
+        candidateIds: ids,
+        selectedIds: ["1:1", "2:2"],
+        flow: atResults,
+        step: "results",
+      }),
+    ).toEqual([]);
+  });
+
   it("ignores navigate-away actions and replayed ids, and passes highlight/finalize through", () => {
     const replayed = act({ type: "set_shortlist", siteIds: ["1:1", "2:2"] });
     const effects = planWorkspaceActions(

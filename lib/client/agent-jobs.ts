@@ -50,6 +50,8 @@ export type WorkspaceActionState = {
   flow: Pick<FlowState, "reached" | "siteTweaks" | "finalPlan">;
   /** Action ids already carried out (a replayed reply does nothing twice). */
   handled?: ReadonlySet<string>;
+  /** The step on screen; moving to it again is a no-op. */
+  step?: FlowStep;
 };
 
 const sameSet = (a: readonly string[], b: readonly string[]) =>
@@ -70,6 +72,14 @@ export function planWorkspaceActions(
     [...new Set(ids)].filter((id) => state.candidateIds.includes(id));
   let selection = [...state.selectedIds];
   let flow = state.flow as FlowState;
+  // A step change repeated in one reply (e.g. run_comparison then go_to_step compare), or to
+  // the step already on screen, is emitted at most once.
+  let onStep = state.step;
+  const goTo = (step: FlowStep) => {
+    if (step === onStep) return;
+    effects.push({ kind: "step", step });
+    onStep = step;
+  };
   const select = (ids: string[]) => {
     if (sameSet(ids, selection)) return;
     effects.push({ kind: "select", siteIds: ids });
@@ -97,7 +107,7 @@ export function planWorkspaceActions(
         if (!ids.length) break;
         select(ids);
         flow = reachStep(flow, "compare");
-        effects.push({ kind: "step", step: "compare" });
+        goTo("compare");
         effects.push({ kind: "run", siteIds: ids });
         break;
       }
@@ -111,8 +121,7 @@ export function planWorkspaceActions(
         flow = resetAfter(flow, "compare");
         break;
       case "go_to_step":
-        if (canOpenStep(flow, action.step))
-          effects.push({ kind: "step", step: action.step });
+        if (canOpenStep(flow, action.step)) goTo(action.step);
         break;
       case "highlight":
         effects.push({ kind: "highlight", target: action.target });
@@ -134,6 +143,8 @@ export function planWorkspaceActions(
           rationale: action.rationale,
         });
         flow = reachStep(flow, "finalize");
+        // The finalize effect opens the step itself once the summary is stored.
+        onStep = "finalize";
         break;
       default:
         // Navigate-away actions: the guided flow moves only through its own steps.
