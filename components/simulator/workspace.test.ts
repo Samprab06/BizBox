@@ -91,29 +91,30 @@ describe("simulator workspace integration", () => {
     expect(html).not.toContain("Project unavailable");
     expect(html).toContain("/projects/saved-project/simulator");
   });
-  it("publishes the actual Example fallback after stored loading fails", async () => {
+  it("shows temporary recovery instead of example values when a requested comparison cannot be read", async () => {
     mocks.load.mockRejectedValue(new Error("Unavailable"));
     const page = await SimulatorPage({
       params: Promise.resolve({ projectId: "saved-project" }),
       searchParams: Promise.resolve({ comparison: "missing" }),
     });
-    renderToStaticMarkup(page);
-    expect(mocks.load).toHaveBeenCalledWith("saved-project", "missing");
-    expect(mocks.render).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: {
-          kind: "simulator",
-          phase: "example",
-          siteId: "montrose",
-          synthetic: true,
-        },
-        data: expect.arrayContaining([
-          expect.objectContaining({
-            run: expect.objectContaining({ siteId: "demo-cafe" }),
-          }),
-        ]),
-      }),
-    );
+    const html = renderToStaticMarkup(page);
+    expect(html).toContain("Comparison temporarily unavailable");
+    expect(html).toContain("Retry");
+    expect(html).toContain("Back to workspace");
+    expect(html).toContain("Open the example");
+    expect(mocks.render).not.toHaveBeenCalled();
+  });
+  it("shows missing-comparison recovery instead of example values for an unknown record", async () => {
+    mocks.load.mockResolvedValue(null);
+    const page = await SimulatorPage({
+      params: Promise.resolve({ projectId: "houston-coffee" }),
+      searchParams: Promise.resolve({ comparison: "does-not-exist" }),
+    });
+    const html = renderToStaticMarkup(page);
+    expect(html).toContain("Comparison not found");
+    expect(html).toContain("Back to workspace");
+    expect(html).toContain("Open the example");
+    expect(mocks.render).not.toHaveBeenCalled();
   });
   it("forwards the saved robustness and detects an older profile without rerunning a model", async () => {
     const stored = fixture().comparison;
@@ -174,4 +175,33 @@ describe("simulator workspace integration", () => {
     expect(html).toContain("Open example project");
     expect(mocks.render).not.toHaveBeenCalled();
   });
+});
+
+it("retains the no-ID example without reading storage", async () => {
+  mocks.render.mockClear();
+  mocks.load.mockClear();
+  renderToStaticMarkup(
+    await SimulatorPage({
+      params: Promise.resolve({ projectId: "houston-coffee" }),
+      searchParams: Promise.resolve({}),
+    }),
+  );
+  expect(mocks.render).toHaveBeenCalledWith(
+    expect.objectContaining({
+      context: expect.objectContaining({ phase: "example", synthetic: true }),
+    }),
+  );
+  expect(mocks.load).not.toHaveBeenCalled();
+});
+
+it("keeps an explicitly supplied invalid comparison ahead of example opt-in", async () => {
+  mocks.render.mockClear();
+  const html = renderToStaticMarkup(
+    await SimulatorPage({
+      params: Promise.resolve({ projectId: "houston-coffee" }),
+      searchParams: Promise.resolve({ comparison: "", example: "1" }),
+    }),
+  );
+  expect(html).toContain("Comparison not found");
+  expect(mocks.render).not.toHaveBeenCalled();
 });
