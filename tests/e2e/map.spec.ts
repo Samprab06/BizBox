@@ -352,7 +352,7 @@ test.describe("intake-backed map", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await expect(
       page
@@ -403,7 +403,7 @@ test.describe("live map boundaries", () => {
     );
     await page.getByRole("button", { name: "Retry search" }).click();
     await expect(
-      page.getByText(/Saved intake could not be read/),
+      page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
     await page.evaluate(() => {
       Object.defineProperty(window, "localStorage", {
@@ -415,8 +415,16 @@ test.describe("live map boundaries", () => {
     });
     await page.getByRole("button", { name: "Retry search" }).click();
     await expect(
-      page.getByText(/Saved intake could not be read/),
+      page.getByText(/Complete your intake to search live listings/),
     ).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Candidate locations", exact: true })
+        .getByText("Example data", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Candidate sites" }).getByRole("link"),
+    ).toHaveCount(SITE_IDS.length);
     expect(requests).toBe(0);
     expect(errors).toEqual([]);
   });
@@ -467,7 +475,7 @@ test.describe("live map boundaries", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await page.clock.install();
     await page.route("**/api/sites", () => new Promise(() => {}));
@@ -478,7 +486,7 @@ test.describe("live map boundaries", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: /Candidate search unavailable/ }),
+        .filter({ hasText: /Listings could not be loaded/ }),
     ).toBeVisible();
     await expect(
       page
