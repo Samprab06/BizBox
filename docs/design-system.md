@@ -227,3 +227,29 @@ longer summaries, stale/unknown warnings and expanded evidence keep wrapping rat
 than clipping. The expanded viewer and full evidence remain scrollable.
 
 On compact decision pages, the task disclosure names the current task and all three task groups before expansion. Opening it exposes the same grouped destinations, current-step/current-page states and Next link. Other workspace pages retain their expanded navigation.
+
+## Shared primitives (DS-7)
+
+All live in `components/ui/` and use only the tokens above. Every interactive one shares
+`focusRing` (the same 2 px `focus-ring` outline as the global rule), scales to 0.97 on
+`:active`, and drops transitions under `prefers-reduced-motion`. Disabled controls are
+dimmed and not focusable; `loading` also disables and sets `aria-busy`.
+
+| Primitive                               | Use it for                                                     | Notes                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Glass`                                 | A translucent surface over a dark map, viewport or canvas      | `sheen` adds a top highlight; `backing="backed"` over bright imagery                                                                        |
+| `Panel`                                 | A titled region of dense content (opaque `raised`, or `glass`) | `title` labels the region; `actions` and `footer` slots                                                                                     |
+| `Card`                                  | Opaque analysis backing                                        | Unchanged API                                                                                                                               |
+| `Button`                                | Any action with a text label                                   | `primary` (white) for the one main action, `glass` for secondary, `quiet` for tertiary, `danger` for destructive; `sm`/`md`/`lg`; `loading` |
+| `IconButton`                            | An icon-only action                                            | `aria-label` is required                                                                                                                    |
+| `Input`, `Textarea`, `Select`           | Form fields                                                    | `invalid` sets `aria-invalid` and the `danger` border; always give a label                                                                  |
+| `Pill`                                  | Static status or tag                                           | Tones: neutral, accent, warn, danger                                                                                                        |
+| `Chip`                                  | Toggleable filter or choice                                    | Exposes `aria-pressed`                                                                                                                      |
+| `Tabs`                                  | Switching views of the same content                            | Arrow/Home/End keys; you render the panel                                                                                                   |
+| `Segmented`                             | A short single-choice setting (e.g. Baseline / Alternative)    | Radio-group semantics                                                                                                                       |
+| `ChatBubble`                            | One consultant (`assistant`) or founder (`user`) message       | Founder bubbles are white                                                                                                                   |
+| `Composer`                              | The message box                                                | Enter sends, Shift+Enter adds a line; `loading` and `disabled`                                                                              |
+| `Stat`, `EvidenceBadge`, `GlassControl` | Unchanged roles                                                | Keep evidence labels beside values; `GlassControl` only over a map/viewport                                                                 |
+
+Prefer these over hand-written `bg-pine` buttons and copy-pasted bubbles. DS-8–DS-10
+migrate the existing screens.
