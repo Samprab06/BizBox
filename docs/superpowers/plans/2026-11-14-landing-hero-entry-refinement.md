@@ -8,4 +8,4 @@ Design: use the canonical BrandLogo component and assets from current main uncha
 - [x] Copy canonical brand component/assets without broad main integration.
 - [x] Implement tested continuous camera/card projection and one mounted onboarding surface.
 - [x] Verify desktop/portrait/landscape entry and reverse; node identity, end-boundary continuity, timer and controls.
-- [x] Run required checks and record local handoff. No further push/PR update/merge/deployment authorized by this request.
+- [x] Run required checks and record local handoff. Akshar subsequently authorized pushing these hero refinements to PR139 and reopening the preview. Merge and deployment remain outside this request.
