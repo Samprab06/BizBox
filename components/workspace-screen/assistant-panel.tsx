@@ -7,6 +7,7 @@ import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
 import { useAssistantDraft } from "./use-assistant-draft";
 import styles from "./workspace-glass.module.css";
 import type { IntakeConversation } from "./use-intake-conversation";
+import { assistantPresentation } from "./assistant-presentation";
 
 const MODE_LABEL: Record<AssistantMode, string> = {
   text: "Text",
@@ -52,14 +53,16 @@ const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink";
 
 function Conversation({
-  conversation,
+  messages,
+  emptyContext,
   id,
 }: {
-  conversation: IntakeConversation;
+  messages: IntakeConversation["messages"];
+  emptyContext?: string | null;
   id: string;
 }) {
   const log = useRef<HTMLDivElement>(null);
-  const count = conversation.messages.length;
+  const count = messages.length;
   useEffect(() => {
     const element = log.current;
     if (element) element.scrollTop = element.scrollHeight;
@@ -73,9 +76,18 @@ function Conversation({
       tabIndex={0}
       className={`${styles.conversation} ${focusRing}`}
     >
+      {count === 0 && emptyContext && (
+        <p
+          role="note"
+          aria-label="Saved brief"
+          className="text-xs text-white/70"
+        >
+          {emptyContext}
+        </p>
+      )}
       {count > 0 && (
         <ol className={styles.messages}>
-          {conversation.messages.map((entry, index) => (
+          {messages.map((entry, index) => (
             <li
               key={index}
               className={`${styles.message} ${entry.role === "founder" ? styles.founderMessage : ""}`}
@@ -119,6 +131,10 @@ export function AssistantPanel({
   const panelId = (value: AssistantMode) => `${base}-panel-${value}`;
   const { availability, busy, failure } = conversation;
   const offline = availability === "offline";
+  const presentation = assistantPresentation(
+    conversation.session,
+    conversation.messages,
+  );
 
   function select(next: AssistantMode, focus: boolean) {
     setMode(next);
@@ -223,7 +239,11 @@ export function AssistantPanel({
       >
         {mode === "text" && (
           <>
-            <Conversation conversation={conversation} id={`${base}-log-text`} />
+            <Conversation
+              messages={presentation.messages}
+              emptyContext={presentation.context}
+              id={`${base}-log-text`}
+            />
             <form
               className={styles.composer}
               onSubmit={(event) => {
@@ -238,7 +258,7 @@ export function AssistantPanel({
               <div className={styles.composerField}>
                 <input
                   aria-label="Message the BizBox assistant"
-                  placeholder="Ask about this space…"
+                  placeholder={presentation.placeholder}
                   maxLength={VOICE_LIMITS.transcriptChars}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -312,7 +332,8 @@ export function AssistantPanel({
               </summary>
               <div className={styles.voiceHistoryLog}>
                 <Conversation
-                  conversation={conversation}
+                  messages={presentation.messages}
+                  emptyContext={presentation.context}
                   id={`${base}-log-voice`}
                 />
               </div>

@@ -81,6 +81,63 @@ async function more(page: Page) {
     await page.getByText("More", { exact: true }).click();
 }
 
+test("compact desktop window expands with the map pane matching its backdrop", async ({
+  page,
+}) => {
+  await services(page);
+  await page.setViewportSize({ width: 500, height: 900 });
+  await page.goto("/projects/houston-coffee/workspace");
+  await expect(page.getByRole("button", { name: /^Show list/ })).toBeVisible();
+  const map = page.locator("[data-map-viewport]");
+  // Presentation geometry exists with or without configured provider imagery.
+  const backdrop = map
+    .locator("..")
+    .locator("..")
+    .locator(":scope > div")
+    .first();
+  async function expectMapGeometry() {
+    await expect
+      .poll(async () => {
+        const pane = await map.boundingBox();
+        const scene = await backdrop.boundingBox();
+        return pane && scene
+          ? Math.max(
+              Math.abs(pane.height - scene.height),
+              Math.abs(pane.y - scene.y),
+              Math.abs(pane.x - scene.x),
+            )
+          : Infinity;
+      })
+      .toBeLessThan(2);
+  }
+  await expectMapGeometry();
+  expect((await map.boundingBox())!.height).toBeGreaterThan(350);
+  await page.setViewportSize({ width: 1000, height: 852 });
+  await expectMapGeometry();
+  const canvas = page
+    .getByRole("region", { name: "Vexcel 3D neighborhood" })
+    .locator("canvas");
+  if (await canvas.count()) {
+    await expect(canvas).toBeVisible();
+    await expect
+      .poll(async () => {
+        const pane = await page.locator("[data-map-viewport]").boundingBox();
+        const scene = await canvas.boundingBox();
+        return pane && scene ? Math.abs(pane.height - scene.height) : Infinity;
+      })
+      .toBeLessThan(2);
+  }
+  const pane = await page.locator("[data-map-viewport]").boundingBox();
+  expect(pane!.height).toBeGreaterThan(650);
+  expect(pane!.width).toBeGreaterThan(500);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({ path: "/tmp/bizbox-expanded-desktop-fixture.png" });
+});
+
 for (const viewport of [
   { width: 1366, height: 900 },
   { width: 820, height: 1180 },
@@ -258,7 +315,7 @@ const inventedBrief = (city = "Houston") => ({
       requirements: "None",
     }).map(([key, value]) => [key, { value, origin: "founder" }]),
   ),
-  messages: [],
+  messages: [] as { role: "agent" | "founder"; text: string }[],
 });
 async function readinessServices(
   page: Page,
@@ -289,6 +346,64 @@ async function readinessServices(
 
 test.describe("inventory readiness desktop", () => {
   test.use({ viewport: { width: 1366, height: 900 } });
+  test("completed brief replaces only the obsolete opener in Text and Voice presentation", async ({
+    page,
+  }) => {
+    const brief = inventedBrief();
+    const opener =
+      "What kind of business are you opening? Describe the concept in a sentence or two.";
+    const saved = {
+      ...brief,
+      messages: [{ role: "agent" as const, text: opener }],
+    };
+    await readinessServices(page, saved);
+    await page.route("**/api/sites", (route) =>
+      route.fulfill({ status: 503, json: {} }),
+    );
+    await page.goto("/projects/houston-coffee/workspace");
+    const note = page.getByRole("note", { name: "Saved brief" });
+    await expect(note).toHaveText(
+      "Coffee shop · Houston · Rent limit $4,500/mo",
+    );
+    await expect(page.getByText(opener, { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "Message the BizBox assistant" }),
+    ).toHaveAttribute("placeholder", "Ask about your saved brief…");
+    await expect(
+      page.getByText("Assistant unavailable.", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Voice", exact: true }).click();
+    await page.getByText("Conversation", { exact: true }).click();
+    await expect(note).toBeVisible();
+    expect(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("sitework:intake:v1:houston-coffee")!)
+            .messages,
+      ),
+    ).toEqual(saved.messages);
+    await page.getByRole("tab", { name: "Text", exact: true }).click();
+    await page.evaluate(() => {
+      const key = "sitework:intake:v1:houston-coffee";
+      const session = JSON.parse(localStorage.getItem(key)!);
+      session.messages.push(
+        { role: "founder", text: "Keep this actual question" },
+        { role: "agent", text: "Keep this actual reply" },
+      );
+      localStorage.setItem(key, JSON.stringify(session));
+      window.dispatchEvent(
+        new CustomEvent("sitework:intake-updated", { detail: { key } }),
+      );
+    });
+    await expect(page.getByRole("log", { name: "Conversation" })).toContainText(
+      "Keep this actual question",
+    );
+    await expect(page.getByRole("log", { name: "Conversation" })).toContainText(
+      "Keep this actual reply",
+    );
+    await expect(note).toHaveCount(0);
+    await expectNoA11yViolations(page);
+  });
   test("missing or unsupported brief never requests inventory and offers the brief action", async ({
     page,
   }) => {

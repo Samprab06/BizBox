@@ -100,7 +100,12 @@ export function createListingLayer(
           ]
         : [];
     });
-    const signature = JSON.stringify(points);
+    const signature = JSON.stringify({
+      points,
+      viewport,
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+    });
     if (signature === labelLayout) return;
     labelLayout = signature;
     const offsets = listingLabelOffsets(points, viewport);
@@ -157,7 +162,16 @@ export function createListingLayer(
     }
     viewer.scene.requestRender();
   });
+  let layoutFrame: number | undefined;
+  let settledFrame: number | undefined;
+  function cancelLayout() {
+    if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame);
+    if (settledFrame !== undefined) cancelAnimationFrame(settledFrame);
+    layoutFrame = undefined;
+    settledFrame = undefined;
+  }
   function cancel() {
+    cancelLayout();
     if (!disposed) viewer.camera.cancelFlight();
   }
   for (const event of ["pointerdown", "wheel", "touchstart"])
@@ -277,12 +291,42 @@ export function createListingLayer(
     cameraKey = key;
   }
   // Resize only re-frames the current intent. Ordinary renders/selection callbacks do not steal a user's pan.
-  const observer = new ResizeObserver(() => frame(true));
-  observer.observe(canvas);
-  const viewportElement = canvas
-    .closest("#neighborhood")
-    ?.parentElement?.parentElement?.querySelector("[data-map-sheet]");
-  if (viewportElement) observer.observe(viewportElement);
+  let layoutGeometry = "";
+  const observer = new ResizeObserver(() => {
+    cancelLayout();
+    // CSS pane reflow and Cesium's own resize can settle in different frames.
+    // Synchronize its public aspect/frustum before fitting the measured pane.
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = undefined;
+      settledFrame = requestAnimationFrame(() => {
+        settledFrame = undefined;
+        if (disposed) return;
+        const geometry = JSON.stringify({
+          width: canvas.clientWidth,
+          height: canvas.clientHeight,
+          viewport: options.viewport?.(canvas),
+        });
+        if (geometry === layoutGeometry) return;
+        layoutGeometry = geometry;
+        viewer.resize();
+        labelLayout = "";
+        frame(true);
+      });
+    });
+  });
+  const workspace =
+    canvas.closest("#neighborhood")?.parentElement?.parentElement;
+  const observed = new Set<Element>([canvas]);
+  if (workspace) observed.add(workspace);
+  for (const selector of [
+    "[data-map-viewport]",
+    "[data-map-toolbar]",
+    "[data-map-sheet]",
+  ]) {
+    const element = workspace?.querySelector(selector);
+    if (element) observed.add(element);
+  }
+  for (const element of observed) observer.observe(element);
   update(initial);
   return {
     update,
@@ -290,6 +334,7 @@ export function createListingLayer(
       if (disposed) return;
       viewer.camera.cancelFlight();
       disposed = true;
+      cancelLayout();
       observer.disconnect();
       stopLabels();
       leaders?.remove();

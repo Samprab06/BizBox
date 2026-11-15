@@ -16,6 +16,7 @@ import {
   type IntakeResponse,
 } from "@/components/intake/live";
 import {
+  fields,
   initialSession,
   intakeSessionSchema,
   type IntakeSession,
@@ -42,9 +43,17 @@ export function parseIntakeSession(raw: string | null): IntakeSession | null {
  * message is omitted for a form-only sync of committed edits.
  */
 export function intakeRequestBody(session: IntakeSession, text?: string) {
+  // Offline onboarding saves the profile without creating pending API edits.
+  // Every message carries the latest founder answers so an absent or older
+  // live draft cannot make the assistant ask for those answers again.
+  // Form-only sync retains the existing pending-edit protocol.
+  const keys =
+    text === undefined
+      ? (session.pending ?? [])
+      : fields.map((field) => field.key);
   return {
     state: session.live?.state,
-    patch: patchFromForm(session.profile, session.pending ?? []),
+    patch: patchFromForm(session.profile, keys),
     message: text,
   };
 }
@@ -74,7 +83,8 @@ export const assistantCopy: IntakeCopy = {
   unreachable: "Could not reach the BizBox assistant. Please try again.",
   unavailable:
     "The BizBox assistant is temporarily unavailable. Please try again.",
-  unexpected: "The BizBox assistant sent an unexpected reply. Please try again.",
+  unexpected:
+    "The BizBox assistant sent an unexpected reply. Please try again.",
 };
 
 export async function postIntakeMessage(

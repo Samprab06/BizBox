@@ -77,3 +77,10 @@ Akshar explicitly narrowed the next pass to Houston onboarding → real matching
 Frontend specialist owns workspace components/CSS and affected regressions. Manager owns review, exact-source validation, native browser QA, documentation and handoff. Existing city annotation layer, Vexcel provider/budgets, runtime and data contracts remain unchanged.
 
 Final exact-source evidence: lint/typecheck/build pass, 1,416 unit tests pass (43 existing skips), and 74 desktop Chromium cases pass (2 existing skips). Two legacy navigation expectations were updated because this workspace no longer propagates a fictional default site. Native actual IAB tab9 verified clear arrival, pin-to-property selection, grouped-unit rent/size/ID changes, close/query clearing and optional8of115list. Native screenshots: `/tmp/bizbox-houston-map-first-iab.png` and `/tmp/bizbox-houston-property-details-iab.png`. These use live source data, not API fixtures.
+
+## Saved context and expanded-window repair
+
+- [x] Reproduce actual988px expanded IAB clipping after compact layout, then verify corrected500→988transition and all four real property tags. Observe actual map/toolbar and synchronize Cesium sizing before overhead fitting; preserve manual input and one Viewer.
+- [x] Suppress only obsolete leading intake opener in workspace after valid completed brief; retain original history, actual offline status and Text/Voice continuity. Show saved context without a synthetic reply.
+- [x] Reproduce offline-onboarding request bootstrap and stale-draft bugs with two failing tests. Include current representable founder answers in message requests through the existing API schema; preserve form-only pending-edit synchronization.
+- [x] Exact-source lint/typecheck/build passed; 1,423 unit tests /43 existing skips and 76 desktop Chromium /2 existing skips passed. Local delivery only. Source imagery coverage and local consultant configuration remain explicit limitations. No new provider, model call, runtime or production work.
