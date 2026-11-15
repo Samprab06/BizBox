@@ -6,6 +6,7 @@ import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
 import { createPostgresIntakeUiLookups } from "./ui-lookups";
 import { createPostgresJobsPort } from "@/lib/agent/job-tools-postgres";
+import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
 
 export const runtime = "nodejs";
@@ -25,6 +26,7 @@ export const POST = createIntakeHandler({
   },
   uiLookups: createPostgresIntakeUiLookups(),
   jobs: createPostgresJobsPort(),
+  comparisonResults: createPostgresComparisonStore(),
 });
 
 export const GET = createIntakeCapabilitiesHandler();
