@@ -13,8 +13,12 @@ import {
   mustHaves,
   profileFromIntake,
 } from "@/lib/client/intake-business-profile";
-import { IntakeDraftSchema, type IntakeState } from "@/lib/contracts/intake";
-import type { AgentViewContext } from "@/lib/contracts/agent";
+import {
+  IntakeDraftSchema,
+  MAX_INTAKE_HISTORY,
+  type IntakeState,
+} from "@/lib/contracts/intake";
+import type { AgentViewContext, FlowEvent } from "@/lib/contracts/agent";
 import {
   formFromDraft,
   IntakeResponseSchema,
@@ -89,6 +93,20 @@ function currentViewState(
 }
 
 /**
+ * Scene 1: the most recent turns, oldest first, for the request's `history`. The caller
+ * passes the session before the current message is added, so that message is never in it.
+ */
+export function recentHistory(session: IntakeSession) {
+  return session.messages
+    .map((entry) => ({
+      role: entry.role,
+      text: entry.text.trim().slice(0, 2000),
+    }))
+    .filter((entry) => entry.text.length > 0)
+    .slice(-MAX_INTAKE_HISTORY);
+}
+
+/**
  * Both surfaces send the existing state/patch/message contract and the active screen.
  * A completed browser form seeds missing state only when selected-site context needs it.
  */
@@ -114,6 +132,29 @@ export function intakeRequestBody(
     patch: patchFromForm(session.profile, keys),
     message: text,
     ...(view ? { view } : {}),
+    ...historyField(session),
+  };
+}
+
+function historyField(session: IntakeSession) {
+  const history = recentHistory(session);
+  return history.length ? { history } : {};
+}
+
+/**
+ * Scene 1: a browser event for the consultant (FlowEvent), sent instead of a founder
+ * message. It carries the round-tripped state and the screen, never a form patch.
+ */
+export function flowEventRequestBody(
+  session: IntakeSession,
+  event: FlowEvent,
+  view?: AgentViewContext,
+) {
+  return {
+    ...(session.live?.state ? { state: session.live.state } : {}),
+    event,
+    ...(view ? { view } : {}),
+    ...historyField(session),
   };
 }
 
@@ -150,7 +191,9 @@ export const assistantCopy: IntakeCopy = {
 export async function postIntakeMessage(
   fetchImpl: typeof fetch,
   projectId: string,
-  body: ReturnType<typeof intakeRequestBody>,
+  body:
+    | ReturnType<typeof intakeRequestBody>
+    | ReturnType<typeof flowEventRequestBody>,
   copy: IntakeCopy = assistantCopy,
 ): Promise<IntakeOutcome> {
   let response: Response;

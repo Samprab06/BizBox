@@ -23,38 +23,41 @@ liveComparisonSearch.candidates.push(second);
 liveComparisonSearch.totalMatched = 2;
 
 const hours = { openMin: 420, closeMin: 1140 };
-const request = EvaluationRequestSchema.parse({
-  projectId: "houston-coffee",
-  profileId: "profile-live-57",
-  profileVersion: 1,
-  synthetic: true,
-  city: "houston",
-  category: "coffee",
-  priceTier: "mid",
-  personaSet: FIXTURE_PERSONA_SET,
-  demandSource: "huff",
-  seeds: 3,
-  baseSeed: 11,
-  sites: liveCandidateIds.map((siteId, index) => ({
-    siteId,
-    storefront: makeStore(siteId, index * 0.3, 0),
-    config: {
-      hours: { weekday: hours, weekend: hours },
-      stations: { planned: 2, usableSf: 1250, sfPerStation: 250 },
-      prices: { avgTicketUsd: 6.5 },
-      staff: { headcount: 2, wageUsdPerHour: 16 },
-      costs: { cogsPctOfRevenue: 0.27 },
-      lease: {
-        sf: 1250,
-        askingRentUsdPerSfYear: 24 + index * 4,
-        tripleNet: false,
-        buildoutUsd: 24000,
-        leaseTermMonths: 36,
+function comparisonRequest(siteIds: readonly string[]) {
+  return EvaluationRequestSchema.parse({
+    projectId: "houston-coffee",
+    profileId: "profile-live-57",
+    profileVersion: 1,
+    synthetic: true,
+    city: "houston",
+    category: "coffee",
+    priceTier: "mid",
+    personaSet: FIXTURE_PERSONA_SET,
+    demandSource: "huff",
+    seeds: 3,
+    baseSeed: 11,
+    sites: siteIds.map((siteId, index) => ({
+      siteId,
+      storefront: makeStore(siteId, index * 0.3, 0),
+      config: {
+        hours: { weekday: hours, weekend: hours },
+        stations: { planned: 2, usableSf: 1250, sfPerStation: 250 },
+        prices: { avgTicketUsd: 6.5 },
+        staff: { headcount: 2, wageUsdPerHour: 16 },
+        costs: { cogsPctOfRevenue: 0.27 },
+        lease: {
+          sf: 1250,
+          askingRentUsdPerSfYear: 24 + index * 4,
+          tripleNet: false,
+          buildoutUsd: 24000,
+          leaseTermMonths: 36,
+        },
+        calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
       },
-      calendar: { weekdayDaysPerMonth: 22, weekendDaysPerMonth: 8 },
-    },
-  })),
-});
+    })),
+  });
+}
+const request = comparisonRequest(liveCandidateIds);
 export const liveComparisonRecord = buildStoredComparison(
   liveComparisonId,
   request,
@@ -200,4 +203,50 @@ export async function mockLiveComparison(
         json: liveSensitivityPayload(route.request().postDataJSON().assumption),
       }),
   );
+}
+
+/**
+ * Scene 1: three real (non-synthetic) listings and a seeded comparison over all three, for
+ * the guided flow (top 3, compare up to MAX_COMPARE_UNITS). Invented data, no network.
+ */
+export const threeSiteIds = ["201:301", "202:302", "203:303"] as const;
+export const threeSiteSearch = structuredClone(liveComparisonSearch);
+{
+  const third = structuredClone(threeSiteSearch.candidates[0]);
+  third.candidate.id = threeSiteIds[2];
+  third.candidate.address = "303 Invented Ave";
+  third.candidate.name = "Synthetic third café";
+  third.propertyId = "103";
+  third.listingId = "203";
+  third.candidate.latitude.value = 29.765;
+  threeSiteSearch.candidates.push(third);
+  threeSiteSearch.totalMatched = 3;
+  for (const entry of threeSiteSearch.candidates) entry.candidate.synthetic = false;
+}
+export const threeSiteComparisonId = "comparison-scene-1";
+const threeSiteRecord = buildStoredComparison(
+  threeSiteComparisonId,
+  comparisonRequest(threeSiteIds),
+  evaluateSites(comparisonRequest(threeSiteIds)),
+);
+export function threeSiteComparison(ids: readonly string[], comparisonId = threeSiteComparisonId) {
+  const payload = {
+    comparisonId,
+    outdated: false,
+    result: structuredClone(threeSiteRecord.evaluation.result),
+    comparison: { ...structuredClone(threeSiteRecord.comparison), synthetic: false },
+    sensitivity: [],
+  };
+  payload.result.ranking = payload.result.ranking.filter((id) => ids.includes(id));
+  payload.result.sites = payload.result.sites
+    .filter((site) => ids.includes(site.siteId))
+    .map((site, index) => ({
+      ...site,
+      rank: index + 1,
+      tiedWith: site.tiedWith.filter((id) => ids.includes(id)),
+    }));
+  payload.comparison.results = payload.comparison.results.filter((site) =>
+    ids.includes(site.siteId),
+  );
+  return payload;
 }

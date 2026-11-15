@@ -1229,3 +1229,199 @@
 .workspace.workspaceSolo {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* Scene 1: three units fit the shortlist tray side by side on desktop. */
+.shortlistUnits[data-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .shortlistUnits[data-count="3"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Scene 1: the running-comparison progress panel. */
+.progressPanel {
+  margin: 4px 0 20px;
+  padding: 18px;
+  border: 1px solid var(--color-glass-edge);
+  border-radius: 24px;
+  background: #ffffff08;
+}
+.progressHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.progressHeading h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.progressMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.stages {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.stage {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.stage[data-status="pending"],
+.stage[data-status="skipped"] {
+  opacity: 0.65;
+}
+.stageMarker {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--color-glass-edge);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.stage[data-status="active"] .stageMarker {
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+.stage[data-status="done"] .stageMarker {
+  border-color: var(--color-accent);
+}
+.stage strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.stage p {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.stageBar {
+  overflow: hidden;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: #ffffff14;
+}
+.stageBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width 400ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stageBar > span {
+    transition: none;
+  }
+}
+
+/* Scene 1: per-site tweak chips. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  font-size: 11px;
+}
+.chip button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip button:hover {
+  background: var(--color-panel-raised);
+}
+
+/* Scene 1: the consultant's top locations, numbered best first. */
+.topSites {
+  pointer-events: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--color-glass-edge);
+  border-radius: 24px;
+  background: var(--color-glass-fill);
+  backdrop-filter: blur(16px);
+}
+.topSites ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  padding: 0;
+  list-style: none;
+}
+@media (max-width: 640px) {
+  .topSites ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.topSite {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: #ffffff0a;
+}
+.topSite[data-selected="true"] {
+  border-color: var(--color-accent);
+}
+.topRank,
+.rankBadge {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.rankBadge {
+  margin-right: 6px;
+}
+.topSite label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.stepActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
