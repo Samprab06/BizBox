@@ -20,6 +20,7 @@ import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
 import type { WorkspaceObservation } from "@/lib/client/workspace-context";
 import { SimulatorViewport } from "./viewport";
 import { customerLabel } from "./customer-label";
+import { InspectPanel } from "@/components/city/inspect-panel";
 import type { RenderQuality } from "./render-policy";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { InsightsDrawer } from "@/components/insights/insights-drawer";
@@ -103,6 +104,7 @@ export function SimulatorDemo({
   const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
+  const [inspectIndex, setInspectIndex] = useState(0);
   const [quality, setQuality] = useState<RenderQuality>("balanced");
   const [interiorMode, setInteriorMode] = useState<"scan" | "modeled">(
     matterport ? "scan" : "modeled",
@@ -150,15 +152,6 @@ export function SimulatorDemo({
     };
   }, [running, playbackEnd, speed, coordinates]);
 
-  const customerIds = [
-    ...new Set(
-      data.flatMap(({ run }) =>
-        run.events
-          .filter((event) => event.type === "arrival")
-          .map((event) => event.customerId),
-      ),
-    ),
-  ];
   const [base, alternative] = data;
   const gain = alternative
     ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
@@ -810,20 +803,42 @@ export function SimulatorDemo({
             );
           })}
         </div>
-        <label className="flex flex-wrap items-center justify-end gap-2 text-sm text-muted">
-          Modeled customer
-          <select
-            aria-label="Inspect a customer"
-            className="max-w-full rounded-lg border border-muted bg-surface px-3 py-2 text-ink"
-            value={customerIds.includes(selected) ? selected : ""}
-            onChange={(event) => select(event.target.value)}
-          >
-            <option value="">Inspect a customer</option>
-            {customerIds.map((id) => (
-              <option key={id}>{id}</option>
-            ))}
-          </select>
-        </label>
+        {/* HAC-93: one selection shared by every view; the card reads the shop clock. */}
+        <InspectPanel
+          events={data[inspectIndex].run.events}
+          minute={shopMinute}
+          closeMin={closeMin}
+          selectedId={selected}
+          onSelect={select}
+          source={context.phase === "ready" ? "stored" : "engine"}
+          scenarioLabel={
+            data.length > 1
+              ? (story.scenarioLabels[inspectIndex] ??
+                `Scenario ${inspectIndex + 1}`)
+              : undefined
+          }
+          followUnavailableReason="the modeled café shows the whole floor, and this run has no street trips to follow in the city"
+          controls={
+            data.length > 1 && (
+              <label className="grid gap-1 text-sm font-medium">
+                Scenario
+                <select
+                  className="rounded-lg border border-line bg-surface p-2 text-ink"
+                  value={inspectIndex}
+                  onChange={(event) =>
+                    setInspectIndex(Number(event.target.value))
+                  }
+                >
+                  {data.map((_, index) => (
+                    <option key={index} value={index}>
+                      {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          }
+        />
       </section>
       {story.provenance && (
         <Card role="region" aria-label="Recorded run provenance">
