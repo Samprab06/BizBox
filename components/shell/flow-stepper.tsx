@@ -103,8 +103,8 @@ export function FlowStepperView({ items }: { items: readonly StepperItem[] }) {
           return (
             <li
               key={item.id}
-              data-step={item.id}
-              data-status={item.status}
+              data-flow-step={item.id}
+              data-flow-status={item.status}
               className={cn(
                 "flex min-w-0 items-center gap-0.5 sm:gap-1",
                 item.status === "current" ? "shrink" : "shrink-0",
