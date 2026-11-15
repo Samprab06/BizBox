@@ -9,7 +9,8 @@ normal-style variable font; no hosted font request or new package is needed.
 - Original filename: `DMSans[opsz,wght].ttf`; stored as `DMSans-Variable.ttf`.
 - Size: 240,164 bytes. Weight axis: 100–1000. Optical-size axis: 9–40.
 - SHA-256: `8cd08d97e89c24d0aa92edd2f0f4c8ee6195eee9b7c9f154865a58b02f0c1c0d`.
-- License: [SIL Open Font License 1.1](OFL.txt), copied unchanged from that revision.
+- License: [SIL Open Font License 1.1](OFL.txt), with all upstream wording retained;
+  line endings and trailing whitespace are normalized for the repository.
 - Copyright: The DM Sans Project Authors; upstream project
   [googlefonts/dm-fonts](https://github.com/googlefonts/dm-fonts).
 
