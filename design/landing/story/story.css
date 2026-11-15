@@ -1,0 +1,309 @@
+:root {
+  color-scheme: dark;
+  --hero-opacity: 1;
+  --location-opacity: 0;
+  --final-opacity: 0;
+  font-family:
+    Inter,
+    "DM Sans",
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #fffdf8;
+  background: #342c30;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  overflow-x: clip;
+}
+body {
+  margin: 0;
+  overflow-x: clip;
+}
+[hidden] {
+  display: none !important;
+}
+
+.world,
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100svh;
+}
+
+.world {
+  z-index: 0;
+  background: #342c30 url("/assets/houston-sunset.jpg") center / cover no-repeat;
+}
+
+.world::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    180deg,
+    rgb(20 16 24 / 18%),
+    transparent 58%,
+    rgb(20 16 24 / 8%)
+  );
+}
+
+#scene {
+  z-index: 1;
+  display: block;
+}
+
+#screen-surface {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  overflow: hidden;
+  transform-origin: 0 0;
+  backface-visibility: hidden;
+  pointer-events: none;
+}
+
+#screen-poster,
+#product-screen {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
+}
+
+#screen-poster {
+  object-fit: contain;
+}
+
+.story-copy {
+  position: fixed;
+  left: 50%;
+  z-index: 4;
+  width: min(90vw, 70rem);
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-wrap: balance;
+  text-shadow: 0 2px 30px rgb(30 20 30 / 18%);
+}
+
+.story-copy h1,
+.story-copy h2 {
+  margin: 0;
+  font-weight: 560;
+  letter-spacing: -0.065em;
+  line-height: 1.02;
+}
+
+.hero-copy {
+  top: clamp(6rem, 12svh, 10rem);
+  opacity: var(--hero-opacity);
+}
+
+.hero-copy h1 {
+  font-size: clamp(3.5rem, 7.2vw, 7.5rem);
+}
+
+.hero-copy h1 span {
+  display: inline-block;
+  animation: word-pop 140ms cubic-bezier(0.18, 0.8, 0.25, 1) both;
+  animation-delay: calc(var(--word-index) * 100ms);
+}
+
+.location-copy {
+  top: clamp(3rem, 7svh, 6rem);
+  opacity: var(--location-opacity);
+}
+
+.location-copy h2 {
+  font-size: clamp(2.5rem, 5.4vw, 5.5rem);
+}
+
+.finish-copy {
+  top: clamp(5rem, 11svh, 8rem);
+  width: min(90vw, 60rem);
+  opacity: var(--final-opacity);
+}
+
+.finish-copy h2 {
+  font-size: clamp(2.25rem, 4.8vw, 4.5rem);
+  line-height: 1.05;
+}
+
+#open-bizbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3rem;
+  margin-top: 1.25rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgb(255 255 255 / 52%);
+  border-radius: 999px;
+  color: #26232a;
+  background: #fffdf8;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  text-shadow: none;
+  pointer-events: auto;
+}
+
+#open-bizbox:focus-visible {
+  outline: 2px solid #fffdf8;
+  outline-offset: 4px;
+}
+
+#open-bizbox:active {
+  transform: scale(0.97);
+}
+
+#story-journey {
+  position: relative;
+  height: 480svh;
+  pointer-events: none;
+}
+
+#story-nav {
+  display: flex;
+  position: fixed;
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 6;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  background: rgb(25 23 30 / 42%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+}
+
+#story-nav button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#story-nav button span {
+  width: 0.3125rem;
+  height: 0.3125rem;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 42%);
+}
+
+#story-nav button[aria-current="step"] {
+  background: rgb(255 255 255 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
+}
+
+#story-nav button[aria-current="step"] span {
+  background: #fffdf8;
+}
+#story-nav button:focus-visible {
+  outline: 2px solid #fffdf8;
+  outline-offset: 3px;
+}
+#story-nav button:active {
+  transform: scale(0.95);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#error,
+.no-script {
+  position: fixed;
+  right: 1rem;
+  bottom: 5.5rem;
+  left: 1rem;
+  z-index: 8;
+  margin: 0;
+  color: #fff0e9;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@keyframes word-pop {
+  from {
+    opacity: 0;
+    transform: translateY(0.12em) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-copy {
+    top: 12svh;
+    width: 94vw;
+  }
+  .hero-copy h1 {
+    font-size: clamp(2.75rem, 12.5vw, 4.5rem);
+  }
+  .location-copy {
+    top: 7svh;
+    width: 90vw;
+  }
+  .location-copy h2 {
+    font-size: clamp(2.5rem, 10.5vw, 4rem);
+  }
+  .finish-copy {
+    top: 9svh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-copy h1 span {
+    animation: none;
+  }
+  #story-nav button:active,
+  #open-bizbox:active {
+    transform: none;
+  }
+}
+
+.model-credit {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 7;
+  padding: 0.5rem;
+  color: #fffdf8;
+  background: rgb(25 23 30 / 64%);
+  border-radius: 0.5rem;
+  font-size: 0.625rem;
+  text-decoration: none;
+}
+.model-credit:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}

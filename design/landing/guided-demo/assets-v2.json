@@ -1,0 +1,41 @@
+{
+  "assets": [
+    {
+      "asset": "public/landing-assets/guided-demo/macbook-gpt-v3.png",
+      "source": "exec-d690aef2-f50e-4825-b15d-8e310aa0cd00.png",
+      "dimensions": [1513, 1040],
+      "bytes": 1145884,
+      "sha256": "7b72e43f5d632b96bad9bbfe09c08051298f842efd63b22eb2348e3ac6452967",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts-v2.json#mac"
+    },
+    {
+      "asset": "public/landing-assets/guided-demo/location-close-v2.png",
+      "source": "exec-e15eb4a9-d6c6-4f31-b494-e80e1b3da505.png",
+      "dimensions": [1586, 992],
+      "bytes": 3316791,
+      "sha256": "f8a3ac3ea3178ba6e0f41c8c9c14cdbf82b2e4cadac21efdcaad50403714ca7c",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts-v2.json#close"
+    },
+    {
+      "asset": "public/landing-assets/guided-demo/cafe-exterior-v2.png",
+      "source": "exec-cf745662-542d-4e5f-9f73-70dcdef4568d.png",
+      "dimensions": [1586, 992],
+      "bytes": 3145735,
+      "sha256": "15fdf1586e7bfe2b669aa58afdcc7976a1a4328fabf93e66a579db1c8b6b28ce",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts-v2.json#exterior"
+    }
+  ],
+  "geography": "Illustrative example only; not real listing, matched geodata or Matterport evidence",
+  "hardware": "GPT2D cutout; earlier Blender assets preserved, not used by the revised route",
+  "font": {
+    "file": "public/fonts/geist-latin.woff2",
+    "source": "Installed next16.4.6 dist/next-devtools/server/font/geist-latin.woff2",
+    "sha256": "1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8",
+    "license": "public/fonts/Geist-OFL.txt",
+    "upstream": "https://github.com/vercel/geist-font/blob/main/OFL.txt"
+  },
+  "onboardingBackground": "Existing public/onboarding/houston-real.jpg; client photo/source manifest retained"
+}

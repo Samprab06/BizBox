@@ -118,9 +118,7 @@ async function completeOnboarding(page: Page) {
   await page.getByRole("button", { name: /Los Angeles/ }).click();
   await proceed(page).click();
   await page.getByRole("button", { name: "Skip" }).click();
-  await page
-    .getByRole("textbox", { name: /exact amount/ })
-    .fill("4550");
+  await page.getByRole("textbox", { name: /exact amount/ }).fill("4550");
   await proceed(page).click();
   await proceed(page).click();
   await page.getByRole("button", { name: "Mid-range" }).click();
@@ -152,34 +150,57 @@ for (const viewport of VIEWPORTS) {
       await completeOnboarding(page);
       await expectNoOverflow(page);
 
-      // The finish goes to the workspace, not past it; the selected-site query is kept.
+      // The finish opens the workspace with this brief; unavailable inventory does not invent a selected site.
       const open = page.getByRole("link", { name: "Open workspace" });
       await expect(open).toHaveAttribute(
         "href",
         "/projects/houston-coffee/workspace",
       );
       state.live = true;
+      const initialSearch = page.waitForRequest(
+        (request) =>
+          request.url().endsWith("/api/sites") && request.method() === "POST",
+      );
       await open.click();
+      expect(
+        (await initialSearch).postDataJSON().profile.economics
+          .monthlyRentCeilingCents.value,
+      ).toBe(455000);
       await expect(
         page.getByRole("heading", { level: 1, name: "Workspace" }),
       ).toBeVisible();
       await openConsultant(page);
-      await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
+      await expect(
+        assistant(page).getByText("Live", { exact: true }),
+      ).toBeVisible();
 
       // The header is the founder's brief from the same stored session.
       const header = page.getByRole("region", {
         name: "Workspace",
         exact: true,
       });
-      await expect(header.getByText("Los Angeles", { exact: true })).toBeVisible();
+      await expect(
+        header.getByText("Los Angeles", { exact: true }),
+      ).toBeVisible();
       await expect(header.getByText("Quick-service food")).toBeVisible();
-      await expect(header.getByText("$4,550/mo rent limit")).toBeVisible();
+      expect((await savedSession(page))?.profile.rent).toEqual({
+        value: "4550",
+        origin: "founder",
+      });
 
-      // Honest labels: the photo is a preview, the example space has no rent, staffing is pending.
-      const location = page.getByRole("region", { name: "Selected location" });
-      await expect(location.getByText("City preview · photo, not a map")).toBeVisible();
-      await expect(location.getByText("Example", { exact: true })).toBeVisible();
-      await expect(location.getByText("Not listed")).toBeVisible();
+      // A failed real-inventory request stays unavailable; it never selects an example space.
+      await expect(
+        header.getByRole("status").filter({ hasText: "Listings unavailable" }),
+      ).toBeVisible();
+      await expect(
+        header.getByRole("group", { name: "Matching locations" }),
+      ).toHaveCount(0);
+      await expect(
+        header.getByRole("button", { name: "Interior", exact: true }),
+      ).toBeDisabled();
+      await expect(
+        page.getByRole("region", { name: "Selected location" }),
+      ).toHaveCount(0);
       await expect(
         assistant(page).getByText(
           "Staffing changes and Keep/Revert are not connected yet.",
@@ -187,11 +208,11 @@ for (const viewport of VIEWPORTS) {
       ).toBeVisible();
       await expectNoOverflow(page);
 
-      // Edit brief keeps the selected space and resumes on the review.
+      // Edit brief resumes the same review without inventing a selected example space.
       const edit = page.getByRole("link", { name: "Edit brief" });
       await expect(edit).toHaveAttribute(
         "href",
-        "/projects/houston-coffee/intake?site=montrose",
+        "/projects/houston-coffee/intake",
       );
       await closeConsultant(page);
       await edit.click();
@@ -200,8 +221,21 @@ for (const viewport of VIEWPORTS) {
       await page.getByRole("textbox", { name: /exact amount/ }).fill("5200");
       await proceed(page).click();
       await expect(title(page)).toHaveText("Review your business");
+      const revisedSearch = page.waitForRequest(
+        (request) =>
+          request.url().endsWith("/api/sites") && request.method() === "POST",
+      );
       await page.getByRole("link", { name: "Open workspace" }).click();
-      await expect(header.getByText("$5,200/mo rent limit")).toBeVisible();
+      expect(
+        (await revisedSearch).postDataJSON().profile.economics
+          .monthlyRentCeilingCents.value,
+      ).toBe(520000);
+      await expect(
+        header.getByText("Los Angeles", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        header.getByRole("status").filter({ hasText: "Listings unavailable" }),
+      ).toBeVisible();
       expect((await savedSession(page))?.profile.rent).toEqual({
         value: "5200",
         origin: "founder",
@@ -218,7 +252,9 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   state.live = true;
   await page.getByRole("link", { name: "Open workspace" }).click();
   await openWorkspaceConsultant(page);
-  await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
+  await expect(
+    assistant(page).getByText("Live", { exact: true }),
+  ).toBeVisible();
 
   // A draft survives the Voice tab, a trip to Edit brief and back, and a reload.
   await composer(page).fill("Is parking nearby?");
@@ -234,7 +270,9 @@ test("one conversation and one draft follow the founder across Text, Voice, Edit
   await page.reload();
   await openConsultant(page);
   await expect(composer(page)).toHaveValue("Is parking nearby?");
-  await expect(assistant(page).getByText("Live", { exact: true })).toBeVisible();
+  await expect(
+    assistant(page).getByText("Live", { exact: true }),
+  ).toBeVisible();
 
   // The typed message is the real intake action: one request, the actual reply is shown.
   await composer(page).press("Enter");
@@ -335,7 +373,9 @@ test("the finish and the workspace work from the keyboard, with a visible focus 
   const edit = page.getByRole("link", { name: "Edit brief" });
   await edit.focus();
   await expect(edit).toBeFocused();
-  const outline = await edit.evaluate((el) => getComputedStyle(el).outlineStyle);
+  const outline = await edit.evaluate(
+    (el) => getComputedStyle(el).outlineStyle,
+  );
   expect(outline).not.toBe("none");
 
   // The assistant tabs are one tab stop; arrows move between Text and Voice.
@@ -363,7 +403,9 @@ test("the workspace plays no animation under reduced motion", async ({
   await completeOnboarding(page);
   await page.getByRole("link", { name: "Open workspace" }).click();
   await openWorkspaceConsultant(page);
-  await expect(assistant(page).getByText("Offline", { exact: true })).toBeVisible();
+  await expect(
+    assistant(page).getByText("Offline", { exact: true }),
+  ).toBeVisible();
   const running = () =>
     page.evaluate(
       () =>
@@ -372,7 +414,9 @@ test("the workspace plays no animation under reduced motion", async ({
     );
   await expect.poll(running).toBe(0);
   await tab(page, "Voice").click();
-  await expect(page.getByRole("region", { name: "Voice assistant" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Voice assistant" }),
+  ).toBeVisible();
   await expect.poll(running).toBe(0);
 });
 
@@ -391,7 +435,11 @@ test("the guided stage is dark glass on the photo, one question at a time, with 
   });
   expect(style.fill).toBe("rgba(16, 19, 27, 0.44)");
   expect(style.blur).toBe("blur(12px)");
-  await expect(page.getByRole("button", { name: "Other Coming soon" })).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Carol M. Highsmith" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Other Coming soon" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("link", { name: "Carol M. Highsmith" }),
+  ).toBeVisible();
   await expect(page.getByText("Step 2 of")).toHaveCount(0);
 });

@@ -27,6 +27,8 @@ test("HAC-99: street ↔ interior keeps the clock, selection and focus both ways
     .getByLabel("Inspect a customer");
 
   await expect(view).toContainText("Street view");
+  await expect(shared).toBeVisible();
+  expect((await shared.boundingBox())!.width).toBeGreaterThanOrEqual(44);
   await shared.fill("600");
   await expect(shared).toHaveValue("600");
   await picker.selectOption("customer-1");

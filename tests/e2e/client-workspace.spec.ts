@@ -1,5 +1,11 @@
 import type { Page } from "@playwright/test";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  closeConsultant,
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 import {
   mockLiveComparison,
   liveComparisonSearch,
@@ -81,7 +87,9 @@ for (const viewport of [
       const composer = page.getByRole("textbox", {
         name: "Message the BizBox assistant",
       });
+      await openConsultant(page);
       await composer.fill("Keep this question while I explore");
+      await closeConsultant(page);
       await locations
         .getByRole("button", { name: "View 202 Invented St" })
         .click();
@@ -98,6 +106,7 @@ for (const viewport of [
           exact: true,
         }),
       ).toBeVisible();
+      await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       await page.getByRole("tab", { name: "Voice", exact: true }).click();
       await expect(
@@ -108,6 +117,7 @@ for (const viewport of [
       ).toBeDisabled();
       await page.getByRole("tab", { name: "Text", exact: true }).click();
       await expect(composer).toHaveValue("Keep this question while I explore");
+      await closeConsultant(page);
       await page
         .getByRole("button", { name: "Locations", exact: true })
         .click();
@@ -137,6 +147,7 @@ for (const viewport of [
       await expect(
         page.getByRole("button", { name: "Compare locations", exact: true }),
       ).toBeDisabled();
+      await openConsultant(page);
       await expect(composer).toHaveValue("Keep this question while I explore");
       expect(
         await page.evaluate(

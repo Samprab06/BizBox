@@ -1,0 +1,39 @@
+{
+  "assets": [
+    {
+      "asset": "public/landing-assets/guided-demo/map-v1.png",
+      "dimensions": [1586, 992],
+      "bytes": 3615125,
+      "source": "exec-76f36b59-894f-4372-b5c9-1ceb3bdb9bde.png",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts.json#map",
+      "geography": "Illustrative example; not real listing imagery, geodata or Matterport capture"
+    },
+    {
+      "asset": "public/landing-assets/guided-demo/cafe-interior-v1.png",
+      "dimensions": [1586, 992],
+      "bytes": 2791888,
+      "source": "exec-0efab48b-7c78-426f-85af-63724626a622.png",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts.json#interior",
+      "geography": "Illustrative example; not real listing imagery, geodata or Matterport capture"
+    },
+    {
+      "asset": "public/landing-assets/guided-demo/cafe-overhead-v1.png",
+      "dimensions": [1586, 992],
+      "bytes": 2465293,
+      "source": "exec-ab6ce75c-43fd-4919-b630-798e62b2d7b0.png",
+      "tool": "Built-in GPT Image",
+      "prompt": "design/landing/guided-demo/prompts.json#overhead",
+      "geography": "Illustrative example; not real listing imagery, geodata or Matterport capture"
+    }
+  ],
+  "macbook": {
+    "authoring": "render_macbook.py",
+    "editable": "macbook-frame-v2.blend",
+    "source": "../macbook/README.md",
+    "manifest": "public/landing-assets/guided-demo/macbook-frame-v2.json",
+    "credits": "/landing-assets/macbook/credits.html"
+  },
+  "runtime": "Prepared images and DOM overlays; no live Vexcel/Matterport/API dependency"
+}
