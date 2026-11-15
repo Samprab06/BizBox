@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "retrievedAt": "2026-11-15T10:26:30.416Z",
+  "provider": "Poly Haven",
+  "licenseUrl": "https://polyhaven.com/license",
+  "apiTermsUrl": "https://polyhaven.com/our-api",
+  "coordinateUnit": "meters",
+  "upAxis": "y",
+  "totalBytes": 4759804,
+  "files": [
+    {
+      "path": "/furniture/round_wooden_table_02/round_wooden_table_02_1k.gltf",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/round_wooden_table_02/round_wooden_table_02_1k.gltf",
+      "bytes": 2851,
+      "sha256": "df65c35148280a06efcc06bfa75432bb13f29318e869597fc94f364ce2b55974",
+      "sourceMd5": "d0d30c21d878a5f1f36a96b33458aba0"
+    },
+    {
+      "path": "/furniture/round_wooden_table_02/textures/round_wooden_table_02_nor_gl_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/round_wooden_table_02/round_wooden_table_02_nor_gl_1k.jpg",
+      "bytes": 635637,
+      "sha256": "34989b9a15753b964a4d9d6b2673c048ff2c14feedbe4e6adbeb4bf32be8bc8c",
+      "sourceMd5": "0f04a60c2f59f09808b26eb594732eed"
+    },
+    {
+      "path": "/furniture/round_wooden_table_02/textures/round_wooden_table_02_diff_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/round_wooden_table_02/round_wooden_table_02_diff_1k.jpg",
+      "bytes": 470007,
+      "sha256": "9872acedc6be92ef232c581c8e9ce435e4aa0d8f5c4b75e4ce445995a3ef8c28",
+      "sourceMd5": "2f16277bfd0ff661de3245c11d0b556e"
+    },
+    {
+      "path": "/furniture/round_wooden_table_02/textures/round_wooden_table_02_arm_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/round_wooden_table_02/round_wooden_table_02_arm_1k.jpg",
+      "bytes": 677385,
+      "sha256": "613d051b4c4e093c5e65eec37d39f6f48ac5476e2cb1b59c4b034f308ef1a7ee",
+      "sourceMd5": "bd5ba146734d7aa0acdfcae0c66b727f"
+    },
+    {
+      "path": "/furniture/round_wooden_table_02/round_wooden_table_02.bin",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/round_wooden_table_02/round_wooden_table_02.bin",
+      "bytes": 135412,
+      "sha256": "fa9a0ed80be31d9160207913762cedc5de21d1cb37b01a5ae6caa23ce7a741b6",
+      "sourceMd5": "026ad1fd824b6eb38a4a260565471243"
+    },
+    {
+      "path": "/furniture/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+      "bytes": 2785,
+      "sha256": "34f55ebe1851b89c045dc62d4461c848de3b93c0668e752a2b5f6cbed2d91a5e",
+      "sourceMd5": "28e739db9799cdadf820ead2b486d463"
+    },
+    {
+      "path": "/furniture/painted_wooden_chair_01/textures/painted_wooden_chair_01_diff_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_chair_01/painted_wooden_chair_01_diff_1k.jpg",
+      "bytes": 168040,
+      "sha256": "de67d1f8a0318616a7ee769cbe5c513301c2b25056542d011bb4359498f9e25d",
+      "sourceMd5": "94c34f4a211eec5bd30017564e09be4c"
+    },
+    {
+      "path": "/furniture/painted_wooden_chair_01/textures/painted_wooden_chair_01_nor_gl_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_chair_01/painted_wooden_chair_01_nor_gl_1k.jpg",
+      "bytes": 140110,
+      "sha256": "27301c3ac6a7daf9e0ba418ec85feaa44cc898e61d048211bca57133f22e1807",
+      "sourceMd5": "5150e3034d2f69b0d7f0576955e51e3e"
+    },
+    {
+      "path": "/furniture/painted_wooden_chair_01/painted_wooden_chair_01.bin",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/painted_wooden_chair_01/painted_wooden_chair_01.bin",
+      "bytes": 37112,
+      "sha256": "eaf952048db1e770c45898049b8abe28deb83d3dbbaad81d5e7e43e22a322295",
+      "sourceMd5": "7fd011acaef4730770108a7932191768"
+    },
+    {
+      "path": "/furniture/painted_wooden_chair_01/textures/painted_wooden_chair_01_arm_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_chair_01/painted_wooden_chair_01_arm_1k.jpg",
+      "bytes": 144503,
+      "sha256": "9d2de0ea0d630e8e5af05424b1f41b1ae4a80465d27a78eb471cd7f8556db84e",
+      "sourceMd5": "2ee02ed8f2dda4303428eaf6443f928a"
+    },
+    {
+      "path": "/furniture/painted_wooden_stool/painted_wooden_stool_1k.gltf",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/painted_wooden_stool/painted_wooden_stool_1k.gltf",
+      "bytes": 2848,
+      "sha256": "f9a9a4a7c38b3421c30dac35d91c41c8864452d6dbb398911494b8324d312ef9",
+      "sourceMd5": "d234ba7a3ce1cc2a68847cea4e405b34"
+    },
+    {
+      "path": "/furniture/painted_wooden_stool/textures/painted_wooden_stool_nor_gl_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_stool/painted_wooden_stool_nor_gl_1k.jpg",
+      "bytes": 489911,
+      "sha256": "39fed6e0a14b464bf5b9555d4ac02df0f85b0bfc89d383e4b8e00c343598384e",
+      "sourceMd5": "4518ff0d1d7dbf0c5cc2d06777e92a97"
+    },
+    {
+      "path": "/furniture/painted_wooden_stool/textures/painted_wooden_stool_arm_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_stool/painted_wooden_stool_arm_1k.jpg",
+      "bytes": 751171,
+      "sha256": "2088f99a25050d6666348388d279b65993fdd50ad8c14d3419a64f1caea6472d",
+      "sourceMd5": "9ffee9bb29a95f4ef24efb415b14f0b6"
+    },
+    {
+      "path": "/furniture/painted_wooden_stool/textures/painted_wooden_stool_diff_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/painted_wooden_stool/painted_wooden_stool_diff_1k.jpg",
+      "bytes": 607519,
+      "sha256": "db0322de5e3c588465d0894515a7c1bdacde9e2a469a9ac154206bfe96746d3f",
+      "sourceMd5": "3118c86c770a6907d0347276deebd96c"
+    },
+    {
+      "path": "/furniture/painted_wooden_stool/painted_wooden_stool.bin",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/painted_wooden_stool/painted_wooden_stool.bin",
+      "bytes": 23384,
+      "sha256": "d336c1eb8832e4441f69bb5618e2289703a7ca71d3884a9087d658051eee0b66",
+      "sourceMd5": "cf312e0df28055cbbf174584a01943c5"
+    },
+    {
+      "path": "/furniture/wooden_display_shelves_01/wooden_display_shelves_01_1k.gltf",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_display_shelves_01/wooden_display_shelves_01_1k.gltf",
+      "bytes": 6795,
+      "sha256": "3784953c451b088d24ac1b0e6946c7f7bd589115f51e6549fdb8fe9f7c10600e",
+      "sourceMd5": "e807901382c7223238c5c3fd5bad5d8e"
+    },
+    {
+      "path": "/furniture/wooden_display_shelves_01/textures/wooden_display_shelves_01_arm_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_display_shelves_01/wooden_display_shelves_01_arm_1k.jpg",
+      "bytes": 164353,
+      "sha256": "33d6b769eafab3b1d8605b202cd41b0994b8c43df02dca5bdd86e942e390ff6a",
+      "sourceMd5": "526dc6c49a7ce366b61f04ab794107ee"
+    },
+    {
+      "path": "/furniture/wooden_display_shelves_01/textures/wooden_display_shelves_01_nor_gl_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_display_shelves_01/wooden_display_shelves_01_nor_gl_1k.jpg",
+      "bytes": 54739,
+      "sha256": "04191c25bfb8e76314863b624233807792df64fa1a638c75d20788becb4cbb8c",
+      "sourceMd5": "696f1c48d08ffcc4bfc90e4aabc91286"
+    },
+    {
+      "path": "/furniture/wooden_display_shelves_01/wooden_display_shelves_01.bin",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/wooden_display_shelves_01/wooden_display_shelves_01.bin",
+      "bytes": 105988,
+      "sha256": "e6c000a780626e618c1f1c0c1ec2ec29e1452e7824055ba53b40963d857edfbe",
+      "sourceMd5": "d26e27c0c3a7c6b247b220a49379298f"
+    },
+    {
+      "path": "/furniture/wooden_display_shelves_01/textures/wooden_display_shelves_01_diff_1k.jpg",
+      "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_display_shelves_01/wooden_display_shelves_01_diff_1k.jpg",
+      "bytes": 139254,
+      "sha256": "cb57e90d9588ce81e58ff7300e89956a6a3c45119165b858d921a5a2439cbeaf",
+      "sourceMd5": "b3f7519052957a3f0199e5fcd742a0b6"
+    }
+  ]
+}

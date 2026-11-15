@@ -1,5 +1,13 @@
 import { z } from "zod";
 import {
+  SpatialDraftSchema,
+  ControlledInteriorFindingSchema,
+  SpatialPoliciesSchema,
+  SpatialPolicyReceiptSchema,
+} from "@/lib/contracts/spatial";
+import { InteriorResponseSchema } from "@/lib/contracts/interior";
+import { InteriorAffordabilityAssessmentSchema } from "@/lib/contracts/interior-affordability";
+import {
   FLOW_STEP_IDS,
   FlowStepSchema,
   type FlowStep,
@@ -27,6 +35,7 @@ export const FLOW_STEPS: ReadonlyArray<{ id: FlowStep; label: string }> = [
   { id: "locations", label: "Top locations" },
   { id: "compare", label: "Compare" },
   { id: "results", label: "Results & refine" },
+  { id: "interior", label: "Interior experiments" },
   { id: "finalize", label: "Final plan" },
 ];
 
@@ -55,12 +64,63 @@ export function flowStepFromLocation(
     : "locations";
 }
 
+export const InteriorFlowSchema = z
+  .object({
+    comparisonId: z.string().min(1).max(200),
+    siteId: z.string().min(1).max(200),
+    selectionRationale: z.string().trim().min(1).max(2000).optional(),
+    source: InteriorResponseSchema.optional(),
+    policies: SpatialPoliciesSchema.optional(),
+    policyReceipt: SpatialPolicyReceiptSchema.optional(),
+    affordability: InteriorAffordabilityAssessmentSchema.optional(),
+    affordabilityAccountId: z.string().trim().min(1).max(200).optional(),
+    baseline: SpatialDraftSchema,
+    draft: SpatialDraftSchema,
+    experimentQuestion: z.string().min(1).max(1000).optional(),
+    finding: ControlledInteriorFindingSchema.optional(),
+    ranRevision: z.number().int().nonnegative().nullable(),
+    reviewedRevision: z.number().int().nonnegative().nullable(),
+    reference: z
+      .object({
+        modelId: z.literal("qfmMbTLt4Bo"),
+        selectedPlan: z.union([z.literal(0), z.literal(1)]),
+        reviewed: z.boolean(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine(
+    (s) =>
+      s.siteId === s.draft.siteId &&
+      s.siteId === s.baseline.siteId &&
+      s.draft.projectId === s.baseline.projectId &&
+      s.draft.id === s.baseline.id,
+    "Interior snapshots must belong to the same project and site",
+  );
+export type InteriorFlowState = z.infer<typeof InteriorFlowSchema>;
+
+export function hasReviewedInterior(
+  interior: InteriorFlowState | undefined | null,
+  scope: { projectId: string; siteId: string; comparisonId: string },
+): interior is InteriorFlowState {
+  return Boolean(
+    interior &&
+    interior.draft.projectId === scope.projectId &&
+    interior.siteId === scope.siteId &&
+    interior.comparisonId === scope.comparisonId &&
+    interior.ranRevision === interior.draft.revision &&
+    interior.reviewedRevision === interior.draft.revision,
+  );
+}
+
 export const FlowStateSchema = z
   .object({
     /** Steps the founder has unlocked, in any order; `questions` is always reachable. */
     reached: z.array(FlowStepSchema).max(FLOW_STEP_IDS.length),
     siteTweaks: SiteTweakMapSchema,
     finalPlan: FinalPlanSummarySchema.nullable(),
+    interior: InteriorFlowSchema.optional(),
   })
   .strict();
 export type FlowState = z.infer<typeof FlowStateSchema>;
@@ -105,9 +165,19 @@ export function resetAfter(state: FlowState, step: FlowStep): FlowState {
   const keep = FLOW_STEP_IDS.slice(0, flowStepIndex(step) + 1);
   const reached = state.reached.filter((s) => keep.includes(s));
   const finalPlan = keep.includes("finalize") ? state.finalPlan : null;
-  if (reached.length === state.reached.length && finalPlan === state.finalPlan)
+  const interior = keep.includes("interior") ? state.interior : undefined;
+  if (
+    reached.length === state.reached.length &&
+    finalPlan === state.finalPlan &&
+    interior === state.interior
+  )
     return state;
-  return { ...state, reached, finalPlan };
+  return {
+    ...state,
+    reached,
+    finalPlan,
+    ...(interior ? { interior } : { interior: undefined }),
+  };
 }
 
 export function withSiteTweaks(
@@ -128,4 +198,14 @@ export function withFinalPlan(
 ): FlowState {
   const next = { ...state, finalPlan };
   return finalPlan ? reachStep(next, "finalize") : resetAfter(next, "results");
+}
+
+/** Every edit invalidates approval and the final report, while retaining the editable draft. */
+export function withInterior(
+  state: FlowState,
+  interior: InteriorFlowState,
+): FlowState {
+  const parsed = InteriorFlowSchema.parse(interior);
+  const reset = resetAfter(state, "interior");
+  return reachStep({ ...reset, interior: parsed, finalPlan: null }, "interior");
 }

@@ -10,6 +10,12 @@ Use `http://localhost:3016/projects/houston-coffee/simulator#scanned-interior` t
 The supplied development key was verified on `localhost`; the `127.0.0.1` origin
 did not load the model. Domain authorization belongs to the SDK key's settings.
 
+## Main workspace integration (November 15)
+
+The main workspace follows Top locations → Compare → Results → Interior experiments and resolves the selected candidate's own approved Matterport source. Coffee Port remains a separate reference example. Scan viewing, exact-suite identity, measured geometry and provider Defurnish availability are separate capabilities; missing data produces an explicitly modeled layout rather than a substituted scan.
+
+Furniture proposal edits, staffing/counter settings, continuous customer movement, customer policies and the final report share the current spatial draft. Clear removes proposed catalog objects, not photographed furniture. A current experiment run and review are required before finalization. Live café Jev decisions use the budgeted interior endpoint; other category previews remain explicitly assumed. See `interior-proposals.md`, `interior-jev-policies.md` and `spatial-implementation-status.md` for verified limits.
+
 ## Matterport setup and viewing
 
 Set the SDK key privately in ignored `.env.local`. It is a domain-restricted
@@ -57,8 +63,8 @@ same clock.
 - Purple spheres with white rings represent employees at their assigned
   counters. Employee buttons provide keyboard inspection. They mark staffing
   during opening hours; they do not simulate employee tasks or travel.
-- Approach and departure paths use illustrative two-minute animations anchored
-  to arrival/completion/abandonment events. Travel time, pedestrian collisions
+- Approach, queue, service and departure motion uses continuous identity-based paths anchored
+  to saved arrival/service/completion/abandonment events. Entry/exit takes at least two modeled minutes and longer for longer paths; positions are deterministic when seeking. Travel time, pedestrian collisions
   and the room geometry do not change engine outcomes.
 - There are no animated cars in the modeled café scene.
 
@@ -132,3 +138,5 @@ The SDK reserves `outputs.objectRoot` and `outputs.collider`: component outputs
 must initialize empty, with those fields assigned during `onInit`. Declaring
 them in the constructor fails with the real provider even if a permissive test
 double accepts it.
+
+Operating playback now uses one modeled minute per real second at 1× so walking is readable. The replay still stops at the recorded closing time; unfinished customers and people whose exit route has not finished remain visible rather than being silently removed. Financial metrics and service cohorts continue to use the original engine events.

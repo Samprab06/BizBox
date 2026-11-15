@@ -14,6 +14,7 @@ export default async function Page({ params, searchParams }: PreviewPageProps) {
       projectId={projectId}
       project={project}
       siteId={siteId}
+      matterportSdkKey={process.env.MATTERPORT_SDK_KEY?.trim() || undefined}
       tilesetUrl={
         process.env.VEXCEL_API_KEY?.trim()
           ? "/api/vexcel/3d/tileset"

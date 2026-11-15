@@ -1,15 +1,13 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { SpatialCommand } from "@/lib/contracts/spatial";
 import type {
   FlowStep,
   HighlightTarget,
   UiAction,
 } from "@/lib/contracts/agent";
-import {
-  MAX_COMPARE_UNITS,
-  type SiteTweaks,
-} from "@/lib/contracts/evaluation";
+import { MAX_COMPARE_UNITS, type SiteTweaks } from "@/lib/contracts/evaluation";
 import {
   canOpenStep,
   reachStep,
@@ -25,6 +23,20 @@ import { writeShortlist } from "./project-store";
  * carries them out against the same comparison controller its screen renders.
  */
 export type WorkspaceEffect =
+  | {
+      kind: "set_reference_cafe";
+      expectedReference: {
+        modelId: "qfmMbTLt4Bo";
+        selectedPlan: 0 | 1;
+        reviewed: boolean;
+      } | null;
+      siteId: string;
+      comparisonId: string;
+      draftId: string;
+      expectedRevision: number;
+      selectedPlan: 0 | 1;
+      reviewed: boolean;
+    }
   /** Emphasise these as the founder's top locations (numbered 1-3, best first). */
   | { kind: "present"; siteIds: string[] }
   /** Replace the comparison selection (at most MAX_COMPARE_UNITS). */
@@ -36,6 +48,33 @@ export type WorkspaceEffect =
   | { kind: "highlight"; target: HighlightTarget }
   | { kind: "focus_map"; siteIds: string[] }
   | { kind: "open_site"; siteId: string }
+  | { kind: "open_interior"; siteId: string }
+  | {
+      kind: "set_interior_affordability";
+      siteId: string;
+      comparisonId: string;
+      draftId: string;
+      expectedRevision: number;
+      assessment: import("@/lib/contracts/interior-affordability").InteriorAffordabilityAssessment;
+      accountId?: string;
+    }
+  | { kind:"propose_interior_experiment";siteId:string;comparisonId:string;draftId:string;expectedRevision:number;question:string;catalogId:string;position?:{x:number;z:number} }
+  | {
+      kind: "spatial_edit";
+      siteId: string;
+      command: SpatialCommand;
+      comparisonId: string;
+      draftId: string;
+      expectedRevision: number;
+    }
+  | {
+      kind: "run_spatial_experiment" | "review_interior";
+      behavior?: "jev" | "assumed";
+      siteId: string;
+      comparisonId: string;
+      draftId: string;
+      expectedRevision: number;
+    }
   | {
       kind: "finalize";
       comparisonId: string;
@@ -137,6 +176,79 @@ export function planWorkspaceActions(
         if (state.candidateIds.includes(action.siteId))
           effects.push({ kind: "open_site", siteId: action.siteId });
         break;
+      case "open_interior":
+        if (
+          state.candidateIds.includes(action.siteId) &&
+          canOpenStep(flow, "results")
+        )
+          effects.push({ kind: "open_interior", siteId: action.siteId });
+        break;
+      case "set_reference_cafe":
+        if (
+          state.candidateIds.includes(action.siteId) &&
+          canOpenStep(flow, "interior")
+        )
+          effects.push({
+            kind: "set_reference_cafe",
+            expectedReference: action.expectedReference,
+            siteId: action.siteId,
+            comparisonId: action.comparisonId,
+            draftId: action.draftId,
+            expectedRevision: action.expectedRevision,
+            selectedPlan: action.selectedPlan,
+            reviewed: action.reviewed,
+          });
+        break;
+      case "propose_interior_experiment":
+        if(state.candidateIds.includes(action.siteId) && canOpenStep(flow,"interior")) {
+          effects.push({kind:"propose_interior_experiment",siteId:action.siteId,comparisonId:action.comparisonId,draftId:action.draftId,expectedRevision:action.expectedRevision,question:action.question,catalogId:action.catalogId,...(action.position?{position:action.position}:{})});
+        }
+        break;
+      case "spatial_edit":
+      case "run_spatial_experiment":
+      case "review_interior":
+        if (
+          state.candidateIds.includes(action.siteId) &&
+          canOpenStep(flow, "interior")
+        )
+          effects.push(
+            action.type === "spatial_edit"
+              ? {
+                  kind: action.type,
+                  siteId: action.siteId,
+                  command: action.command,
+                  comparisonId: action.comparisonId,
+                  draftId: action.draftId,
+                  expectedRevision: action.expectedRevision,
+                }
+              : {
+                  kind: action.type,
+                  ...(action.type === "run_spatial_experiment" &&
+                  action.behavior
+                    ? { behavior: action.behavior }
+                    : {}),
+                  siteId: action.siteId,
+                  comparisonId: action.comparisonId,
+                  draftId: action.draftId,
+                  expectedRevision: action.expectedRevision,
+                },
+          );
+        break;
+      case "set_interior_affordability":
+        if (
+          state.candidateIds.includes(action.siteId) &&
+          canOpenStep(flow, "interior")
+        )
+          effects.push({
+            kind: action.type,
+            siteId: action.siteId,
+            comparisonId: action.comparisonId,
+            draftId: action.draftId,
+            expectedRevision: action.expectedRevision,
+            assessment: action.assessment,
+            ...(action.accountId ? { accountId: action.accountId } : {}),
+          });
+        break;
       case "finalize_plan":
         effects.push({
           kind: "finalize",
@@ -233,7 +345,9 @@ export async function applyAgentJobActions(
       deps.report(`Shortlisted ${action.siteIds.length} space(s).`);
     } else if (action.type === "run_comparison") {
       handled.add(action.id);
-      deps.report(`Running the comparison of ${action.siteIds.length} space(s)…`);
+      deps.report(
+        `Running the comparison of ${action.siteIds.length} space(s)…`,
+      );
       try {
         await (deps.runComparison ?? runAgentComparison)(
           deps.projectId,
@@ -260,7 +374,9 @@ export async function applyAgentJobActions(
         deps.projectId,
         action.investigationId,
       );
-      deps.report("Investigation started. Follow its progress in the consultant panel.");
+      deps.report(
+        "Investigation started. Follow its progress in the consultant panel.",
+      );
       href = `${base}/comparison?investigation=${encodeURIComponent(action.investigationId)}`;
     }
   }

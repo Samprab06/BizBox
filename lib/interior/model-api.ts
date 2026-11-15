@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { fromApiToSdk } from "../layout/scan-transform";
 import {
   InteriorDimensionsSchema,
   MatterportModelIdSchema,
@@ -9,6 +10,7 @@ import {
 export const MATTERPORT_MODEL_ENDPOINT =
   "https://api.matterport.com/api/models/graph";
 // Official references: developers.matterport.com/api/property-intelligence/{dimensions,vector-data}/
+// Coordinate basis: developers.matterport.com/overview/concepts/#api-to-sdk-conversions
 // Only query operations are allowed. No assets, mutations, unlocking or purchases.
 export const INTERIOR_DIMENSIONS_QUERY = `query InteriorDimensions($modelId: ID!) {
   model(id: $modelId) {
@@ -95,20 +97,23 @@ export function normalizeMatterportDimensions(
       edge.vertices.map((vertex) => vertex.position),
     );
     const { height, lowerElevation, area } = room.dimensionEstimates;
+    const sdkVertices = vertices.map((v) =>
+      fromApiToSdk({ x: v.x, y: v.y, z: lowerElevation }),
+    );
     return {
       id: room.id,
       floorId: room.floor.id,
       areaSqFt: area * squareMetersToSquareFeet,
       bounds: {
         min: {
-          x: Math.min(...vertices.map((v) => v.x)),
+          x: Math.min(...sdkVertices.map((v) => v.x)),
           y: lowerElevation,
-          z: Math.min(...vertices.map((v) => v.y)),
+          z: Math.min(...sdkVertices.map((v) => v.z)),
         },
         max: {
-          x: Math.max(...vertices.map((v) => v.x)),
+          x: Math.max(...sdkVertices.map((v) => v.x)),
           y: lowerElevation + height,
-          z: Math.max(...vertices.map((v) => v.y)),
+          z: Math.max(...sdkVertices.map((v) => v.z)),
         },
       },
     };
@@ -120,6 +125,7 @@ export function normalizeMatterportDimensions(
   )
     return;
   const result = InteriorDimensionsSchema.safeParse({
+    coordinateFrame: "showcase-y-up-v1",
     coordinateUnit: "meters",
     areaUnit: "square_feet",
     upAxis: "y",
@@ -158,7 +164,7 @@ export function normalizeMatterportDimensions(
       retrievedAt: new Date().toISOString(),
       limitations: [
         "Enterprise Property Intelligence access is required",
-        "Native model XY and Z elevation are mapped to application Y-up coordinates",
+        "Native Model API coordinates are mapped to SDK (x, y, z) = (API x, API z, -API y); bounds are reordered after conversion",
         "Bounds enclose room boundaries; they are not exact room polygons or usable-capacity guarantees",
       ],
     },

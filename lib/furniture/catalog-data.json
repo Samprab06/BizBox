@@ -1,0 +1,82 @@
+[
+  {
+    "id": "round_wooden_table_02",
+    "role": "table",
+    "seats": 0,
+    "name": "Round Wooden Table 02",
+    "provider": "poly-haven",
+    "license": "CC0-1.0",
+    "sourceUrl": "https://polyhaven.com/a/round_wooden_table_02",
+    "assetUrl": "/furniture/round_wooden_table_02/round_wooden_table_02_1k.gltf",
+    "widthM": 0.79617804,
+    "depthM": 0.79617804,
+    "heightM": 0.74602664,
+    "modelOffsetM": [0, 0, 0],
+    "dimensionsStatus": "source-model-bounds",
+    "sourceFootprintAxes": "direct",
+    "sourceDimensionsMm": [
+      796.1780428886414, 796.1780428886414, 746.0266395536621
+    ],
+    "polycount": 4254
+  },
+  {
+    "id": "painted_wooden_chair_01",
+    "role": "seating",
+    "seats": 1,
+    "name": "Painted Wooden Chair 01",
+    "provider": "poly-haven",
+    "license": "CC0-1.0",
+    "sourceUrl": "https://polyhaven.com/a/painted_wooden_chair_01",
+    "assetUrl": "/furniture/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+    "widthM": 0.43175144,
+    "depthM": 0.53982417,
+    "heightM": 0.95648214,
+    "modelOffsetM": [0.00152444, 0.00074156, 0.03068716],
+    "dimensionsStatus": "source-model-bounds",
+    "sourceFootprintAxes": "direct",
+    "sourceDimensionsMm": [
+      431.75144493579865, 539.8241728544235, 956.4821355743334
+    ],
+    "polycount": 724
+  },
+  {
+    "id": "painted_wooden_stool",
+    "role": "seating",
+    "seats": 1,
+    "name": "Painted Wooden Stool",
+    "provider": "poly-haven",
+    "license": "CC0-1.0",
+    "sourceUrl": "https://polyhaven.com/a/painted_wooden_stool",
+    "assetUrl": "/furniture/painted_wooden_stool/painted_wooden_stool_1k.gltf",
+    "widthM": 0.38483743,
+    "depthM": 0.4060743,
+    "heightM": 0.57891509,
+    "modelOffsetM": [-0.00493915, 0.0009894, -0.0132319],
+    "dimensionsStatus": "source-model-bounds",
+    "sourceFootprintAxes": "direct",
+    "sourceDimensionsMm": [
+      384.83743369579315, 406.07430040836334, 578.9150850614533
+    ],
+    "polycount": 676
+  },
+  {
+    "id": "wooden_display_shelves_01",
+    "role": "storage",
+    "seats": 0,
+    "name": "Wooden Display Shelves 01",
+    "provider": "poly-haven",
+    "license": "CC0-1.0",
+    "sourceUrl": "https://polyhaven.com/a/wooden_display_shelves_01",
+    "assetUrl": "/furniture/wooden_display_shelves_01/wooden_display_shelves_01_1k.gltf",
+    "widthM": 0.37150964,
+    "depthM": 1.07776093,
+    "heightM": 1.55618382,
+    "modelOffsetM": [0, -0.00043631, 0],
+    "dimensionsStatus": "source-model-bounds",
+    "sourceFootprintAxes": "swapped-in-gltf",
+    "sourceDimensionsMm": [
+      1077.760934829712, 371.50970101356506, 1556.1838150024414
+    ],
+    "polycount": 3174
+  }
+]

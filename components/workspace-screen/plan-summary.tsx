@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ReferenceCafeReport } from "@/components/plan/reference-cafe-report";
+import { SpatialReport } from "@/components/plan/spatial-report";
 import { useId, useState } from "react";
 import { Pill } from "@/components/ui/pill";
 import { cn, focusRing, pressable } from "@/components/ui/cn";
@@ -168,6 +170,12 @@ function PlanSummaryView({
         </ul>
       </section>
 
+      {summary.referenceCafe && (
+        <ReferenceCafeReport
+          selectedPlan={summary.referenceCafe.selectedPlan}
+        />
+      )}
+      {summary.interior && <SpatialReport interior={summary.interior} />}
       <div className={styles.columns}>
         <div className={styles.column}>
           {tweaks.length > 0 && (

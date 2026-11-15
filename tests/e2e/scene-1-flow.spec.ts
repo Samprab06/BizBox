@@ -48,6 +48,18 @@ async function services(page: Page) {
   await page.route("**/api/sites/*/interior", (route) =>
     route.fulfill({ status: 404, json: {} }),
   );
+  await page.route("**/matterport/showcase.html?*", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<html><body>Offline reference scan test</body></html>",
+    }),
+  );
+  await page.route("https://my.matterport.com/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<html><body>Offline reference scan test</body></html>",
+    }),
+  );
   const posts: IntakePost[] = [];
   await page.route("**/api/projects/*/intake", (route) => {
     if (route.request().method() === "GET")
@@ -62,7 +74,9 @@ async function services(page: Page) {
         ]),
       });
     if (kind)
-      return route.fulfill({ json: reply(`Noted: ${kind.replace("_", " ")}.`) });
+      return route.fulfill({
+        json: reply(`Noted: ${kind.replace("_", " ")}.`),
+      });
     const text = body.message ?? "";
     if (/compare them/i.test(text))
       return route.fulfill({
@@ -169,14 +183,18 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
   await expect(
     page.getByRole("region", { name: "Comparison shortlist" }),
   ).toContainText("Comparison 3/3");
-  const arrival = posts.find((post) => post.event?.kind === "arrived_workspace");
+  const arrival = posts.find(
+    (post) => post.event?.kind === "arrived_workspace",
+  );
   expect(arrival?.view).toMatchObject({
     stage: "workspace",
     step: "locations",
     candidateIds: [...threeSiteIds],
   });
   expect((arrival?.view?.candidates as unknown[]).length).toBe(3);
-  expect(events(posts).filter((e) => e.kind === "arrived_workspace")).toHaveLength(1);
+  expect(
+    events(posts).filter((e) => e.kind === "arrived_workspace"),
+  ).toHaveLength(1);
 
   // The agent runs the comparison: the compare step shows persona progress.
   const composer = page.getByRole("textbox", {
@@ -258,10 +276,20 @@ test("Scene 1: top 3 greeting, agent-run comparison with progress, tweak and rer
     results.getByRole("button", { name: "Rerun", exact: true }),
   ).toBeVisible();
 
-  // The agent finalizes: the final plan step shows the chosen site.
+  // The agent chooses the site, then the reference interior must be reviewed before finalization.
   await composer.fill("Let's go with 101 Invented St");
   await composer.press("Enter");
+  await expect(page).toHaveURL(/step=interior/);
+  await page
+    .getByRole("button", { name: "Review reference café result", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Continue to final report", exact: true })
+    .click();
   await expect(page).toHaveURL(/step=finalize/);
+  await expect(
+    page.getByRole("region", { name: "Reference café counter findings" }),
+  ).toBeVisible();
   await expect(stepStatus(page, "finalize")).toHaveAttribute(
     "data-flow-status",
     "current",

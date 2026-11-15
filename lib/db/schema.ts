@@ -1,3 +1,4 @@
+export * from "./interior-policy-schema";
 export * from "./costar-schema";
 export * from "./layout-schema";
 import { layouts } from "./layout-schema";

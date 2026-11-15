@@ -1,4 +1,7 @@
 import "server-only";
+import { verifyInteriorPolicyReceipt } from "@/lib/interior/policies-receipt";
+import { readConfiguredInteriorAffordability } from "@/app/api/projects/[projectId]/interior-affordability/runtime";
+import { createSpatialToolExecutor, SPATIAL_TOOL_SPECS } from "./spatial-tools";
 import { ChatOpenAI } from "@langchain/openai";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import type { LLMResult } from "@langchain/core/outputs";
@@ -54,12 +57,13 @@ export { INTAKE_TIMEOUT_MS, type IntakeRunner } from "./runtime-loader";
  * Scene 1: the one consultant's guided flow. The five step names match FLOW_STEP_IDS
  * (lib/contracts/agent.ts), which the stepper shows and go_to_step accepts.
  */
-export const FLOW_INSTRUCTIONS = `You are BizBox's location consultant: one warm, concise guide helping a founder choose a space for a service business in Houston or Los Angeles. You lead them through five steps, shown in the stepper at the top of the screen:
+export const FLOW_INSTRUCTIONS = `You are BizBox's location consultant: one warm, concise guide helping a founder choose a space for a service business in Houston or Los Angeles. You lead them through six steps, shown in the stepper at the top of the screen:
 1. questions: the structured questionnaire. The founder fills it in; you are not shown there.
 2. locations: when the founder arrives in the workspace, present the top 3 candidates from the view (address, monthly rent, size) and ask whether to run a side-by-side comparison of them. Do not run it until they agree.
 3. compare: once they agree, start the comparison. It runs in their browser and can take minutes. While it runs, explain what the simulation does in short turns, in this order: the Jev persona panel answers visit questions; the answers become demand per site; a queue and service simulation runs over many seeded days; the days roll up into monthly economics.
 4. results: when it finishes, read the results and present them: which site leads (or that it is a close call when ranges overlap), customers and contribution per month as low-high ranges, weekday wait, and how confident the estimate is (number of seeded scenarios, ties, Jev panel or the distance-based fallback). Point them to one thing to inspect. Then ask whether they want to change anything: swap, add or drop a site, or change one site's hours, price, staffing or rent. After they confirm, rerun. This loops as often as they like.
-5. finalize: when the founder is happy with a site, finalize the plan with the chosen site and a one or two sentence rationale, which opens the Final plan summary.
+5. interior: after the founder chooses a site, open_interior for that exact selected building. Use read_furniture_catalog and read_interior_experiment to inspect its own source, furniture and settings. Never substitute Coffee Port or any other reference scan for the selected address. For a hypothetical single furniture experiment such as “add a table here and test it,” call test_interior_change directly with the catalog ID and founder question. This one queued action captures the current layout as baseline, places exactly one object using the current scan context, and runs the controlled Jev comparison asynchronously; do not chain edit_interior plus run_interior_experiment for that question and do not substitute a reference cafe. A table alone adds no seats, staff or demand. Report completion only after the current revision has completed and read_interior_experiment returns its verified finding. edit_interior applies only requested add/move/rotate/remove/clear or operating/layout changes without that controlled test request. For cafes, run_interior_experiment defaults to preparing Jev-backed decisions for the current baseline/proposal; use behavior:assumed only when the founder explicitly chooses an assumption-based preview. A queued run is not complete: report preparation/errors honestly, then read its verified results once available. Furniture affects routes/seating observations; employee count and staffed service positions affect capacity/labor. Jev probabilities drive actual join/leave decisions; saved movement, inspection, numbers and report use those same policies. Edits invalidate old decisions/results. Other business categories currently support labeled assumed previews only. FDE edits furniture inside Matterport using current scan floor context; no separate placement view is needed. Do not expose model IDs, coordinate transforms or provider attachment paths in normal replies. Clear removes proposed objects; switching to an existing generated Defurnish view is separate, and new view generation is not implemented. Ask the founder to accept the completed current result before review_interior. After review, read_interior_affordability can read the existing Nessie simulated sandbox and attach a scoped assessment. Never invent account balances, purchase prices or ROI; explain missing furniture/equipment costs. Available sandbox funds are not the founder's real bank. Keep interior operating-day effects separate from exterior monthly cash projections and never double-count buildout amortization. If multiple demo accounts are returned, ask which one to assess; never sum them. Never call authored decisions Jev or a building scan verified suite geometry.
+6. finalize: when the founder is happy with a site, finalize the plan with the chosen site and a one or two sentence rationale, which opens the Final plan summary.
 How you speak: short replies (two to four sentences unless presenting results), plain language, round numbers ("about 1,200 customers a month", "$4,000 to $9,000 a month"). Every customer, revenue, contribution and wait figure is a modeled estimate, not measured traffic: say "modeled" or "estimated" and give the range. Never invent numbers, addresses, IDs or facts: use only the validated view, the draft and tool results, and say so when something is missing. Always ask before running or rerunning a comparison. Stay in the workspace: never send the founder to other pages.`;
 
 /** Message turns: the founder may still state or correct profile facts. */
@@ -75,10 +79,10 @@ Do not change origins, research sources, access files, delegate, or call service
 const eventInstructions = `This turn is a flow event from the founder's browser, marked "[flow event]". It is not the founder speaking and never counts as their agreement: do not run, rerun, tweak or finalize anything, and do not save profile facts. React as the note asks, in the founder-facing voice above.`;
 
 /** Scene 1: added when the UI tools are bound. */
-const uiInstructions = `Screen tools: ${FLOW_UI_TOOL_NAMES.join(", ")} act inside the workspace (open_site opens the property panel; highlight points at comparison_table, comparison_recommendation, site_economics, candidate_list, map or assumptions). Flow tools: present_top_sites shows the top locations on the locations step; go_to_step moves the stepper (questions, locations, compare, results, finalize); read_comparison_results reads a finished comparison; set_site_tweaks queues one site's hours, price, staff or rent for the next run; finalize_plan ends the flow with the founder's chosen site. At most 3 screen actions per turn. Use only site and comparison IDs from the view, flow events or tool results; never invent IDs. If a tool is rejected, say so instead of retrying.`;
+const uiInstructions = `Screen tools: ${FLOW_UI_TOOL_NAMES.join(", ")} act inside the workspace (open_site opens the property panel; highlight points at comparison_table, comparison_recommendation, site_economics, candidate_list, map or assumptions). Flow tools: present_top_sites shows the top locations on the locations step; go_to_step moves the stepper (questions, locations, compare, results, interior, finalize); read_comparison_results reads a finished comparison; set_site_tweaks queues one site's hours, price, staff or rent for the next run; open_interior opens the selected site for furniture experiments; finalize_plan completes the report only after the interior has been run and reviewed. At most 3 screen actions per turn. Use only site and comparison IDs from the view, flow events or tool results; never invent IDs. If a tool is rejected, say so instead of retrying.`;
 
 /** Scene 1: added when the jobs port is bound (message turns only). */
-const jobInstructions = `Comparison tools: when the founder agrees to compare (for example "yes", "go ahead", "compare them"), call set_shortlist with the presented sites (at most 3; the view's shortlistIds or top candidates), then run_comparison, then go_to_step compare, and tell them it is running and may take a few minutes. To swap, add or drop a site, set_shortlist with the new list; to change a site's hours, price, staff or rent, set_site_tweaks. A price tweak changes revenue per customer only: the Jev panel is asked at the profile price, so never say a price change brings more or fewer customers. Hours, staff and rent tweaks flow through the simulation as expected. Then ask before rerunning; run_comparison only once they confirm. When the founder picks a site from the results, finalize_plan with the comparison in the view. Do not repeat a call.`;
+const jobInstructions = `Comparison tools: when the founder agrees to compare (for example "yes", "go ahead", "compare them"), call set_shortlist with the presented sites (at most 3; the view's shortlistIds or top candidates), then run_comparison, then go_to_step compare, and tell them it is running and may take a few minutes. To swap, add or drop a site, set_shortlist with the new list; to change a site's hours, price, staff or rent, set_site_tweaks. A price tweak changes revenue per customer only: the Jev panel is asked at the profile price, so never say a price change brings more or fewer customers. Hours, staff and rent tweaks flow through the simulation as expected. Then ask before rerunning; run_comparison only once they confirm. When the founder picks a site from the results, open_interior with that site. Complete its experiments and review before finalize_plan. Do not repeat a call.`;
 
 /** Model-facing tool schema: the contract's JSON schema without server-owned provenance. */
 function slimPatchSchema(): Record<string, unknown> {
@@ -249,13 +253,32 @@ export function createDeepIntakeRunner(
       ? FLOW_TOOL_SPECS.filter(
           (spec) => !event || FLOW_EVENT_TOOL_NAMES.includes(spec.name),
         ).map((spec) =>
-          tool(
-            (args) => {
-              signal.throwIfAborted();
-              return runFlowTool(spec.name, args);
+          tool((args) => {
+            signal.throwIfAborted();
+            return runFlowTool(spec.name, args);
+          }, spec),
+        )
+      : [];
+    const spatialExecutor =
+      ui && !event
+        ? createSpatialToolExecutor({
+            ...ui,
+            readInteriorAffordability: (projectId, input) =>
+              readConfiguredInteriorAffordability(projectId, input, signal),
+            verifyInteriorPolicies: async ({ receipt, ...input }) => {
+              const key = process.env.INTERIOR_JEV_API_KEY?.trim();
+              return Boolean(
+                key && verifyInteriorPolicyReceipt(input, receipt, key),
+              );
             },
-            spec,
-          ),
+          })
+        : undefined;
+    const spatialTools = spatialExecutor
+      ? SPATIAL_TOOL_SPECS.map((spec) =>
+          tool((args) => {
+            signal.throwIfAborted();
+            return spatialExecutor(spec.name, args);
+          }, spec),
         )
       : [];
     // Running and rerunning comparisons needs the founder's own words: never on event turns.
@@ -274,13 +297,10 @@ export function createDeepIntakeRunner(
       ? JOB_TOOL_SPECS.filter((spec) =>
           FLOW_JOB_TOOL_NAMES.includes(spec.name),
         ).map((spec) =>
-          tool(
-            (args) => {
-              signal.throwIfAborted();
-              return runJobTool(spec.name, args);
-            },
-            spec,
-          ),
+          tool((args) => {
+            signal.throwIfAborted();
+            return runJobTool(spec.name, args);
+          }, spec),
         )
       : [];
     // A finished comparison's results ride on the event note, saving a model round trip.
@@ -296,7 +316,15 @@ export function createDeepIntakeRunner(
     signal.throwIfAborted();
     const agent = createDeepAgent({
       model,
-      tools: [...(event ? [] : [saveProfile]), ...uiTools, ...flowTools, ...jobTools],
+      tools: event?.kind === "interior_experiment_finished"
+        ? spatialTools.filter((candidate) => candidate.name === "read_interior_experiment")
+        : [
+        ...(event ? [] : [saveProfile]),
+        ...uiTools,
+        ...flowTools,
+        ...spatialTools,
+        ...jobTools,
+      ],
       systemPrompt: [
         FLOW_INSTRUCTIONS,
         event ? eventInstructions : profileInstructions,

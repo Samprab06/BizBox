@@ -10,6 +10,8 @@ import {
   resetAfter,
   withFinalPlan,
   withSiteTweaks,
+  withInterior,
+  type InteriorFlowState,
   FlowStateSchema,
   type FlowState,
   type FlowStep,
@@ -114,6 +116,7 @@ export type FlowProgress = {
   reach: (step: FlowStep) => void;
   resetAfter: (step: FlowStep) => void;
   setSiteTweaks: (candidateId: string, tweaks: SiteTweaks | null) => void;
+  setInterior: (interior: InteriorFlowState) => void;
   setFinalPlan: (plan: FinalPlanSummary | null) => void;
 };
 
@@ -137,6 +140,11 @@ export function useFlowProgress(projectId: string): FlowProgress {
       updateFlowState(projectId, (s) => withSiteTweaks(s, candidateId, tweaks)),
     [projectId],
   );
+  const setInterior = useCallback(
+    (interior: InteriorFlowState) =>
+      updateFlowState(projectId, (s) => withInterior(s, interior)),
+    [projectId],
+  );
   const setFinalPlan = useCallback(
     (plan: FinalPlanSummary | null) =>
       updateFlowState(projectId, (s) => withFinalPlan(s, plan)),
@@ -150,7 +158,8 @@ export function useFlowProgress(projectId: string): FlowProgress {
       resetAfter: reset,
       setSiteTweaks,
       setFinalPlan,
+      setInterior,
     }),
-    [state, reach, reset, setSiteTweaks, setFinalPlan],
+    [state, reach, reset, setSiteTweaks, setFinalPlan, setInterior],
   );
 }

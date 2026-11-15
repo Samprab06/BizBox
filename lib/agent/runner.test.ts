@@ -1,3 +1,4 @@
+import { SPATIAL_TOOL_SPECS } from "./spatial-tools";
 import { formatViewContext } from "./view-context";
 import { AgentViewContextSchema } from "@/lib/contracts/agent";
 import { AIMessage } from "@langchain/core/messages";
@@ -317,14 +318,19 @@ describe("HAC-144 UI tool group", () => {
       "save_profile",
       ...FLOW_UI_TOOL_NAMES,
       ...FLOW_TOOL_NAMES,
+      ...SPATIAL_TOOL_SPECS.map((s) => s.name),
     ]);
     // Page jumps to the legacy screens are no longer bound.
-    expect(FLOW_UI_TOOL_NAMES).toEqual(["open_site", "focus_map", "highlight"]);
+    expect(FLOW_UI_TOOL_NAMES).toEqual([
+      "open_site",
+      "focus_map",
+      "open_interior",
+      "highlight",
+    ]);
     for (const legacy of [
       "show_step",
       "show_comparison",
       "open_simulator",
-      "open_interior",
       "show_plan",
     ])
       expect(model.boundNames).not.toContain(legacy);

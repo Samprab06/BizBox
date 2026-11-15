@@ -1,3 +1,11 @@
+import {
+  SpatialDraftSchema,
+  ControlledInteriorFindingSchema,
+  SpatialPoliciesSchema,
+  SpatialPolicyReceiptSchema,
+} from "./spatial";
+import { InteriorResponseSchema } from "./interior";
+import { InteriorAffordabilityAssessmentSchema } from "./interior-affordability";
 import { z } from "zod";
 import { LocationPlanSchema, OriginSchema } from ".";
 import { DemandSourceSchema, SiteTweaksSchema } from "./evaluation";
@@ -139,6 +147,32 @@ export const FinalPlanSummarySchema = z
     chosenAddress: z.string().min(1).max(300),
     rationale: z.string().min(1).max(2000),
     finalizedAt: z.string().datetime(),
+    interior: z
+      .object({
+        comparisonId: z.string().min(1).max(200),
+        siteId: z.string().min(1).max(200),
+        source: InteriorResponseSchema.optional(),
+        policies: SpatialPoliciesSchema.optional(),
+        policyReceipt: SpatialPolicyReceiptSchema.optional(),
+        affordability: InteriorAffordabilityAssessmentSchema.optional(),
+        affordabilityAccountId: z.string().trim().min(1).max(200).optional(),
+        baseline: SpatialDraftSchema,
+        draft: SpatialDraftSchema,
+        experimentQuestion: z.string().min(1).max(1000).optional(),
+        finding: ControlledInteriorFindingSchema.optional(),
+        ranRevision: z.number().int().nonnegative(),
+        reviewedRevision: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
+    referenceCafe: z
+      .object({
+        modelId: z.literal("qfmMbTLt4Bo"),
+        selectedPlan: z.union([z.literal(0), z.literal(1)]),
+        reviewed: z.literal(true),
+      })
+      .strict()
+      .optional(),
     demandSource: DemandSourceSchema,
     metrics: z
       .object({

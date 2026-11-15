@@ -1,6 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { SpatialReport } from "./spatial-report";
+import { ReferenceCafeReport } from "./reference-cafe-report";
+import {
+  useFlowProgress,
+  hasReviewedInterior,
+} from "@/lib/client/flow-progress";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
 import { intakeStorageKey } from "@/components/workspace-screen/intake-conversation";
@@ -56,6 +62,7 @@ export function PlanExport({
   comparisonId?: string;
   investigationId?: string;
 }) {
+  const flow = useFlowProgress(projectId);
   // HAC-135: without ?comparison= the plan opens the project's saved comparison.
   // `undefined` means storage hasn't been read yet (server render, first paint).
   const resolved = useProjectComparisonId(projectId, urlComparisonId);
@@ -198,6 +205,17 @@ export function PlanExport({
     );
 
   const { plan } = state;
+  const final = flow.state.finalPlan;
+  const interior = flow.state.interior;
+  const currentInterior =
+    final?.comparisonId === comparisonId &&
+    hasReviewedInterior(interior, {
+      projectId,
+      siteId: final.chosenSiteId,
+      comparisonId: comparisonId!,
+    })
+      ? interior
+      : null;
   const preparedOn = new Date().toLocaleDateString("en-US", {
     dateStyle: "long",
   });
@@ -211,6 +229,29 @@ export function PlanExport({
       aria-labelledby="plan-title"
       className="space-y-6 print:space-y-4 print:text-[11pt]"
     >
+      {final?.comparisonId === comparisonId &&
+        final.referenceCafe?.reviewed && (
+          <ReferenceCafeReport
+            selectedPlan={final.referenceCafe.selectedPlan}
+          />
+        )}
+      {currentInterior?.ranRevision === currentInterior?.draft.revision &&
+      currentInterior?.reviewedRevision === currentInterior?.draft.revision &&
+      currentInterior ? (
+        <SpatialReport
+          interior={{
+            ...currentInterior,
+            ranRevision: currentInterior.draft.revision,
+            reviewedRevision: currentInterior.draft.revision,
+          }}
+        />
+      ) : final?.comparisonId === comparisonId &&
+        final.referenceCafe?.reviewed ? null : (
+        <p role="status">
+          Exterior findings only. Complete and review interior experiments in
+          the workspace for the combined final report.
+        </p>
+      )}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2

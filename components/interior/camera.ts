@@ -209,7 +209,7 @@ export function toScanWorld(
 
 /** Where the replay's people and counters stand in the scan, for follow and lookAt. */
 export function scanTargets(replay: ScanReplay, placement: ScanPlacement) {
-  const layout = scanLayout(replay.frame, replay.stationCount);
+  const layout = replay.projectedLayout ?? scanLayout(replay.frame, replay.stationCount);
   return {
     stations: layout.stations.map((station) =>
       toScanWorld(placement, station, 1),

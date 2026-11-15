@@ -293,3 +293,42 @@ describe("interior source repository", () => {
     await expect(readInteriorSite({ execute }, "12:34")).rejects.toThrow();
   });
 });
+
+it("re-fetches legacy geometry for an approved mapping and preserves explicit uncalibrated fallback", async () => {
+  const fixture = getInteriorFixture("interior-fixture-scan");
+  if (fixture?.kind !== "scan" || !fixture.dimensions)
+    throw new Error("Missing fixture");
+  const legacy = fixture.dimensions,
+    read = async () => ({
+      ...site,
+      models: [{ ...site.models[0]!, dimensions: legacy }],
+    });
+  const replacement = {
+    ...structuredClone(legacy),
+    coordinateFrame: "showcase-y-up-v1" as const,
+  };
+  const provider = vi.fn(async () => replacement);
+  const refreshed = await resolveInterior("12:34", read, {
+    allowLicensedAssets: true,
+    dimensionsProvider: provider,
+  });
+  expect(provider).toHaveBeenCalledTimes(1);
+  expect(refreshed).toMatchObject({
+    kind: "scan",
+    dimensions: { coordinateFrame: "showcase-y-up-v1" },
+  });
+  const fallback = await resolveInterior("12:34", read, {
+    allowLicensedAssets: true,
+    dimensionsProvider: async () => undefined,
+  });
+  expect(fallback).toMatchObject({
+    kind: "scan",
+    dimensions: {
+      floors: legacy.floors,
+      coordinateUnit: legacy.coordinateUnit,
+    },
+  });
+  expect(fallback.provenance.limitations.join(" ")).toMatch(
+    /legacy.*no calibrated overlay/i,
+  );
+});

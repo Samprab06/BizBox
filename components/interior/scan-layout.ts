@@ -1,5 +1,9 @@
 import type { interiorFrame } from "../simulator/interior-state";
-
+import {
+  projectCustomerMotion,
+  projectEmployeeMotion,
+  type CustomerMotionGeometry,
+} from "../simulator/customer-motion";
 type Frame = ReturnType<typeof interiorFrame>;
 type Person = {
   id: string;
@@ -9,104 +13,56 @@ type Person = {
   z: number;
 };
 const spacing = 2.2;
-
-/** Remaining arc length is monotonic even across the legacy path's turns. */
-function remainingPath(
-  x: number,
-  z: number,
-  points: readonly [number, number][],
-) {
-  const lengths = points
-    .slice(1)
-    .map(([nextX, nextZ], index) =>
-      Math.hypot(nextX - points[index][0], nextZ - points[index][1]),
-    );
-  const total = lengths.reduce((sum, length) => sum + length, 0);
-  let walked = 0;
-  let bestDistance = Infinity;
-  let remaining = total;
-  lengths.forEach((length, index) => {
-    const [startX, startZ] = points[index];
-    const dx = points[index + 1][0] - startX;
-    const dz = points[index + 1][1] - startZ;
-    const fraction = Math.max(
-      0,
-      Math.min(1, ((x - startX) * dx + (z - startZ) * dz) / (length * length)),
-    );
-    const distance = Math.hypot(
-      x - startX - fraction * dx,
-      z - startZ - fraction * dz,
-    );
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      remaining = total - walked - fraction * length;
-    }
-    walked += length;
-  });
-  return { remaining, total };
-}
-
-/** Scan-only illustrative placement in metres. This does not model floor capacity. */
-export function scanLayout(frame: Frame, stationCount: number) {
-  const serviceX = (index: number) =>
-    (index - (stationCount - 1) / 2) * spacing;
-  const serviceByCustomer = new Map(frame.serving);
-  const people: Person[] = frame.customers.map((dot) => {
-    if (dot.state === "waiting") {
-      const index = frame.waiting.indexOf(dot.id);
-      return {
-        ...dot,
-        role: "customer",
+const geometries = new Map<number, CustomerMotionGeometry>();
+/** Fixed reference-scan geometry; coordinates remain illustrative meters. */
+export function scanMotionGeometry(
+  stationCount: number,
+): CustomerMotionGeometry {
+  let geometry = geometries.get(stationCount);
+  if (!geometry) {
+    geometry = {
+      entrance: { x: -4, z: 2.2 },
+      outsideApproach: { x: -4, z: 10 },
+      outsideExit: { x: -6, z: 10 },
+      exitVia: [{ x: -6, z: 2.2 }],
+      queueSlot: (index) => ({
         x: index < 4 ? 0 : (index - 3) * spacing,
         z: Math.min(index + 1, 4) * spacing,
-      };
-    }
-    if (dot.state === "serving")
-      return {
-        ...dot,
-        role: "customer",
-        x: serviceX(serviceByCustomer.get(dot.id) ?? 0),
+      }),
+      staffPoint: (index) => ({
+        x: (index - (stationCount - 1) / 2) * spacing,
+        z: -spacing,
+      }),
+      stationPoint: (index) => ({
+        x: (index - (stationCount - 1) / 2) * spacing,
         z: 0,
-      };
-    if (dot.state === "approaching") {
-      const route = remainingPath(dot.x, dot.z, [
-        [-8, 3.4],
-        [0, 3.4],
-        [0, 2.5],
-      ]);
-      return {
-        ...dot,
-        role: "customer",
-        x: -4,
-        z: 2.2 + (7.8 * route.remaining) / route.total,
-      };
-    }
-    const route = remainingPath(dot.x, dot.z, [
-      [-6, -0.75],
-      [3.35, -0.75],
-      [3.35, 2.2],
-      [0, 2.5],
-      [0, 3.4],
-      [8, 3.4],
-    ]);
-    return {
-      ...dot,
-      role: "customer",
-      x: -6,
-      z: 2.2 + 7.8 * (1 - route.remaining / route.total),
+      }),
+      walkSpeedMPerMin: 2.2,
+      approachDurationMin: 2,
+      exitDurationMin: 2,
     };
-  });
+    geometries.set(stationCount, geometry);
+  }
+  return geometry;
+}
+/** Continuous event-time motion shared with modeled view; no state-specific teleport. */
+export function scanLayout(frame: Frame, stationCount: number) {
+  const geometry = scanMotionGeometry(stationCount);
+  const people: Person[] = projectCustomerMotion(
+    frame.motion.run,
+    frame.motion.minute,
+    geometry,
+  ).map((dot) => ({ ...dot, role: "customer" }));
   people.push(
-    ...frame.employees.map((dot): Person => ({
-      ...dot,
-      role: "employee",
-      state: "staffing",
-      x: serviceX(dot.station - 1),
-      z: -spacing,
-    })),
+    ...projectEmployeeMotion(
+      frame.motion.run,
+      frame.motion.minute,
+      frame.motion.employeeCount ?? 0,
+      geometry,
+    ).map((dot) => ({ ...dot, role: "employee" as const })),
   );
   const stations = Array.from({ length: stationCount }, (_, index) => ({
-    x: serviceX(index),
+    x: geometry.stationPoint(index).x,
     z: -spacing / 2,
   }));
   return { people, stations };
