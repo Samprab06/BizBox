@@ -56,6 +56,21 @@ const metrics = (out: AssembledEvaluation) =>
 const DAYS_PER_MONTH = WEEKDAYS_PER_MONTH + WEEKEND_DAYS_PER_MONTH;
 
 describe("per-site tweaks in assembly (Scene 1)", () => {
+  it("derives planned counters from staff, capped by the floor area", async () => {
+    const base = await assemble(assemblyInput());
+    const b = site(base, "102:2").config;
+    expect(b.staff.headcount).toBe(2);
+    expect(b.stations).toEqual({
+      planned: 2,
+      usableSf: 1300,
+      sfPerStation: 100,
+    });
+    const three = await assemble(withTweaks({ "102:2": { staff: 3 } }));
+    expect(site(three, "102:2").config.stations.planned).toBe(3);
+    const many = await assemble(withTweaks({ "102:2": { staff: 40 } }));
+    expect(site(many, "102:2").config.stations.planned).toBe(13);
+  });
+
   it("changes only the tweaked site's config and metrics, and reports the tweaks", async () => {
     const base = await assemble(assemblyInput());
     const tweaks = {
@@ -79,6 +94,8 @@ describe("per-site tweaks in assembly (Scene 1)", () => {
       },
       prices: { avgTicketUsd: 8 },
       staff: { ...site(base, "102:2").config.staff, headcount: 3 },
+      // One counter per person on shift: the staff tweak moves the counters too.
+      stations: { ...site(base, "102:2").config.stations, planned: 3 },
       lease: {
         ...site(base, "102:2").config.lease,
         askingRentUsdPerSfYear: (2000 * 12) / 1300,

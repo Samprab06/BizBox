@@ -70,7 +70,8 @@ describe("evaluation assembly with injected source dependencies", () => {
       leaseTermMonths: 60,
     });
     expect(site.config.stations).toEqual({
-      planned: 13,
+      // Two staff on shift (default) -> two counters; area would fit 13.
+      planned: 2,
       usableSf: 1300,
       sfPerStation: 100,
     });

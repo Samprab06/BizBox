@@ -572,7 +572,11 @@ export async function assembleEvaluation(
     const config: EvaluationSite["config"] = {
       hours: { weekday: siteHours, weekend: siteHours },
       stations: {
-        planned: Math.floor(sf / sfPerStation),
+        // One counter per person on shift, capped by what the floor area fits.
+        planned: Math.max(
+          0,
+          Math.min(Math.max(siteStaff, 1), Math.floor(sf / sfPerStation)),
+        ),
         usableSf: sf,
         sfPerStation,
       },
