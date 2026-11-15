@@ -21,7 +21,7 @@ import type { CopilotReadDependencies } from "./copilot-read-tools";
 
 /** Lazy production composition over existing scoped stores; construction performs no I/O. */
 export function createPostgresCopilotToolDependencies(
-  hooks: Pick<CopilotReadDependencies, "diagnose" | "focusView"> = {},
+  hooks: Pick<CopilotReadDependencies, "focusView"> = {},
 ) {
   const repository = createPostgresScenarioRepository();
   const scenarios = createScenarioService({ repository, newId: randomUUID });
@@ -268,7 +268,7 @@ export function createPostgresCopilotToolDependencies(
 }
 
 export function createPostgresCopilotTools(
-  hooks: Pick<CopilotReadDependencies, "diagnose" | "focusView"> = {},
+  hooks: Pick<CopilotReadDependencies, "focusView"> = {},
 ) {
   return createCopilotTools(createPostgresCopilotToolDependencies(hooks));
 }
