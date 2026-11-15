@@ -1,17 +1,24 @@
 "use client";
 
-import { INTAKE_UPDATED_EVENT } from "@/lib/client/intake-events";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
-import { VoicePanel } from "@/components/voice/voice-panel";
+import { useConsultant, useConsultantVoice } from "@/components/shell/consultant-shell";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import Link from "next/link";
-import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { assumptionRows, formFromDraft, IntakeResponseSchema, patchFromForm } from "./live";
-import { answerPrompt, fields, initialSession, intakeSessionSchema, missingFields, profileValidationMessage, updateProfile, type IntakeSession } from "./profile";
+import { VOICE_LIMITS } from "@/lib/voice/contracts";
+import { useState, useSyncExternalStore } from "react";
+import { sessionOrInitial, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
+import type { IntakeConversation, SendOptions } from "@/components/workspace-screen/use-intake-conversation";
+import { assumptionRows } from "./live";
+import { answerPrompt, fields, missingFields, profileValidationMessage, updateProfile } from "./profile";
 
 type Key = (typeof fields)[number]["key"];
-type Failure = { message: string; retry?: string };
+
+/** Wording for the detailed form; the request itself is the workspace assistant's (HAC-129). */
+const formCopy: IntakeCopy = {
+  unreachable: "Could not reach the intake service.",
+  unavailable: "Intake is temporarily unavailable. Please try again.",
+  unexpected: "The intake service sent an unexpected reply. Please try again.",
+};
 
 const subscribe = () => () => {};
 
@@ -24,162 +31,54 @@ export function intakeHref(projectId: string, mode: IntakeMode, siteId?: string)
 }
 
 export function IntakeScreen({ projectId, mode = "guided", siteId }: { projectId: string; mode?: IntakeMode; siteId?: string }) {
-  const key = `sitework:intake:v1:${projectId}`;
   const ready = useSyncExternalStore(subscribe, () => true, () => false);
-  if (!ready) return <p role="status">Loading intake…</p>;
-  return <IntakeForm key={key} storageKey={key} projectId={projectId} mode={mode} siteId={siteId} />;
+  const consultant = useConsultant();
+  if (!ready || !consultant) return <p role="status">Loading intake…</p>;
+  return <IntakeForm projectId={projectId} mode={mode} siteId={siteId} conversation={consultant.conversation} />;
 }
 
-function readSession(key: string): IntakeSession {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? intakeSessionSchema.parse(JSON.parse(saved)) : initialSession;
-  } catch {
-    return initialSession;
-  }
-}
+/** Wording, placement and the "edits still work" note for the form's own requests. */
+const formSend: SendOptions = { source: "page", copy: formCopy, suffix: "Your profile edits still work." };
 
-/** HAC-66: live when the server reports an intake model; otherwise the labelled offline fixture. */
-function useLiveIntake(projectId: string) {
-  const [live, setLive] = useState(false);
-  useEffect(() => {
-    let active = true;
-    fetch(`/api/projects/${encodeURIComponent(projectId)}/intake`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: { modelConfigured?: unknown } | null) => {
-        if (active) setLive(body?.modelConfigured === true);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [projectId]);
-  return live;
-}
-
-function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: string; projectId: string; mode: IntakeMode; siteId?: string }) {
-  const [session, setSession] = useState(() => readSession(storageKey));
+/**
+ * HAC-143: the form keeps no conversation state of its own. History, the request queue,
+ * the availability probe and failures are the consultant shell's (one per project); live
+ * chat and voice happen in the consultant dock. The form adds structured edits, the offline
+ * fixture's prompt-by-prompt answers and, while it is open, prompt-guarded voice answers.
+ */
+function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: string; mode: IntakeMode; siteId?: string; conversation: IntakeConversation }) {
+  const { read, save, enqueue, sendNow, syncEdits, report, busy, storageError } = conversation;
+  const session = conversation.session ?? sessionOrInitial(null);
+  const live = conversation.availability === "live";
+  const failure = conversation.failure?.source === "page" ? conversation.failure : null;
   const [message, setMessage] = useState("");
   const [drafts, setDrafts] = useState<Partial<Record<Key, string>>>({});
-  const [storageError, setStorageError] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  const live = useLiveIntake(projectId);
-  // The latest session for async callbacks; save() and the storage listener keep it current.
-  const latest = useRef(session);
-  const requests = useRef<Promise<unknown>>(Promise.resolve());
-  const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const missing = missingFields(session.profile);
   const next = missing[0];
 
-  useEffect(() => {
-    const sync = (event: StorageEvent) => {
-      if (event.key !== storageKey) return;
-      const stored = readSession(storageKey);
-      latest.current = stored;
-      setSession(stored);
-    };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, [storageKey]);
+  const sync = () => syncEdits(formSend);
+  const currentPrompt = () => missingFields(read().profile)[0]?.label ?? "Review your profile";
 
-  function save(updated: IntakeSession) {
-    latest.current = updated;
-    setSession(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      window.dispatchEvent(new CustomEvent(INTAKE_UPDATED_EVENT, { detail: { key: storageKey } }));
-      setStorageError(false);
-    } catch {
-      setStorageError(true);
-    }
-  }
-
-  /** Sends the founder's message (or only pending form edits) with the round-tripped state. */
-  function enqueue(action: () => Promise<string | null>): Promise<string | null> {
-    const result = requests.current.then(() => mounted.current ? action() : null);
-    requests.current = result.catch(() => null);
-    return result;
-  }
-
-  function send(text: string | undefined, appendFounder: boolean): Promise<string | null> {
-    return enqueue(() => sendLive(text, appendFounder));
-  }
-
-  async function sendLive(text: string | undefined, appendFounder: boolean): Promise<string | null> {
-    const current = latest.current;
-    const pending = current.pending ?? [];
-    const patch = patchFromForm(current.profile, pending);
-    if (!text && !patch) return null;
-    const before = appendFounder && text ? { ...current, messages: [...current.messages, { role: "founder" as const, text }] } : current;
-    save(before);
-    setBusy(true);
-    setFailure(null);
-    try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/intake`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ state: current.live?.state, patch, message: text }),
-      });
-      const body: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const error = body as { message?: unknown } | null;
-        const reason = typeof error?.message === "string" ? error.message : "Intake is temporarily unavailable. Please try again.";
-        setFailure({ message: `${reason} Your profile edits still work.`, retry: response.status >= 500 ? text ?? "" : undefined });
-        return null;
-      }
-      const parsed = IntakeResponseSchema.safeParse(body);
-      if (!parsed.success) {
-        setFailure({ message: "The intake service sent an unexpected reply. Please try again.", retry: text ?? "" });
-        return null;
-      }
-      const result = parsed.data;
-      if (!mounted.current) return null;
-      const now = latest.current;
-      // Form edits made while the request was in flight stay newer than the reply.
-      const sent = new Set(pending);
-      const stillPending = (now.pending ?? []).filter((key) => !sent.has(key) || now.profile[key]?.value !== current.profile[key]?.value);
-      const fromDraft = formFromDraft(result.draft);
-      const profile = { ...now.profile };
-      for (const [key, answer] of Object.entries(fromDraft) as [Key, { value: string; origin: "default" | "founder" }][]) {
-        if (!stillPending.includes(key)) profile[key] = answer;
-      }
-      save({
-        ...now,
-        profile,
-        pending: stillPending,
-        live: { state: { draft: result.draft, assumptions: result.assumptions }, missingRequiredFields: result.missingRequiredFields, findings: result.findings },
-        messages: text ? [...now.messages, { role: "agent", text: result.assistantMessage }] : now.messages,
-      });
-      return result.assistantMessage;
-    } catch {
-      if (mounted.current) setFailure({ message: "Could not reach the intake service. Your profile edits still work.", retry: text ?? "" });
-      return null;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** Sends committed form edits as a structured patch; no model call is needed. */
-  function sync() {
-    // A pending retry carries these edits with it, so it is not pre-empted.
-    if (live && !busy && failure?.retry === undefined && latest.current.pending?.length) void send(undefined, false);
-  }
-
-  const currentPrompt = () => missingFields(latest.current.profile)[0]?.label ?? "Review your profile";
-
-  /** Typed and spoken messages share this existing-state action queue. */
+  /** Typed fixture answers and spoken answers share the project's one action queue. */
   function submitMessage(raw: string, expectedPrompt?: string): Promise<string | null> {
     const text = raw.trim();
     if (!text) return Promise.resolve(null);
+    if (live) {
+      // Checked before sending: a spoken answer must not land on a prompt that has moved on.
+      return enqueue(async () => {
+        if (expectedPrompt !== undefined && expectedPrompt !== currentPrompt()) {
+          report("Your intake changed before this voice answer could be applied. Please repeat it or keep typing.", "page");
+          return null;
+        }
+        return sendNow(text, true, formSend);
+      });
+    }
     return enqueue(async () => {
       if (expectedPrompt !== undefined && expectedPrompt !== currentPrompt()) {
-        setFailure({ message: "Your intake changed before this voice answer could be applied. Please repeat it or keep typing." });
+        report("Your intake changed before this voice answer could be applied. Please repeat it or keep typing.", "page");
         return null;
       }
-      if (live) return sendLive(text, true);
-      const current = latest.current;
+      const current = read();
       const prompt = missingFields(current.profile)[0];
       const updated = answerPrompt(current, text);
       if (updated === current || updated.messages.length <= current.messages.length) return null;
@@ -189,10 +88,11 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
     });
   }
 
-  const voiceAdapter: VoiceAdapter = {
-    readContext: () => ({ projectId, mode: "intake", prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
+  // HAC-143: the dock's one voice session answers the form's current prompt while it is open.
+  useConsultantVoice({
+    readContext: () => ({ projectId, mode: "intake", view: conversation.view, prompt: currentPrompt().slice(0, VOICE_LIMITS.promptChars) }),
     submitTranscript: text => submitMessage(text, currentPrompt()),
-  };
+  });
 
   const assumptions = session.live ? assumptionRows(session.live.state.assumptions) : [];
   const storageAlert = storageError && <p role="alert" className="mb-4 text-sm">This browser could not save your changes.</p>;
@@ -200,7 +100,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
   if (mode === "guided") {
     /** HAC-127: a confirmed guided answer takes the same save path as a profile-field edit. */
     const commit = (key: Key, value: string) => {
-      const current = latest.current;
+      const current = read();
       const pending = live ? [...new Set([...(current.pending ?? []), key])] : current.pending;
       save({ ...current, profile: updateProfile(current.profile, key, value), pending });
       sync();
@@ -212,13 +112,13 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
           profile={session.profile}
           onCommit={commit}
           formHref={intakeHref(projectId, "form", siteId)}
-          mapHref={workspaceHref(projectId, "map", siteId)}
+          nextHref={workspaceHref(projectId, "workspace", siteId)}
           notice={failure && (
             <div role="alert" className="mt-4 rounded-xl border border-white/25 bg-black/30 p-3 text-sm">
               <p>{failure.message}</p>
               {failure.retry !== undefined && (
                 <button type="button" className="mt-2 rounded-full border border-white/40 px-3 py-1" disabled={busy}
-                  onClick={() => void send(failure.retry || undefined, false)}>Retry</button>
+                  onClick={conversation.retry}>Retry</button>
               )}
             </div>
           )}
@@ -252,28 +152,14 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
               <p>{failure.message}</p>
               {failure.retry !== undefined && (
                 <button type="button" className="mt-2 rounded-lg border border-line px-3 py-1" disabled={busy}
-                  onClick={() => void send(failure.retry || undefined, false)}>Retry</button>
+                  onClick={conversation.retry}>Retry</button>
               )}
             </div>
           )}
-          <VoicePanel adapter={voiceAdapter} />
           {live ? (
-            <form onSubmit={(event) => {
-              event.preventDefault();
-              const text = message.trim();
-              if (!text || busy) return;
-              setMessage("");
-              void submitMessage(text);
-            }}>
-              <label className="block text-sm font-medium" htmlFor="intake-live-message">Message the intake agent</label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <input id="intake-live-message" className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2"
-                  value={message} onChange={(event) => setMessage(event.target.value)} required />
-                <button type="submit" disabled={busy} className="rounded-lg bg-pine px-4 py-2 text-white disabled:opacity-60">
-                  {busy ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </form>
+            <p className="text-sm text-muted">
+              Message the intake agent in the BizBox assistant, by text or voice. Replies appear here and in the assistant.
+            </p>
           ) : (
           <form onSubmit={(event) => {
             event.preventDefault();
@@ -310,7 +196,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
                 const invalid = profileValidationMessage(field, input);
                 setDrafts((current) => ({ ...current, [field.key]: invalid ? input : undefined }));
                 if (!invalid) {
-                  const current = latest.current;
+                  const current = read();
                   const pending = live ? [...new Set([...(current.pending ?? []), field.key])] : current.pending;
                   save({ ...current, profile: updateProfile(current.profile, field.key, input), pending });
                 }
@@ -331,7 +217,7 @@ function IntakeForm({ storageKey, projectId, mode, siteId }: { storageKey: strin
                       step={"numeric" in field ? 1 : undefined}
                       id={`profile-${field.key}`} value={value} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} onChange={(event) => changed(event.target.value)} onBlur={sync} />
                   )}
-                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-red-800">{error}</p>}
+                  {error && <p id={errorId} role="alert" className="mt-1 text-sm font-medium text-danger">{error}</p>}
                 </div>
               );
             })}

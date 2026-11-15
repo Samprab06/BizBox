@@ -7,7 +7,8 @@ import { AssumedValueSchema, OriginSchema } from "./index";
  * A scenario is never updated. Any change is a new row whose `parentId` points at
  * the version it replaces. Every override keeps the same provenance wrapper the
  * rest of the contracts use (value, unit, origin, evidenceIds). `founder` means the
- * founder asked for the value; an agent-authored scenario can never carry it.
+ * founder asked for the value; agent children may retain unchanged founder values
+ * from their parent, but may not introduce or alter founder wrappers.
  */
 
 const Id = z.string().min(1);
@@ -24,7 +25,9 @@ const Positive = (unit: string) =>
 const WholeNumber = (unit: string, min: number, max = Infinity) =>
   KnownNumber(unit).refine(
     (v) =>
-      Number.isInteger(v.value) && (v.value ?? 0) >= min && (v.value ?? 0) <= max,
+      Number.isInteger(v.value) &&
+      (v.value ?? 0) >= min &&
+      (v.value ?? 0) <= max,
     `Must be an integer from ${min} to ${max}`,
   );
 
@@ -129,7 +132,12 @@ export const ScenarioSchema = z
         path: ["rationale"],
         message: "An agent-authored scenario needs a rationale",
       });
-    if (s.author === "agent" && overrideOrigins(s.overrides).includes("founder"))
+    // Child provenance needs the parent and is checked by deriveScenario/parseScenario.
+    if (
+      s.author === "agent" &&
+      s.parentId === null &&
+      overrideOrigins(s.overrides).includes("founder")
+    )
       ctx.addIssue({
         code: "custom",
         path: ["overrides"],

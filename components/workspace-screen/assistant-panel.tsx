@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 import { assistantModes, nextAssistantMode, type AssistantMode } from "./model";
+import { useAssistantDraft } from "./use-assistant-draft";
 import type { IntakeConversation } from "./use-intake-conversation";
 
 const MODE_LABEL: Record<AssistantMode, string> = {
@@ -102,20 +110,31 @@ function Conversation({
 /**
  * One assistant, two input modes. Text and Voice are WAI-ARIA tabs over the same conversation
  * hook and the same composer draft; switching modes only changes which input is shown.
+ * HAC-143: the consultant shell owns the mode and the voice adapter, so both survive
+ * navigation; the panel itself stays mounted in the project layout.
  */
 export function AssistantPanel({
   projectId,
   conversation,
-  selectedSiteId,
-  summary,
+  mode,
+  onModeChange,
+  voiceAdapter,
+  actions,
+  inline,
+  className = "",
 }: {
   projectId: string;
   conversation: IntakeConversation;
-  selectedSiteId?: string;
-  summary: string;
+  mode: AssistantMode;
+  onModeChange: (mode: AssistantMode) => void;
+  voiceAdapter: VoiceAdapter;
+  /** Extra header controls (the shell's layout toggle). */
+  actions?: ReactNode;
+  /** HAC-150: an answer card shown in the Text tab between the conversation and the composer. */
+  inline?: ReactNode;
+  className?: string;
 }) {
-  const [mode, setMode] = useState<AssistantMode>("text");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useAssistantDraft(projectId);
   const [historyOpen, setHistoryOpen] = useState(false);
   const tabs = useRef<Record<AssistantMode, HTMLButtonElement | null>>({
     text: null,
@@ -124,11 +143,13 @@ export function AssistantPanel({
   const base = useId();
   const tabId = (value: AssistantMode) => `${base}-tab-${value}`;
   const panelId = (value: AssistantMode) => `${base}-panel-${value}`;
-  const { availability, busy, failure } = conversation;
+  const { availability, busy } = conversation;
   const offline = availability === "offline";
 
+  const failure = conversation.failure?.source === "assistant" ? conversation.failure : null;
+
   function select(next: AssistantMode, focus: boolean) {
-    setMode(next);
+    onModeChange(next);
     if (focus) tabs.current[next]?.focus();
   }
 
@@ -138,18 +159,6 @@ export function AssistantPanel({
     event.preventDefault();
     select(next, true);
   }
-
-  const voiceAdapter: VoiceAdapter = {
-    readContext: () => ({
-      projectId,
-      mode: "chat",
-      ...(selectedSiteId && selectedSiteId.length <= 200
-        ? { selectedSiteId }
-        : {}),
-      summary: summary.slice(0, VOICE_LIMITS.summaryChars),
-    }),
-    submitTranscript: (text) => conversation.submit(text),
-  };
 
   const status =
     availability === "checking"
@@ -161,7 +170,7 @@ export function AssistantPanel({
   return (
     <aside
       aria-labelledby={`${base}-heading`}
-      className="flex min-h-[420px] min-w-0 flex-col overflow-hidden rounded-3xl border border-viewport-line bg-viewport-canvas/95 text-viewport-ink lg:h-full"
+      className={`flex min-w-0 flex-col overflow-hidden rounded-3xl border border-viewport-line bg-viewport-canvas/95 text-viewport-ink ${className}`}
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-viewport-line px-5 py-4">
         <div className="flex items-center gap-2">
@@ -175,6 +184,7 @@ export function AssistantPanel({
             {status}
           </span>
         </div>
+        <div className="flex items-center gap-2">
         <div
           role="tablist"
           aria-label="Assistant mode"
@@ -205,7 +215,12 @@ export function AssistantPanel({
             </button>
           ))}
         </div>
+        {actions}
+        </div>
       </header>
+      <p className="border-b border-viewport-line px-5 py-2 text-xs text-viewport-muted">
+        Staffing changes and Keep/Revert are not connected yet.
+      </p>
 
       {failure && (
         <div
@@ -241,6 +256,7 @@ export function AssistantPanel({
         {mode === "text" && (
           <>
             <Conversation conversation={conversation} id={`${base}-log-text`} />
+            {inline}
             <form
               className="border-t border-viewport-line p-4"
               onSubmit={(event) => {
@@ -303,11 +319,12 @@ export function AssistantPanel({
       >
         {mode === "voice" && (
           <>
-            <div className="px-5 text-ink">
+            <div className="px-5">
               <VoicePanel
                 adapter={voiceAdapter}
                 title="Talk to BizBox"
                 label="Voice assistant"
+                tone="dark"
               />
             </div>
             <details

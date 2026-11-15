@@ -9,11 +9,20 @@ import {
   useSyncExternalStore,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import { INTAKE_UPDATED_EVENT } from "./intake-events";
 import type {
   WorkspaceObservation,
   WorkspaceReport,
 } from "./workspace-context";
+
+export const AgentViewContextState = createContext<
+  AgentViewContext | undefined
+>(undefined);
+
+export function useAgentViewContext() {
+  return useContext(AgentViewContextState);
+}
 
 export type WorkspacePublisher = (
   source: string,

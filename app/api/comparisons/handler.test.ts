@@ -14,7 +14,11 @@ import {
 } from "@/lib/demand/fixtures";
 import { createMemoryComparisonStore } from "@/lib/evaluation/store";
 import { syntheticHoustonFixture } from "@/fixtures/houston-coffee";
-import { AssemblyError } from "@/lib/evaluation/assemble";
+import {
+  AssemblyError,
+  JEV_COMPETITOR_SET_VERSION,
+  PanelInProgressError,
+} from "@/lib/evaluation/assemble";
 import type { SiteConfigInput } from "@/lib/sim/contracts";
 import { createSensitivityHandler } from "./[comparisonId]/sensitivity/handler";
 import {
@@ -136,6 +140,7 @@ describe("POST /api/comparisons", () => {
         profileVersion: 1,
         demandSource: "huff",
       }),
+      expect.objectContaining({ deadlineAt: expect.any(Number) }),
     );
     expect((await response.json()).assembly).toEqual(assembly);
     expect(store.records.get("p1/assembled_1")?.evaluation.assembly).toEqual(
@@ -157,6 +162,71 @@ describe("POST /api/comparisons", () => {
         ).json()
       ).assembly,
     ).toEqual(assembly);
+  });
+
+  it("returns 202 in_progress for a deadline-limited Jev panel and resumes on the same POST (HAC-155)", async () => {
+    const store = createMemoryComparisonStore({ p1: 1 });
+    const profile = {
+      ...syntheticHoustonFixture.profile,
+      id: "profile-v1",
+      projectId: "p1",
+    };
+    const deadlines: unknown[] = [];
+    const jevCompetitorSet = {
+      version: JEV_COMPETITOR_SET_VERSION,
+      sites: { "201:301": { competitorIds: ["comp_a"], capped: false } },
+    };
+    const assemble = vi
+      .fn()
+      .mockImplementationOnce(async (_input: unknown, deadline: unknown) => {
+        deadlines.push(deadline);
+        throw new PanelInProgressError(120, 400);
+      })
+      .mockImplementationOnce(async (_input: unknown, deadline: unknown) => {
+        deadlines.push(deadline);
+        return {
+          findings: [],
+          assumptions: {},
+          jevCompetitorSet,
+          request: EvaluationRequestSchema.parse(evaluationRequest()),
+        };
+      });
+    let n = 0;
+    const handler = createComparisonsHandler({
+      store,
+      newId: () => `resumed_${++n}`,
+      profiles: { load: async () => profile },
+      assemble,
+      panelBudgetMs: 35_000,
+      now: () => 1_000,
+    });
+    const body = {
+      projectId: "p1",
+      profileId: "profile-v1",
+      candidateIds: ["201:301"],
+      demandSource: "jev",
+    };
+    const first = await handler(post(body));
+    expect(first.status).toBe(202);
+    expect(await first.json()).toEqual({
+      status: "in_progress",
+      message: "Jev panel in progress (120/400 personas)",
+      completedPersonas: 120,
+      totalPersonas: 400,
+    });
+    expect(store.records.size).toBe(0);
+    const second = await handler(post(body));
+    expect(second.status).toBe(201);
+    expect(store.records.size).toBe(1);
+    // HAC-156: the stored comparison keeps the Jev competitor-set provenance.
+    expect(
+      store.records.get("p1/resumed_1")?.evaluation.assembly?.jevCompetitorSet,
+    ).toEqual(jevCompetitorSet);
+    expect(assemble.mock.calls[0]![0]).toEqual(assemble.mock.calls[1]![0]);
+    expect(deadlines).toEqual([
+      expect.objectContaining({ deadlineAt: 36_000 }),
+      expect.objectContaining({ deadlineAt: 36_000 }),
+    ]);
   });
 
   it("rejects invalid shortcut IDs, missing scoped profiles and unusable sites without saving", async () => {

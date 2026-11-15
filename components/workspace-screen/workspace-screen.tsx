@@ -5,14 +5,16 @@ import { useId, useState } from "react";
 import { useSiteSearch } from "@/lib/client/use-site-search";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
-import { AssistantPanel } from "./assistant-panel";
+import { useConsultant } from "@/components/shell/consultant-shell";
+import { parseIntakeSession } from "./intake-conversation";
 import { LocationPanel } from "./location-panel";
 import { cityPhotoFor, selectedSpace, workspaceHeader } from "./model";
-import { useIntakeConversation } from "./use-intake-conversation";
+import { useContextIntake } from "@/lib/client/use-workspace-context";
 
 /**
- * HAC-128: the screen a founder lands on after onboarding. One city/budget header, one
- * selected-location panel and one assistant panel (Text / Voice over one conversation).
+ * HAC-128: the screen a founder lands on after onboarding: one city/budget header and one
+ * selected-location panel. HAC-143: the assistant (Text / Voice over one conversation) is
+ * the consultant shell's dock in the project layout, so it is not mounted here.
  */
 export function WorkspaceScreen({
   projectId,
@@ -24,21 +26,15 @@ export function WorkspaceScreen({
   siteId?: string;
 }) {
   const headingId = useId();
-  const conversation = useIntakeConversation(projectId);
+  const consultant = useConsultant();
+  // Outside a project layout (no shell) the saved session is read directly.
+  const raw = useContextIntake(projectId);
+  const session = consultant?.conversation.session ?? parseIntakeSession(raw);
   const { state: search } = useSiteSearch(projectId);
   const [expanded, setExpanded] = useState(false);
-  const header = workspaceHeader(conversation.session, project);
+  const header = workspaceHeader(session, project);
   const space = selectedSpace(search, project, siteId);
   const selected = space.kind === "space" ? space : undefined;
-  const summary = [
-    `City: ${header.city}`,
-    `Business: ${header.business}`,
-    header.budget,
-    selected
-      ? `Selected space: ${selected.name}${selected.example ? " (example)" : ""}`
-      : "No space selected",
-  ].join(". ");
-
   return (
     <section
       aria-labelledby={headingId}
@@ -65,7 +61,7 @@ export function WorkspaceScreen({
           </p>
         </div>
         <Link
-          href={workspaceHref(projectId, "intake")}
+          href={workspaceHref(projectId, "intake", selected?.id)}
           prefetch={false}
           className="flex items-center gap-2 rounded-xl border border-viewport-line px-4 py-2.5 text-sm hover:bg-viewport-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-viewport-ink"
         >
@@ -82,19 +78,13 @@ export function WorkspaceScreen({
           </svg>
         </Link>
       </header>
-      <div className="mt-5 grid min-w-0 gap-4 lg:h-[600px] lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+      <div className="mt-5 grid min-w-0 gap-4 lg:h-[560px]">
         <LocationPanel
           projectId={projectId}
           photo={cityPhotoFor(header.city)}
           space={space}
           expanded={expanded}
           onExpandedChange={setExpanded}
-        />
-        <AssistantPanel
-          projectId={projectId}
-          conversation={conversation}
-          selectedSiteId={selected?.id}
-          summary={summary}
         />
       </div>
     </section>

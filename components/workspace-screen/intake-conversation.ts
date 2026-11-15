@@ -4,9 +4,14 @@
  * session (localStorage `sitework:intake:v1:<projectId>`, read by IntakeScreen, the context
  * bar and the site search). There is no second conversation or profile store.
  *
- * The request/merge steps mirror IntakeForm.sendLive in components/intake/intake-screen.tsx
- * and reuse its mapping helpers from components/intake/live.ts.
+ * HAC-129: this is the one implementation of the request/merge steps. The workspace hook and
+ * the intake screen's detailed form (IntakeForm.sendLive) both call these functions, so the
+ * body shape, error handling and the in-flight-edit merge cannot drift apart. The surfaces
+ * only differ in their wording (`IntakeCopy`) and in whether a reply carries chat text.
  */
+import { profileFromIntake } from "@/lib/client/intake-business-profile";
+import { IntakeDraftSchema, type IntakeState } from "@/lib/contracts/intake";
+import type { AgentViewContext } from "@/lib/contracts/agent";
 import {
   formFromDraft,
   IntakeResponseSchema,
@@ -35,12 +40,68 @@ export function parseIntakeSession(raw: string | null): IntakeSession | null {
   }
 }
 
-/** The same body IntakeForm sends: round-tripped state, pending form edits and the message. */
-export function intakeRequestBody(session: IntakeSession, text: string) {
+/** Keep every explicit live leaf, including null/unknown; fill only absent form-derived data. */
+function fillMissing(current: unknown, fallback: unknown): unknown {
+  if (current === undefined) return fallback;
+  if (
+    current === null ||
+    fallback === null ||
+    typeof current !== "object" ||
+    typeof fallback !== "object" ||
+    Array.isArray(current) ||
+    Array.isArray(fallback)
+  )
+    return current;
+  const existing = current as Record<string, unknown>;
+  return Object.fromEntries(
+    [...new Set([...Object.keys(fallback), ...Object.keys(existing)])].map(
+      (key) => [
+        key,
+        fillMissing(existing[key], (fallback as Record<string, unknown>)[key]),
+      ],
+    ),
+  );
+}
+
+function currentViewState(
+  session: IntakeSession,
+  projectId: string,
+): IntakeState | undefined {
+  const { profile } = profileFromIntake(session, projectId);
+  if (!profile) return session.live?.state;
+  const searchDraft = Object.fromEntries(
+    Object.entries(profile).filter(([key]) => key in IntakeDraftSchema.shape),
+  );
+  const draft = IntakeDraftSchema.safeParse(
+    fillMissing(session.live?.state.draft, searchDraft),
+  );
+  // Partial live constraints can conflict with older completed form values (e.g. hours).
+  // Keep the valid original state so sending a turn never fails during serialization.
+  if (!draft.success) return session.live?.state;
   return {
-    state: session.live?.state,
+    draft: draft.data,
+    assumptions: session.live?.state.assumptions ?? {},
+  };
+}
+
+/**
+ * Both surfaces send the existing state/patch/message contract and the active screen.
+ * A completed browser form seeds missing state only when selected-site context needs it.
+ */
+export function intakeRequestBody(
+  session: IntakeSession,
+  text?: string,
+  view?: AgentViewContext,
+  projectId?: string,
+) {
+  return {
+    state:
+      text && projectId && (view?.siteId || view?.candidateIds?.length)
+        ? currentViewState(session, projectId)
+        : session.live?.state,
     patch: patchFromForm(session.profile, session.pending ?? []),
     message: text,
+    ...(view ? { view } : {}),
   };
 }
 
@@ -54,14 +115,31 @@ export function withFounderMessage(
   };
 }
 
+/** A successful outcome carries the reply UI actions (HAC-144). */
 export type IntakeOutcome =
   | { ok: true; result: IntakeResponse }
   | { ok: false; message: string; retryable: boolean };
+
+/** Surface-specific wording for the three ways a request can fail. */
+export type IntakeCopy = {
+  unreachable: string;
+  unavailable: string;
+  unexpected: string;
+};
+
+export const assistantCopy: IntakeCopy = {
+  unreachable: "Could not reach the BizBox assistant. Please try again.",
+  unavailable:
+    "The BizBox assistant is temporarily unavailable. Please try again.",
+  unexpected:
+    "The BizBox assistant sent an unexpected reply. Please try again.",
+};
 
 export async function postIntakeMessage(
   fetchImpl: typeof fetch,
   projectId: string,
   body: ReturnType<typeof intakeRequestBody>,
+  copy: IntakeCopy = assistantCopy,
 ): Promise<IntakeOutcome> {
   let response: Response;
   try {
@@ -71,11 +149,7 @@ export async function postIntakeMessage(
       body: JSON.stringify(body),
     });
   } catch {
-    return {
-      ok: false,
-      message: "Could not reach the BizBox assistant. Please try again.",
-      retryable: true,
-    };
+    return { ok: false, message: copy.unreachable, retryable: true };
   }
   const json: unknown = await response.json().catch(() => null);
   if (!response.ok) {
@@ -83,20 +157,13 @@ export async function postIntakeMessage(
     return {
       ok: false,
       message:
-        typeof error?.message === "string"
-          ? error.message
-          : "The BizBox assistant is temporarily unavailable. Please try again.",
+        typeof error?.message === "string" ? error.message : copy.unavailable,
       retryable: response.status >= 500,
     };
   }
   const parsed = IntakeResponseSchema.safeParse(json);
   if (!parsed.success)
-    return {
-      ok: false,
-      message:
-        "The BizBox assistant sent an unexpected reply. Please try again.",
-      retryable: true,
-    };
+    return { ok: false, message: copy.unexpected, retryable: true };
   return { ok: true, result: parsed.data };
 }
 
@@ -108,6 +175,8 @@ export function applyIntakeReply(
   now: IntakeSession,
   sent: IntakeSession,
   result: IntakeResponse,
+  /** False for a form-only sync (no founder message), which has no chat reply to show. */
+  appendReply = true,
 ): IntakeSession {
   const sentKeys = new Set(sent.pending ?? []);
   const stillPending = (now.pending ?? []).filter(
@@ -131,10 +200,9 @@ export function applyIntakeReply(
       missingRequiredFields: result.missingRequiredFields,
       findings: result.findings,
     },
-    messages: [
-      ...now.messages,
-      { role: "agent", text: result.assistantMessage },
-    ],
+    messages: appendReply
+      ? [...now.messages, { role: "agent", text: result.assistantMessage }]
+      : now.messages,
   };
 }
 

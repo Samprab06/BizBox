@@ -1,58 +1,92 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "DM Sans", "Segoe UI", sans-serif;
-  --color-paper: #f6f5ef;
-  --color-surface: #ffffff;
-  --color-ink: #1c3028;
-  --color-muted: #50655a;
-  --color-line: #d9dfd5;
-  --color-pine: #1b4937;
-  --color-on-pine: #ffffff;
-  --color-mint: #e2efdf;
-  --color-warn: #754900;
-  --color-danger: #a02828;
-  --color-baseline: #1b4937;
-  --color-alternative: #315b83;
+  /* HAC-130 onboarding material; neutral/white confirmed by Akshar for HAC-133. */
+  --font-sans:
+    var(--font-bizbox-sans), "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --color-canvas: #101115;
+  --color-glass-fill: rgba(15, 16, 21, 0.4);
+  --color-glass-edge: rgba(255, 255, 255, 0.48);
+  --color-panel-raised: #18191f;
+  --color-glass-fallback: #18191fee;
+  --color-field: rgba(12, 13, 18, 0.38);
+  --color-ink: #f7f7fa;
+  --color-muted: #dedee5;
+  --color-line: rgba(255, 255, 255, 0.19);
+  --color-accent: #f3f3f6;
+  --color-accent-hover: #ffffff;
+  --color-on-accent: #17181d;
+  --color-focus-ring: var(--color-accent);
+  --color-warn: #f0d7af;
+  --color-danger: #ffbfbf;
+  --color-baseline: #f3f3f6;
+  --color-alternative: #dedee5;
 
-  --color-evidence-source-ink: #1b4937;
-  --color-evidence-source-surface: #e2efdf;
-  --color-evidence-input-ink: #284d78;
-  --color-evidence-input-surface: #e7eef8;
-  --color-evidence-assumption-ink: #754900;
-  --color-evidence-assumption-surface: #fff0cc;
-  --color-evidence-simulation-ink: #514178;
-  --color-evidence-simulation-surface: #eae8f5;
+  /* Visible labels carry provenance; neutral pairs preserve the approved material. */
+  --color-evidence-source-ink: var(--color-ink);
+  --color-evidence-source-surface: rgb(255 255 255 / 9%);
+  --color-evidence-input-ink: var(--color-ink);
+  --color-evidence-input-surface: rgb(255 255 255 / 9%);
+  --color-evidence-assumption-ink: var(--color-ink);
+  --color-evidence-assumption-surface: rgb(255 255 255 / 9%);
+  --color-evidence-simulation-ink: var(--color-ink);
+  --color-evidence-simulation-surface: rgb(255 255 255 / 9%);
 
-  /* The viewport is a contained mode, never a global dark page theme. */
-  --color-viewport-canvas: #101b16;
-  --color-viewport-surface: #172720;
-  --color-viewport-ink: #f1f3eb;
-  --color-viewport-muted: #bac7be;
-  --color-viewport-line: #46594c;
-  --color-viewport-warn: #ffe3a2;
-  --color-viewport-danger: #ffb4b4;
-  --color-viewport-baseline: #a7d5b7;
-  --color-viewport-alternative: #a8c9ec;
-  --color-viewport-evidence-source-ink: #c6ebd0;
-  --color-viewport-evidence-source-surface: #243b31;
-  --color-viewport-evidence-input-ink: #c5ddfa;
-  --color-viewport-evidence-input-surface: #24364b;
-  --color-viewport-evidence-assumption-ink: #ffe3a2;
-  --color-viewport-evidence-assumption-surface: #45371b;
-  --color-viewport-evidence-simulation-ink: #e0d5fc;
-  --color-viewport-evidence-simulation-surface: #353048;
+  /* Compatibility aliases; remove as DS-8–DS-10 migrate their consumers. */
+  --color-paper: var(--color-canvas);
+  --color-surface: var(--color-panel-raised);
+  --color-pine: var(--color-accent);
+  --color-on-pine: var(--color-on-accent);
+  --color-mint: var(--color-field);
+  --color-viewport-canvas: var(--color-canvas);
+  --color-viewport-surface: var(--color-surface);
+  --color-viewport-ink: var(--color-ink);
+  --color-viewport-muted: var(--color-muted);
+  --color-viewport-line: var(--color-line);
+  --color-viewport-warn: var(--color-warn);
+  --color-viewport-danger: var(--color-danger);
+  --color-viewport-baseline: var(--color-baseline);
+  --color-viewport-alternative: var(--color-alternative);
+  --color-viewport-evidence-source-ink: var(--color-evidence-source-ink);
+  --color-viewport-evidence-source-surface: var(
+    --color-evidence-source-surface
+  );
+  --color-viewport-evidence-input-ink: var(--color-evidence-input-ink);
+  --color-viewport-evidence-input-surface: var(--color-evidence-input-surface);
+  --color-viewport-evidence-assumption-ink: var(
+    --color-evidence-assumption-ink
+  );
+  --color-viewport-evidence-assumption-surface: var(
+    --color-evidence-assumption-surface
+  );
+  --color-viewport-evidence-simulation-ink: var(
+    --color-evidence-simulation-ink
+  );
+  --color-viewport-evidence-simulation-surface: var(
+    --color-evidence-simulation-surface
+  );
 
-  --radius-card: 0.75rem;
+  --radius-control: 14px;
+  --radius-panel: 32px;
+  --radius-sheet: 36px;
+  --radius-card: var(--radius-panel);
   --spacing-card: 1.25rem;
+  --blur-glass: 16px;
+  --shadow-glass: 0 18px 48px -24px #0009, inset 0 1px 1px #ffffff85;
+  --transition-duration-question: 120ms;
+  --ease-question: ease-out;
+}
+
+:root {
+  color-scheme: dark;
 }
 
 body {
   @apply bg-paper font-sans text-ink antialiased;
 }
-a:focus-visible,
-button:focus-visible {
-  @apply outline-2 outline-offset-4 outline-pine;
+:is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 4px;
 }
 
 /* Local surface variables inherit through primitives, including nested badges. */
@@ -109,12 +143,12 @@ button:focus-visible {
 
 .sw-glass-control {
   background: color-mix(in srgb, var(--sw-surface) 94%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  backdrop-filter: blur(var(--blur-glass));
 }
 
 .sw-glass-control :is(a, button):focus-visible {
-  outline-color: var(--sw-baseline);
+  outline-color: var(--color-focus-ring);
 }
 
 .sw-stat {
@@ -181,10 +215,128 @@ button:focus-visible {
 }
 
 /* Simulator timeline slider */
-.sim-range { @apply h-5 cursor-pointer appearance-none bg-transparent; --track: linear-gradient(to right, rgb(255 255 255 / 0.9) var(--fill, 0%), rgb(255 255 255 / 0.12) var(--fill, 0%)); }
-.sim-range::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: var(--track); }
-.sim-range::-moz-range-track { height: 4px; border-radius: 999px; background: var(--track); }
-.sim-range::-webkit-slider-thumb { appearance: none; margin-top: -5px; width: 14px; height: 14px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12), 0 2px 6px rgb(0 0 0 / 0.4); transition: box-shadow 0.15s; }
-.sim-range::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 999px; background: #fff; box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12); }
-.sim-range:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px rgb(255 255 255 / 0.18), 0 2px 6px rgb(0 0 0 / 0.4); }
-.sim-range:focus-visible { @apply rounded-full outline-2 outline-offset-4 outline-white/40; }
+.sim-range {
+  @apply h-5 cursor-pointer appearance-none bg-transparent;
+  --track: linear-gradient(
+    to right,
+    rgb(255 255 255 / 0.9) var(--fill, 0%),
+    rgb(255 255 255 / 0.12) var(--fill, 0%)
+  );
+}
+.sim-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
+}
+.sim-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
+}
+.sim-range::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow:
+    0 0 0 4px rgb(255 255 255 / 0.12),
+    0 2px 6px rgb(0 0 0 / 0.4);
+  transition: box-shadow 0.15s;
+}
+.sim-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12);
+}
+.sim-range:hover::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 6px rgb(255 255 255 / 0.18),
+    0 2px 6px rgb(0 0 0 / 0.4);
+}
+.sim-range:focus-visible {
+  @apply rounded-full outline-2 outline-offset-4 outline-white/40;
+}
+
+/* Transitional compatibility for legacy paper shells and hard-coded action text.
+   Keep onboarding's white buttons/marks intact; migrate these usages in DS-8–DS-10. */
+[data-bizbox-theme="smoke"]
+  :is(header, section, input, select, textarea).bg-white,
+[data-bizbox-theme="smoke"] button.border-line.bg-white {
+  background-color: var(--color-surface);
+}
+[data-bizbox-theme="smoke"] :is(input, select, textarea).border-line {
+  border-color: var(--color-glass-edge);
+}
+[data-bizbox-theme="smoke"] .bg-pine.text-white,
+[data-bizbox-theme="smoke"]
+  [aria-current="page"][class~="aria-[current=page]:bg-pine"][class~="aria-[current=page]:text-white"] {
+  color: var(--color-on-accent);
+}
+
+/* Scenario labels remain explicit and gain a shape distinction in monochrome. */
+.sw-scenario-baseline,
+.sw-scenario-alternative {
+  padding-inline-start: 0.5rem;
+  border-inline-start: 2px solid currentColor;
+}
+.sw-scenario-alternative {
+  border-inline-start-style: dashed;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .sw-glass-control {
+    background: var(--color-glass-fallback);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-duration-question: 0ms;
+  }
+}
+
+@media print {
+  :root {
+    color-scheme: light;
+    --color-canvas: #ffffff;
+    --color-glass-fill: #ffffff;
+    --color-glass-edge: #17181d;
+    --color-panel-raised: #ffffff;
+    --color-glass-fallback: #ffffff;
+    --color-field: #f3f3f6;
+    --color-ink: #17181d;
+    --color-muted: #17181d;
+    --color-line: #dedee5;
+    --color-accent: #17181d;
+    --color-accent-hover: #101115;
+    --color-on-accent: #ffffff;
+    --color-warn: #754900;
+    --color-danger: #a02828;
+    --color-baseline: #17181d;
+    --color-alternative: #17181d;
+    --color-evidence-source-surface: #f3f3f6;
+    --color-evidence-input-surface: #f3f3f6;
+    --color-evidence-assumption-surface: #f3f3f6;
+    --color-evidence-simulation-surface: #f3f3f6;
+  }
+
+  body,
+  .sw-viewport,
+  .sw-card,
+  .sw-glass-control {
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .sw-card,
+  .sw-glass-control {
+    border-color: var(--color-glass-edge);
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

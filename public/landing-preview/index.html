@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#252126">
   <title>BizBox — Test business decisions before committing.</title>
-  <link rel="preload" href="assets/houston-sunset.jpg" as="image">
-  <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="/landing-preview/assets/houston-sunset.jpg" as="image">
+  <link rel="icon" href="/landing-preview/assets/bizbox-logo.png" type="image/png">
+  <link rel="stylesheet" href="/landing-preview/style.css">
 </head>
 <body>
   <svg class="filter-defs" aria-hidden="true" focusable="false"><defs><filter id="glass-refraction" x="-4%" y="-12%" width="108%" height="124%" color-interpolation-filters="sRGB"><feImage id="glass-displacement" x="0" y="0" width="100%" height="100%" preserveAspectRatio="none" result="rim-map"/><feDisplacementMap in="SourceGraphic" in2="rim-map" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter></defs></svg>
@@ -18,11 +19,11 @@
   </div>
 
   <header class="topbar glass">
-    <a class="brand" href="#start" aria-label="BizBox home">
-      <img src="assets/bizbox-logo.png" alt="" width="36" height="36">
+    <a class="brand" href="/" aria-label="BizBox home">
+      <img src="/landing-preview/assets/bizbox-logo.png" alt="" width="36" height="36">
       <span>BizBox</span>
     </a>
-    <a class="nav-cta demo-link" href="#demo" aria-disabled="true">Try a demo <span aria-hidden="true">↗</span></a>
+    <a class="nav-cta demo-link" href="/start">Try a demo <span aria-hidden="true">↗</span></a>
   </header>
 
   <div class="story-copy" id="story-copy">
@@ -31,7 +32,7 @@
 
   <div class="product-shell" id="product-shell" hidden>
     <div class="product-window glass" id="product-window" role="region" aria-label="BizBox product preview">
-      <img class="screen-poster" src="assets/product-screen.jpg" alt="BizBox product preview" id="screen-poster">
+      <img class="screen-poster" src="/landing-preview/assets/product-screen.jpg" alt="BizBox product preview" id="screen-poster">
       <iframe id="app-frame" title="BizBox interactive demo" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" tabindex="-1" hidden></iframe>
       <iframe id="tour-frame" title="Matterport sample space tour" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="fullscreen; xr-spatial-tracking" allowfullscreen tabindex="-1" hidden></iframe>
       <div class="frame-loading" id="frame-loading" role="status" hidden>Loading preview…</div>
@@ -44,7 +45,8 @@
   </div>
 
   <div class="finish" id="finish" hidden>
-    <a class="final-cta glass demo-link" href="#demo" aria-disabled="true">Try a demo <span aria-hidden="true">↗</span></a>
+    <a class="final-cta glass demo-link" href="/start">Try a demo <span aria-hidden="true">↗</span></a>
+    <a class="workspace-link" href="/start">Already started? Open your workspace</a>
   </div>
 
   <nav class="progress-nav glass" aria-label="Explore BizBox">
@@ -67,6 +69,6 @@
   </main>
   <p class="sr-only" id="scene-status" aria-live="polite">Test business decisions before committing.</p>
   <noscript><p class="no-script">BizBox needs JavaScript for the product preview.</p></noscript>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="/landing-preview/app.js"></script>
 </body>
 </html>

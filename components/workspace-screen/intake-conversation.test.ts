@@ -73,6 +73,35 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(JSON.parse(String(init.body)).message).toBe("Hi");
   });
 
+  it("HAC-144: passes the reply's UI actions through and drops a list it cannot read", async () => {
+    const actions = [{ id: "ui_1", type: "navigate", stage: "map" }];
+    const post = (body: unknown) =>
+      postIntakeMessage(
+        (async () => Response.json(body)) as unknown as typeof fetch,
+        "p",
+        intakeRequestBody(session, "Show me spaces", {
+          stage: "workspace",
+          candidateIds: ["L-1:S-1"],
+        }),
+      );
+    expect(await post({ ...reply, actions })).toEqual({
+      ok: true,
+      result: { ...reply, actions },
+    });
+    const newer = await post({
+      ...reply,
+      actions: [{ id: "x", type: "teleport" }],
+    });
+    expect(newer.ok && newer.result.actions).toBeUndefined();
+    expect(newer.ok && newer.result.assistantMessage).toBe(
+      reply.assistantMessage,
+    );
+    // The view rides on the request and the API contract accepts it.
+    const body = intakeRequestBody(session, "Hi", { stage: "map" });
+    expect(IntakeRequestSchema.parse(body).view).toEqual({ stage: "map" });
+    expect("view" in intakeRequestBody(session, "Hi")).toBe(false);
+  });
+
   it("reports failures; only server errors and network failures are retryable", async () => {
     const fail = (status: number, body: unknown) =>
       postIntakeMessage(
@@ -122,4 +151,181 @@ describe("workspace assistant uses the existing intake session and endpoint", ()
     expect(next.profile.city?.value).toBe("Houston");
     expect(next.live?.missingRequiredFields).toEqual(["businessName"]);
   });
+
+  it("is the one implementation: a form sync sends no message and adds no chat reply", () => {
+    const body = intakeRequestBody(session);
+    expect(body.message).toBeUndefined();
+    expect(body.patch).toBeDefined();
+    const next = applyIntakeReply(session, session, reply, false);
+    expect(next.messages).toEqual(session.messages);
+    expect(next.live?.missingRequiredFields).toEqual(["businessName"]);
+  });
+
+  it("takes each surface's own wording for failures", async () => {
+    const copy = {
+      unreachable: "unreachable",
+      unavailable: "unavailable",
+      unexpected: "unexpected",
+    };
+    const fail = (impl: () => Promise<Response>) =>
+      postIntakeMessage(
+        impl as unknown as typeof fetch,
+        "p",
+        intakeRequestBody(session, "Hi"),
+        copy,
+      );
+    expect(
+      await fail(async () => {
+        throw new TypeError("offline");
+      }),
+    ).toMatchObject({ message: "unreachable" });
+    expect(await fail(async () => Response.json({}, { status: 500 }))).toEqual({
+      ok: false,
+      message: "unavailable",
+      retryable: true,
+    });
+    expect(await fail(async () => Response.json({ nope: 1 }))).toMatchObject({
+      message: "unexpected",
+    });
+  });
+});
+
+it("serializes the same validated-shape view with the shared text/voice body", () => {
+  const view = { stage: "site", siteId: "screen" } as const;
+  const body = intakeRequestBody(session, "Compare this one", view);
+  expect(
+    IntakeRequestSchema.parse(JSON.parse(JSON.stringify(body))).view,
+  ).toEqual(view);
+});
+
+it("seeds only missing API draft leaves from the completed browser search form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee for commuters",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Favor Montrose",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      missingRequiredFields: [],
+      findings: [],
+      state: {
+        draft: {
+          businessName: "Actual business",
+          economics: {
+            startupBudgetCents: {
+              value: null,
+              unit: "USD cents",
+              origin: "founder",
+              evidenceIds: ["stated-unknown"],
+              unknownReason: "I do not know",
+            },
+          },
+        },
+        assumptions: {},
+      },
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  const parsed = IntakeRequestSchema.parse(body);
+  expect(parsed.state?.draft.businessName).toBe("Actual business");
+  expect(parsed.state?.draft.economics?.startupBudgetCents).toEqual(
+    browser.live?.state.draft.economics?.startupBudgetCents,
+  );
+  expect(parsed.state?.draft.economics?.averageTicketCents).toMatchObject({
+    value: null,
+    origin: "default",
+  });
+  expect(parsed.state?.draft.capacity?.serviceMinutes?.origin).toBe("default");
+  expect(parsed.state?.draft.capacity?.servers?.origin).toBe("founder");
+  expect(
+    intakeRequestBody(
+      browser,
+      undefined,
+      { stage: "workspace", siteId: "screen" },
+      "houston-coffee",
+    ).state,
+  ).toEqual(browser.live?.state);
+});
+
+it("keeps the valid original draft if filling a partial constraint would conflict with the form", async () => {
+  const { fields } = await import("@/components/intake/profile");
+  const values = {
+    concept: "Coffee",
+    category: "Coffee shop",
+    city: "Houston",
+    areas: "Any",
+    rent: "4000",
+    buildout: "80000",
+    price: "Midrange",
+    customers: "Commuters",
+    hours: "7am–5pm",
+    staff: "2",
+    requirements: "none",
+  };
+  const browser: IntakeSession = {
+    profile: Object.fromEntries(
+      fields.map(({ key }) => [key, { value: values[key], origin: "founder" }]),
+    ),
+    messages: [],
+    live: {
+      state: {
+        draft: { operatingHours: { openMinute: 1080 } },
+        assumptions: {},
+      },
+      missingRequiredFields: [],
+      findings: [],
+    },
+  };
+  const body = intakeRequestBody(
+    browser,
+    "Compare this one",
+    { stage: "workspace", siteId: "screen" },
+    "houston-coffee",
+  );
+  expect(body.state).toEqual(browser.live?.state);
+  expect(IntakeRequestSchema.safeParse(body).success).toBe(true);
+  const { createIntakeHandler } =
+    await import("@/app/api/projects/[projectId]/intake/handler");
+  const handler = createIntakeHandler({
+    projectExists: async () => true,
+    viewContextLookups: {
+      comparison: async () => null,
+      scenario: async () => null,
+      investigation: async () => null,
+      candidates: async () => null,
+    },
+    runAgent: async ({ viewContextLine }) =>
+      viewContextLine?.includes('"phase":"missing"')
+        ? "Continue the conversation"
+        : "Unexpected selection",
+  });
+  const response = await handler(
+    new Request("http://localhost/intake", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ projectId: "houston-coffee" }) },
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).assistantMessage).toBe(
+    "Continue the conversation",
+  );
 });

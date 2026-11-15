@@ -7,7 +7,13 @@ import {
   type ConsultantInvestigation as Investigation,
 } from "@/components/nessie/consultant-results";
 import { ConsultantCashCard } from "@/components/nessie/consultant-cash-card";
+import { useAgentInvestigationId } from "@/lib/client/agent-jobs";
 import { withoutNessieFindings } from "@/lib/nessie/findings";
+import {
+  createPanelResendBackoff,
+  panelProgressMessage,
+  parsePanelProgress,
+} from "@/lib/panel/progress";
 
 const POLL_MS = 3000;
 const MAX_POLL_BACKOFF_MS = 60_000;
@@ -44,11 +50,14 @@ export function ConsultantPanel({
   profile?: { id: string; version: number };
   cashContextStale?: boolean;
 }) {
+  // HAC-151: an investigation the consultant started is shown here too, without a URL param.
+  const started = useAgentInvestigationId(projectId);
+  const shown = investigationId ?? started;
   // Remount on identity change so old findings disappear before the next fetch.
   return (
     <ConsultantActivity
-      key={`${projectId}:${investigationId ?? ""}`}
-      investigationId={investigationId}
+      key={`${projectId}:${shown ?? ""}`}
+      investigationId={shown}
       projectId={projectId}
       profile={profile}
       cashContextStale={cashContextStale}
@@ -88,7 +97,11 @@ function ConsultantActivity({
     // Consecutive failures back off (3 s, 6 s, ... 60 s) and stop after MAX_POLL_FAILURES, so a
     // broken job or API can't keep an open tab calling /advance (and the paid model) forever.
     let failures = 0;
+    // A 202 from advance is a Jev panel still answering (HAC-155), not an error.
+    const panelBackoff = createPanelResendBackoff();
+    let panelDelay: number | null = null;
     const poll = async () => {
+      panelDelay = null;
       try {
         const response = await fetch(url, {
           signal: controller.signal,
@@ -121,6 +134,17 @@ function ConsultantActivity({
           setState(next);
           if (next.job.status !== "queued" && next.job.status !== "running")
             return;
+          const panel =
+            advance.status === 202 ? parsePanelProgress(next.job.reason) : null;
+          if (panel) {
+            // Resend advance soon while personas keep completing; stop if it stalls.
+            panelDelay = panelBackoff.next(panel);
+            if (panelDelay === null) {
+              setError(true);
+              setPollStopped(true);
+              return;
+            }
+          } else panelBackoff.reset();
         } else return;
       } catch {
         if (controller.signal.aborted) return;
@@ -134,7 +158,7 @@ function ConsultantActivity({
       if (!controller.signal.aborted)
         timer = setTimeout(
           poll,
-          Math.min(POLL_MS * 2 ** failures, MAX_POLL_BACKOFF_MS),
+          panelDelay ?? Math.min(POLL_MS * 2 ** failures, MAX_POLL_BACKOFF_MS),
         );
     };
     void poll();
@@ -175,6 +199,11 @@ function ConsultantActivity({
 
   const status = state?.job.status;
   const ended = status === "failed" || status === "interrupted";
+  // A partial Jev panel is shown as progress, never as a finished step or result.
+  const panelProgress =
+    status === "queued" || status === "running"
+      ? parsePanelProgress(state?.job.reason)
+      : null;
   const cashResults =
     investigationId && !retrying
       ? selectNessieResults(state, { investigationId, projectId, profile })
@@ -204,11 +233,13 @@ function ConsultantActivity({
           ? pollStopped
             ? "Investigation update unavailable. Reload the page to try again."
             : "Investigation update unavailable. Retrying."
-          : status
-            ? STATUS_TEXT[status]
-            : investigationId
-              ? "Loading investigation..."
-              : "No investigation linked to this comparison."}
+          : panelProgress
+            ? panelProgressMessage(panelProgress)
+            : status
+              ? STATUS_TEXT[status]
+              : investigationId
+                ? "Loading investigation..."
+                : "No investigation linked to this comparison."}
       </p>
       {state && state.milestones.length > 0 && (
         <ol

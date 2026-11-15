@@ -200,6 +200,8 @@ export function selectedSpace(
     subtitle: site.neighborhood,
     example: true,
     stats: [
+      // Missing data stays visible: an example space has no listing rent to show.
+      { label: "Monthly rent", value: "Not listed" },
       {
         label: "Area",
         value: site.squareFeet.toLocaleString("en-US"),

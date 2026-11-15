@@ -62,6 +62,50 @@ describe("Postgres Jev cache boundary", () => {
     expect(query.sql).toContain("ON CONFLICT(project_id,cache_key)");
     expect(execute).toHaveBeenCalledTimes(1);
   });
+  it("reads many keys in one project- and model-scoped query", async () => {
+    const execute = vi.fn<(query: SQL) => Promise<unknown>>(async () => [
+      { cache_key: "k1", response: value },
+      { cache_key: "k3", response: { ...value, modelVersion: "" } }, // invalid rows are misses
+    ]);
+    const cache = createPostgresJevCache({ execute }, "project-a", "test-model");
+    const hits = await cache.getMany!(["k1", "k2", "k3", "k1"]);
+    expect([...hits.keys()]).toEqual(["k1"]);
+    expect(hits.get("k1")).toEqual(value);
+    expect(execute).toHaveBeenCalledTimes(1);
+    const query = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]!);
+    expect(query.params).toEqual(["project-a", "test-model", "k1", "k2", "k3"]);
+    expect(query.sql).toContain("cache_key IN (");
+    expect(query.sql).toContain("expires_at>now()");
+  });
+
+  it("splits very large reads into chunks and makes no query for no keys", async () => {
+    const execute = vi.fn<(query: SQL) => Promise<unknown>>(async () => []);
+    const cache = createPostgresJevCache({ execute }, "p", "m");
+    await cache.getMany!([]);
+    expect(execute).not.toHaveBeenCalled();
+    await cache.getMany!(Array.from({ length: 4500 }, (_, i) => `k${i}`));
+    expect(execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("upserts many answers in one multi-row statement, keeping the last for a repeated key", async () => {
+    const execute = vi.fn<(query: SQL) => Promise<unknown>>(async () => []);
+    const cache = createPostgresJevCache({ execute }, "project-a", "jev-latest");
+    const newer = { ...value, modelVersion: "jev-1.14.0" };
+    await cache.setMany!([
+      { key: "a", value },
+      { key: "b", value },
+      { key: "a", value: newer },
+    ]);
+    expect(execute).toHaveBeenCalledTimes(1);
+    const query = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]!);
+    expect(query.params.filter((_, i) => i % 5 === 1)).toEqual(["project-a", "project-a"]);
+    expect(query.params.filter((_, i) => i % 5 === 2)).toEqual(["a", "b"]);
+    expect(query.params.filter((_, i) => i % 5 === 4)).toEqual([JSON.stringify(newer), JSON.stringify(value)]);
+    expect(query.sql).toContain("ON CONFLICT(project_id,cache_key)");
+    await cache.setMany!([]);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a resolved response version while indexing by the requested alias", async () => {
     const resolved = { ...value, modelVersion: "jev-1.14.0" };
     const execute = vi

@@ -78,15 +78,37 @@ test.describe("location plan export", () => {
     );
   });
 
-  test("print styles hide the print button", async ({ page }) => {
+  test("print styles keep the plan visible and hide the persistent consultant", async ({
+    page,
+  }) => {
     await mockPlan(page);
     await page.goto(`/projects/${PROJECT}/plan?comparison=${comparisonId}`);
     await expect(
       page.getByRole("button", { name: "Print or save as PDF" }),
     ).toBeVisible();
+    const assistant = page.getByRole("complementary", {
+      name: "Assistant",
+      exact: true,
+      includeHidden: true,
+    });
+    await expect(assistant).toBeVisible();
     await page.emulateMedia({ media: "print" });
     await expect(
       page.getByRole("button", { name: "Print or save as PDF" }),
     ).toBeHidden();
+    await expect(assistant).toBeHidden();
+    await expect(
+      page.getByRole("article", { name: "Location plan" }),
+    ).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+    await page.getByRole("button", { name: "Expand the assistant" }).click();
+    await expect(
+      page.getByRole("article", { name: "Location plan", includeHidden: true }),
+    ).toBeHidden();
+    await page.emulateMedia({ media: "print" });
+    await expect(
+      page.getByRole("article", { name: "Location plan" }),
+    ).toBeVisible();
+    await expect(assistant).toBeHidden();
   });
 });

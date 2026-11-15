@@ -9,6 +9,13 @@ import { getSiteFixture } from "@/components/site/site-fixtures";
 import { createPostgresComparisonStore } from "@/lib/evaluation/store-postgres";
 import { parseStoredInsights } from "@/components/insights/stored-insights";
 import type { SiteInsights } from "@/lib/contracts/insights";
+import { RestoreSavedComparison } from "@/lib/client/project-store";
+import { publicCafeScan } from "@/lib/interior/fixtures";
+
+const cafeSweep = publicCafeScan.placement.serviceSweep;
+const cafeViewpoint = cafeSweep?.rotation
+  ? { sweepId: cafeSweep.sweepId, rotation: cafeSweep.rotation }
+  : undefined;
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +23,12 @@ type Search = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) =>
   typeof v === "string" && v.length <= 300 ? v : undefined;
 
-/** HAC-63: ?comparison=<id>[&site=<siteId>][&project=<projectId>] opens a stored run; otherwise the labelled example. */
+/**
+ * HAC-63: ?comparison=<id>[&site=<siteId>][&project=<projectId>] opens a stored run; otherwise the labelled example.
+ * HAC-135: this server page can't read the browser's saved comparison, so without
+ * ?comparison= it renders `RestoreSavedComparison`, which adds the saved id to the URL
+ * on the client and the page reloads the stored run.
+ */
 async function loadStored(projectId: string, search: Search) {
   const comparisonId = one(search.comparison);
   if (!comparisonId) return null;
@@ -91,9 +103,22 @@ export default async function Page({
   const tilesetUrl = process.env.VEXCEL_API_KEY?.trim()
     ? "/api/vexcel/3d/tileset"
     : undefined;
+  // A browser SDK key is domain-restricted and intentionally client-permitted.
+  // The API key/token never cross this server-component boundary. The public
+  // cafe scan is a demonstration reference, never a stored candidate site, so it
+  // is passed to the labelled example only.
+  const sdkKey = process.env.MATTERPORT_SDK_KEY?.trim();
   const stored = await loadStored(projectId, search);
+  const restore = one(search.comparison) ? null : (
+    <RestoreSavedComparison projectId={projectId} />
+  );
   if (!stored && !getPreviewProject(projectId) && !one(search.comparison))
-    return <WorkspaceView projectId={projectId} view="simulator" />;
+    return (
+      <>
+        {restore}
+        <WorkspaceView projectId={projectId} view="simulator" />
+      </>
+    );
   if (stored)
     return (
       <SimulatorContext projectId={projectId}>
@@ -137,6 +162,7 @@ export default async function Page({
       : undefined;
   return (
     <SimulatorContext projectId={projectId}>
+      {restore}
       <WorkspaceView
         projectId={projectId}
         view="simulator"
@@ -156,6 +182,22 @@ export default async function Page({
           data={makeDemo()}
           plan={demoPlan}
           coordinates={coordinates}
+          matterport={
+            sdkKey
+              ? {
+                  sdkKey,
+                  modelId: publicCafeScan.modelId,
+                  // HAC-138: proposed service-area overlay from the café's
+                  // registry row; not a measured business layout.
+                  placement: {
+                    origin: publicCafeScan.placement.origin,
+                    rotationY: publicCafeScan.placement.rotationY,
+                    scale: publicCafeScan.placement.scale,
+                  },
+                  viewpoint: cafeViewpoint,
+                }
+              : undefined
+          }
         />
       </WorkspaceView>
     </SimulatorContext>

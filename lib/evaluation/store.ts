@@ -9,6 +9,7 @@ import type {
   EvaluationResult,
   SensitivityResult,
 } from "@/lib/contracts/evaluation";
+import { demandPersonaSet } from "@/lib/contracts/evaluation";
 import type { DayType } from "@/lib/demand/contracts";
 import type { DayResult, SiteConfig } from "@/lib/sim/contracts";
 import { canonicalEvents, isOutdated, type EvaluationRun } from "./evaluate";
@@ -71,7 +72,10 @@ export function toSiteRun(args: {
   const answers = new Map(table?.personas.filter((persona) =>
     !table.failedPersonaIds.includes(persona.personaId),
   ).map((persona) => [persona.personaId, persona]));
-  const replayPersonas = request.personaSet.personas
+  const site = request.sites.find((s) => s.siteId === day.siteId);
+  const replayPersonas = (
+    site ? demandPersonaSet(request, site, args.demandSource) : request.personaSet
+  ).personas
     .filter((persona) => arrivingPersonas.has(persona.id))
     .map(({ id, segment }) => {
       const answer = answers.get(id);

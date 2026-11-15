@@ -18,6 +18,12 @@ export type CopilotMutationContext = {
   projectId: string;
   evidenceId: string;
   signal: AbortSignal;
+  /** Trusted workspace snapshot; never supplied by model arguments. */
+  scenarioId?: string;
+  profileVersion?: number;
+  idempotencyKey?: string;
+  runConfirmed?: boolean;
+  budgetConfirmed?: boolean;
 };
 const capacitySchema = z
   .array(
@@ -39,12 +45,30 @@ const candidatesSchema = z
     evidenceIds: z.array(z.string().min(1)).min(1),
   })
   .strict();
+const priceEvidenceSchema = z
+  .object({
+    comparisonId: z.string().min(1).max(200).nullable(),
+    siteIds: z.array(z.string().min(1).max(200)).max(8),
+    status: z.enum(["cached_curve", "unavailable", "tier_requires_run"]),
+  })
+  .strict();
 export type CopilotMutationDependencies = {
   scenarios: Pick<ScenarioService, "get" | "create">;
+  priceAcceptance?: (
+    projectId: string,
+    scenario: Scenario,
+    change: Extract<ScenarioChange, { kind: "price" | "price_tier" }>,
+    signal: AbortSignal,
+  ) => Promise<{
+    comparisonId: string | null;
+    siteIds: string[];
+    status: "cached_curve" | "unavailable" | "tier_requires_run";
+  }>;
   validateCandidates?: (
     projectId: string,
     siteIds: string[],
     signal: AbortSignal,
+    scenario?: Scenario,
   ) => Promise<z.infer<typeof candidatesSchema>>;
   /** Trusted scoped listing/layout capacity adapter; no model-authored SF or ceiling. */
   stationCapacity?: (
@@ -61,7 +85,7 @@ const descriptions: Record<CopilotMutationToolName, string> = {
   set_staffing:
     "Create one scenario version with a constant staff headcount. Hourly staffing is unsupported.",
   set_price:
-    "Requires the cached price-acceptance adapter; currently returns unsupported without writing a version.",
+    "Propose a price or tier change using cached acceptance evidence only; never calls a paid panel or runs the scenario.",
   set_stations:
     "Create one version only after trusted square-footage and selected-layout capacity validation.",
   add_sites:
@@ -103,6 +127,12 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
       try {
         z.string().trim().min(1).max(200).parse(context.projectId);
         z.string().trim().min(1).max(200).parse(context.evidenceId);
+        if (context.scenarioId !== undefined)
+          z.string().trim().min(1).max(200).parse(context.scenarioId);
+        if (context.profileVersion !== undefined)
+          z.number().int().positive().parse(context.profileVersion);
+        if (context.idempotencyKey !== undefined)
+          z.string().trim().min(1).max(200).parse(context.idempotencyKey);
         const parsed = CopilotMutationSchemas[name]?.parse(args);
         if (!parsed)
           return rejected("INVALID_INPUT", "Unknown copilot mutation tool.");
@@ -114,10 +144,6 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
           return unsupported(
             "Durable layout operations and scenario linkage are not available in this tool slice.",
           );
-        if (name === "set_price")
-          return unsupported(
-            "Cached price-acceptance repricing must be integrated before this tool can change price.",
-          );
         const fromId =
           "from_id" in parsed
             ? parsed.from_id
@@ -127,8 +153,73 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
         parent = await deps.scenarios.get(context.projectId, fromId);
         if (parent.projectId !== context.projectId || parent.id !== fromId)
           return rejected("NOT_FOUND", "No such scenario in this project.");
+        if (
+          (context.scenarioId !== undefined &&
+            context.scenarioId !== parent.id) ||
+          (context.profileVersion !== undefined &&
+            context.profileVersion !== parent.profileVersion)
+        )
+          return rejected(
+            "STALE_CONTEXT",
+            "The workspace context changed. Refresh before proposing a change.",
+          );
+        let priceAcceptance:
+          | Awaited<
+              ReturnType<
+                NonNullable<CopilotMutationDependencies["priceAcceptance"]>
+              >
+            >
+          | undefined;
         let change: ScenarioChange;
         switch (name) {
+          case "set_price": {
+            const input = CopilotMutationSchemas.set_price.parse(args);
+            if (!deps.priceAcceptance)
+              return unsupported(
+                "A scoped cached price-acceptance adapter is required.",
+              );
+            if (
+              input.avg_ticket !== undefined &&
+              Math.abs(
+                input.avg_ticket * 100 - Math.round(input.avg_ticket * 100),
+              ) > 1e-7
+            )
+              return rejected(
+                "INVALID_INPUT",
+                "Average ticket must be expressed in whole cents.",
+              );
+            change =
+              input.avg_ticket !== undefined
+                ? {
+                    kind: "price",
+                    averageTicketCents: Math.round(input.avg_ticket * 100),
+                  }
+                : { kind: "price_tier", tier: input.tier! };
+            priceAcceptance = priceEvidenceSchema.parse(
+              await deps.priceAcceptance(
+                context.projectId,
+                parent,
+                change,
+                context.signal,
+              ),
+            );
+            if (
+              priceAcceptance.siteIds.some(
+                (id) => !parent!.siteIds.includes(id),
+              ) ||
+              new Set(priceAcceptance.siteIds).size !==
+                priceAcceptance.siteIds.length ||
+              (priceAcceptance.status === "cached_curve" &&
+                (change.kind !== "price" ||
+                  !priceAcceptance.comparisonId ||
+                  priceAcceptance.siteIds.length !== parent.siteIds.length))
+            )
+              return rejected(
+                "INVALID_INPUT",
+                "Cached price evidence does not match the scenario.",
+              );
+            break;
+          }
           case "fork_scenario": {
             const input = CopilotMutationSchemas.fork_scenario.parse(args);
             change = { kind: "fork", label: input.label };
@@ -205,6 +296,7 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
                 context.projectId,
                 input.site_ids,
                 context.signal,
+                parent,
               ),
             );
             if (
@@ -233,12 +325,19 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
           evidenceIds: [context.evidenceId],
         });
         context.signal.throwIfAborted();
-        const child = await deps.scenarios.create(context.projectId, {
-          fromId,
-          patch,
-          author: "agent",
-          rationale: "rationale" in parsed ? parsed.rationale : undefined,
-        });
+        const child = await deps.scenarios.create(
+          context.projectId,
+          {
+            fromId,
+            patch,
+            author: "agent",
+            rationale: "rationale" in parsed ? parsed.rationale : undefined,
+          },
+          context.idempotencyKey
+            ? { idempotencyKey: context.idempotencyKey }
+            : undefined,
+        );
+        context.signal.throwIfAborted();
         const diff = diffScenarios(parent, child);
         const reference = (scenarioId: string, path: string) => ({
           kind: "scenario_value" as const,
@@ -249,6 +348,22 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
           status: "created",
           scenarioId: child.id,
           parentId: parent.id,
+          ...(priceAcceptance
+            ? {
+                priceAcceptance: {
+                  status: priceAcceptance.status,
+                  references:
+                    priceAcceptance.status === "cached_curve"
+                      ? priceAcceptance.siteIds.map((siteId) => ({
+                          kind: "price_acceptance_shift",
+                          comparisonId: priceAcceptance!.comparisonId!,
+                          scenarioId: child.id,
+                          siteId,
+                        }))
+                      : [],
+                },
+              }
+            : {}),
           diff: {
             sites: diff.sites,
             changedPaths: [
@@ -290,7 +405,7 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
           error.code === "not_found"
         )
           return rejected("NOT_FOUND", "No such scenario in this project.");
-        // Preserve today's strict service invariant until the parent-aware owner change lands.
+        // Never relabel inherited founder inputs to get an agent proposal accepted.
         if (
           parent &&
           overrideOrigins(parent.overrides).includes("founder") &&
@@ -299,10 +414,20 @@ export function createCopilotMutationTools(deps: CopilotMutationDependencies) {
         )
           return rejected(
             "PROVENANCE_CONFLICT",
-            "This service currently rejects inherited founder overrides on agent versions. No version was created; provenance was preserved.",
+            "An agent cannot introduce or change founder-attributed values. Inherited evidence must remain unchanged.",
           );
         if (error instanceof ScenarioPatchError)
           return rejected("INVALID_INPUT", "The shortlist change is invalid.");
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "invalid"
+        )
+          return rejected(
+            "INVALID_INPUT",
+            "The scenario request conflicts with the saved action or provenance.",
+          );
         return rejected(
           "UNAVAILABLE",
           "The scenario change could not be completed.",

@@ -1,8 +1,14 @@
 import type { Page, Route } from "@playwright/test";
 import { workspaceHref } from "../../lib/client/workspace-routes";
-import { expect, expectNoA11yViolations, test } from "./fixtures";
+import {
+  expect,
+  expectNoA11yViolations,
+  openConsultant,
+  test,
+} from "./fixtures";
 
-// HAC-128: the BizBox workspace screen. Every network boundary is a page.route mock: no
+// HAC-128: the BizBox workspace screen. HAC-143: the assistant is the consultant shell's dock
+// (a bottom sheet under 768 px, opened with `openConsultant`). Every network boundary is a page.route mock: no
 // model, voice, listing or database service is called.
 
 const VIEWPORTS = [
@@ -63,11 +69,13 @@ const tab = (page: Page, name: "Text" | "Voice") =>
 const composer = (page: Page) =>
   page.getByRole("textbox", { name: "Message the BizBox assistant" });
 
-async function open(page: Page, projectId: string) {
+async function open(page: Page, projectId: string, consultant = true) {
   await page.goto(workspaceHref(projectId, "workspace"));
   await expect(
     page.getByRole("heading", { level: 1, name: "Workspace" }),
   ).toBeVisible();
+  if (!consultant) return;
+  await openConsultant(page);
   await expect(
     assistant(page).getByText("Live", { exact: true }),
   ).toBeVisible();
@@ -97,7 +105,8 @@ for (const viewport of VIEWPORTS) {
       projectId,
     }) => {
       const { calls, pending } = await mockServices(page);
-      await open(page, projectId);
+      // The location panel is checked first: on a phone the open sheet covers most of it.
+      await open(page, projectId, false);
 
       // One header, one selected location (an example, labelled as such) and a labelled city photo.
       await expect(
@@ -123,6 +132,10 @@ for (const viewport of VIEWPORTS) {
       await expect(details).toHaveAttribute("aria-expanded", "true");
       await expect(
         location.getByRole("link", { name: "Open site detail" }),
+      ).toBeVisible();
+      await openConsultant(page);
+      await expect(
+        assistant(page).getByText("Live", { exact: true }),
       ).toBeVisible();
 
       // A draft survives a round trip through the Voice tab.
@@ -215,7 +228,8 @@ test("the history is the intake conversation, so the intake screen shows it too"
     assistant(page).getByRole("log", { name: "Conversation" }),
   ).toContainText("Corner spaces noted.");
 
-  await page.goto(workspaceHref(projectId, "intake"));
+  // The detailed form (?mode=form) shows the conversation; the guided questions do not.
+  await page.goto(`${workspaceHref(projectId, "intake")}?mode=form`);
   const intakeLog = page.getByRole("list", { name: "Conversation" });
   await expect(intakeLog).toContainText("We want a corner space");
   await expect(intakeLog).toContainText("Corner spaces noted.");
@@ -227,6 +241,7 @@ test("offline, nothing is sent, the draft is kept and no reply is invented", asy
 }) => {
   const { calls } = await mockServices(page, { live: false });
   await page.goto(workspaceHref(projectId, "workspace"));
+  await openConsultant(page);
   await expect(
     assistant(page).getByText("Offline", { exact: true }),
   ).toBeVisible();

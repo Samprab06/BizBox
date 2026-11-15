@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Profile } from "@/components/intake/profile";
+import { ClockDial } from "./clock-dial";
+import { DEFAULT_RANGE, formatHoursValue, parseHoursValue } from "./clock-dial-math";
 import { CurvedRuler } from "./curved-ruler";
 import {
   categoryChoices,
@@ -43,13 +45,13 @@ export function OnboardingFlow({
   profile,
   onCommit,
   formHref,
-  mapHref,
+  nextHref,
   notice,
 }: {
   profile: Profile;
   onCommit: (key: QuestionStep, value: string) => void;
   formHref: string;
-  mapHref: string;
+  nextHref: string;
   notice?: ReactNode;
 }) {
   const [step, setStep] = useState<Step>(() => resumeStep(profile));
@@ -118,7 +120,7 @@ export function OnboardingFlow({
         <Image key={photo.photo} src={photo.photo} alt="" fill sizes="(max-width: 768px) 100vw, 1100px" priority />
       </div>
       <div className={styles.dim} aria-hidden="true" />
-      <section aria-labelledby="onboarding-title" className={`${styles.glass} w-full max-w-xl p-5 sm:p-8`}>
+      <section aria-labelledby="onboarding-title" className={`${styles.glass} w-full max-w-[45rem] backdrop-blur-[12px] p-5 sm:p-8`}>
         <form onSubmit={submit} noValidate>
           <div key={step} className={styles.fade} data-step={step}>
             <h2 id="onboarding-title" ref={heading} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none sm:text-3xl">
@@ -147,7 +149,7 @@ export function OnboardingFlow({
                 </button>
               )}
               {step === "review" ? (
-                <ReviewActions profile={profile} formHref={formHref} mapHref={mapHref} onFix={go} />
+                <ReviewActions profile={profile} formHref={formHref} nextHref={nextHref} onFix={go} />
               ) : (
                 <button type="submit" className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] hover:bg-white/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
                   Continue <span aria-hidden="true">→</span>
@@ -203,7 +205,14 @@ export function OnboardingFlow({
       case "customers":
         return text({ textarea: true, maxLength: 250, placeholder: "Residents, commuters, students…" });
       case "hours":
-        return text({ maxLength: 80, placeholder: "7am – 6pm" });
+        return (
+          <ClockDial
+            value={parseHoursValue(value) ?? DEFAULT_RANGE}
+            onChange={(next) => setDraft(key, formatHoursValue(next))}
+            labelledBy="onboarding-title"
+            describedBy={describedBy}
+          />
+        );
       case "requirements":
         return text({ textarea: true, maxLength: 300, placeholder: "Street frontage, parking, ground floor…" });
       case "city":
@@ -324,7 +333,7 @@ function Review({ profile, onEdit }: { profile: Profile; onEdit: (key: QuestionS
   );
 }
 
-function ReviewActions({ profile, formHref, mapHref, onFix }: { profile: Profile; formHref: string; mapHref: string; onFix: (step: Step) => void }) {
+function ReviewActions({ profile, formHref, nextHref, onFix }: { profile: Profile; formHref: string; nextHref: string; onFix: (step: Step) => void }) {
   const invalid = questionSteps.find((key) => stepError(key, profile[key]?.value ?? "") !== undefined);
   return (
     <>
@@ -336,8 +345,8 @@ function ReviewActions({ profile, formHref, mapHref, onFix }: { profile: Profile
           Finish {reviewLabels[invalid].toLowerCase()} <span aria-hidden="true">→</span>
         </button>
       ) : (
-        <Link href={mapHref} className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-          Explore locations <span aria-hidden="true">→</span>
+        <Link href={nextHref} className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#10131b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          Open workspace <span aria-hidden="true">→</span>
         </Link>
       )}
     </>

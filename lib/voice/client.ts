@@ -245,6 +245,7 @@ export class VoiceClient {
     return JSON.stringify([
       context.projectId,
       context.mode,
+      context.view,
       context.selectedSiteId,
       context.scenarioId,
       context.prompt,

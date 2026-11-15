@@ -96,6 +96,48 @@ they are distinct from requestAnimationFrame cadence. Earlier callback-only
 checks of 30 and 114 FPS should not be read as city-rendering rates. The final
 paused sample again recorded zero draw calls. Temporary probes were removed.
 
+## Workspace simulator check (HAC-70)
+
+Measured on November 14, 2026 on `/projects/houston-coffee/simulator` (the
+workspace route that `/simulator-demo` redirects to), at main `bab11dc`, with the
+method below: `pnpm build` + `pnpm start --hostname 127.0.0.1 --port 3014`, a
+foreground headed Chromium 159 window with a 1500 × 804 CSS-pixel viewport and
+device pixel ratio 1, Balanced graphics, the initial Montrose camera, normal
+cache, about 20 s to settle, then a seek to 9 AM and 1× playback. Hardware: a
+Windows 10 laptop with Intel HD Graphics 520 (ANGLE / Direct3D 11). In the
+workspace layout the city canvas is 959 × 639 pixels. A temporary probe in the
+measuring script counted WebGL draw calls per animation frame; it is not part of
+the application.
+
+| Sample                                | City frames drawn | Median / p95 interval | City draw calls | Long tasks | Simulated minutes |
+| ------------------------------------- | ----------------- | --------------------- | --------------- | ---------- | ----------------- |
+| Playing, city in view, 8 s            | 4.4 FPS           | 233 / 252 ms          | 1,505           | 0          | 62 to 65          |
+| Playing, city scrolled offscreen, 4 s | 0 FPS             | 16.7 / 16.8 ms        | 0               | 0          | 73                |
+| Paused, city in view, 4 s             | 0 FPS             | 16.7 / 17.0 ms        | 0               | 0          | 0                 |
+
+What this shows:
+
+- Paused and offscreen scenes stop city drawing, as HAC-65 intended. The café
+  scenes in view kept drawing while the city was offscreen.
+- On this integrated GPU the city is GPU-bound at about 4 FPS. That is far below
+  the 32 FPS recorded above on Akshar's Mac, but the hardware differs, so this
+  sample neither confirms nor refutes that the workspace route keeps HAC-65's
+  frame rate. A like-for-like check still needs the same Mac, or the HAC-65
+  candidate re-measured on this laptop.
+- Playback advanced only 62 to 65 simulated minutes in 8 s with the city in view
+  (1× is about 144), against 73 minutes in 4 s with it offscreen. On slow GPUs
+  the playback clock runs slower than real 1× speed while the city is visible.
+  HAC-77 addresses this in commit `3a00669`. Capture the clock delta again when
+  measuring a build with that change.
+- The 500-agent case could not be measured here: this example renders the seeded
+  café day, not a 500-agent city layer, which HAC-77 adds.
+
+For the follow-up, run the HAC-65 candidate and workspace build on the same
+machine in the same browser. Keep the graphics setting, initial camera, device
+pixel ratio and cache warm-up consistent. Record each build's commit, city
+drawing-buffer size, city-rendered FPS and simulated minutes advanced. Record the
+500-agent workload separately when it is available.
+
 ## Reproduce and verify
 
 1. Install from the lockfile with `pnpm install --frozen-lockfile`.

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { replayAt } from "../replay/replay-state";
+import { interiorFrame } from "./interior-state";
 import type { DemoData, demoPlan } from "./fixture";
 import type { SimulatorStory } from "./stored";
 import { DecisionHeader } from "@/components/decision/decision-header";
@@ -19,18 +20,33 @@ import { useWorkspaceReport } from "@/lib/client/use-workspace-context";
 import type { WorkspaceObservation } from "@/lib/client/workspace-context";
 import { SimulatorViewport } from "./viewport";
 import { customerLabel } from "./customer-label";
+import { InspectPanel } from "@/components/city/inspect-panel";
 import type { RenderQuality } from "./render-policy";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { InsightsDrawer } from "@/components/insights/insights-drawer";
+import {
+  playbackSpeeds,
+  StatsCard,
+  type PlaybackSpeed,
+} from "@/components/city/stats-card";
+import type { MatterportConfig } from "../interior/matterport-view";
+import { InteriorView } from "../interior/interior-view";
+import {
+  CityInteriorTransition,
+  useViewHandoff,
+} from "@/components/city/transition";
+import { viewMinute } from "@/components/city/transition-state";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
 const Scene = dynamic(() => import("./scene"), { ssr: false });
+const MatterportView = dynamic(() => import("../interior/matterport-view"), {
+  ssr: false,
+});
 const usd = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const speeds = [0.5, 1, 2, 4];
 const playbackFrameInterval = 1000 / 60;
 
 function clock(minute: number) {
@@ -41,13 +57,13 @@ function clock(minute: number) {
 
 /** The bundled fixture's copy, labelled as an example (HAC-63). */
 export const EXAMPLE_STORY: SimulatorStory = {
-  eyebrow: "Example · Houston coffee shop",
-  title: "Does a second station pay off?",
+  eyebrow: "Example · Toy data · Houston coffee shop",
+  title: "Does a second staffed counter pay off?",
   intro: "",
-  scenarioLabels: ["Baseline", "Alternative"],
+  scenarioLabels: ["One staffed counter", "Two staffed counters"],
   compare: true,
   footnote:
-    "Example data, not a researched property: 110 generated customers at a fixture site. Illustrative block and vehicles. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
+    "Example data, not a researched property: 110 generated customers at a fixture site. Modeled layout, not a Matterport scan. Dot travel paths are illustrative two-minute entry/exit animations, not measured walking or collision simulation. Monthly totals repeat one weekday 22 times and include ingredients, labor, rent and buildout amortization; taxes and other overhead are excluded.",
 };
 
 export function SimulatorDemo({
@@ -63,6 +79,7 @@ export function SimulatorDemo({
   insights,
   insightsUnavailableReason,
   profileVersion,
+  matterport,
 }: {
   projectId: string;
   robustness?: RobustnessSummary | null;
@@ -77,22 +94,34 @@ export function SimulatorDemo({
   coordinates?: { longitude: number; latitude: number; tilesetUrl: string };
   /** Copy and provenance; defaults to the labelled example. */
   story?: SimulatorStory;
+  /** Public-demo scan only; the SDK key is client-permitted and domain-restricted. */
+  matterport?: MatterportConfig;
 }) {
   useWorkspaceReport(projectId, context);
   const { openMin, closeMin } = data[0].run.metrics;
   const start = coordinates ? 0 : openMin;
   const end = coordinates ? 1440 : closeMin;
   const [minute, setMinute] = useState(
-    data[0].run.events.find((event) => event.type === "service_start")
-      ?.timeMin ?? openMin,
+    matterport
+      ? Math.min(closeMin, openMin + 24)
+      : (data[0].run.events.find((event) => event.type === "service_start")
+          ?.timeMin ?? openMin),
   );
   const [previewIndex, setPreviewIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1);
+  // Both views share a clock; the controller that starts it chooses its stop.
+  const [playbackEnd, setPlaybackEnd] = useState(end);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
+  const [inspectIndex, setInspectIndex] = useState(0);
   const [quality, setQuality] = useState<RenderQuality>("balanced");
-  const running = playing && minute < end;
+  const [interiorMode, setInteriorMode] = useState<"scan" | "modeled">(
+    matterport ? "scan" : "modeled",
+  );
+  const running = playing && minute < playbackEnd;
+  // HAC-99: street ↔ interior handoff. Clock, run and selection stay here.
+  const handoff = useViewHandoff();
 
   useEffect(() => {
     if (!running) return;
@@ -112,7 +141,7 @@ export function SimulatorDemo({
         committed = now - ((now - committed) % playbackFrameInterval);
         setMinute((value) =>
           Math.min(
-            end,
+            playbackEnd,
             value + (elapsedForFrame * speed) / (coordinates ? 55 : 125),
           ),
         );
@@ -132,9 +161,8 @@ export function SimulatorDemo({
       cancelAnimationFrame(request);
       document.removeEventListener("visibilitychange", resumeWhenVisible);
     };
-  }, [running, end, speed, coordinates]);
+  }, [running, playbackEnd, speed, coordinates]);
 
-  const arrivals = replayAt(data[0].run.events, minute).arrivals;
   const [base, alternative] = data;
   const gain = alternative
     ? alternative.monthly.contributionUsd - base.monthly.contributionUsd
@@ -144,10 +172,7 @@ export function SimulatorDemo({
     : 0;
   const shopMinute = Math.min(closeMin, Math.max(openMin, minute));
   const previewRun = data[previewIndex].run;
-  const previewMinute = Math.min(
-    previewRun.metrics.closeMin,
-    Math.max(previewRun.metrics.openMin, minute),
-  );
+  const previewMinute = viewMinute("interior", minute, previewRun.metrics);
   const previewFrame = replayAt(previewRun.events, previewMinute);
   const insightsControl = (
     <InsightsDrawer
@@ -291,9 +316,9 @@ export function SimulatorDemo({
                 run={data[previewIndex].run}
                 minute={previewMinute}
                 cutaway
-                cameraZoom={22}
                 selected={selected}
                 select={select}
+                employeeCount={data[previewIndex].staffing?.headcount}
               />
             </SimulatorViewport>
             <p className="text-xs text-muted">
@@ -345,50 +370,45 @@ export function SimulatorDemo({
         <p className="mt-2 text-xs text-muted">{story.footnote}</p>
       </Card>
 
-      {coordinates ? (
-        <SimulatorViewport
-          label="3D neighborhood"
-          className="h-[40rem] max-h-[80dvh] min-h-[32rem]"
-        >
-          <Neighborhood
-            {...coordinates}
-            minute={minute}
-            quality={quality}
-            locationLabel={context.siteId ?? "Selected location"}
-            controls={
-              <div>
-                <label className="flex flex-wrap items-center gap-2 text-xs">
-                  Graphics
-                  <select
-                    aria-label="Graphics quality"
-                    value={quality}
-                    onChange={(event) =>
-                      setQuality(event.target.value as RenderQuality)
-                    }
-                    className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
-                  >
-                    <option value="balanced">Balanced</option>
-                    <option value="detailed">Detailed</option>
-                  </select>
-                </label>
-                {insightsControl}
-              </div>
-            }
-          >
+      <CityInteriorTransition
+        handoff={handoff}
+        siteLabel={context.siteId ?? base.run.siteId}
+        interior={
+          <div className="space-y-2">
+            <InteriorView
+              siteId={context.siteId ?? base.run.siteId}
+              sdkKey={matterport?.sdkKey}
+              run={previewRun}
+              minute={previewMinute}
+              employeeCount={data[previewIndex].staffing?.headcount}
+              selected={selected}
+              select={select}
+              seek={(value) => {
+                setPlaying(false);
+                setMinute(value);
+              }}
+            />
             <Timeline
-              label="Neighborhood timeline"
-              floating
-              className="absolute inset-x-3 bottom-8 z-10"
-              minute={minute}
-              min={start}
-              max={end}
-              step={1}
+              label="Interior timeline"
+              className=""
+              minute={previewMinute}
+              min={previewRun.metrics.openMin}
+              max={previewRun.metrics.closeMin}
+              step={0.01}
               running={running}
-              ended={minute >= end}
+              ended={minute >= previewRun.metrics.closeMin}
               speed={speed}
               onSpeed={setSpeed}
               onToggle={() => {
-                if (minute >= end) setMinute(start);
+                setPlaybackEnd(previewRun.metrics.closeMin);
+                if (
+                  minute >= previewRun.metrics.closeMin ||
+                  minute < previewRun.metrics.openMin
+                ) {
+                  setMinute(previewRun.metrics.openMin);
+                  setPlaying(true);
+                  return;
+                }
                 setPlaying(!running);
               }}
               onSeek={(value) => {
@@ -396,17 +416,75 @@ export function SimulatorDemo({
                 setMinute(value);
               }}
             />
-          </Neighborhood>
-        </SimulatorViewport>
-      ) : (
-        <Card>
-          <p role="status" className="text-sm text-muted">
-            3D neighborhood unavailable. The modeled operating replay is
-            available below.
-          </p>
-          {insightsControl}
-        </Card>
-      )}
+            {insightsControl}
+          </div>
+        }
+        city={
+          coordinates ? (
+            <SimulatorViewport
+              label="3D neighborhood"
+              className="h-[40rem] max-h-[80dvh] min-h-[32rem]"
+            >
+              <Neighborhood
+                {...coordinates}
+                minute={minute}
+                quality={quality}
+                locationLabel={context.siteId ?? "Selected location"}
+                controls={
+                  <div>
+                    <label className="flex flex-wrap items-center gap-2 text-xs">
+                      Graphics
+                      <select
+                        aria-label="Graphics quality"
+                        value={quality}
+                        onChange={(event) =>
+                          setQuality(event.target.value as RenderQuality)
+                        }
+                        className="rounded border border-viewport-muted bg-viewport-surface p-2 text-viewport-ink"
+                      >
+                        <option value="balanced">Balanced</option>
+                        <option value="detailed">Detailed</option>
+                      </select>
+                    </label>
+                    {insightsControl}
+                  </div>
+                }
+              >
+                <Timeline
+                  label="Neighborhood timeline"
+                  floating
+                  className="absolute inset-x-3 bottom-8 z-10"
+                  minute={minute}
+                  min={start}
+                  max={end}
+                  step={1}
+                  running={running}
+                  ended={minute >= end}
+                  speed={speed}
+                  onSpeed={setSpeed}
+                  onToggle={() => {
+                    setPlaybackEnd(end);
+                    if (minute >= end) setMinute(start);
+                    setPlaying(!running);
+                  }}
+                  onSeek={(value) => {
+                    setPlaying(false);
+                    setMinute(value);
+                  }}
+                />
+              </Neighborhood>
+            </SimulatorViewport>
+          ) : (
+            <Card>
+              <p role="status" className="text-sm text-muted">
+                3D neighborhood unavailable. The modeled operating replay is
+                available below.
+              </p>
+              {insightsControl}
+            </Card>
+          )
+        }
+      />
 
       {story.compare && alternative && (
         <Card className="grid gap-5 sm:grid-cols-3">
@@ -466,6 +544,34 @@ export function SimulatorDemo({
         aria-label="Operating replay"
         className="scroll-mt-4 space-y-4"
       >
+        <div
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted"
+          aria-label="Dot legend"
+        >
+          <span className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-3 rounded-full"
+              style={{ background: "#60a5fa" }}
+            />
+            Customer
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-3 rounded-full ring-2 ring-ink ring-offset-2 ring-offset-surface"
+              style={{ background: "#c084fc" }}
+            />
+            Employee · ring
+          </span>
+          <span>Outline · selected customer</span>
+        </div>
+        <p className="max-w-2xl text-xs leading-relaxed text-muted">
+          Customers approach the same shop, queue, receive service and leave.
+          Employee dots mark staffed counters; movement paths illustrate replay
+          events. Adding furniture without staffing does not add modeled service
+          capacity.
+        </p>
         <div className="flex flex-wrap gap-2">
           <Timeline
             label="Shared playback"
@@ -479,6 +585,7 @@ export function SimulatorDemo({
             speed={speed}
             onSpeed={setSpeed}
             onToggle={() => {
+              setPlaybackEnd(closeMin);
               if (minute >= closeMin || minute < openMin) {
                 setMinute(openMin);
                 setPlaying(true);
@@ -493,54 +600,224 @@ export function SimulatorDemo({
           />
           <button
             type="button"
-            aria-pressed={cutaway}
-            onClick={() => setCutaway(!cutaway)}
-            className="rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine aria-pressed:bg-mint"
+            aria-label="Reset shared playback"
+            onClick={() => {
+              setPlaying(false);
+              setPlaybackEnd(closeMin);
+              setMinute(openMin);
+              select("");
+            }}
+            className="min-h-11 rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine"
           >
-            Focus on shop
+            Reset
           </button>
+          {interiorMode === "modeled" && (
+            <button
+              type="button"
+              aria-pressed={cutaway}
+              onClick={() => setCutaway(!cutaway)}
+              className="rounded-lg border border-pine bg-surface px-4 py-3 text-sm font-medium text-pine aria-pressed:bg-mint"
+            >
+              Focus on shop
+            </button>
+          )}
         </div>
+        <StatsCard
+          run={previewRun}
+          runLabel={story.scenarioLabels[previewIndex]}
+          scope="site"
+          minute={previewMinute}
+          playing={running}
+          speed={speed}
+          onScopeChange={() => {}}
+          onMinuteChange={(value) => {
+            setPlaying(false);
+            setMinute(value);
+          }}
+          onPlayingChange={(value) => {
+            if (
+              value &&
+              (minute < previewRun.metrics.openMin ||
+                minute >= previewRun.metrics.closeMin)
+            ) {
+              setMinute(previewRun.metrics.openMin);
+            }
+            setPlaybackEnd(previewRun.metrics.closeMin);
+            setPlaying(value);
+          }}
+          onSpeedChange={setSpeed}
+        />
+        <section
+          id="scanned-interior"
+          aria-label="Interior view controls"
+          className="scroll-mt-24 space-y-3"
+        >
+          {matterport && (
+            <p className="text-xs text-muted">
+              Starts paused at {clock(Math.min(closeMin, openMin + 24))}. Play
+              the day or reset to opening.
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={interiorMode === "scan"}
+              disabled={!matterport}
+              onClick={() => setInteriorMode("scan")}
+              className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine disabled:opacity-40 aria-pressed:bg-mint"
+            >
+              Scanned interior
+            </button>
+            <button
+              type="button"
+              aria-pressed={interiorMode === "modeled"}
+              onClick={() => setInteriorMode("modeled")}
+              className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine aria-pressed:bg-mint"
+            >
+              Modeled layout
+            </button>
+          </div>
+          {!matterport && (
+            <p className="text-xs text-muted">
+              Scanned interior is unavailable in this environment. The modeled
+              replay is selected.
+            </p>
+          )}
+          {interiorMode === "scan" &&
+            matterport &&
+            handoff.view === "interior" && (
+              <p className="text-xs text-muted">
+                The interior is open above; the scanned plan returns here when
+                you go back to the street.
+              </p>
+            )}
+          {interiorMode === "scan" && matterport && handoff.view === "city" && (
+            <>
+              <div
+                role="radiogroup"
+                aria-label="Scanned plan"
+                className="flex flex-wrap gap-2"
+              >
+                {data.map((_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    role="radio"
+                    aria-checked={previewIndex === index}
+                    tabIndex={previewIndex === index ? 0 : -1}
+                    onClick={() => setPreviewIndex(index)}
+                    onKeyDown={(event) => {
+                      const direction =
+                        event.key === "ArrowRight" || event.key === "ArrowDown"
+                          ? 1
+                          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                            ? -1
+                            : 0;
+                      if (
+                        !direction &&
+                        event.key !== "Home" &&
+                        event.key !== "End"
+                      )
+                        return;
+                      event.preventDefault();
+                      const next =
+                        event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? data.length - 1
+                            : (index + direction + data.length) % data.length;
+                      setPreviewIndex(next);
+                      event.currentTarget.parentElement
+                        ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+                        [next]?.focus();
+                    }}
+                    className="min-h-11 rounded-lg border border-pine bg-surface px-4 text-sm font-medium text-pine aria-checked:bg-mint"
+                  >
+                    {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+                  </button>
+                ))}
+              </div>
+              <MatterportView
+                config={matterport}
+                run={previewRun}
+                minute={previewMinute}
+                employeeCount={data[previewIndex].staffing?.headcount}
+                selected={selected}
+                select={select}
+                seek={setMinute}
+              />
+            </>
+          )}
+        </section>
         <div className="grid gap-4 lg:grid-cols-2">
-          {data.map(({ run, monthly }, index) => {
-            const frame = replayAt(run.events, minute);
+          {data.map(({ run, monthly, staffing }, index) => {
+            const frame = interiorFrame(run, minute, staffing?.headcount);
             const customer = frame.arrivals.get(selected);
             const scenario =
               story.compare && index === 1 ? "alternative" : "baseline";
+            const label =
+              story.scenarioLabels[index] ?? `Scenario ${index + 1}`;
             return (
-              <Card key={index} className="!p-4">
+              <Card
+                key={index}
+                role="region"
+                aria-label={label}
+                className="min-w-0 !p-4"
+              >
                 <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                   <h2
                     className={`font-semibold ${scenario === "baseline" ? "text-baseline" : "text-alternative"}`}
                   >
-                    {story.compare
-                      ? story.scenarioLabels[index]
-                      : `Baseline · ${story.scenarioLabels[index]}`}
+                    {story.compare ? label : `Baseline · ${label}`}
                   </h2>
                   <span className="text-xs text-muted">
                     {run.metrics.stations}{" "}
-                    {run.metrics.stations === 1 ? "station" : "stations"}
+                    {run.metrics.stations === 1 ? "counter" : "counters"}
+                    {staffing
+                      ? ` · ${staffing.headcount} ${staffing.headcount === 1 ? "employee" : "employees"}`
+                      : " · staffing unavailable"}
                   </span>
                 </header>
-                <SimulatorViewport
-                  label={`${story.scenarioLabels[index]} modeled café`}
-                  className="h-72"
-                >
-                  <Scene
-                    quality={quality}
-                    run={run}
-                    minute={minute}
-                    cutaway={cutaway}
-                    selected={selected}
-                    select={select}
-                  />
-                </SimulatorViewport>
-                <div className="grid grid-cols-2 gap-3 pt-4 sm:grid-cols-4">
+                {interiorMode === "modeled" && (
+                  <>
+                    <p className="pb-2 text-xs font-medium text-muted">
+                      Modeled layout
+                    </p>
+                    <SimulatorViewport
+                      label={`${label} modeled café`}
+                      className="h-72"
+                    >
+                      <Scene
+                        quality={quality}
+                        run={run}
+                        minute={minute}
+                        cutaway={cutaway}
+                        selected={selected}
+                        select={select}
+                        employeeCount={staffing?.headcount}
+                      />
+                    </SimulatorViewport>
+                  </>
+                )}
+                <dl className="grid grid-cols-2 gap-3 pt-4 sm:grid-cols-5">
                   <Live label="Modeled arrivals" value={frame.arrivals.size} />
                   <Live label="Served" value={frame.served} />
                   <Live label="Waiting" value={frame.waiting.length} />
                   <Live label="Left" value={frame.left} warn={frame.left > 0} />
-                </div>
+                  <Live
+                    label="Busy counters"
+                    value={`${frame.serving.length}/${run.metrics.stations}`}
+                  />
+                </dl>
                 <dl className="mt-4 space-y-2 text-sm">
+                  <Row
+                    label="Avg wait to service so far"
+                    value={
+                      frame.meanWaitMin === null
+                        ? "No service starts yet"
+                        : `${frame.meanWaitMin.toFixed(1)} min`
+                    }
+                  />
                   <Row
                     label="Modeled day-end"
                     value={`${run.metrics.served} served · ${run.metrics.abandoned} left`}
@@ -550,39 +827,113 @@ export function SimulatorDemo({
                     value={usd.format(monthly.revenueUsd)}
                   />
                   <Row
+                    label="Modeled labor / month"
+                    value={usd.format(monthly.costs.laborUsd)}
+                  />
+                  <Row
                     label="Modeled monthly contribution"
                     value={usd.format(monthly.contributionUsd)}
                     strong
                   />
                 </dl>
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  Wait averages customers who have started service by this
+                  minute, including those still being served. Served and left
+                  are cumulative; waiting and busy counters are current.
+                </p>
+                {staffing && (
+                  <div
+                    className="mt-3 flex flex-wrap gap-2"
+                    aria-label="Employee inspection"
+                  >
+                    {Array.from(
+                      {
+                        length: Math.min(
+                          staffing.headcount,
+                          run.metrics.stations,
+                        ),
+                      },
+                      (_, employee) => (
+                        <button
+                          key={employee}
+                          type="button"
+                          aria-pressed={selected === `employee-${employee + 1}`}
+                          onClick={() => select(`employee-${employee + 1}`)}
+                          className="min-h-11 rounded-full border border-pine px-3 text-xs text-pine aria-pressed:bg-mint"
+                        >
+                          Employee {employee + 1} · counter {employee + 1}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
                 {selected && (
-                  <p className="mt-3 rounded-lg bg-paper p-3 text-xs text-muted">
-                    {selected} ·{" "}
-                    {customer
-                      ? customerLabel(customer, !story.compare)
-                      : "not arrived yet"}
+                  <p
+                    role="status"
+                    aria-label="Person inspection"
+                    className="mt-3 rounded-lg bg-paper p-3 text-xs text-muted"
+                  >
+                    {selected.startsWith("employee-")
+                      ? `Employee ${selected.slice(9)}`
+                      : selected}{" "}
+                    ·{" "}
+                    {selected.startsWith("employee-")
+                      ? frame.employees.some(
+                          (employee) => employee.id === selected,
+                        )
+                        ? `staffing counter ${selected.slice(9)} · stationary role marker`
+                        : staffing &&
+                            Number(selected.slice(9)) <=
+                              Math.min(staffing.headcount, run.metrics.stations)
+                          ? "off shift · shop closed"
+                          : "not staffed in this scenario"
+                      : customer
+                        ? `${frame.customers.find((dot) => dot.id === selected)?.state ?? (customer.decision === "leave" ? "left" : "departed")} · ${customerLabel(customer, !story.compare)}`
+                        : "not arrived yet"}
                   </p>
                 )}
               </Card>
             );
           })}
         </div>
-        <label className="flex flex-wrap items-center justify-end gap-2 text-sm text-muted">
-          Modeled customer
-          <select
-            aria-label="Inspect a customer"
-            className="max-w-full rounded-lg border border-muted bg-surface px-3 py-2 text-ink"
-            value={arrivals.has(selected) ? selected : ""}
-            onChange={(event) => select(event.target.value)}
-          >
-            <option value="">
-              {arrivals.size ? "Inspect a customer" : "No modeled arrivals yet"}
-            </option>
-            {[...arrivals.keys()].map((id) => (
-              <option key={id}>{id}</option>
-            ))}
-          </select>
-        </label>
+        {/* HAC-93: one selection shared by every view; the card reads the shop clock. */}
+        <InspectPanel
+          events={data[inspectIndex].run.events}
+          minute={shopMinute}
+          closeMin={closeMin}
+          selectedId={selected}
+          onSelect={select}
+          source={context.phase === "ready" ? "stored" : "engine"}
+          scenarioLabel={
+            data.length > 1
+              ? (story.scenarioLabels[inspectIndex] ??
+                `Scenario ${inspectIndex + 1}`)
+              : undefined
+          }
+          following={handoff.following}
+          onFollowChange={handoff.setFollowing}
+          followUnavailableReason="the modeled café shows the whole floor, and this run has no street trips to follow in the city"
+          controls={
+            data.length > 1 && (
+              <label className="grid gap-1 text-sm font-medium">
+                Scenario
+                <select
+                  className="rounded-lg border border-line bg-surface p-2 text-ink"
+                  value={inspectIndex}
+                  onChange={(event) =>
+                    setInspectIndex(Number(event.target.value))
+                  }
+                >
+                  {data.map((_, index) => (
+                    <option key={index} value={index}>
+                      {story.scenarioLabels[index] ?? `Scenario ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          }
+        />
       </section>
       {story.provenance && (
         <Card role="region" aria-label="Recorded run provenance">
@@ -595,7 +946,12 @@ export function SimulatorDemo({
         </Card>
       )}
       <p className="max-w-2xl text-xs leading-relaxed text-muted">
-        {story.footnote}
+        {interiorMode === "scan" && matterport
+          ? story.footnote.replace(
+              "Modeled layout, not a Matterport scan.",
+              "The backdrop is a public Matterport café reference, not the selected Houston property. Toy customer dots and proposed service counters are simulation overlays, not observed activity or captured furnishings.",
+            )
+          : story.footnote}
       </p>
     </div>
   );
@@ -625,8 +981,8 @@ function Timeline({
   step: number;
   running: boolean;
   ended: boolean;
-  speed: number;
-  onSpeed: (speed: number) => void;
+  speed: PlaybackSpeed;
+  onSpeed: (speed: PlaybackSpeed) => void;
   onToggle: () => void;
   onSeek: (minute: number) => void;
 }) {
@@ -687,7 +1043,11 @@ function Timeline({
         aria-label={`Speed ${speed}×`}
         title="Change speed"
         onClick={() =>
-          onSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length])
+          onSpeed(
+            playbackSpeeds[
+              (playbackSpeeds.indexOf(speed) + 1) % playbackSpeeds.length
+            ],
+          )
         }
         className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-mint"
       >
@@ -726,17 +1086,17 @@ function Live({
   warn,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   warn?: boolean;
 }) {
   return (
-    <div>
-      <p
-        className={`text-2xl font-semibold tabular-nums ${warn ? "text-danger" : ""}`}
+    <div className="flex flex-col">
+      <dt className="order-2 text-xs text-muted">{label}</dt>
+      <dd
+        className={`order-1 text-2xl font-semibold tabular-nums ${warn ? "text-danger" : ""}`}
       >
         {value}
-      </p>
-      <p className="text-xs text-muted">{label}</p>
+      </dd>
     </div>
   );
 }

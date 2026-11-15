@@ -48,6 +48,40 @@ describe("investigation API", () => {
       { seq: 0, summary: { result: "synthetic" } },
     ]);
   });
+  it("answers 202 while a Jev panel step is in progress, then 200 once it finishes (HAC-155)", async () => {
+    let calls = 0;
+    const panelPlanner: InvestigationStepPlanner = async ({ nextSeq }) =>
+      nextSeq
+        ? null
+        : {
+            tool: "poll_customers",
+            inputHash: "poll",
+            execute: async () => {
+              if (++calls === 1)
+                throw Object.assign(
+                  new Error("Jev panel in progress (5/50 personas)"),
+                  { resumable: true },
+                );
+              return { summary: { polled: true }, done: true };
+            },
+          };
+    const handlers = createInvestigationHandlers({
+      repository: createMemoryInvestigationRepository(),
+      planner: panelPlanner,
+      resumeToolTimeouts: true,
+    });
+    const { job } = await (await handlers.create(request(input))).json();
+    const first = await handlers.advance(request({}), context(job.id));
+    expect(first.status).toBe(202);
+    expect((await first.json()).job).toMatchObject({
+      status: "running",
+      reason: "Jev panel in progress (5/50 personas)",
+      counters: { toolCalls: 0, pollCustomers: 0 },
+    });
+    const second = await handlers.advance(request({}), context(job.id));
+    expect(second.status).toBe(200);
+    expect((await second.json()).job.status).toBe("succeeded");
+  });
   it.each([
     { ...input, attempt: 4 },
     { ...input, counters: {} },

@@ -13,6 +13,16 @@ import {
 } from "@/lib/contracts/evaluation";
 import { profileFromIntake } from "./intake-business-profile";
 import { useSiteSearch } from "./use-site-search";
+import {
+  activeComparisonId,
+  comparisonStorageKey,
+  readSavedComparison,
+  readShortlist,
+  restoreShortlist,
+  writeSavedComparison,
+  writeShortlist,
+  type SavedComparison,
+} from "./project-store";
 import type { SiteSearchResult } from "@/lib/contracts/sites";
 import type {
   DemandSource,
@@ -21,6 +31,12 @@ import type {
   SensitivityResult,
 } from "@/lib/contracts/evaluation";
 import type { AssemblyMetadata } from "@/lib/evaluation/assemble";
+import {
+  createPanelResendBackoff,
+  PanelInProgressBodySchema,
+  panelProgressMessage,
+  type PanelProgressCount,
+} from "@/lib/panel/progress";
 
 export type LiveComparisonPayload = {
   comparisonId: string;
@@ -47,6 +63,8 @@ export type LiveComparisonController = {
   setSelectedIds: (ids: string[]) => void;
   payload: LiveComparisonPayload | null;
   message: string;
+  /** HAC-155: a deadline-limited Jev panel still being resumed; never a finished result. */
+  panelProgress: PanelProgressCount | null;
   notes: string[];
   demandSource: DemandSource;
   demandSourceReason: string;
@@ -106,39 +124,14 @@ const PayloadSchema = z.object({
     })
     .optional(),
 });
-const SavedSchema = z.object({
-  projectId: z.string(),
-  comparisonId: z.string().min(1),
-  profileId: z.string().min(1),
-  profileVersion: z.number().int().positive(),
-  intakeFingerprint: z.string(),
-});
-export type SavedComparison = z.infer<typeof SavedSchema>;
-export const comparisonStorageKey = (projectId: string) =>
-  `sitework:comparison:v1:${projectId}`;
-export function activeComparisonId(
-  href: string,
-  saved: SavedComparison | null,
-) {
-  const ids = new URL(href).searchParams.getAll("comparison");
-  return (ids.length === 1 && ids[0]) || saved?.comparisonId;
-}
+export {
+  activeComparisonId,
+  comparisonStorageKey,
+  readSavedComparison,
+  type SavedComparison,
+} from "./project-store";
 const intakeKey = (projectId: string) => `sitework:intake:v1:${projectId}`;
 const fingerprint = (profile: BusinessProfile) => JSON.stringify(profile);
-
-export function readSavedComparison(
-  storage: Pick<Storage, "getItem">,
-  projectId: string,
-): SavedComparison | null {
-  try {
-    const saved = SavedSchema.parse(
-      JSON.parse(storage.getItem(comparisonStorageKey(projectId)) ?? "null"),
-    );
-    return saved.projectId === projectId ? saved : null;
-  } catch {
-    return null;
-  }
-}
 
 function readIntake(projectId: string) {
   try {
@@ -163,6 +156,17 @@ async function api<T>(
   timeout = 15_000,
   fetcher: typeof fetch = fetch,
 ): Promise<T> {
+  const { ok, body } = await send(path, init, timeout, fetcher);
+  if (!ok) throw new Error("Service unavailable");
+  return schema.parse(body);
+}
+
+async function send(
+  path: string,
+  init: RequestInit,
+  timeout: number,
+  fetcher: typeof fetch,
+): Promise<{ ok: boolean; status: number; body: unknown }> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (init.signal?.aborted) controller.abort();
@@ -174,8 +178,12 @@ async function api<T>(
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!response.ok) throw new Error("Service unavailable");
-    return schema.parse(await response.json());
+    if (!response.ok) return { ok: false, status: response.status, body: null };
+    return {
+      ok: true,
+      status: response.status,
+      body: await response.json(),
+    };
   } finally {
     clearTimeout(timer);
     init.signal?.removeEventListener("abort", abort);
@@ -189,12 +197,65 @@ const post = (body: unknown, signal?: AbortSignal): RequestInit => ({
   signal,
 });
 
+function wait(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/**
+ * POST /api/comparisons until it returns the comparison. A 202 `in_progress` (HAC-155) means the
+ * Jev panel hit the function deadline with its answers cached: it is reported through
+ * `onProgress` and the same body is resent with `createPanelResendBackoff`. Never an error and
+ * never a result by itself.
+ */
+async function postComparison(
+  body: unknown,
+  signal: AbortSignal | undefined,
+  fetcher: typeof fetch,
+  onProgress?: (progress: PanelProgressCount) => void,
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void> = wait,
+) {
+  const backoff = createPanelResendBackoff();
+  for (;;) {
+    const response = await send(
+      "/api/comparisons",
+      post(body, signal),
+      90_000,
+      fetcher,
+    );
+    if (!response.ok) throw new Error("Service unavailable");
+    if (response.status !== 202) return PayloadSchema.parse(response.body);
+    const progress = PanelInProgressBodySchema.parse(response.body);
+    onProgress?.({
+      completedPersonas: progress.completedPersonas,
+      totalPersonas: progress.totalPersonas,
+    });
+    const delay = backoff.next(progress);
+    if (delay === null) throw new Error("Jev panel is not making progress");
+    await sleep(delay, signal);
+  }
+}
+
 export async function requestLiveComparison(
   profile: BusinessProfile,
   candidateIds: string[],
   demandSource: DemandSource,
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
+  options: {
+    onProgress?: (progress: PanelProgressCount) => void;
+    sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  } = {},
 ) {
   if (
     !candidateIds.length ||
@@ -212,20 +273,17 @@ export async function requestLiveComparison(
   );
   if (saved.profile.projectId !== profile.projectId)
     throw new Error("Profile identity mismatch");
-  const payload = await api(
-    "/api/comparisons",
-    PayloadSchema,
-    post(
-      {
-        projectId: profile.projectId,
-        profileId: saved.profile.id,
-        candidateIds,
-        demandSource,
-      },
-      signal,
-    ),
-    90_000,
+  const payload = await postComparison(
+    {
+      projectId: profile.projectId,
+      profileId: saved.profile.id,
+      candidateIds,
+      demandSource,
+    },
+    signal,
     fetcher,
+    options.onProgress,
+    options.sleep,
   );
   if (
     payload.result.projectId !== profile.projectId ||
@@ -244,6 +302,55 @@ export async function requestLiveComparison(
       intakeFingerprint: fingerprint(profile),
     } satisfies SavedComparison,
   };
+}
+
+/**
+ * HAC-151: runs a comparison the consultant asked for, outside any React state: the saved intake
+ * becomes the profile, then the same profile -> comparison path as the Run button. Saves the
+ * shortlist and the comparison so the comparison screen opens the result.
+ */
+export async function runAgentComparison(
+  projectId: string,
+  siteIds: string[],
+  options: {
+    signal?: AbortSignal;
+    fetcher?: typeof fetch;
+    storage?: Pick<Storage, "getItem">;
+    onProgress?: (progress: PanelProgressCount) => void;
+    sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  } = {},
+) {
+  const fetcher = options.fetcher ?? fetch;
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(
+      (options.storage ?? localStorage).getItem(
+        `sitework:intake:v1:${projectId}`,
+      ) ?? "null",
+    );
+  } catch {
+    /* An unreadable intake is reported below as an incomplete one. */
+  }
+  const { profile, reason } = profileFromIntake(raw, projectId);
+  if (!profile) throw new Error(reason ?? "Complete the intake first");
+  const capability = await api(
+    "/api/comparisons/capabilities",
+    z.object({ jevConfigured: z.boolean() }),
+    { signal: options.signal },
+    15_000,
+    fetcher,
+  ).catch(() => null);
+  const response = await requestLiveComparison(
+    profile,
+    siteIds,
+    capability?.jevConfigured ? "jev" : "huff",
+    options.signal,
+    fetcher,
+    { onProgress: options.onProgress, sleep: options.sleep },
+  );
+  writeShortlist(projectId, siteIds);
+  writeSavedComparison(response.saved);
+  return response;
 }
 
 export function useStoredComparison(
@@ -351,14 +458,7 @@ export function useStoredComparison(
     (payload: LiveComparisonPayload, saved: SavedComparison) => {
       generation.current++;
       activeId.current = payload.comparisonId;
-      try {
-        localStorage.setItem(
-          comparisonStorageKey(projectId),
-          JSON.stringify(saved),
-        );
-      } catch {
-        /* Explicit replay links still work when storage is unavailable. */
-      }
+      writeSavedComparison(saved);
       // Subsequent focus/retry reads the newly adopted comparison, including
       // when this run started from an older comparison permalink.
       const url = new URL(window.location.href);
@@ -404,12 +504,23 @@ export function useLiveComparison(
   const [intakeVersion, setIntakeVersion] = useState(0);
   const search = useSiteSearch(projectId, attempt + intakeVersion);
   const stored = useStoredComparison(projectId, initialComparisonId);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIdsState] = useState<string[]>([]);
+  // HAC-135: the shortlist is saved per project, so it survives navigation.
+  const setSelectedIds = useCallback(
+    (ids: string[]) => {
+      setSelectedIdsState(ids);
+      writeShortlist(projectId, ids);
+    },
+    [projectId],
+  );
   const [capability, setCapability] = useState<{
     jev: boolean;
     reason: string;
   } | null>(null);
   const [running, setRunning] = useState(false);
+  const [panelProgress, setPanelProgress] = useState<PanelProgressCount | null>(
+    null,
+  );
   const [failure, setFailure] = useState("");
   const [sensitivity, setSensitivity] = useState<
     LiveComparisonController["sensitivity"] & { comparisonId: string | null }
@@ -509,10 +620,12 @@ export function useLiveComparison(
     const ids = candidateKey ? candidateKey.split(",") : [];
     const first = previousCandidates.current === null;
     previousCandidates.current = candidateKey;
-    setSelectedIds((current) =>
-      first ? ids : current.filter((id) => ids.includes(id)),
+    setSelectedIdsState((current) =>
+      first
+        ? restoreShortlist(readShortlist(localStorage, projectId), ids)
+        : current.filter((id) => ids.includes(id)),
     );
-  }, [candidateKey, search.state.mode]);
+  }, [candidateKey, search.state.mode, projectId]);
   const retry = () => {
     setFailure("");
     setAttempt((n) => n + 1);
@@ -530,6 +643,7 @@ export function useLiveComparison(
     sensitivityOperation.current?.abort();
     sensitivityOperation.current = null;
     setRunning(true);
+    setPanelProgress(null);
     setFailure("");
     setSensitivity({
       loading: false,
@@ -543,9 +657,18 @@ export function useLiveComparison(
         selectedIds,
         capability?.jev ? "jev" : "huff",
         controller.signal,
+        fetch,
+        {
+          onProgress: (progress) => {
+            if (mounted.current && operation.current === controller)
+              setPanelProgress(progress);
+          },
+        },
       );
-      if (mounted.current && operation.current === controller)
+      if (mounted.current && operation.current === controller) {
+        writeShortlist(projectId, selectedIds);
         stored.adopt(response.payload, response.saved);
+      }
     } catch {
       if (mounted.current && operation.current === controller)
         setFailure(
@@ -554,7 +677,10 @@ export function useLiveComparison(
     } finally {
       if (operation.current === controller) {
         operation.current = null;
-        if (mounted.current) setRunning(false);
+        if (mounted.current) {
+          setRunning(false);
+          setPanelProgress(null);
+        }
       }
     }
   };
@@ -641,8 +767,10 @@ export function useLiveComparison(
     selectedIds,
     setSelectedIds,
     payload: stored.payload,
+    panelProgress: running ? panelProgress : null,
     message:
       failure ||
+      (running && panelProgress ? panelProgressMessage(panelProgress) : "") ||
       (search.state.mode === "example"
         ? search.state.message
         : search.state.mode === "live" && !candidates.length
