@@ -93,16 +93,19 @@ export function scrollOffset(
   );
 }
 
-export type LocationSpace = "map" | "analytics" | null;
+export type LocationSpace = "question" | "map" | "analytics" | null;
+const spacePosition = (scene: LocationSpace) =>
+  scene === "question" ? -1 : Number(scene === "analytics");
 export type SpaceSlide = {
   scene: LocationSpace;
   from: number;
   to: number;
   startedAt: number;
   duration: number;
+  suspended?: boolean;
 };
 export function initialSpaceSlide(scene: LocationSpace): SpaceSlide {
-  const mix = Number(scene === "analytics");
+  const mix = spacePosition(scene);
   return { scene, from: mix, to: mix, startedAt: 0, duration: 0 };
 }
 export function spaceSlideAt(state: SpaceSlide, now: number) {
@@ -111,11 +114,29 @@ export function spaceSlideAt(state: SpaceSlide, now: number) {
     : 1;
   const mix = state.from + (state.to - state.from) * smooth(0, 1, t);
   const active = t < 1 && state.from !== state.to;
+  const transitioning = active || !!state.suspended;
   return {
     scene: state.scene,
     mix,
     active,
-    retainMap: state.scene === "map" || (state.scene === "analytics" && active),
+    retainMap: state.scene === "map" || (state.scene !== null && transitioning),
+    retainQuestion:
+      state.scene === "question" ||
+      (transitioning && Math.min(state.from, state.to) < 0),
+    retainAnalytics:
+      state.scene === "analytics" ||
+      (transitioning && Math.max(state.from, state.to) > 0),
+  };
+}
+export function holdSpaceSlide(state: SpaceSlide, now: number): SpaceSlide {
+  const frame = spaceSlideAt(state, now);
+  return {
+    ...state,
+    from: frame.mix,
+    to: frame.mix,
+    startedAt: now,
+    duration: 0,
+    suspended: frame.active || state.suspended,
   };
 }
 export function retargetSpaceSlide(
@@ -124,15 +145,60 @@ export function retargetSpaceSlide(
   now: number,
   animate: boolean,
 ): SpaceSlide {
-  if (!animate || scene === null || previous.scene === null)
+  if (
+    !animate ||
+    scene === null ||
+    previous.scene === null ||
+    Math.abs(spacePosition(scene) - spacePosition(previous.scene)) > 1
+  )
     return initialSpaceSlide(scene);
-  if (previous.scene === scene) return previous;
+  if (previous.scene === scene && !previous.suspended) return previous;
   return {
     scene,
     from: spaceSlideAt(previous, now).mix,
-    to: Number(scene === "analytics"),
+    to: spacePosition(scene),
     startedAt: now,
     duration: 500,
+  };
+}
+
+/** Bounded, deterministic chat beats shared by all three scripted questions. */
+export function chatSchedule(prompt: string, paragraphs: readonly string[]) {
+  const sendAt = 250 + prompt.length * 25 + 220;
+  const sentAt = sendAt + 180;
+  const replyAt = sentAt + 420;
+  return {
+    sendAt,
+    sentAt,
+    replyAt,
+    duration: replyAt + paragraphs.join("\n\n").length * 22 + 250,
+  };
+}
+export function chatAt(
+  prompt: string,
+  paragraphs: readonly string[],
+  elapsed: number,
+  reduced = false,
+) {
+  const schedule = chatSchedule(prompt, paragraphs);
+  const time = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+  const sent = reduced || time >= schedule.sentAt;
+  const replyVisible = reduced || time >= schedule.replyAt;
+  let remaining = reduced
+    ? Infinity
+    : Math.max(0, Math.floor((time - schedule.replyAt) / 22));
+  const typed = paragraphs.map((paragraph) => {
+    const text = paragraph.slice(0, Math.max(0, remaining));
+    remaining -= paragraph.length + 2;
+    return text;
+  });
+  return {
+    promptText: reduced ? prompt : typingAt(prompt, time, 250),
+    sendPressed: !reduced && time >= schedule.sendAt && time < schedule.sentAt,
+    sent,
+    replyVisible,
+    paragraphs: typed,
+    complete: reduced || time >= schedule.duration,
   };
 }
 type SlideScheduler = {

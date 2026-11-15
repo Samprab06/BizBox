@@ -20,12 +20,14 @@ export type WorkspaceObservation =
   | {
       kind: "search";
       phase: "loading" | "example" | "live";
+      needsBrief?: boolean;
       candidates: ContextListing[];
       evidenceId?: string;
     }
   | {
       kind: "comparison" | "stored";
       phase: "loading" | "ready" | "running" | "example";
+      needsBrief?: boolean;
       comparisonId?: string;
       synthetic?: boolean;
       outdated?: boolean;
@@ -220,9 +222,10 @@ export function resolveWorkspaceContext({
         currentComparison.phase === "example" ||
         (isReplay && currentReplay?.phase === "example")
       ) {
-        example = true;
+        const needsBrief = currentComparison.needsBrief;
+        example = !needsBrief || project.sites.length > 0;
         selectedId = fixtureRequested?.id ?? project.sites[0]?.id;
-        status = "Example data";
+        status = example ? "Example data" : "Brief incomplete";
       } else if (
         isReplay &&
         (!currentReplay || currentReplay.phase === "loading")
@@ -270,8 +273,14 @@ export function resolveWorkspaceContext({
     example = project.sites.some((site) => site.id === selectedId);
     status = example ? "Example data" : "Your input";
   } else if (currentSearch?.phase === "example") {
-    example = view === "map";
-    status = example ? "Example data" : "Listing unavailable";
+    example = view === "map" && project.sites.length > 0;
+    if (view === "map" && currentSearch.needsBrief)
+      selectedId = fixtureRequested?.id;
+    status = example
+      ? "Example data"
+      : view === "map" && currentSearch.needsBrief
+        ? "Brief incomplete"
+        : "Listing unavailable";
   } else if (currentSearch?.phase === "live") {
     const selected = candidates.find((site) => site.id === selectedId);
     example =

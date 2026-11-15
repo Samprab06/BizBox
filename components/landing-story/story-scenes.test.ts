@@ -8,9 +8,33 @@ import {
   ConsultantScene,
   CounterComparison,
   MorningScene,
+  LocationQuestion,
+  CounterQuestion,
+  interiorFrame,
 } from "./story-scenes";
 const data = createLocationStory();
 describe("prepared location-story presentation", () => {
+  it("keeps a scrolled preview in viewport coordinates and fills the resized viewport on expansion", () => {
+    const source = { left: 20, top: 312, width: 350, height: 136 };
+    expect(interiorFrame(source, { width: 390, height: 700 }, 0)).toMatchObject(
+      source,
+    );
+    expect(interiorFrame(source, { width: 390, height: 700 }, 1)).toEqual({
+      left: 0,
+      top: 0,
+      width: 390,
+      height: 700,
+    });
+    expect(interiorFrame(source, { width: 700, height: 390 }, 1)).toEqual({
+      left: 0,
+      top: 0,
+      width: 700,
+      height: 390,
+    });
+    expect(interiorFrame(source, { width: 700, height: 390 }, 0)).toMatchObject(
+      source,
+    );
+  });
   it("shows engine-backed same-morning values without putting the map in analytics", () => {
     const html = renderToStaticMarkup(h(LocationAnalytics, { data }));
     for (const site of data.sites) {
@@ -38,24 +62,64 @@ describe("prepared location-story presentation", () => {
     expect(html).toContain("Assumptions &amp; costs");
     expect(html).not.toContain("canvas");
     expect(html).not.toContain("iframe");
+    const primary = html.split("<details")[0];
+    expect(primary).not.toContain("assumed arrivals");
+    expect(primary).not.toContain("/ month rent");
+    expect(primary).toContain('data-result-chart="contribution"');
   });
-  it("shows the consultant bubble before typing, then reveals the prepared recommendation", () => {
+  it("composes the consultant question before sending, then distinguishes the user from BizBox and embeds See inside in its reply", () => {
     const initial = renderToStaticMarkup(
       h(ConsultantScene, { data, elapsed: 200, reduced: false }),
     );
     const typed = renderToStaticMarkup(
       h(ConsultantScene, { data, elapsed: 20000, reduced: false }),
     );
-    const visible = (html: string) =>
-      html.match(/<p aria-hidden="true">([\s\S]*?)<span/)?.[1];
-    expect(visible(initial)).toBe("");
-    expect(visible(typed)).toContain("higher rent");
+    expect(initial).toContain("<textarea");
+    expect(initial).toContain('aria-label="Consultant question"');
+    expect(initial).not.toContain('data-speaker="user"');
+    expect(initial).not.toContain('data-speaker="bizbox"');
+    expect(typed).toContain('data-speaker="user"');
+    expect(typed).toContain('data-speaker="bizbox"');
+    expect(typed).toContain("higher rent");
+    expect(typed).toContain('data-interior-preview="true"');
+    expect(typed).toContain("See inside");
+    expect(typed.match(/cafe-interior-v1.png/g)?.length).toBeGreaterThan(0);
     expect(initial).toContain("Example consultant recommendation");
     const reduced = renderToStaticMarkup(
       h(ConsultantScene, { data, elapsed: 0, reduced: true }),
     );
-    expect(visible(reduced)).toContain("higher rent");
+    expect(reduced).toContain('data-speaker="bizbox"');
+    expect(reduced).toContain("higher rent");
   });
+  it.each(["location", "counter"] as const)(
+    "uses a composer before separate user and BizBox messages for %s",
+    (kind) => {
+      const render = (elapsed: number) =>
+        renderToStaticMarkup(
+          kind === "location"
+            ? h(LocationQuestion, { elapsed, reduced: false })
+            : h(CounterQuestion, { demo: DEMO, elapsed, reduced: false }),
+        );
+      const initial = render(500);
+      expect(initial).toContain("<textarea");
+      expect(initial).toContain(
+        `aria-label="${kind === "location" ? "Location" : "Counter"} question"`,
+      );
+      expect(initial).toContain('aria-label="Send example prompt"');
+      expect(initial).not.toContain('data-speaker="bizbox"');
+      const sent = render(20000);
+      expect(sent).toContain('data-speaker="user"');
+      expect(sent).toContain('data-speaker="bizbox"');
+      expect(sent.indexOf('data-speaker="user"')).toBeLessThan(
+        sent.indexOf('data-speaker="bizbox"'),
+      );
+      if (kind === "counter") {
+        expect(sent).toContain("110-customer morning");
+        expect(sent).toContain("$72 in labor");
+        expect(sent).toContain("$6,000 in setup");
+      }
+    },
+  );
   it("shows each counter result together but keeps secondary metrics behind Details", () => {
     const html = renderToStaticMarkup(
       h(CounterComparison, {
