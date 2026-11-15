@@ -17,6 +17,39 @@ const DEMO_CUSTOMER = {
   },
 } as const;
 const DEMO_NICKNAME = "BizBox Demo - simulated funds";
+const DEMO_MERCHANT = { name: "BizBox Demo Supplier", category: "Simulated" };
+// Fixed, fictional activity so the consultant's cash card shows non-zero
+// inflow/outflow/bills. Deposits are cash movement, not sales evidence.
+const ACTIVITY = {
+  deposits: [
+    { amount_cents: 420_000, description: "Simulated demo deposit: week 1" },
+    { amount_cents: 385_000, description: "Simulated demo deposit: week 2" },
+    { amount_cents: 510_000, description: "Simulated demo deposit: week 3" },
+    { amount_cents: 295_000, description: "Simulated demo deposit: week 4" },
+  ],
+  purchases: [
+    { amount_cents: 240_000, description: "Simulated demo rent" },
+    { amount_cents: 85_000, description: "Simulated demo supplies" },
+    { amount_cents: 132_000, description: "Simulated demo payroll" },
+    { amount_cents: 41_000, description: "Simulated demo marketing" },
+  ],
+  bills: [
+    {
+      status: "recurring",
+      payee: "Simulated Demo Utilities",
+      nickname: "Simulated utilities",
+      payment_amount: 310,
+      recurring_date: 15,
+    },
+    {
+      status: "pending",
+      payee: "Simulated Demo Insurance",
+      nickname: "Simulated insurance",
+      payment_amount: 275,
+      daysFromNow: 10,
+    },
+  ],
+} as const;
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const AddressSchema = z.object({
   street_number: z.string().max(12),
@@ -39,6 +72,15 @@ const AccountSchema = z.object({
   balance_cents: z.number().int().safe(),
   available_cents: z.number().int().safe(),
 });
+
+const TransactionRefSchema = z.object({
+  id: identifier,
+  payer_id: z.string().optional(),
+  payee_id: z.string().optional(),
+});
+const BillRefSchema = z.object({ id: identifier, account_id: z.string() });
+const MerchantSchema = z.object({ id: identifier, name: z.string().max(80) });
+const WriteAckSchema = z.object({ id: identifier });
 
 export class NessieSeedError extends Error {
   constructor(
@@ -68,18 +110,28 @@ const ambiguous = () =>
 function modeFor(
   argv: readonly string[],
   env: Record<string, string | undefined>,
-): "confirm" | "dry-run" {
+): { mode: "confirm" | "dry-run"; withActivity: boolean } {
   if (env.CI?.trim())
     throw new NessieSeedError(
       "ci_forbidden",
       "Nessie seeding is forbidden in CI, including with --confirm.",
     );
-  if (argv.length !== 1 || !["--confirm", "--dry-run"].includes(argv[0]!))
+  const flags = new Set(argv);
+  const withActivity = flags.has("--with-activity");
+  const modes = ["--confirm", "--dry-run"].filter((f) => flags.has(f));
+  if (
+    flags.size !== argv.length ||
+    modes.length !== 1 ||
+    flags.size !== 1 + (withActivity ? 1 : 0)
+  )
     throw new NessieSeedError(
       "usage",
-      "Usage: pnpm nessie:seed --confirm for guarded simulated sandbox writes, or pnpm nessie:seed --dry-run for an offline plan. No request was made.",
+      "Usage: pnpm nessie:seed --confirm for guarded simulated sandbox writes, or pnpm nessie:seed --dry-run for an offline plan. Add --with-activity to also plan or create fixed fictional deposits, purchases and bills. No request was made.",
     );
-  return argv[0] === "--confirm" ? "confirm" : "dry-run";
+  return {
+    mode: modes[0] === "--confirm" ? "confirm" : "dry-run",
+    withActivity,
+  };
 }
 
 type SeedResult = {
@@ -88,6 +140,7 @@ type SeedResult = {
   customer: "created" | "reused";
   account: "created" | "reused";
   accountId: string;
+  activity?: "created" | "skipped_existing";
 };
 type DryRunResult = {
   mode: "dry-run";
@@ -96,6 +149,7 @@ type DryRunResult = {
   targetCheckingAccounts: 1;
   initialBalanceCents: 5000000;
   networkRequests: 0;
+  targetActivity?: { deposits: number; purchases: number; bills: number };
 };
 
 /**
@@ -109,14 +163,16 @@ export async function seedNessieDemo({
   fetcher = fetch,
   print = console.log,
   timeoutMs = 20_000,
+  now = Date.now,
 }: {
   argv: readonly string[];
   env?: Record<string, string | undefined>;
   fetcher?: typeof fetch;
   print?: (message: string) => void;
   timeoutMs?: number;
+  now?: () => number;
 }): Promise<SeedResult | DryRunResult> {
-  const mode = modeFor(argv, env);
+  const { mode, withActivity } = modeFor(argv, env);
   if (mode === "dry-run") {
     const result: DryRunResult = {
       mode: "dry-run",
@@ -125,6 +181,15 @@ export async function seedNessieDemo({
       targetCheckingAccounts: 1,
       initialBalanceCents: INITIAL_BALANCE_CENTS,
       networkRequests: 0,
+      ...(withActivity
+        ? {
+            targetActivity: {
+              deposits: ACTIVITY.deposits.length,
+              purchases: ACTIVITY.purchases.length,
+              bills: ACTIVITY.bills.length,
+            },
+          }
+        : {}),
     };
     print(JSON.stringify(result));
     return result;
@@ -218,7 +283,8 @@ export async function seedNessieDemo({
     }
   }
   async function list<S extends z.ZodType<{ id: string }>>(
-    path: "/customers" | "/accounts",
+    path:
+      "/customers" | "/accounts" | "/transactions" | "/bills" | "/merchants",
     schema: S,
   ): Promise<z.output<S>[]> {
     const Page = z.object({
@@ -319,12 +385,66 @@ export async function seedNessieDemo({
         throw uncertain();
     }
     if (account.id.includes(apiKey)) throw invalid();
+    let activity: SeedResult["activity"];
+    if (withActivity) {
+      const accountId = account.id;
+      // The provider has no idempotency token, so activity is written only to
+      // an account that has none yet. Any prior activity (including a partial
+      // earlier run) means we stop rather than risk duplicating it.
+      const [transactions, bills] = [
+        await list("/transactions", TransactionRefSchema),
+        await list("/bills", BillRefSchema),
+      ];
+      const hasActivity =
+        transactions.some(
+          (t) => t.payer_id === accountId || t.payee_id === accountId,
+        ) || bills.some((b) => b.account_id === accountId);
+      if (hasActivity) activity = "skipped_existing";
+      else {
+        const merchants = (await list("/merchants", MerchantSchema)).filter(
+          (m) => m.name === DEMO_MERCHANT.name,
+        );
+        if (merchants.length > 1) throw ambiguous();
+        const merchant =
+          merchants[0] ??
+          (await create("/merchants", DEMO_MERCHANT, MerchantSchema));
+        if (merchant.name !== DEMO_MERCHANT.name) throw uncertain();
+        const base_ = `/accounts/${encodeURIComponent(accountId)}`;
+        for (const d of ACTIVITY.deposits)
+          await create(`${base_}/deposits`, d, WriteAckSchema);
+        for (const p of ACTIVITY.purchases)
+          await create(
+            `${base_}/purchases`,
+            { ...p, merchant_id: merchant.id },
+            WriteAckSchema,
+          );
+        for (const b of ACTIVITY.bills) {
+          const { daysFromNow, ...fields } = b as typeof b & {
+            daysFromNow?: number;
+          };
+          await create(
+            `${base_}/bills`,
+            daysFromNow === undefined
+              ? fields
+              : {
+                  ...fields,
+                  payment_date: new Date(now() + daysFromNow * 86_400_000)
+                    .toISOString()
+                    .slice(0, 10),
+                },
+            WriteAckSchema,
+          );
+        }
+        activity = "created";
+      }
+    }
     const result: SeedResult = {
       mode: "seeded",
       synthetic: true,
       customer: customerStatus,
       account: accountStatus,
       accountId: account.id,
+      ...(activity ? { activity } : {}),
     };
     print(JSON.stringify(result));
     return result;
@@ -346,7 +466,7 @@ if (
 ) {
   void (async () => {
     const argv = process.argv.slice(2);
-    const mode = modeFor(argv, process.env);
+    const { mode } = modeFor(argv, process.env);
     // Do not load a key for an offline dry-run. Imports never read env files.
     if (mode === "confirm")
       config({ path: [".env.local", ".env"], quiet: true });

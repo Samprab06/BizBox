@@ -352,4 +352,97 @@ describe("guarded Nessie demo seed CLI", () => {
       }
     }
   });
+  describe("--with-activity", () => {
+    const activityArgv = ["--confirm", "--with-activity"];
+    function activitySandbox(
+      existing: { tx?: unknown[]; bills?: unknown[] } = {},
+    ) {
+      const base = sandbox(true, true);
+      const tx = [...(existing.tx ?? [])];
+      const bills = [...(existing.bills ?? [])];
+      const merchants: unknown[] = [];
+      let n = 0;
+      const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (init?.method === "GET") {
+          if (path === "/transactions") return page(tx);
+          if (path === "/bills") return page(bills);
+          if (path === "/merchants") return page(merchants);
+          return base.fetcher(url, init);
+        }
+        if (path === "/merchants") {
+          const m = { id: "merch_demo", name: "BizBox Demo Supplier" };
+          merchants.push(m);
+          return Response.json(m, { status: 201 });
+        }
+        return Response.json({ id: `w${++n}` }, { status: 201 });
+      });
+      return { fetcher };
+    }
+    it("is rejected unless paired with exactly one mode flag", async () => {
+      const fetcher = vi.fn<typeof fetch>();
+      for (const argv of [
+        ["--with-activity"],
+        ["--with-activity", "--with-activity"],
+        ["--confirm", "--dry-run", "--with-activity"],
+      ])
+        await expect(run(fetcher, { argv })).rejects.toMatchObject({
+          code: "usage",
+        });
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+    it("dry-run reports the fixed activity plan offline", async () => {
+      const fetcher = vi.fn<typeof fetch>();
+      const result = await run(fetcher, {
+        argv: ["--dry-run", "--with-activity"],
+        env: {},
+      });
+      expect(result).toMatchObject({
+        networkRequests: 0,
+        targetActivity: { deposits: 4, purchases: 4, bills: 2 },
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+    it("writes deposits, purchases and bills only to an account with no activity", async () => {
+      const f = activitySandbox();
+      const result = await run(f.fetcher, {
+        argv: activityArgv,
+        now: () => Date.parse("2026-11-15T00:00:00Z"),
+      });
+      expect(result).toMatchObject({ activity: "created" });
+      const paths = f.fetcher.mock.calls
+        .filter(([, init]) => init?.method === "POST")
+        .map(([url]) => new URL(String(url)).pathname);
+      expect(paths.filter((p) => p.endsWith("/deposits"))).toHaveLength(4);
+      expect(paths.filter((p) => p.endsWith("/purchases"))).toHaveLength(4);
+      expect(paths.filter((p) => p.endsWith("/bills"))).toHaveLength(2);
+      expect(paths.filter((p) => p === "/merchants")).toHaveLength(1);
+      const dated = f.fetcher.mock.calls.find(
+        ([url, init]) =>
+          init?.method === "POST" &&
+          String(url).endsWith("/bills") &&
+          String(init.body).includes("payment_date"),
+      );
+      expect(JSON.parse(String(dated![1]!.body)).payment_date).toBe(
+        "2026-11-25",
+      );
+    });
+    it("makes no writes when the account already has activity", async () => {
+      const f = activitySandbox({
+        tx: [{ id: "t1", payee_id: account.id }],
+      });
+      expect(await run(f.fetcher, { argv: activityArgv })).toMatchObject({
+        activity: "skipped_existing",
+      });
+      expect(
+        f.fetcher.mock.calls.every(([, init]) => init?.method === "GET"),
+      ).toBe(true);
+      const g = activitySandbox({
+        bills: [{ id: "b1", account_id: account.id }],
+      });
+      expect(await run(g.fetcher, { argv: activityArgv })).toMatchObject({
+        activity: "skipped_existing",
+      });
+    });
+  });
 });

@@ -126,6 +126,12 @@ support and native alternatives: [Local PostGIS](docs/local-postgis.md).
 To create the fictional Nessie demo account (one customer, $50,000 of simulated cash), run
 `pnpm nessie:seed --dry-run` and then `pnpm nessie:seed --confirm`. It refuses to run in CI and
 reuses its records on later runs.
+Add `--with-activity` (`pnpm nessie:seed --confirm --with-activity`) to also create fixed fictional
+deposits, purchases and bills, so the consultant's cash card shows non-zero flows. It writes only to
+a demo account with no existing activity.
+
+The consultant's planner is also told to state a recommended site's customer-panel result together
+with its Nessie cash scenario (coverage and interval) in one finding.
 
 ## Scripts
 
