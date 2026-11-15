@@ -7,6 +7,7 @@ import {
   type ConsultantInvestigation as Investigation,
 } from "@/components/nessie/consultant-results";
 import { ConsultantCashCard } from "@/components/nessie/consultant-cash-card";
+import { useAgentInvestigationId } from "@/lib/client/agent-jobs";
 import { withoutNessieFindings } from "@/lib/nessie/findings";
 import {
   createPanelResendBackoff,
@@ -49,11 +50,14 @@ export function ConsultantPanel({
   profile?: { id: string; version: number };
   cashContextStale?: boolean;
 }) {
+  // HAC-151: an investigation the consultant started is shown here too, without a URL param.
+  const started = useAgentInvestigationId(projectId);
+  const shown = investigationId ?? started;
   // Remount on identity change so old findings disappear before the next fetch.
   return (
     <ConsultantActivity
-      key={`${projectId}:${investigationId ?? ""}`}
-      investigationId={investigationId}
+      key={`${projectId}:${shown ?? ""}`}
+      investigationId={shown}
       projectId={projectId}
       profile={profile}
       cashContextStale={cashContextStale}

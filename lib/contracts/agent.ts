@@ -134,6 +134,26 @@ export const HighlightActionSchema = z
   })
   .strict();
 
+/** HAC-151: replaces the project's comparison shortlist (the client store, HAC-135). */
+export const SetShortlistActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("set_shortlist"),
+    siteIds: z.array(Id).min(1).max(MAX_FOCUS_SITES),
+  })
+  .strict();
+/**
+ * HAC-151: the client runs the comparison for these sites (the existing comparison path, which
+ * can outlast the 30 s turn), then opens it as it would for `show_comparison`.
+ */
+export const RunComparisonActionSchema = z
+  .object({
+    ...actionId,
+    type: z.literal("run_comparison"),
+    siteIds: z.array(Id).min(1).max(MAX_FOCUS_SITES),
+  })
+  .strict();
+
 export const UiActionSchema = z.discriminatedUnion("type", [
   NavigateActionSchema,
   OpenSiteActionSchema,
@@ -143,6 +163,8 @@ export const UiActionSchema = z.discriminatedUnion("type", [
   OpenInteriorActionSchema,
   ShowPlanActionSchema,
   HighlightActionSchema,
+  SetShortlistActionSchema,
+  RunComparisonActionSchema,
 ]);
 export type UiAction = z.infer<typeof UiActionSchema>;
 export type UiActionType = UiAction["type"];

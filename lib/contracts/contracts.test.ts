@@ -292,6 +292,8 @@ describe("agent UI actions and view context (HAC-134)", () => {
       { id: "a6", type: "open_interior", siteId: "s1", minute: 480 },
       { id: "a7", type: "show_plan", comparisonId: "c1" },
       { id: "a8", type: "highlight", target: "comparison_table" },
+      { id: "a9", type: "set_shortlist", siteIds: ["1:2", "3:4"] },
+      { id: "a10", type: "run_comparison", siteIds: ["1:2"] },
     ];
     for (const action of actions)
       expect(UiActionSchema.safeParse(action).success).toBe(true);

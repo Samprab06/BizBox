@@ -3,10 +3,29 @@ import {
   type InteriorDimensions,
   type InteriorProvenance,
   type InteriorResponse,
+  type ScanPlacement,
 } from "../contracts/interior";
 import { getInteriorFixture } from "./fixtures";
 
 export class InteriorNotFoundError extends Error {}
+export const NO_PLACEMENT_REASON =
+  "No placement calibration for this scan: the simulation overlay falls back to Modeled layout";
+
+/** HAC-138: whether a scan can host the overlay, or why it uses Modeled layout. */
+export function scanOverlay(
+  response: InteriorResponse,
+):
+  | { mode: "scan"; placement: ScanPlacement }
+  | { mode: "modeled"; reason: string } {
+  if (response.kind !== "scan")
+    return {
+      mode: "modeled",
+      reason: response.provenance.limitations[0] ?? "No scan is available",
+    };
+  return response.placement
+    ? { mode: "scan", placement: response.placement }
+    : { mode: "modeled", reason: NO_PLACEMENT_REASON };
+}
 export type InteriorSite = {
   siteId: string;
   propertyId: string;
@@ -19,6 +38,8 @@ export type InteriorSite = {
     /** Public/unlisted embed check result (HAC-137); null when never checked. */
     isPublic: boolean | null;
     dimensions: InteriorDimensions | null;
+    /** HAC-138: authored overlay placement; absent/null when uncalibrated. */
+    placement?: ScanPlacement | null;
     source: InteriorProvenance;
   }[];
 };
@@ -87,6 +108,7 @@ export async function resolveInterior(
         : [
             "Dimensions unavailable: no complete approved room metrics and boundary cache",
           ];
+      const placementLimitations = model.placement ? [] : [NO_PLACEMENT_REASON];
       return InteriorResponseSchema.parse({
         kind: "scan",
         modelId: model.modelId,
@@ -108,6 +130,7 @@ export async function resolveInterior(
               },
             }
           : {}),
+        ...(model.placement ? { placement: model.placement } : {}),
         provenance: {
           ...model.source,
           scope,
@@ -115,6 +138,7 @@ export async function resolveInterior(
             ...model.source.limitations,
             ...scopeLimitations,
             ...geometryLimitations,
+            ...placementLimitations,
           ],
         },
       });

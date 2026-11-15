@@ -304,6 +304,55 @@ export async function requestLiveComparison(
   };
 }
 
+/**
+ * HAC-151: runs a comparison the consultant asked for, outside any React state: the saved intake
+ * becomes the profile, then the same profile -> comparison path as the Run button. Saves the
+ * shortlist and the comparison so the comparison screen opens the result.
+ */
+export async function runAgentComparison(
+  projectId: string,
+  siteIds: string[],
+  options: {
+    signal?: AbortSignal;
+    fetcher?: typeof fetch;
+    storage?: Pick<Storage, "getItem">;
+    onProgress?: (progress: PanelProgressCount) => void;
+    sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  } = {},
+) {
+  const fetcher = options.fetcher ?? fetch;
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(
+      (options.storage ?? localStorage).getItem(
+        `sitework:intake:v1:${projectId}`,
+      ) ?? "null",
+    );
+  } catch {
+    /* An unreadable intake is reported below as an incomplete one. */
+  }
+  const { profile, reason } = profileFromIntake(raw, projectId);
+  if (!profile) throw new Error(reason ?? "Complete the intake first");
+  const capability = await api(
+    "/api/comparisons/capabilities",
+    z.object({ jevConfigured: z.boolean() }),
+    { signal: options.signal },
+    15_000,
+    fetcher,
+  ).catch(() => null);
+  const response = await requestLiveComparison(
+    profile,
+    siteIds,
+    capability?.jevConfigured ? "jev" : "huff",
+    options.signal,
+    fetcher,
+    { onProgress: options.onProgress, sleep: options.sleep },
+  );
+  writeShortlist(projectId, siteIds);
+  writeSavedComparison(response.saved);
+  return response;
+}
+
 export function useStoredComparison(
   projectId: string,
   initialComparisonId?: string,

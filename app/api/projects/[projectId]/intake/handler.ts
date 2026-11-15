@@ -14,7 +14,7 @@ import {
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
 import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
-
+import type { JobsPort } from "@/lib/agent/job-tools";
 import {
   formatViewContext,
   resolveViewContext,
@@ -31,6 +31,8 @@ type Dependencies = {
   viewContextLookups?: ViewContextLookups;
   /** HAC-144: trusted ID checks for the UI tools. Without them no UI tools are bound. */
   uiLookups?: IntakeUiLookups;
+  /** HAC-151: server ports for the `jobs` tools (shortlist, comparison, investigation, plan). */
+  jobs?: JobsPort;
   newActionId?: () => string;
   onCompleted?: (
     projectId: string,
@@ -187,6 +189,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
                     projectId,
                     lookups: dependencies.uiLookups,
                     view,
+                    ...(dependencies.jobs ? { jobs: dependencies.jobs } : {}),
                     actions,
                     newId,
                   },

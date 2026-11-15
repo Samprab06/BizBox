@@ -4,6 +4,7 @@ import {
   InteriorDimensionsSchema,
   InteriorProvenanceSchema,
   MatterportModelIdSchema,
+  ScanPlacementSchema,
 } from "../contracts/interior";
 import type { InteriorSite } from "./service";
 
@@ -30,7 +31,7 @@ export async function readInteriorSite(
     throw new Error("Invalid interior site");
   const models = rows(
     await db.execute(sql`
-    SELECT model_id, costar_space_id, has_exterior, display_approved, is_public, dimensions, source
+    SELECT model_id, costar_space_id, has_exterior, display_approved, is_public, dimensions, placement, source
     FROM matterport_models
     WHERE costar_property_id=${site.property_id} AND (costar_space_id=${siteId} OR costar_space_id IS NULL)
     ORDER BY model_id
@@ -55,6 +56,10 @@ export async function readInteriorSite(
         model.dimensions == null
           ? null
           : InteriorDimensionsSchema.parse(model.dimensions),
+      placement:
+        model.placement == null
+          ? null
+          : ScanPlacementSchema.parse(model.placement),
       source: InteriorProvenanceSchema.parse(model.source),
     })),
   };
