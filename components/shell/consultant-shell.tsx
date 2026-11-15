@@ -10,7 +10,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { AssistantPanel } from "@/components/workspace-screen/assistant-panel";
 import {
@@ -22,15 +21,13 @@ import {
   type IntakeConversation,
 } from "@/components/workspace-screen/use-intake-conversation";
 import type { UiAction } from "@/lib/contracts/agent";
-import { useAnswerCard } from "./answer-cards";
-import { selectedSiteFromLocation } from "./consultant-location";
 import {
-  firstNavigate,
-  isBriefComplete,
-  isEntryPath,
-  navigateHref,
-  spacesHref,
-} from "./entry-flow";
+  canOpenStep,
+  flowStepFromLocation,
+  flowStepHref,
+  readFlowState,
+} from "@/lib/client/flow-progress";
+import { selectedSiteFromLocation } from "./consultant-location";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
 
@@ -42,9 +39,15 @@ import { VOICE_LIMITS, type VoiceAdapter } from "@/lib/voice/contracts";
  *
  * - `docked`: the step's view beside the consultant (about 68/32 from 768 px; below that the
  *   consultant is a bottom sheet the founder opens and closes);
- * - `focus`: the consultant fills the page and the view is hidden (still mounted).
+ * - `focus`: the founder expanded the consultant; the view is hidden (still mounted).
+ *
+ * Scene 1: the questionnaire (`/intake`) shows no dock at all, only the page at full width;
+ * the conversation still runs here so the questionnaire can use it. Every other step opens
+ * docked, and the workspace registers the handler that carries out the consultant's actions.
  */
 export type ConsultantLayout = "focus" | "docked";
+
+export type ActionHandler = (actions: UiAction[]) => void;
 
 type ConsultantContextValue = {
   conversation: IntakeConversation;
@@ -52,6 +55,8 @@ type ConsultantContextValue = {
   registerVoice: (adapter: VoiceAdapter | null) => void;
   layout: ConsultantLayout;
   setLayout: (layout: ConsultantLayout) => void;
+  /** Scene 1: the mounted workspace carries out the consultant's UI actions. */
+  registerActions: (handler: ActionHandler | null) => void;
 };
 
 const ConsultantContext = createContext<ConsultantContextValue | null>(null);
@@ -79,20 +84,27 @@ export function useConsultantVoice(adapter: VoiceAdapter) {
   }, [register]);
 }
 
-const subscribeNever = () => () => {};
+/** Scene 1: sends the consultant's UI actions to this screen while it is mounted. */
+export function useConsultantActions(handler: ActionHandler) {
+  const register = useConsultant()?.registerActions;
+  const latest = useRef(handler);
+  useEffect(() => {
+    latest.current = handler;
+  }, [handler]);
+  useEffect(() => {
+    if (!register) return;
+    register((actions) => latest.current(actions));
+    return () => register(null);
+  }, [register]);
+}
 
 export const consultantLayoutKey = (projectId: string) =>
   `bizbox:consultant-layout:v1:${projectId}`;
 
-function useConsultantLayout(projectId: string, entry: boolean) {
+function useConsultantLayout(projectId: string) {
   const key = consultantLayoutKey(projectId);
-  // HAC-150: the project's entry route opens the chat full screen.
-  const [layout, setState] = useState<ConsultantLayout>(
-    entry ? "focus" : "docked",
-  );
+  const [layout, setState] = useState<ConsultantLayout>("docked");
   useEffect(() => {
-    // The entry route decides its own layout from the brief, not from a saved one.
-    if (entry) return;
     let saved: string | null = null;
     try {
       saved = sessionStorage.getItem(key);
@@ -102,7 +114,7 @@ function useConsultantLayout(projectId: string, entry: boolean) {
     // Read after mount so the server render and first client render agree.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved === "focus" || saved === "docked") setState(saved);
-  }, [key, entry]);
+  }, [key]);
   const setLayout = useCallback(
     (next: ConsultantLayout) => {
       setState(next);
@@ -162,84 +174,28 @@ export function ConsultantShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const entry = isEntryPath(pathname, projectId);
-  // HAC-150: the first `navigate` action docks the consultant and opens that step. The
-  // handler is read through a ref because it needs the conversation this call creates.
-  const actionsRef = useRef<(actions: UiAction[]) => void>(() => {});
+  // Scene 1: the questionnaire has no chat, so the dock is hidden there entirely.
+  const hidden = flowStepFromLocation(pathname, "") === "questions";
+  // The workspace registers the handler for the consultant's actions while it is mounted.
+  // Elsewhere only a guided-flow step change is honoured; navigate-away actions are not.
+  const pageActions = useRef<ActionHandler | null>(null);
+  const registerActions = useCallback((handler: ActionHandler | null) => {
+    pageActions.current = handler;
+  }, []);
   const onActions = useCallback(
-    (actions: UiAction[]) => actionsRef.current(actions),
-    [],
+    (actions: UiAction[]) => {
+      if (pageActions.current) return pageActions.current(actions);
+      const go = actions.find(
+        (action): action is Extract<UiAction, { type: "go_to_step" }> =>
+          action.type === "go_to_step",
+      );
+      if (go && canOpenStep(readFlowState(projectId), go.step))
+        router.push(flowStepHref(projectId, go.step));
+    },
+    [projectId, router],
   );
   const conversation = useIntakeConversation(projectId, onActions);
-  const [layout, setLayout] = useConsultantLayout(projectId, entry);
-  const layoutRef = useRef(layout);
-  useEffect(() => {
-    layoutRef.current = layout;
-  }, [layout]);
-  const [transition, setTransition] = useState<"none" | "animated" | "cut">(
-    "none",
-  );
-  const mainRef = useRef<HTMLElement>(null);
-  const dockRef = useRef<HTMLDivElement>(null);
-  /** Docks the consultant; `animate` is false for a returning founder, who starts docked. */
-  const dock = useCallback(
-    (animate: boolean) => {
-      const reduce = window.matchMedia(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      setTransition(!animate ? "none" : reduce ? "cut" : "animated");
-      setLayout("docked");
-    },
-    [setLayout],
-  );
-  useEffect(() => {
-    actionsRef.current = (actions) => {
-      const navigate = firstNavigate(actions);
-      if (!navigate || layoutRef.current !== "focus") return;
-      dock(true);
-      router.push(navigateHref(projectId, navigate));
-    };
-  }, [dock, projectId, router]);
-  // The animation is a short fade-and-rise of the step view and the dock. Reduced motion gets
-  // a cut: `transition` is "cut", so no animation runs at all.
-  useEffect(() => {
-    if (layout !== "docked" || transition !== "animated") return;
-    const keyframes = [
-      { opacity: 0, transform: "translateY(10px)" },
-      { opacity: 1, transform: "none" },
-    ];
-    const options = { duration: 320, easing: "ease-out" } as const;
-    mainRef.current?.animate?.(keyframes, options);
-    dockRef.current?.animate?.(keyframes, options);
-  }, [layout, transition]);
-  // The brief becoming complete docks the consultant. A complete brief found on arrival
-  // (a returning founder) docks at once with no animation; completing it here animates.
-  const loaded = useSyncExternalStore(
-    subscribeNever,
-    () => true,
-    () => false,
-  );
-  // A first visit has no saved session yet; the entry starts the brief with the assistant's
-  // opening question, which the answer cards and the chat then build on.
-  const { session, read, save } = conversation;
-  useEffect(() => {
-    if (loaded && entry && !session) save(read());
-  }, [loaded, entry, session, read, save]);
-  const complete = isBriefComplete(session?.profile);
-  const wasComplete = useRef<boolean | null>(null);
-  useEffect(() => {
-    if (!loaded) return;
-    const before = wasComplete.current;
-    wasComplete.current = complete;
-    if (!complete) return;
-    if (entry) {
-      dock(before === false);
-      router.replace(spacesHref(projectId));
-    } else if (before === false && layoutRef.current === "focus") {
-      dock(true);
-    }
-  }, [loaded, complete, entry, dock, router, projectId]);
-  const answerCard = useAnswerCard(conversation);
+  const [layout, setLayout] = useConsultantLayout(projectId);
   const [mode, setMode] = useState<AssistantMode>("text");
   const [sheetOpen, setSheetOpen] = useState(false);
   // On a phone the sheet covers the step, so moving to another step closes it. The panel
@@ -307,9 +263,18 @@ export function ConsultantShell({
   );
 
   const context = useMemo(
-    () => ({ conversation, registerVoice, layout, setLayout }),
-    [conversation, registerVoice, layout, setLayout],
+    () => ({ conversation, registerVoice, layout, setLayout, registerActions }),
+    [conversation, registerVoice, layout, setLayout, registerActions],
   );
+
+  if (hidden)
+    return (
+      <ConsultantContext.Provider value={context}>
+        <div data-consultant-layout="hidden" className="min-w-0">
+          <main className="min-w-0 px-5 pt-7 pb-10 sm:px-8">{children}</main>
+        </div>
+      </ConsultantContext.Provider>
+    );
 
   const toggleLayout = (
     <button
@@ -334,7 +299,6 @@ export function ConsultantShell({
     <ConsultantContext.Provider value={context}>
       <div
         data-consultant-layout={layout}
-        data-dock-transition={transition}
         className={
           focus
             ? "min-w-0 print:block"
@@ -343,7 +307,6 @@ export function ConsultantShell({
       >
         {/* The view stays mounted in focus, so its state is kept for when it returns. */}
         <main
-          ref={mainRef}
           // While the phone sheet is open, room below the view lets all of it scroll clear.
           // CSS hiding lets print restore the plan even when the assistant is expanded.
           className={`min-w-0 px-5 pt-7 sm:px-8 md:pb-10 ${focus ? "hidden" : ""} print:block ${sheetOpen ? "pb-[80dvh]" : "pb-24"}`}
@@ -351,7 +314,6 @@ export function ConsultantShell({
           {children}
         </main>
         <div
-          ref={dockRef}
           className={
             focus
               ? "mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-3xl min-w-0 flex-col p-3 sm:p-5 print:hidden"
@@ -396,7 +358,6 @@ export function ConsultantShell({
               onModeChange={setMode}
               voiceAdapter={voiceAdapter}
               actions={toggleLayout}
-              inline={focus ? answerCard : undefined}
               className={
                 companion
                   ? "min-h-[420px] flex-1 shrink-0"
