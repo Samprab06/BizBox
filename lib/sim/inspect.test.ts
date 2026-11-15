@@ -4,6 +4,7 @@ import type { SimEvent } from "./contracts";
 import {
   ageBand,
   arrivedCustomers,
+  customerDisplayName,
   filterCustomers,
   incomeBand,
   inspectCustomer,
@@ -67,6 +68,29 @@ const inspect = (customerId: string, minute: number, events = run.events) =>
   });
 
 describe("inspectCustomer", () => {
+  it("keeps observed departure time fixed after completion, abandonment or leaving on arrival", () => {
+    for (const customerId of [
+      ...new Set(run.events.map((event) => event.customerId)),
+    ]) {
+      const terminal = run.events.find(
+        (event) =>
+          event.customerId === customerId &&
+          (event.type === "completion" ||
+            event.type === "abandonment" ||
+            (event.type === "arrival" && event.decision === "leave")),
+      );
+      if (!terminal) continue;
+      expect(
+        inspect(customerId, terminal.timeMin - 0.001).departureMin,
+      ).toBeNull();
+      expect(inspect(customerId, terminal.timeMin).departureMin).toBe(
+        terminal.timeMin,
+      );
+      expect(inspect(customerId, closeMin + 120).departureMin).toBe(
+        terminal.timeMin,
+      );
+    }
+  });
   it("never reveals an outcome after the inspected minute (seek back)", () => {
     const ids = [...new Set(run.events.map((e) => e.customerId))].slice(0, 30);
     // Cards only change at event times, so check each one and the instant before it.
@@ -238,6 +262,24 @@ describe("inspectCustomer", () => {
 
   it("rejects a non-finite minute", () => {
     expect(() => inspect(servedId, Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe("readable customer labels", () => {
+  it("formats cohort IDs and prefers supplied persona names without changing identity", () => {
+    expect(customerDisplayName("persona-commuter#2367")).toBe("Commuter 2367");
+    expect(customerDisplayName("persona-neighbor#406")).toBe("Neighbor 406");
+    expect(customerDisplayName("customer-12")).toBe("Customer 12");
+    expect(
+      customerDisplayName("persona-commuter#2367", "Morning commuter"),
+    ).toBe("Morning commuter 2367");
+    expect(
+      filterCustomers(
+        ["persona-commuter#2367"],
+        "commuter 2367",
+        customerDisplayName,
+      ),
+    ).toEqual(["persona-commuter#2367"]);
   });
 });
 
