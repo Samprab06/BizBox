@@ -19,6 +19,7 @@ export function VoicePanel({
   label = "Voice intake",
   className = "",
   tone = "light",
+  compact = false,
 }: {
   adapter: VoiceAdapter;
   title?: string;
@@ -26,6 +27,8 @@ export function VoicePanel({
   className?: string;
   /** "dark" restyles the panel for the dark BizBox workspace; behaviour is identical. */
   tone?: "light" | "dark";
+  /** Sparse workspace presentation; the same client, orb and controls are retained. */
+  compact?: boolean;
 }) {
   const latest = useRef(adapter);
   useEffect(() => {
@@ -89,8 +92,8 @@ export function VoicePanel({
           active={active}
         />
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">{title}</h3>
-          <p className={`mt-1 text-xs ${muted}`}>
+          <h3 className={compact ? "sr-only" : "font-semibold"}>{title}</h3>
+          <p className={compact ? "sr-only" : `mt-1 text-xs ${muted}`}>
             Optional AI voice. Starting sends microphone audio for transcription
             and speaks the conversation reply. You can keep typing.
           </p>
@@ -100,10 +103,16 @@ export function VoicePanel({
             className={`mt-2 text-sm ${muted}`}
           >
             {configured === null
-              ? "Checking voice availability…"
+              ? compact
+                ? "Checking…"
+                : "Checking voice availability…"
               : configured
-                ? state.message
-                : "Voice is unavailable. Typed intake still works."}
+                ? compact && state.phase === "idle"
+                  ? "Ready"
+                  : state.message
+                : compact
+                  ? "Voice unavailable"
+                  : "Voice is unavailable. Typed intake still works."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {!active ? (

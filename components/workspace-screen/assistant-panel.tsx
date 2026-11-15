@@ -180,7 +180,10 @@ export function AssistantPanel({
           >
             Assistant
           </h2>
-          <span className="rounded border border-viewport-line px-1.5 py-0.5 text-[11px] text-viewport-muted">
+          <span
+            data-agent-availability={availability}
+            className="rounded border border-viewport-line px-1.5 py-0.5 text-[11px] text-viewport-muted"
+          >
             {status}
           </span>
         </div>

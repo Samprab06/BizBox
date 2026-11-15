@@ -11,11 +11,8 @@ import {
   categoryChoices,
   cityChoices,
   comingSoonCities,
-  formatAreas,
   initialValue,
   isRulerStep,
-  neighborhoods,
-  parseAreas,
   photoCredits,
   priceChoices,
   questionSteps,
@@ -27,7 +24,6 @@ import {
   skipValues,
   stepError,
   titles,
-  type AreaChoices,
   type City,
   type QuestionStep,
   type Step,
@@ -56,7 +52,6 @@ export function OnboardingFlow({
 }) {
   const [step, setStep] = useState<Step>(() => resumeStep(profile));
   const [drafts, setDrafts] = useState<Partial<Record<QuestionStep, string>>>({});
-  const [areaDraft, setAreaDraft] = useState<AreaChoices | null>(null);
   const [error, setError] = useState<string | undefined>();
   const [returnToReview, setReturnToReview] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -70,7 +65,6 @@ export function OnboardingFlow({
   const city: City = cityChoices.some((choice) => choice.value === savedCity) ? (savedCity as City) : "Houston";
 
   function valueOf(key: QuestionStep): string {
-    if (key === "areas") return areaDraft ? formatAreas(areaDraft) : (profile.areas?.value ?? "");
     const draft = drafts[key];
     if (draft !== undefined) return draft;
     const initial = initialValue(key, profile);
@@ -80,7 +74,6 @@ export function OnboardingFlow({
   function go(next: Step) {
     moved.current = true;
     setError(undefined);
-    if (next === "areas") setAreaDraft(parseAreas(profile.areas?.value ?? "", city));
     setStep(next);
   }
 
@@ -241,37 +234,8 @@ export function OnboardingFlow({
             </div>
           </>
         );
-      case "areas": {
-        const picks = areaDraft ?? parseAreas(profile.areas?.value ?? "", city);
-        const update = (next: AreaChoices) => {
-          setError(undefined);
-          setAreaDraft(next);
-        };
-        const toggle = (name: string, list: "favor" | "avoid") => {
-          const other = list === "favor" ? "avoid" : "favor";
-          const on = picks[list].includes(name);
-          update({
-            ...picks,
-            [list]: on ? picks[list].filter((entry) => entry !== name) : [...picks[list], name],
-            [other]: picks[other].filter((entry) => entry !== name),
-          });
-        };
-        return (
-          <div className="space-y-4">
-            {(["favor", "avoid"] as const).map((list) => (
-              <div key={list} role="group" aria-label={list === "favor" ? "Favor" : "Avoid"} className="flex flex-wrap items-center gap-2">
-                <span className="w-14 text-sm text-white/80" aria-hidden="true">{list === "favor" ? "Favor" : "Avoid"}</span>
-                {neighborhoods[city].map((name) => (
-                  <button key={name} type="button" aria-pressed={picks[list].includes(name)} aria-label={`${list === "favor" ? "Favor" : "Avoid"} ${name}`} onClick={() => toggle(name, list)} className={`rounded-full border px-3 py-1.5 text-sm focus-visible:outline-2 focus-visible:outline-white ${picks[list].includes(name) ? "border-white bg-white text-[#10131b]" : "border-white/30 text-white hover:bg-white/10"}`}>
-                    {name}
-                  </button>
-                ))}
-              </div>
-            ))}
-            <textarea aria-label="Other area notes" aria-describedby={describedBy} className={`${field} min-h-20 resize-y`} maxLength={250} placeholder="Walkable streets, near offices. Avoid shopping centers…" value={picks.notes} onChange={(event) => update({ ...picks, notes: event.target.value })} />
-          </div>
-        );
-      }
+      case "areas":
+        return text({ textarea: true, maxLength: 250, placeholder: "Type your preferences…" });
       case "rent":
       case "buildout":
       case "staff": {

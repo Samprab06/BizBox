@@ -25,6 +25,14 @@ import {
 } from "./render-policy";
 import { useSceneVisibility } from "./use-scene-visibility";
 import { createAnimatedColor } from "./animated-color";
+import {
+  createListingLayer,
+  type ListingLayerOptions,
+} from "@/components/city/listing-layer";
+import {
+  listingTileError,
+  LISTING_TILE_BUDGET,
+} from "@/components/city/listing-markers";
 
 export default function Neighborhood({
   longitude,
@@ -35,6 +43,10 @@ export default function Neighborhood({
   quality = "balanced",
   locationLabel,
   controls,
+  illustrativeOverlays = true,
+  birdseye = false,
+  showLocationLabel = true,
+  listingLayer,
 }: {
   longitude: number;
   latitude: number;
@@ -44,6 +56,13 @@ export default function Neighborhood({
   quality?: RenderQuality;
   locationLabel: string;
   controls?: ReactNode;
+  /** The founder workspace shows source imagery without invented traffic/demand. */
+  illustrativeOverlays?: boolean;
+  birdseye?: boolean;
+  /** The workspace already names the city/selected space in its own controls. */
+  showLocationLabel?: boolean;
+  /** Optional real-listing annotations; does not replace the existing renderer. */
+  listingLayer?: ListingLayerOptions;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const { visible, hasBeenVisible } = useSceneVisibility(container);
@@ -54,6 +73,14 @@ export default function Neighborhood({
   const atmosphereRef = useRef(atmosphereEnabled);
   const visibleRef = useRef(visible);
   const viewerRef = useRef<Viewer | undefined>(undefined);
+  const listingOptions = useRef(listingLayer);
+  const listingAttachment = useRef<
+    ReturnType<typeof createListingLayer> | undefined
+  >(undefined);
+  useEffect(() => {
+    listingOptions.current = listingLayer;
+    if (listingLayer) listingAttachment.current?.update(listingLayer);
+  }, [listingLayer]);
   const updateScene = useRef<() => void>(() => {});
   useEffect(() => {
     timeRef.current = minute;
@@ -88,6 +115,7 @@ export default function Neighborhood({
     const roadRequests = new AbortController();
     const element = container.current;
     if (!element || !hasBeenVisible) return;
+    setStatus("loading");
     const disposers: (() => void)[] = [];
     const dispose = () => {
       disposers.splice(0).forEach((stop) => stop());
@@ -97,6 +125,7 @@ export default function Neighborhood({
 
     async function load(target: HTMLDivElement) {
       Object.assign(window, { CESIUM_BASE_URL: "/cesium/" });
+      const sdk = await import("cesium");
       const {
         Viewer,
         Cesium3DTileset,
@@ -115,10 +144,12 @@ export default function Neighborhood({
         Cesium3DTileStyle,
         Expression,
         Math: CesiumMath,
-      } = await import("cesium");
+      } = sdk;
       if (closed) return;
       viewer = new Viewer(target, {
         baseLayer: false,
+        // Preserve source mesh below the ellipsoid: a height-zero globe can
+        // occlude negative-elevation Vexcel geometry.
         globe: false,
         skyBox: false,
         skyAtmosphere: false,
@@ -154,7 +185,10 @@ export default function Neighborhood({
       controls.inertiaZoom = 0.4;
       controls.zoomFactor = 8;
       controls.maximumMovementRatio = 0.2;
-      const initialSettings = RENDER_SETTINGS[qualityRef.current];
+      const initialSettings = {
+        ...RENDER_SETTINGS[qualityRef.current],
+        ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
+      };
       const tileset = await Cesium3DTileset.fromUrl(tilesetUrl, {
         showCreditsOnScreen: true,
         maximumScreenSpaceError: initialSettings.tileError,
@@ -163,6 +197,10 @@ export default function Neighborhood({
         shadows: ShadowMode.DISABLED,
         lightColor: new Cartesian3(0.22, 0.22, 0.22),
         dynamicScreenSpaceError: initialSettings.dynamicScreenSpaceError,
+        // Regional shortlists need the desired coarse LOD, not every intermediate
+        // ancestor held by replacement traversal. Regional cache remains bounded.
+        skipLevelOfDetail: Boolean(listingOptions.current),
+        immediatelyLoadDesiredLevelOfDetail: Boolean(listingOptions.current),
       });
       if (closed) {
         tileset.destroy();
@@ -209,7 +247,7 @@ export default function Neighborhood({
         radius: InstanceType<typeof ConstantProperty>;
         color: ReturnType<typeof createAnimatedColor>;
       }[] = [];
-      for (const anchor of demandAnchors) {
+      for (const anchor of illustrativeOverlays ? demandAnchors : []) {
         const position = Cartesian3.fromDegrees(
           longitude + anchor.east,
           latitude + anchor.north,
@@ -299,8 +337,36 @@ export default function Neighborhood({
       const lightingStyle = new Cesium3DTileStyle();
       tileset.style = lightingStyle;
       let previousTint = "";
+      const applyTileError = () => {
+        const baseline = RENDER_SETTINGS[qualityRef.current].tileError;
+        const frustum = city.camera.frustum;
+        const fovy =
+          ("fovy" in frustum ? frustum.fovy : undefined) ?? Math.PI / 3;
+        const error = listingOptions.current
+          ? listingTileError(
+              baseline,
+              tileset.root.geometricError,
+              Math.max(
+                1,
+                city.camera.positionCartographic.height,
+                Cartesian3.distance(
+                  city.camera.positionWC,
+                  tileset.boundingSphere.center,
+                ) - tileset.boundingSphere.radius,
+              ),
+              city.scene.canvas.clientHeight,
+              fovy,
+            )
+          : baseline;
+        // Avoid resetting Cesium's memory-adjusted error on unchanged frames.
+        if (Math.abs(tileset.maximumScreenSpaceError - error) > 0.01)
+          tileset.maximumScreenSpaceError = error;
+      };
       const applyQuality = () => {
-        const settings = RENDER_SETTINGS[qualityRef.current];
+        const settings = {
+          ...RENDER_SETTINGS[qualityRef.current],
+          ...(listingOptions.current ? LISTING_TILE_BUDGET : {}),
+        };
         const resolutionScale = resolutionScaleFor(
           window.devicePixelRatio,
           settings.maxPixelRatio,
@@ -310,9 +376,7 @@ export default function Neighborhood({
         }
         // The tile-error setter also resets Cesium's memory-adjusted error;
         // preserve that adaptive state during ordinary timeline updates.
-        if (tileset.maximumScreenSpaceError !== settings.tileError) {
-          tileset.maximumScreenSpaceError = settings.tileError;
-        }
+        applyTileError();
         if (
           tileset.dynamicScreenSpaceError !== settings.dynamicScreenSpaceError
         ) {
@@ -375,7 +439,9 @@ export default function Neighborhood({
         lowClouds.show = atmosphereRef.current;
         if (city.scene.sun) city.scene.sun.show = atmosphereRef.current;
         if (!atmosphereRef.current) {
-          city.scene.backgroundColor = Color.fromCssColorString("#101b16");
+          city.scene.backgroundColor = Color.fromCssColorString(
+            listingOptions.current ? "#17181d" : "#101b16",
+          );
           previousMinute = -1;
           return;
         }
@@ -445,9 +511,33 @@ export default function Neighborhood({
       updateScene.current();
 
       viewer.camera.setView({
-        destination: Cartesian3.fromDegrees(longitude, latitude - 0.0037, 150),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(-10), roll: 0 },
+        destination: Cartesian3.fromDegrees(
+          longitude,
+          latitude - 0.0037,
+          birdseye ? 650 : 150,
+        ),
+        orientation: {
+          heading: 0,
+          pitch: CesiumMath.toRadians(birdseye ? -60 : -10),
+          roll: 0,
+        },
       });
+      if (listingOptions.current) {
+        // Reuses Cesium's own render loop. No polling, private SDK state or
+        // external root patch: only a public presentation threshold changes.
+        disposers.push(city.scene.preRender.addEventListener(applyTileError));
+        const attachment = createListingLayer(
+          viewer,
+          sdk,
+          listingOptions.current,
+        );
+        listingAttachment.current = attachment;
+        disposers.push(() => {
+          attachment.destroy();
+          if (listingAttachment.current === attachment)
+            listingAttachment.current = undefined;
+        });
+      }
       const roadTiles = new Map<string, Entity[]>();
       let visible = true;
       let revision = 0;
@@ -461,6 +551,7 @@ export default function Neighborhood({
         pendingTiles.clear();
       });
       async function updateRoads() {
+        if (!illustrativeOverlays) return;
         const current = ++revision;
         setRoadStatus("loading");
         try {
@@ -587,7 +678,15 @@ export default function Neighborhood({
       updateScene.current = () => {};
       dispose();
     };
-  }, [longitude, latitude, tilesetUrl, attempt, hasBeenVisible]);
+  }, [
+    longitude,
+    latitude,
+    tilesetUrl,
+    attempt,
+    hasBeenVisible,
+    illustrativeOverlays,
+    birdseye,
+  ]);
 
   return (
     <div
@@ -605,22 +704,26 @@ export default function Neighborhood({
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgb(0_0_0/0.55))]"
       />
 
-      <div className="absolute top-3 left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted">
-        <span>{locationLabel}</span>
-        {status === "failed" && (
-          <button
-            type="button"
-            className="ml-2 underline"
-            onClick={() => {
-              setTrafficVisible(true);
-              setStatus("loading");
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Retry
-          </button>
-        )}
-      </div>
+      {(showLocationLabel || status === "failed") && (
+        <div
+          className={`absolute ${showLocationLabel ? "top-3" : "top-20"} left-3 z-10 max-w-[60%] rounded bg-viewport-surface p-2 text-xs text-viewport-muted`}
+        >
+          {showLocationLabel && <span>{locationLabel}</span>}
+          {status === "failed" && (
+            <button
+              type="button"
+              className="ml-2 underline"
+              onClick={() => {
+                setTrafficVisible(true);
+                setStatus("loading");
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       {status !== "ready" && (
         <div
@@ -638,88 +741,90 @@ export default function Neighborhood({
         </div>
       )}
 
-      <GlassControl
-        over="viewport"
-        aria-label="Illustrative neighborhood overlays"
-        className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium">
-            Illustrative traffic pattern
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={trafficVisible}
-            aria-label="Illustrative traffic pattern"
-            onClick={() => {
-              const show = !trafficVisible;
-              setTrafficVisible(show);
-              trafficEntities.current(show);
-            }}
-            className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
-          >
-            <span
-              className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
-            />
-          </button>
-        </div>
-        <div
-          className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
-        />
-
-        {trafficVisible && roadStatus !== "ready" && (
-          <p role="status" className="mt-2 text-[11px] text-viewport-muted">
-            {roadStatus === "loading"
-              ? "Loading nearby roads…"
-              : "Some roads didn’t load. Move the map or toggle to retry."}
-          </p>
-        )}
-
-        <p className="mt-2 text-[11px]">
-          Time-of-day curves and invented offsets; not observed traffic.
-        </p>
-        <details className="mt-4">
-          <summary className="cursor-pointer text-xs font-medium">
-            Assumed activity by time of day
-          </summary>
-          <p className="mt-1 text-[11px]">
-            Hand-placed anchors; not measured trips.
-          </p>
-          <ul className="mt-2.5 space-y-2">
-            {demandAnchors.map((anchor) => {
-              const level = demandLevel(minute, anchor.peaks);
-              return (
-                <li
-                  key={anchor.label}
-                  className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
-                  title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
-                >
-                  {anchor.label}
-                  <span className="h-1 overflow-hidden rounded-full bg-white/10">
-                    <span
-                      className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
-                      style={{
-                        width: `${Math.max(3, level * 100)}%`,
-                        backgroundColor: anchor.color,
-                      }}
-                    />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </details>
-        <label className="mt-4 flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={atmosphereEnabled}
-            onChange={(event) => setAtmosphere(event.target.checked)}
+      {illustrativeOverlays && (
+        <GlassControl
+          over="viewport"
+          aria-label="Illustrative neighborhood overlays"
+          className="absolute top-20 left-3 z-10 w-[11.5rem] !p-3"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium">
+              Illustrative traffic pattern
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={trafficVisible}
+              aria-label="Illustrative traffic pattern"
+              onClick={() => {
+                const show = !trafficVisible;
+                setTrafficVisible(show);
+                trafficEntities.current(show);
+              }}
+              className={`relative h-4 w-7 rounded-full transition ${trafficVisible ? "bg-emerald-400/90" : "bg-white/15"}`}
+            >
+              <span
+                className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${trafficVisible ? "left-3.5" : "left-0.5"}`}
+              />
+            </button>
+          </div>
+          <div
+            className={`mt-2.5 h-1 rounded-full bg-gradient-to-r from-[#2fdf92] via-[#ffb522] to-[#ff3e47] transition-opacity ${trafficVisible ? "" : "opacity-20"}`}
           />
-          Sky and clouds
-        </label>
-        <div className="mt-3">{controls}</div>
-      </GlassControl>
+
+          {trafficVisible && roadStatus !== "ready" && (
+            <p role="status" className="mt-2 text-[11px] text-viewport-muted">
+              {roadStatus === "loading"
+                ? "Loading nearby roads…"
+                : "Some roads didn’t load. Move the map or toggle to retry."}
+            </p>
+          )}
+
+          <p className="mt-2 text-[11px]">
+            Time-of-day curves and invented offsets; not observed traffic.
+          </p>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs font-medium">
+              Assumed activity by time of day
+            </summary>
+            <p className="mt-1 text-[11px]">
+              Hand-placed anchors; not measured trips.
+            </p>
+            <ul className="mt-2.5 space-y-2">
+              {demandAnchors.map((anchor) => {
+                const level = demandLevel(minute, anchor.peaks);
+                return (
+                  <li
+                    key={anchor.label}
+                    className="grid grid-cols-[4.5rem_1fr] items-center gap-2 text-[11px] text-viewport-muted"
+                    title={`${anchor.label}: ${level > 0.6 ? "High" : level > 0.2 ? "Moderate" : "Low"}`}
+                  >
+                    {anchor.label}
+                    <span className="h-1 overflow-hidden rounded-full bg-white/10">
+                      <span
+                        className="block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300"
+                        style={{
+                          width: `${Math.max(3, level * 100)}%`,
+                          backgroundColor: anchor.color,
+                        }}
+                      />
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+          <label className="mt-4 flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={atmosphereEnabled}
+              onChange={(event) => setAtmosphere(event.target.checked)}
+            />
+            Sky and clouds
+          </label>
+          <div className="mt-3">{controls}</div>
+        </GlassControl>
+      )}
 
       {children}
 
