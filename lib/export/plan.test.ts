@@ -33,7 +33,7 @@ describe("printable location plan (HAC-26)", () => {
       siteLabels: { [SITE_A.id]: "Site A storefront" },
     });
     expect(out.recommendedSite).toBe("Site A storefront");
-    expect(out.runnerUp).toBe(SITE_B.id);
+    expect(out.runnerUp).toBe("Site 2");
     expect(out.sections.map((s) => s.id)).toEqual(
       expect.arrayContaining(["comparison", "assumptions"]),
     );
@@ -47,6 +47,33 @@ describe("printable location plan (HAC-26)", () => {
     }
     expect(out.attributions).toEqual(ATTRIBUTIONS);
     expect(out.limitations.join(" ")).toMatch(/not a sales forecast/);
+  });
+
+  it("shows addresses and plain copy: no raw IDs, citation tags or metric paths", () => {
+    const base = inputs();
+    const out = preparePlanExport({
+      ...base,
+      siteLabels: { [SITE_A.id]: "12 Main St", [SITE_B.id]: "34 Oak Ave" },
+    });
+    const shown = JSON.stringify({
+      ...out,
+      sections: out.sections.map((s) => ({
+        ...s,
+        rows: s.rows.map((row) => ({ ...row, citations: [] })),
+      })),
+      comparisonId: undefined,
+    });
+    expect(shown).not.toContain(SITE_A.id);
+    expect(shown).not.toContain(SITE_B.id);
+    expect(shown).not.toMatch(/\[(comparison|run|evidence):/);
+    expect(shown).not.toMatch(/monthlyContributionUsd|sites\./);
+    expect(out.recommendation).toBe(
+      "Recommended: 12 Main St. It's the strongest option within your budget; check the assumptions before you sign.",
+    );
+    const rows = out.sections.find((s) => s.id === "comparison")!.rows;
+    expect(rows[0]!.label).toBe("12 Main St — Monthly operating contribution");
+    expect(rows[0]!.sources.every((x) => /^[A-Z]/.test(x))).toBe(true);
+    expect(new Set(out.limitations).size).toBe(out.limitations.length);
   });
 
   it("never exports source free text, photos or private payload fields", () => {
