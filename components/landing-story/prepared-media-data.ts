@@ -8,14 +8,17 @@ export type PreparedMedia = {
   webm: string;
   counterCount?: 1 | 2;
 };
+export type PreparedMapMedia = PreparedMedia & {
+  discoveryPoster: string;
+  anchors: readonly {
+    siteId: "montrose" | "heights";
+    u: number;
+    v: number;
+  }[];
+};
 export type PreparedMediaManifest = {
-  map: PreparedMedia & {
-    anchors: readonly {
-      siteId: "montrose" | "heights";
-      u: number;
-      v: number;
-    }[];
-  };
+  map: PreparedMapMedia;
+  mapPortrait: PreparedMapMedia;
   counters: {
     current: PreparedMedia & { counterCount: 1 };
     proposed: PreparedMedia & { counterCount: 2 };
@@ -56,10 +59,8 @@ function asset(value: unknown): PreparedMedia {
     webm: data.webm as string,
   };
 }
-export function parsePreparedMedia(value: unknown): PreparedMediaManifest {
-  const data = object(value),
-    map = object(data.map),
-    counters = object(data.counters);
+function mapAsset(value: unknown): PreparedMapMedia {
+  const map = object(value);
   if (!Array.isArray(map.anchors) || map.anchors.length !== 2)
     throw new Error("Prepared map anchors are missing.");
   const anchors = map.anchors.map((value) => {
@@ -79,12 +80,27 @@ export function parsePreparedMedia(value: unknown): PreparedMediaManifest {
   });
   if (new Set(anchors.map((a) => a.siteId)).size !== 2)
     throw new Error("Duplicate prepared map anchors.");
+  if (
+    typeof map.discoveryPoster !== "string" ||
+    !/^\/landing-assets\/prepared\/houston-discovery(?:-portrait)?\.[a-f0-9]{12}\.webp$/.test(
+      map.discoveryPoster,
+    )
+  )
+    throw new Error("Invalid discovery poster.");
+  if (map.discoveryPoster === map.poster)
+    throw new Error("Discovery must not use simulation footage.");
+  return { ...asset(map), anchors, discoveryPoster: map.discoveryPoster };
+}
+export function parsePreparedMedia(value: unknown): PreparedMediaManifest {
+  const data = object(value),
+    counters = object(data.counters);
   const current = object(counters.current),
     proposed = object(counters.proposed);
   if (current.counterCount !== 1 || proposed.counterCount !== 2)
     throw new Error("Prepared counter recordings do not match their setups.");
   return {
-    map: { ...asset(map), anchors },
+    map: mapAsset(data.map),
+    mapPortrait: mapAsset(data.mapPortrait),
     counters: {
       current: { ...asset(current), counterCount: 1 },
       proposed: { ...asset(proposed), counterCount: 2 },

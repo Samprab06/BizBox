@@ -140,7 +140,7 @@ export function PreparedVideo({
       closed = true;
       element.pause();
     };
-  }, [mounted, running, replayRevision, loop]);
+  }, [mounted, running, replayRevision, loop, media.mp4, media.webm]);
   return (
     <div
       className={`${styles.media} ${fit === "contain" ? styles.contain : ""}`}
@@ -160,6 +160,7 @@ export function PreparedVideo({
       />
       {mounted && (
         <video
+          key={media.mp4}
           ref={video}
           className={styles.video}
           aria-label={label}

@@ -10,7 +10,7 @@ The landing must not download Cesium, map tiles or road data at any chapter. No 
 
 ## Media contract
 
-Content-hashed MP4 (H.264) and WebM files with WebP posters live in `public/landing-assets/prepared`. `manifest.json` records dimensions, durations, normalized map anchors, counter counts and paths. Map overlays project the captured normalized anchors using the same centered cover fit as the media, then clamp glass cards to the viewport. Text and financial data are never baked into footage.
+Content-hashed MP4 (H.264) and WebM files with WebP posters live in `public/landing-assets/prepared`. `manifest.json` records dimensions, durations, normalized map anchors, counter counts and paths. Map overlays project the captured normalized anchors using the same centered contain fit as the media, then clamp glass cards to the viewport. Text and financial data are never baked into footage.
 
 Recordings show an illustrative prepared example, not live pedestrian measurement or property-specific verification. Preserve map attribution, existing modeled-data disclosures and generated-interior provenance. Original source assets and product renderer remain available.
 
@@ -34,3 +34,15 @@ This window includes the expanded screen-background image as well as map media. 
 ## Final verification
 
 Integrated `a73078b` main normally without conflicts or replacing teammate code. Lint, typecheck, production build, environment-file guard and client-bundle guard pass. Full unit suite:2,201passed/51existing skips. Homepage, retained legacy preview, cold-media budgets and prepared-media behavior:86browser checks passed across Chromium/WebKit/mobile Chrome, with one pre-existing WebKit keyboard skip. New coverage includes no live GIS downloads, immutable/range delivery, poster-only reduced motion/Save Data, manual autoplay recovery, selection through the closing shot and hidden-tab continuity including completed12:00results. The independent focused review's completed-clock regression was fixed and covered by browser tests. The existing recorded-example-loader tracing warning remains.
+
+## Discovery, prompt and framing correction
+
+Akshar reported three visible problems after release: “Two spaces for your café” reused the simulation poster with baked road dots; the location question had an inner blue glass patch; the map recording cropped its edges on narrow screens. Discovery now uses separate dot-free map captures. A480×960 portrait recording/poster complements the desktop capture, and both orientations use centered contain-fit with the same fit for native map anchors. Changing orientation reloads the appropriate source while retaining its playback time. No map engine is added to the landing.
+
+The question's refraction pseudo-layer caused the rectangular blue inset. It is disabled only for the location question's composer and bubbles; native backdrop blur and the reflective border remain. This also avoids a CSS compiler prefix-deduplication issue that discarded the unprefixed backdrop-filter override in Chromium. Other chat layouts and glass components remain unchanged.
+
+Capture files/provenance use the original renderer at build time. The temporary capture route/components were moved outside the repository before validation. New portrait MP4 is296,548bytes; discovery stills are369,272bytes (desktop) and211,382bytes (portrait). Everything retains content hashes and existing immutable delivery. Current hero loading budgets remain unchanged.
+
+Correction verification: both new regression cases failed against the prior implementation before the fix. Lint/typecheck/build and env/client-bundle checks pass. Full units:2,203passed/51existing skips. Homepage/legacy/cold/media browser coverage:92passed/oneexisting WebKit keyboard skip across Chromium, WebKit and mobile Chrome. New coverage checks clean discovery assets, complete-frame fit, portrait source selection, rotation/time continuity, and absence of the blue pseudo-layer in both prompt and sent bubble. An independent focused review found no unresolved issue; actual phone screenshots verify both cards and both full dot flows remain clear of the overlays.
+
+Main's separate HAC-200 workspace failure was reproduced against the unmodified9c45718 production build before rebuilding these corrections. It navigates directly to the workspace and is not caused by landing changes. Its repair is tracked separately, with explicit candidate selection retaining the real chat-request assertion.

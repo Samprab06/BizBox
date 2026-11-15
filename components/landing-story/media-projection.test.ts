@@ -183,3 +183,38 @@ describe("prepared playback policy", () => {
     ).toThrow("setups");
   });
 });
+
+describe("separate discovery and simulation framing", () => {
+  it("fits the full recording inside portrait viewports without clipping its corners", () => {
+    const corners = [
+      { siteId: "top", u: 0, v: 0 },
+      { siteId: "bottom", u: 1, v: 1 },
+    ];
+    expect(
+      projectMediaAnchors(
+        corners,
+        { width: 1120, height: 720 },
+        { width: 390, height: 844 },
+        "contain",
+      ),
+    ).toEqual([
+      { id: "top", x: 0, y: 296.64285714285717 },
+      { id: "bottom", x: 390, y: 547.3571428571429 },
+    ]);
+  });
+  it("uses a dot-free discovery image instead of a simulation poster", () => {
+    const html = renderToStaticMarkup(
+      h(StoryMap, {
+        data: createLocationStory(),
+        minute: 480,
+        expanded: true,
+        selected: "montrose",
+        onSelect: () => {},
+        viewport: { width: 1365, height: 900 },
+        morning: false,
+      }),
+    );
+    expect(html).toContain("houston-discovery.");
+    expect(html).not.toContain("houston-morning.");
+  });
+});

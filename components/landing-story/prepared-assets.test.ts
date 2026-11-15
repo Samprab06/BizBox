@@ -7,9 +7,18 @@ import provenance from "../../public/landing-assets/prepared/provenance.json";
 
 describe("prepared landing delivery assets", () => {
   it("ships every referenced recording and poster under its actual content hash", () => {
-    const scenes = [manifest.map, ...Object.values(manifest.counters)];
+    const scenes = [
+      manifest.map,
+      manifest.mapPortrait,
+      ...Object.values(manifest.counters),
+    ];
     for (const scene of scenes) {
-      for (const path of [scene.poster, scene.mp4, scene.webm]) {
+      for (const path of [
+        scene.poster,
+        scene.mp4,
+        scene.webm,
+        ...("discoveryPoster" in scene ? [scene.discoveryPoster] : []),
+      ]) {
         expect(path).toMatch(
           /^\/landing-assets\/prepared\/[\w-]+\.[a-f0-9]{12}\.(webp|mp4|webm)$/,
         );
