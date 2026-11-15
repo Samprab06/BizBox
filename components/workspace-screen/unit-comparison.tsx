@@ -417,9 +417,6 @@ function ServiceCounters({
   return (
     <div className="mt-6" data-service-counters>
       <h3 className="text-base font-semibold">Service counters</h3>
-      <p className="mb-3 text-xs">
-        Test 1 or 2 more counters at this site (modeled)
-      </p>
       {modeled.length > 1 && (
         <div
           className="mb-3 flex flex-wrap gap-2"
