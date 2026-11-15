@@ -11,6 +11,7 @@ import {
   evidenceHref,
 } from "@/components/site/live-evidence";
 import { workspaceHref } from "@/lib/client/workspace-routes";
+import { FinishBriefNotice } from "@/components/shell/finish-brief-notice";
 
 export function MapPreview({
   project,
@@ -19,7 +20,7 @@ export function MapPreview({
   project: PreviewProject;
   selectedId?: string;
 }) {
-  const { state, retry } = useSiteSearch(project.id);
+  const { state, readiness, retry } = useSiteSearch(project.id);
   if (state.mode === "loading")
     return <p role="status">Loading candidate sites…</p>;
   if (state.mode === "live") {
@@ -174,24 +175,32 @@ export function MapPreview({
   }
   return (
     <>
-      <div className="mb-5 rounded-lg bg-paper p-4">
-        <p role={state.failed ? "alert" : "status"}>{state.message}</p>
-        <Link
-          href={workspaceHref(project.id, "intake")}
-          className="mt-2 inline-block text-pine underline"
-        >
-          Review intake
-        </Link>
-        <button
-          type="button"
-          className="ml-4 rounded bg-pine px-3 py-2 text-white"
-          onClick={retry}
-        >
-          Retry search
-        </button>
-      </div>
-      <ExampleMap project={project} selectedId={selectedId} />
-      <p className="mt-6 text-xs text-muted">Example data</p>
+      {readiness.status === "needs_brief" ? (
+        <FinishBriefNotice projectId={project.id} message={readiness.message} />
+      ) : (
+        <div className="mb-5 rounded-lg bg-paper p-4">
+          <p role={state.failed ? "alert" : "status"}>{state.message}</p>
+          <Link
+            href={workspaceHref(project.id, "intake")}
+            className="mt-2 inline-block text-pine underline"
+          >
+            Review intake
+          </Link>
+          <button
+            type="button"
+            className="ml-4 rounded bg-pine px-3 py-2 text-white"
+            onClick={retry}
+          >
+            Retry search
+          </button>
+        </div>
+      )}
+      {project.sites.length > 0 && (
+        <>
+          <p className="my-4 text-xs text-muted">Example data</p>
+          <ExampleMap project={project} selectedId={selectedId} />
+        </>
+      )}
     </>
   );
 }
