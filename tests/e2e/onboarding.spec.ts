@@ -130,14 +130,22 @@ for (const viewport of [
       await page.getByRole("button", { name: "Mid-range" }).click();
       await proceed(page).click();
 
-      // Hours must be one same-day range the map can read; Enter submits.
+      // HAC-154: hours are a clock dial that starts at 9–5. Typed text must still be one
+      // same-day range the map can read; the dial's keyboard steps write that text.
       await expect(title(page)).toHaveText("When will you be open?");
-      const hours = page.getByRole("textbox", { name: "When will you be open?" });
+      const hours = page.getByRole("textbox", { name: "Hours, exact" });
+      await expect(hours).toHaveValue("9am – 5pm");
       await hours.fill("evenings");
       await hours.press("Enter");
       await expect(page.getByRole("alert").filter({ hasText: /same-day range/ })).toBeVisible();
-      await hours.fill("11am – 11pm");
-      await hours.press("Enter");
+      await hours.fill("9am – 5pm");
+      await page.getByRole("slider", { name: "Opening time" }).focus();
+      for (let i = 0; i < 2; i++) await page.keyboard.press("Shift+ArrowRight");
+      await page.getByRole("slider", { name: "Closing time" }).focus();
+      for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowRight");
+      await expect(hours).toHaveValue("11am – 11pm");
+      await expectNoOverflow(page);
+      await proceed(page).click();
 
       await expect(title(page)).toHaveText("How many people will be on shift?");
       await ruler(page).focus();

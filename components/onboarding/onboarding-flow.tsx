@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Profile } from "@/components/intake/profile";
+import { ClockDial } from "./clock-dial";
 import { CurvedRuler } from "./curved-ruler";
 import {
   categoryChoices,
@@ -30,6 +31,7 @@ import {
   type QuestionStep,
   type Step,
 } from "./flow";
+import { defaultHours, formatHours } from "./hours";
 import styles from "./onboarding.module.css";
 
 const steps: readonly Step[] = [...questionSteps, "review"];
@@ -72,6 +74,7 @@ export function OnboardingFlow({
     const draft = drafts[key];
     if (draft !== undefined) return draft;
     const initial = initialValue(key, profile);
+    if (initial === "" && key === "hours") return formatHours(defaultHours);
     return initial === "" && isRulerStep(key) ? String(rulers[key].start) : initial;
   }
 
@@ -203,7 +206,7 @@ export function OnboardingFlow({
       case "customers":
         return text({ textarea: true, maxLength: 250, placeholder: "Residents, commuters, students…" });
       case "hours":
-        return text({ maxLength: 80, placeholder: "7am – 6pm" });
+        return <ClockDial value={value} describedBy={describedBy} onChange={(next) => setDraft(key, next)} />;
       case "requirements":
         return text({ textarea: true, maxLength: 300, placeholder: "Street frontage, parking, ground floor…" });
       case "city":
