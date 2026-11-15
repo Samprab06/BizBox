@@ -65,17 +65,23 @@ The existing card padding stays 20 px. Motion comes from the existing
 120 ms, ease-out, content opacity only. Reduced motion changes that duration to
 0 ms. Keep glass fill/blur stable; no unrelated continuous or ornamental motion.
 
-### Typography and remaining font criterion
+### Typography
 
-The foundation uses HAC-130's existing system stack: `"Avenir Next", Avenir,
-"Segoe UI", sans-serif`. Use tabular numbers for money, timing and metrics.
-The former DM Sans declaration was never loaded.
+DM Sans, the family named in HAC-133, is bundled through `next/font/local` in
+`app/layout.tsx`. Akshar explicitly requested completion of this requirement on
+November 14, 2026. The unmodified variable font supports normal weights 100–1000
+and optical sizes 9–40. `display: swap` keeps text visible during loading, and
+Next.js supplies a metric-adjusted fallback. The existing Avenir/Segoe UI/system
+stack remains available if the local font cannot load. Use tabular numbers for
+money, timing and metrics.
 
-**Remaining HAC-133 blocker:** the ticket's `next/font` criterion needs an approved
-font family and source/bundled asset. No such asset or hosted fetch is approved.
-This change preserves the accepted UI stack without adding a network font request,
-service or dependency. Do not claim that the `next/font` criterion is complete;
-load it after the chosen source is supplied.
+The asset and SIL Open Font License are checked in under `app/fonts/dm-sans`;
+[font provenance](../app/fonts/dm-sans/README.md) records the pinned upstream
+revision and checksum. Next.js preloads and serves it from the application's own
+`/_next/static/media/` path. Neither the build nor the browser requests a font
+from Google or another hosted font service. The shared Tailwind `font-sans` token
+reads the generated root variable, including in print. The static landing document
+retains its own typography until its separate integration ticket.
 
 ### Evidence, scenarios and legacy compatibility
 

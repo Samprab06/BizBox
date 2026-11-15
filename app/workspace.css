@@ -2,7 +2,8 @@
 
 @theme {
   /* HAC-130 onboarding material; neutral/white confirmed by Akshar for HAC-133. */
-  --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-sans:
+    var(--font-bizbox-sans), "Avenir Next", Avenir, "Segoe UI", sans-serif;
   --color-canvas: #101115;
   --color-glass-fill: rgba(15, 16, 21, 0.4);
   --color-glass-edge: rgba(255, 255, 255, 0.48);
