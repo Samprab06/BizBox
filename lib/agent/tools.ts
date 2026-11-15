@@ -715,6 +715,9 @@ export function createInvestigationTools(
             stored.evaluation.assembly = {
               findings: assembled.findings,
               assumptions: assembled.assumptions,
+              ...(assembled.jevCompetitorSet
+                ? { jevCompetitorSet: assembled.jevCompetitorSet }
+                : {}),
             };
             context.signal.throwIfAborted();
             try {
