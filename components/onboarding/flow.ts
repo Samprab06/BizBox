@@ -67,6 +67,13 @@ export const cityChoices = [
 /** Placeholders only; not launch dates or a roadmap commitment. */
 export const comingSoonCities = ["New York", "Chicago", "Miami"] as const;
 
+/** Decorative generated artwork, separate from the real photos of supported cities. */
+export const comingSoonCityPhotos: Record<(typeof comingSoonCities)[number], string> = {
+  "New York": "/onboarding/generated/new-york.jpg",
+  Chicago: "/onboarding/generated/chicago.jpg",
+  Miami: "/onboarding/generated/miami.jpg",
+};
+
 /** Photo credits from the handoff's photos/manifest.json (also in public/onboarding/). */
 export const photoCredits = {
   Houston: {

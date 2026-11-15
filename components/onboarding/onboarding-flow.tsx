@@ -9,6 +9,7 @@ import {
   categoryChoices,
   cityChoices,
   comingSoonCities,
+  comingSoonCityPhotos,
   initialValue,
   isRulerStep,
   photoCredits,
@@ -217,9 +218,12 @@ export function OnboardingFlow({
             </div>
             <div role="group" aria-label="Coming soon cities" className="mt-3 grid grid-cols-3 gap-2">
               {comingSoonCities.map((name) => (
-                <button key={name} type="button" disabled className="cursor-not-allowed rounded-xl border border-white/15 px-2 py-2 text-xs text-white/50">
-                  <strong className="block font-medium">{name}</strong>{" "}
-                  <span className="text-[10px]">Coming soon</span>
+                <button key={name} type="button" disabled className="relative aspect-[4/3] cursor-not-allowed overflow-hidden rounded-xl border border-white/20 text-left text-xs text-white">
+                  <Image src={comingSoonCityPhotos[name]} alt="" fill sizes="(max-width: 640px) 28vw, 180px" className="object-cover" />
+                  <span className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/15 to-transparent p-2 sm:p-3">
+                    <strong className="block font-medium">{name}</strong>{" "}
+                    <span className="mt-0.5 text-[10px] text-white/85">Coming soon</span>
+                  </span>
                 </button>
               ))}
             </div>
