@@ -17,6 +17,7 @@ import {
   runnerUpGap,
   type SummaryRange,
 } from "@/lib/client/final-plan";
+import { OUTDATED_LIMITATION } from "@/lib/export/plan";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import type { FinalPlanSummary } from "@/lib/contracts/plan";
 import { comparisonScale } from "./comparison-chart";
@@ -133,6 +134,15 @@ function PlanSummaryView({
           not measured traffic
         </p>
       </header>
+
+      {summary.outdated && (
+        <p role="status" className={styles.muted}>
+          {OUTDATED_LIMITATION}{" "}
+          <Link href={flowStepHref(projectId, "compare")}>
+            Rerun the comparison
+          </Link>
+        </p>
+      )}
 
       <section aria-labelledby={ids.metrics} className={styles.block}>
         <h3 id={ids.metrics} className={styles.heading}>

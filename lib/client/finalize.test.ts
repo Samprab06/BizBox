@@ -39,6 +39,18 @@ describe("finalizeChosenSite", () => {
     expect(summary?.rationale).toBe("Best margin.");
   });
 
+  it("flags a summary finalized from an outdated comparison", async () => {
+    expect(
+      (
+        await finalizeChosenSite({
+          ...base,
+          payload: { ...payload, outdated: true },
+        })
+      )?.outdated,
+    ).toBe(true);
+    expect((await finalizeChosenSite(base))?.outdated).toBeUndefined();
+  });
+
   it("refuses a site that is not in the comparison, or no comparison", async () => {
     expect(
       await finalizeChosenSite({ ...base, chosenSiteId: "9:9" }),
@@ -50,11 +62,20 @@ describe("finalizeChosenSite", () => {
 describe("opening the final step after finalizing", () => {
   it("lets the stepper and resolver reach finalize once a plan is stored", async () => {
     const summary = (await finalizeChosenSite(base))!;
-    const locked = { ...initialFlowState(), reached: ["questions", "locations"] as const };
+    const locked = {
+      ...initialFlowState(),
+      reached: ["questions", "locations"] as const,
+    };
     expect(
-      resolveWorkspaceStep("finalize", reachableSteps({ reached: [...locked.reached] })),
+      resolveWorkspaceStep(
+        "finalize",
+        reachableSteps({ reached: [...locked.reached] }),
+      ),
     ).toBe("locations");
-    const next = withFinalPlan({ ...locked, reached: [...locked.reached] }, summary);
+    const next = withFinalPlan(
+      { ...locked, reached: [...locked.reached] },
+      summary,
+    );
     expect(canOpenStep(next, "finalize")).toBe(true);
     expect(resolveWorkspaceStep("finalize", reachableSteps(next))).toBe(
       "finalize",

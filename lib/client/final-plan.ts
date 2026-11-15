@@ -372,6 +372,8 @@ export type BuildFinalPlanSummaryInput = {
   tweaks?: SiteTweakMap;
   /** The grounded plan from `fetchGroundedPlan`, when it loaded. */
   plan?: GroundedLocationPlan | null;
+  /** The comparison's profile changed after it ran. */
+  outdated?: boolean;
   /** Finalization time; defaults to now. */
   now?: Date;
 };
@@ -392,6 +394,7 @@ export function buildFinalPlanSummary({
   addresses,
   tweaks,
   plan,
+  outdated,
   now = new Date(),
 }: BuildFinalPlanSummaryInput): FinalPlanSummary {
   const site = result.sites.find((entry) => entry.siteId === chosenSiteId);
@@ -426,6 +429,7 @@ export function buildFinalPlanSummary({
           monthlyContributionUsd: toSummaryRange(runner.monthlyContributionUsd),
         }
       : null,
+    ...(outdated ? { outdated: true } : {}),
     risks: deriveRisks({ site, result, plan, addresses }),
     nextSteps: deriveNextSteps(plan, chosenTweaks),
   });

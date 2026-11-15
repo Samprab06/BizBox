@@ -4,6 +4,7 @@ import { fixture } from "@/lib/agent/__fixtures__/plan";
 import { SITE_A, SITE_B } from "@/lib/demand/fixtures";
 import {
   ATTRIBUTIONS,
+  OUTDATED_LIMITATION,
   formatFact,
   PlanExportRefusal,
   preparePlanExport,
@@ -61,15 +62,18 @@ describe("printable location plan (HAC-26)", () => {
     expect(text).not.toMatch(/matterport|photo url|attachmentUri|broker/i);
   });
 
-  it("refuses an outdated comparison with a rerun prompt", () => {
-    try {
-      preparePlanExport(inputs(true));
-      throw new Error("expected a refusal");
-    } catch (error) {
-      expect(error).toBeInstanceOf(PlanExportRefusal);
-      expect((error as PlanExportRefusal).code).toBe("outdated");
-      expect((error as Error).message).toMatch(/Rerun the comparison/);
-    }
+  it("still exports an outdated comparison, flagged with a limitation", () => {
+    const out = preparePlanExport(inputs(true));
+    expect(out.outdated).toBe(true);
+    expect(out.limitations[0]).toBe(OUTDATED_LIMITATION);
+    expect(out.sections.length).toBeGreaterThan(0);
+    expect(preparePlanExport(inputs()).outdated).toBe(false);
+  });
+
+  it("refuses an unverifiable comparison", () => {
+    expect(() =>
+      preparePlanExport({ ...inputs(), comparison: { nope: true } }),
+    ).toThrow(PlanExportRefusal);
   });
 
   it("refuses a plan or comparison from another project or comparison", () => {

@@ -21,6 +21,7 @@ import {
 import type { AgentViewContext, FlowEvent } from "@/lib/contracts/agent";
 import {
   formFromDraft,
+  sameAnswer,
   IntakeResponseSchema,
   patchFromForm,
   type IntakeResponse,
@@ -264,6 +265,10 @@ export function applyIntakeReply(
       );
       if (!appendReply || unchanged) continue;
     }
+    // The agent restating what the founder already said is not a change: keep their
+    // wording and origin so the profile does not drift (and comparisons stay current).
+    const existing = profile[key];
+    if (existing && sameAnswer(key, existing.value, answer.value)) continue;
     profile[key] = answer;
   }
   return {
