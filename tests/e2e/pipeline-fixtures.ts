@@ -59,7 +59,7 @@ export async function enterPipelineIntake(page: Page) {
     await answer.fill(text);
     await answer.press("Enter");
   }
-  await expect(page.getByText("All required fields are filled.")).toBeVisible();
+  await expect(page.getByText(/^Form fields are filled\./)).toBeVisible();
 }
 
 /** Recorded wire responses pass through the real panel aggregator; expected outputs are never calculated in the test. */
