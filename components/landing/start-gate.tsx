@@ -9,7 +9,11 @@ import {
   intakeStorageKey,
   parseIntakeSession,
 } from "@/components/workspace-screen/intake-conversation";
-import { entryPath } from "@/components/shell/entry-flow";
+import {
+  flowStepHref,
+  reachStep,
+  updateFlowState,
+} from "@/lib/client/flow-progress";
 import { workspaceHref } from "@/lib/client/workspace-routes";
 import { DEMO_PROJECT_ID, isGeneratedProjectId } from "@/lib/projects/ids";
 import { CURRENT_PROJECT_KEY, entryPlan } from "./entry";
@@ -61,9 +65,10 @@ const secondary = cn(
 );
 
 /**
- * /start: a first visit gets a new project and goes straight into the chat-first entry
- * (HAC-150); a founder with a complete brief lands docked; one with a started brief chooses
- * between continuing the chat and the workspace.
+ * /start: a first visit gets a new project and goes straight into the questionnaire (the
+ * flow's `questions` step); a founder with a complete brief continues at the workspace's
+ * `locations` step; one with a started brief chooses between finishing the questions and
+ * the workspace.
  */
 export function StartGate() {
   const router = useRouter();
@@ -77,14 +82,15 @@ export function StartGate() {
         parseIntakeSession(read(intakeStorageKey(projectId))),
       )
     : null;
-  // HAC-150: a first visit opens the chat; a returning founder with a complete brief goes
-  // to the same entry, which docks straight onto Spaces.
+  // A first visit opens the questionnaire; a complete brief has unlocked the top locations.
+  const resume = target?.kind === "returning" && target.complete;
   const href =
     target?.kind === "onboarding"
       ? target.href
-      : target?.kind === "returning" && target.complete
-        ? target.onboardingHref
+      : resume
+        ? target.workspaceHref
         : null;
+  const resumeProject = resume ? target.projectId : null;
   const create = target?.kind === "create";
   const [attempt, setAttempt] = useState(0);
   const [failedAttempt, setFailedAttempt] = useState<number | null>(null);
@@ -93,8 +99,10 @@ export function StartGate() {
   const creating = useRef(false);
 
   useEffect(() => {
+    if (resumeProject)
+      updateFlowState(resumeProject, (state) => reachStep(state, "locations"));
     if (href) router.replace(href);
-  }, [href, router]);
+  }, [href, resumeProject, router]);
 
   useEffect(() => {
     if (!create || creating.current) return;
@@ -102,7 +110,7 @@ export function StartGate() {
     createProject().then(
       (projectId) => {
         rememberProject(projectId);
-        router.replace(entryPath(projectId));
+        router.replace(flowStepHref(projectId, "questions"));
       },
       () => {
         creating.current = false;
@@ -153,12 +161,12 @@ export function StartGate() {
         Welcome back to BizBox
       </h1>
       <p className="mt-3 max-w-md text-muted">
-        You started describing your business. Pick up the conversation or jump
-        to your workspace.
+        You started describing your business. Finish the questions or jump to
+        your workspace.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Link href={target.onboardingHref} className={primary}>
-          Continue the conversation
+          Continue the questions
         </Link>
         <Link href={target.workspaceHref} className={secondary}>
           Open your workspace

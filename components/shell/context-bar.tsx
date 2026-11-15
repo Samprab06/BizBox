@@ -1,7 +1,6 @@
 "use client";
 
 import { agentViewForRoute } from "@/lib/client/agent-view-context";
-import Link from "next/link";
 import {
   createContext,
   useCallback,
@@ -34,43 +33,24 @@ function ExampleBadge() {
   );
 }
 
+/**
+ * Scene 1: the context is display-only. The top stepper is the flow's only back/forth
+ * navigation, so these fields carry no links (the model's hrefs stay for other consumers).
+ */
 function ContextFields({ model }: { model: WorkspaceContextModel }) {
   const fields = [
-    {
-      label: "Business concept",
-      field: model.concept,
-      action: "Change business concept",
-    },
-    {
-      label: "Selected location",
-      field: model.location,
-      action: "Change selected location",
-    },
-    {
-      label: "Scenario",
-      field: model.scenario,
-      action: "View baseline scenario",
-    },
-    {
-      label: "Data and model",
-      field: model.status,
-      action: "View data and evidence",
-    },
+    { label: "Business concept", field: model.concept },
+    { label: "Selected location", field: model.location },
+    { label: "Scenario", field: model.scenario },
+    { label: "Data and model", field: model.status },
   ];
   return (
     <dl className="grid min-w-0 gap-4 md:grid-cols-[1.1fr_1.4fr_0.6fr_1.2fr]">
-      {fields.map(({ label, field, action }) => (
+      {fields.map(({ label, field }) => (
         <div key={label} className="min-w-0">
           <dt className="text-xs font-medium text-muted">{label}</dt>
           <dd className="mt-1 text-sm font-medium [overflow-wrap:anywhere]">
-            <Link
-              href={field.href}
-              prefetch={false}
-              aria-label={`${action}: ${field.text}`}
-              className="text-pine underline decoration-line underline-offset-4 hover:decoration-pine"
-            >
-              {field.text}
-            </Link>
+            <span className="text-pine">{field.text}</span>
             {label === "Selected location" && model.example && (
               <span className="ml-2">
                 <ExampleBadge />

@@ -12,7 +12,10 @@ import {
   SiteTweakMapSchema,
   type EvaluationRequest,
   type EvaluationSite,
+  type SiteTweakMap,
+  type SiteTweaks,
 } from "@/lib/contracts/evaluation";
+import { SiteConfigSchema } from "@/lib/sim/contracts";
 import { categoryDefaults } from "@/lib/agent/defaults";
 import {
   WEEKDAYS_PER_MONTH,
@@ -56,6 +59,8 @@ export const AssemblyShortcutSchema = z
     siteTweaks: SiteTweakMapSchema.optional(),
   })
   .strict();
+const unknownTweakMessage = (id: string) =>
+  `Tweaks name ${id}, which is not one of candidateIds`;
 export const AssemblyInputSchema = AssemblyShortcutSchema.extend({
   profileVersion: z.number().int().positive(),
   profile: BusinessProfileSchema,
@@ -69,7 +74,68 @@ export const AssemblyInputSchema = AssemblyShortcutSchema.extend({
       code: "custom",
       message: "Profile snapshot identity must match the request",
     });
+  const wanted = new Set(input.candidateIds);
+  for (const id of Object.keys(input.siteTweaks ?? {}))
+    if (!wanted.has(id))
+      ctx.addIssue({
+        code: "custom",
+        path: ["siteTweaks", id],
+        message: unknownTweakMessage(id),
+      });
 });
+
+/**
+ * Scene 1: field errors for per-site tweaks keyed by a candidate that is not in the request,
+ * as `{ "siteTweaks.<candidateId>": [message] }`. Empty when every tweak names a candidate.
+ */
+export function siteTweakFieldErrors(
+  candidateIds: readonly string[],
+  siteTweaks: SiteTweakMap | undefined,
+): Record<string, string[]> {
+  const wanted = new Set(candidateIds);
+  return Object.fromEntries(
+    Object.keys(siteTweaks ?? {})
+      .filter((id) => !wanted.has(id))
+      .map((id) => [`siteTweaks.${id}`, [unknownTweakMessage(id)]]),
+  );
+}
+
+/**
+ * Scene 1: per-site tweaks produced a site config the simulator cannot run. Carries field
+ * errors keyed by tweak field (`siteTweaks.<candidateId>.<field>`), reported as a 422.
+ */
+export class SiteTweakError extends Error {
+  constructor(
+    message: string,
+    public readonly fieldErrors: Record<string, string[]>,
+  ) {
+    super(message);
+    this.name = "SiteTweakError";
+  }
+}
+
+/** Which tweak field produced each part of the site config, for field errors. */
+const TWEAK_FIELD_FOR_CONFIG: Record<string, keyof SiteTweaks> = {
+  hours: "hours",
+  prices: "priceUsd",
+  staff: "staff",
+  lease: "monthlyRentUsd",
+};
+
+/** One-line summary of a site's tweaks for findings, e.g. "hours 420-1140, staff 3". */
+function describeTweaks(tweaks: SiteTweaks): string {
+  const parts: string[] = [];
+  if (tweaks.hours)
+    parts.push(
+      `hours ${tweaks.hours.openMinute}-${tweaks.hours.closeMinute} (minutes of the day)`,
+    );
+  if (tweaks.priceUsd !== undefined)
+    parts.push(`average ticket $${tweaks.priceUsd.toFixed(2)}`);
+  if (tweaks.staff !== undefined) parts.push(`staff ${tweaks.staff}`);
+  if (tweaks.monthlyRentUsd !== undefined)
+    parts.push(`monthly rent $${tweaks.monthlyRentUsd.toFixed(2)}`);
+  return parts.join(", ");
+}
 export type AssembleEvaluationInput = z.input<typeof AssemblyInputSchema>;
 export type AssemblyFinding = {
   code: string;
@@ -119,6 +185,13 @@ export type AssemblyMetadata = {
   jevCompetitorSet?: JevCompetitorSet;
   /** Provenance of the per-site Jev persona sets, when Jev was asked (HAC-159). */
   jevPersonaSet?: JevPersonaSetProvenance;
+  /**
+   * Scene 1: the per-site tweaks applied to this comparison, keyed by candidate (site) ID,
+   * exactly as requested. Only sites that were assembled appear; a tweak for a candidate that
+   * was excluded is reported as a `SITE_TWEAKS_IGNORED` finding instead. The tweaked values are
+   * already in `request.sites[].config`, so reruns reproduce them from the stored request.
+   */
+  siteTweaks?: SiteTweakMap;
 };
 export type AssembledEvaluation = AssemblyMetadata & {
   request: EvaluationRequest;
@@ -290,6 +363,7 @@ export async function assembleEvaluation(
   const catchments: AssemblyCatchment[] = [];
   const siteCatchments = new Map<string, AssemblyCatchment>();
   const panelSites: CandidateSite[] = [];
+  const appliedTweaks: SiteTweakMap = {};
   for (const id of input.candidateIds) {
     const row = rows.get(id);
     if (!row) {
@@ -380,6 +454,29 @@ export async function assembleEvaluation(
       openMin: profile.operatingHours.openMinute,
       closeMin: profile.operatingHours.closeMinute,
     };
+    // Scene 1: per-site tweaks replace this site's engine/economics inputs. Jev prompts keep
+    // the profile's opening time and price (see `panelSites` and `need`), so hours, staff and
+    // rent tweaks never change Jev cache keys; a price tweak reprices cached answers instead.
+    const tweaks = input.siteTweaks?.[id];
+    const siteHours = tweaks?.hours
+      ? {
+          openMin: tweaks.hours.openMinute,
+          closeMin: tweaks.hours.closeMinute,
+        }
+      : hours;
+    const sitePrice = tweaks?.priceUsd ?? price;
+    const siteStaff = tweaks?.staff ?? staff;
+    const siteRentUsdPerSfYear =
+      tweaks?.monthlyRentUsd !== undefined
+        ? (tweaks.monthlyRentUsd * 12) / sf
+        : (row.baseRentCents.value! * 12) / 100 / sf;
+    const tweaked = (key: string, value: number, field: keyof SiteTweaks) => {
+      assumptions[`${path}.config.${key}`] = {
+        value,
+        origin: "founder",
+        evidenceIds: [`siteTweaks:${id}:${field}`],
+      };
+    };
     const trace = (key: string, value: number, sourcePath: string) => {
       assumptions[`${path}.config.${key}`] = {
         ...assumptions[sourcePath]!,
@@ -413,6 +510,16 @@ export async function assembleEvaluation(
       (row.baseRentCents.value! * 12) / 100 / sf,
       `${path}.monthlyBaseRentCents`,
     );
+    if (tweaks?.priceUsd !== undefined)
+      tweaked("prices.avgTicketUsd", sitePrice, "priceUsd");
+    if (tweaks?.staff !== undefined)
+      tweaked("staff.headcount", siteStaff, "staff");
+    if (tweaks?.monthlyRentUsd !== undefined)
+      tweaked(
+        "lease.askingRentUsdPerSfYear",
+        siteRentUsdPerSfYear,
+        "monthlyRentUsd",
+      );
     trace(
       "lease.opexUsdPerSfYear",
       (row.opexCents.value! * 12) / 100 / sf,
@@ -430,40 +537,76 @@ export async function assembleEvaluation(
     );
     for (const day of ["weekday", "weekend"] as const)
       for (const key of ["openMin", "closeMin"] as const)
-        number(`${path}.config.hours.${day}.${key}`, {
-          value: hours[key],
-          origin: profile.synthetic ? "default" : "founder",
-          evidenceIds: [`profile:${profile.id}:operatingHours`],
-          unit: "minutes",
-        });
+        number(
+          `${path}.config.hours.${day}.${key}`,
+          tweaks?.hours
+            ? {
+                value: siteHours[key],
+                origin: "founder",
+                evidenceIds: [`siteTweaks:${id}:hours`],
+                unit: "minutes",
+              }
+            : {
+                value: hours[key],
+                origin: profile.synthetic ? "default" : "founder",
+                evidenceIds: [`profile:${profile.id}:operatingHours`],
+                unit: "minutes",
+              },
+        );
+    const config: EvaluationSite["config"] = {
+      hours: { weekday: siteHours, weekend: siteHours },
+      stations: {
+        planned: Math.floor(sf / sfPerStation),
+        usableSf: sf,
+        sfPerStation,
+      },
+      service: { meanServiceMin: service },
+      prices: { avgTicketUsd: sitePrice },
+      staff: { headcount: siteStaff, wageUsdPerHour: wage },
+      costs: { cogsPctOfRevenue: cogs },
+      lease: {
+        sf,
+        askingRentUsdPerSfYear: siteRentUsdPerSfYear,
+        tripleNet: row.opexCents.value! > 0,
+        opexUsdPerSfYear: (row.opexCents.value! * 12) / 100 / sf,
+        buildoutUsd: buildout,
+        leaseTermMonths: term,
+      },
+      calendar: {
+        weekdayDaysPerMonth: WEEKDAYS_PER_MONTH,
+        weekendDaysPerMonth: WEEKEND_DAYS_PER_MONTH,
+      },
+    };
+    if (tweaks) {
+      // A tweak must leave a config the simulator accepts; report which tweak field broke it.
+      const parsed = SiteConfigSchema.safeParse(config);
+      if (!parsed.success) {
+        const fieldErrors: Record<string, string[]> = {};
+        for (const issue of parsed.error.issues) {
+          const field = TWEAK_FIELD_FOR_CONFIG[String(issue.path[0])];
+          (fieldErrors[
+            field ? `siteTweaks.${id}.${field}` : `siteTweaks.${id}`
+          ] ??= []).push(issue.message);
+        }
+        throw new SiteTweakError(
+          `Tweaks for ${id} make the site impossible to simulate`,
+          fieldErrors,
+        );
+      }
+      appliedTweaks[id] = tweaks;
+      finding(
+        "SITE_TWEAKS_APPLIED",
+        `Founder changes applied to this site only: ${describeTweaks(tweaks)}.`,
+        id,
+      );
+    }
     sites.push({
       siteId: id,
       storefront,
       serviceMeanOrigin: assumptions["profile.serviceMinutes"]?.origin,
-      config: {
-        hours: { weekday: hours, weekend: hours },
-        stations: {
-          planned: Math.floor(sf / sfPerStation),
-          usableSf: sf,
-          sfPerStation,
-        },
-        service: { meanServiceMin: service },
-        prices: { avgTicketUsd: price },
-        staff: { headcount: staff, wageUsdPerHour: wage },
-        costs: { cogsPctOfRevenue: cogs },
-        lease: {
-          sf,
-          askingRentUsdPerSfYear: (row.baseRentCents.value! * 12) / 100 / sf,
-          tripleNet: row.opexCents.value! > 0,
-          opexUsdPerSfYear: (row.opexCents.value! * 12) / 100 / sf,
-          buildoutUsd: buildout,
-          leaseTermMonths: term,
-        },
-        calendar: {
-          weekdayDaysPerMonth: WEEKDAYS_PER_MONTH,
-          weekendDaysPerMonth: WEEKEND_DAYS_PER_MONTH,
-        },
-      },
+      config,
+      // Cached Jev answers stay at the profile price; the evaluator reprices from it.
+      ...(sitePrice !== price ? { jevBasePriceUsd: price } : {}),
     });
     panelSites.push({
       id: optionId(id),
@@ -483,6 +626,13 @@ export async function assembleEvaluation(
     catchments.push(bundle);
     siteCatchments.set(id, bundle);
   }
+  for (const id of Object.keys(input.siteTweaks ?? {}))
+    if (!appliedTweaks[id])
+      finding(
+        "SITE_TWEAKS_IGNORED",
+        "Tweaks were not applied because this candidate was excluded from the comparison.",
+        id,
+      );
   if (!sites.length)
     throw new AssemblyError(
       "No candidates have enough known inputs to evaluate",
@@ -835,6 +985,11 @@ export async function assembleEvaluation(
         personaCount: set.personas.length,
       };
     }
+    if (Object.values(appliedTweaks).some((t) => t.hours || t.priceUsd))
+      finding(
+        "SITE_TWEAKS_JEV",
+        "Jev answers were collected at the profile's opening time and price. Tweaked hours change only the simulated open window; a tweaked price rescales cached Jev visits by each persona's cached price acceptance.",
+      );
     finding(
       "JEV_PERSONA_SET",
       `Jev personas come from each site's own catchment, seeded by its catchment ID (${JEV_PERSONA_SET_VERSION}); the shared study-area personas are used for Huff only.`,
@@ -926,6 +1081,7 @@ export async function assembleEvaluation(
     assumptions,
     ...(jevCompetitorSet ? { jevCompetitorSet } : {}),
     ...(jevPersonaSet ? { jevPersonaSet } : {}),
+    ...(Object.keys(appliedTweaks).length ? { siteTweaks: appliedTweaks } : {}),
   };
 }
 

@@ -11,7 +11,6 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLiveComparison } from "@/lib/client/live-comparison";
-import { TaskNav } from "@/components/shell/task-nav";
 import type { PreviewProject } from "@/lib/contracts/workspace-preview";
 import {
   useConsultant,
@@ -436,23 +435,17 @@ export function WorkspaceScreen({
       header={header}
       projectId={projectId}
       selectedSiteId={selected?.candidate.id}
+      // Scene 1: the header stepper is the only flow navigation, so the workspace has no
+      // views menu or "Edit brief" link of its own; only the photo credits remain.
+      editBriefHref={null}
       navigation={
         navigation ?? (
-          <TaskNav
-            projectId={projectId}
-            route="workspace"
-            siteId={selected?.candidate.id}
-            compact
-            disclosureLabel="Views"
-            footer={
-              <Link
-                href="/workspace/credits.html"
-                className="mt-4 inline-block text-xs underline"
-              >
-                Photo credits
-              </Link>
-            }
-          />
+          <Link
+            href="/workspace/credits.html"
+            className="text-xs underline"
+          >
+            Photo credits
+          </Link>
         )
       }
       backdrop={

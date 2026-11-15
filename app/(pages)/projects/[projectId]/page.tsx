@@ -1,8 +1,12 @@
-/**
- * HAC-150: the project's entry route. The shell (project layout) opens the consultant full
- * screen here and docks it beside Spaces once the brief is complete or the agent navigates,
- * so this page has nothing of its own to show. It exists so `/projects/<id>` is a route.
- */
-export default function ProjectEntryPage() {
-  return null;
+import { redirect } from "next/navigation";
+import { flowStepHref } from "@/lib/client/flow-steps";
+
+/** Scene 1: the project's entry route opens the flow's first step, the questionnaire. */
+export default async function ProjectEntryPage({
+  params,
+}: {
+  params: Promise<{ projectId: string }>;
+}) {
+  const { projectId } = await params;
+  redirect(flowStepHref(projectId, "questions"));
 }

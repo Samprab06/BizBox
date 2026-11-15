@@ -14,7 +14,7 @@ const model = resolveWorkspaceContext({
 });
 
 describe("ContextBar", () => {
-  it("provides the four real context destinations and an accessible native disclosure", () => {
+  it("shows the four context fields, display-only, in an accessible native disclosure", () => {
     const html = renderToStaticMarkup(h(ContextBar, { model }));
     expect(html).toContain('aria-label="Project context"');
     expect(html).toContain("<details");
@@ -25,10 +25,12 @@ describe("ContextBar", () => {
     expect(html).toContain("Data and model");
     expect(html).toContain("My café");
     expect(html).toContain("Example</span>");
-    expect(html).toContain("/projects/houston-coffee/intake?site=montrose");
-    expect(html).toContain("/projects/houston-coffee/map?site=montrose");
-    expect(html).toContain("/projects/houston-coffee/comparison?site=montrose");
-    expect(html).toContain("#listing-source");
+    // Scene 1: the stepper is the only navigation, so the bar has no links.
+    expect(html).not.toContain("<a ");
+    expect(model.concept.href).toBe(
+      "/projects/houston-coffee/intake?site=montrose",
+    );
+    expect(model.status.href).toContain("#listing-source");
   });
   it("never renders an Example badge for verified live context", () => {
     const html = renderToStaticMarkup(

@@ -1,5 +1,7 @@
 # Agentic business-plan workflow: ticket plan
 
+> **Note:** the Copilot (AGT-3 to AGT-5: `lib/agent/copilot*.ts`, `components/copilot/*`, the `/copilot` routes) was removed in Scene 1. The consultant/intake agent is the only agent.
+
 Draft tickets for the HAC team. They are not in Linear yet, and owners are unassigned. They
 belong in a new Linear project, **Agentic copilot**, and follow the same format as the
 Linear tickets. When importing them, add the standard "Product context" and "Stack" blocks

@@ -25,17 +25,17 @@ const complete: IntakeSession = {
 };
 
 describe("landing entry target", () => {
-  it("sends a first visit, or a session that only holds defaults, into onboarding", () => {
+  it("sends a first visit, or a session that only holds defaults, into the questionnaire", () => {
     for (const session of [null, initialSession]) {
       expect(entryTarget(session, "houston-coffee")).toEqual({
         kind: "onboarding",
-        href: "/projects/houston-coffee",
+        href: "/projects/houston-coffee/intake",
       });
     }
     expect(hasStarted(initialSession)).toBe(false);
   });
 
-  it("offers a returning founder the workspace and the unfinished onboarding", () => {
+  it("offers a returning founder the workspace and the unfinished questions", () => {
     const partial: IntakeSession = {
       ...initialSession,
       profile: { ...initialSession.profile, concept: founder("Bakery") },
@@ -43,9 +43,8 @@ describe("landing entry target", () => {
     expect(entryTarget(partial, "houston-coffee")).toEqual({
       kind: "returning",
       complete: false,
-      onboardingHref: "/projects/houston-coffee",
-      briefHref: "/projects/houston-coffee/intake",
-      workspaceHref: "/projects/houston-coffee/workspace",
+      onboardingHref: "/projects/houston-coffee/intake",
+      workspaceHref: "/projects/houston-coffee/workspace?step=locations",
     });
   });
 
@@ -82,14 +81,14 @@ describe("landing entry target", () => {
     it("reopens the remembered project, started or not", () => {
       expect(entryPlan(own, sessions({}))).toEqual({
         kind: "onboarding",
-        href: `/projects/${own}`,
+        href: `/projects/${own}/intake`,
         projectId: own,
       });
       expect(entryPlan(own, sessions({ [own]: complete }))).toMatchObject({
         kind: "returning",
         complete: true,
         projectId: own,
-        workspaceHref: `/projects/${own}/workspace`,
+        workspaceHref: `/projects/${own}/workspace?step=locations`,
       });
     });
 

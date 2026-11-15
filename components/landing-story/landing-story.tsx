@@ -445,6 +445,9 @@ export function LandingStory({
             Test a decision
           </button>
         </nav>
+        <Link className={base.navStart} href={entryHref} prefetch={false}>
+          Get started <Icon name="arrow" />
+        </Link>
       </Glass>
       <div
         className={`${base.heroCopy} ${styles.heroCopy}`}

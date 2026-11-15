@@ -4,6 +4,7 @@ import { Markdown } from "@/components/ui/markdown";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { useConsultant, useConsultantVoice } from "@/components/shell/consultant-shell";
 import { workspaceHref } from "@/lib/client/workspace-routes";
+import { flowStepHref, reachStep, updateFlowState } from "@/lib/client/flow-progress";
 import Link from "next/link";
 import { VOICE_LIMITS } from "@/lib/voice/contracts";
 import { useState, useSyncExternalStore } from "react";
@@ -114,7 +115,8 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
           profile={session.profile}
           onCommit={commit}
           formHref={intakeHref(projectId, "form", siteId)}
-          nextHref={workspaceHref(projectId, "workspace", siteId)}
+          nextHref={flowStepHref(projectId, "locations")}
+          onNext={() => updateFlowState(projectId, (state) => reachStep(state, "locations"))}
           notice={failure && (
             <div role="alert" className="mt-4 rounded-xl border border-white/25 bg-black/30 p-3 text-sm">
               <p>{failure.message}</p>
