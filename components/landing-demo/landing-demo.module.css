@@ -2190,5 +2190,14 @@
     min-height: 44px;
     padding: 8px;
     font-size: 12px;
+    white-space: nowrap;
+  }
+  .brand {
+    flex-shrink: 0;
+  }
+  .root .navStart {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 13px;
   }
 }
