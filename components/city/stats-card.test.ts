@@ -38,3 +38,15 @@ it("disables unavailable area data and does not present a site total as area sta
   expect(html).toMatch(/aria-pressed="false" disabled=""[^>]*>Area overview/);
   expect(html).toContain('aria-label="Pause playback"');
 });
+
+it("keeps purchase points on the same scale as playback advances", () => {
+  const pointsAt = (minute: number) => {
+    const html = renderToStaticMarkup(
+      createElement(StatsCard, { ...props, minute }),
+    );
+    return html.match(/<polyline points="([^"]+)"/)![1].split(" ");
+  };
+  const early = pointsAt(600).slice(0, -1);
+  expect(early.length).toBeGreaterThan(1);
+  expect(pointsAt(run.metrics.closeMin).slice(0, early.length)).toEqual(early);
+});

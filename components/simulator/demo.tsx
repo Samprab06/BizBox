@@ -24,6 +24,11 @@ import { InspectPanel } from "@/components/city/inspect-panel";
 import type { RenderQuality } from "./render-policy";
 import type { SiteInsights } from "@/lib/contracts/insights";
 import { InsightsDrawer } from "@/components/insights/insights-drawer";
+import {
+  playbackSpeeds,
+  StatsCard,
+  type PlaybackSpeed,
+} from "@/components/city/stats-card";
 import type { MatterportConfig } from "../interior/matterport-view";
 
 const Neighborhood = dynamic(() => import("./neighborhood"), { ssr: false });
@@ -36,7 +41,6 @@ const usd = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 0,
 });
-const speeds = [0.5, 1, 2, 4];
 const playbackFrameInterval = 1000 / 60;
 
 function clock(minute: number) {
@@ -99,9 +103,9 @@ export function SimulatorDemo({
   );
   const [previewIndex, setPreviewIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   // Both views share a clock; the controller that starts it chooses its stop.
   const [playbackEnd, setPlaybackEnd] = useState(end);
-  const [speed, setSpeed] = useState(1);
   const [cutaway, setCutaway] = useState(false);
   const [selected, select] = useState("");
   const [inspectIndex, setInspectIndex] = useState(0);
@@ -109,7 +113,6 @@ export function SimulatorDemo({
   const [interiorMode, setInteriorMode] = useState<"scan" | "modeled">(
     matterport ? "scan" : "modeled",
   );
-  const [activePlan, setActivePlan] = useState(0);
   const running = playing && minute < playbackEnd;
 
   useEffect(() => {
@@ -562,6 +565,31 @@ export function SimulatorDemo({
             </button>
           )}
         </div>
+        <StatsCard
+          run={previewRun}
+          runLabel={story.scenarioLabels[previewIndex]}
+          scope="site"
+          minute={previewMinute}
+          playing={running}
+          speed={speed}
+          onScopeChange={() => {}}
+          onMinuteChange={(value) => {
+            setPlaying(false);
+            setMinute(value);
+          }}
+          onPlayingChange={(value) => {
+            if (
+              value &&
+              (minute < previewRun.metrics.openMin ||
+                minute >= previewRun.metrics.closeMin)
+            ) {
+              setMinute(previewRun.metrics.openMin);
+            }
+            setPlaybackEnd(previewRun.metrics.closeMin);
+            setPlaying(value);
+          }}
+          onSpeedChange={setSpeed}
+        />
         <section
           id="scanned-interior"
           aria-label="Interior view controls"
@@ -610,9 +638,9 @@ export function SimulatorDemo({
                     key={index}
                     type="button"
                     role="radio"
-                    aria-checked={activePlan === index}
-                    tabIndex={activePlan === index ? 0 : -1}
-                    onClick={() => setActivePlan(index)}
+                    aria-checked={previewIndex === index}
+                    tabIndex={previewIndex === index ? 0 : -1}
+                    onClick={() => setPreviewIndex(index)}
                     onKeyDown={(event) => {
                       const direction =
                         event.key === "ArrowRight" || event.key === "ArrowDown"
@@ -633,7 +661,7 @@ export function SimulatorDemo({
                           : event.key === "End"
                             ? data.length - 1
                             : (index + direction + data.length) % data.length;
-                      setActivePlan(next);
+                      setPreviewIndex(next);
                       event.currentTarget.parentElement
                         ?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
                         [next]?.focus();
@@ -646,9 +674,9 @@ export function SimulatorDemo({
               </div>
               <MatterportView
                 config={matterport}
-                run={data[activePlan].run}
-                minute={minute}
-                employeeCount={data[activePlan].staffing?.headcount}
+                run={previewRun}
+                minute={previewMinute}
+                employeeCount={data[previewIndex].staffing?.headcount}
                 selected={selected}
                 select={select}
                 seek={setMinute}
@@ -886,8 +914,8 @@ function Timeline({
   step: number;
   running: boolean;
   ended: boolean;
-  speed: number;
-  onSpeed: (speed: number) => void;
+  speed: PlaybackSpeed;
+  onSpeed: (speed: PlaybackSpeed) => void;
   onToggle: () => void;
   onSeek: (minute: number) => void;
 }) {
@@ -948,7 +976,11 @@ function Timeline({
         aria-label={`Speed ${speed}×`}
         title="Change speed"
         onClick={() =>
-          onSpeed(speeds[(speeds.indexOf(speed) + 1) % speeds.length])
+          onSpeed(
+            playbackSpeeds[
+              (playbackSpeeds.indexOf(speed) + 1) % playbackSpeeds.length
+            ],
+          )
         }
         className="w-11 shrink-0 rounded-full py-1.5 text-xs font-medium tabular-nums hover:bg-mint"
       >
