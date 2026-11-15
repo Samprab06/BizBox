@@ -9,7 +9,8 @@ import { useState, useSyncExternalStore } from "react";
 import { sessionOrInitial, type IntakeCopy } from "@/components/workspace-screen/intake-conversation";
 import type { IntakeConversation, SendOptions } from "@/components/workspace-screen/use-intake-conversation";
 import { assumptionRows } from "./live";
-import { answerPrompt, fields, missingFields, profileValidationMessage, updateProfile } from "./profile";
+import { intakeReadiness } from "./readiness";
+import { answerPrompt, fields, missingFields, profileValidationMessage, editIntakeField } from "./profile";
 
 type Key = (typeof fields)[number]["key"];
 
@@ -55,6 +56,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
   const [drafts, setDrafts] = useState<Partial<Record<Key, string>>>({});
   const missing = missingFields(session.profile);
   const next = missing[0];
+  const readiness = intakeReadiness(session, drafts);
 
   const sync = () => syncEdits(formSend);
   const currentPrompt = () => missingFields(read().profile)[0]?.label ?? "Review your profile";
@@ -101,8 +103,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
     /** HAC-127: a confirmed guided answer takes the same save path as a profile-field edit. */
     const commit = (key: Key, value: string) => {
       const current = read();
-      const pending = live ? [...new Set([...(current.pending ?? []), key])] : current.pending;
-      save({ ...current, profile: updateProfile(current.profile, key, value), pending });
+      save(editIntakeField(current, key, value, live));
       sync();
     };
     return (
@@ -168,7 +169,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
             setMessage("");
           }}>
             <label className="block text-sm font-medium" htmlFor={next ? "intake-message" : undefined}>
-              {next ? `Your answer · ${next.label}` : "Your profile is complete"}
+              {next ? `Your answer · ${next.label}` : "Form fields are filled"}
             </label>
             {next && (
               <div className="mt-2 flex flex-wrap gap-2">
@@ -183,7 +184,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
         <section aria-labelledby="profile-heading">
           <h2 id="profile-heading" className="text-lg font-semibold">Business profile</h2>
           <p className="mt-2 text-sm text-muted" aria-live="polite">
-            {missing.length ? `Still needed: ${missing.map((field) => field.label).join(", ")}.` : "All required fields are filled."}
+            {readiness.message}
           </p>
           <div className="mt-5 grid gap-4">
             {fields.map((field) => {
@@ -197,8 +198,7 @@ function IntakeForm({ projectId, mode, siteId, conversation }: { projectId: stri
                 setDrafts((current) => ({ ...current, [field.key]: invalid ? input : undefined }));
                 if (!invalid) {
                   const current = read();
-                  const pending = live ? [...new Set([...(current.pending ?? []), field.key])] : current.pending;
-                  save({ ...current, profile: updateProfile(current.profile, field.key, input), pending });
+                  save(editIntakeField(current, field.key, input, live));
                 }
               };
               const inputClass = "mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm";

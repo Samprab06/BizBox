@@ -193,7 +193,7 @@ for (const viewport of [
       await expect(page).toHaveURL(/\/intake\?mode=form$/);
       await expect(page.getByLabel("Service category")).toHaveValue("Quick-service food");
       await expect(page.getByLabel("Monthly rent ceiling ($)")).toHaveValue("4550");
-      await expect(page.getByText("All required fields are filled.")).toBeVisible();
+      await expect(page.getByText(/^Form fields are filled\./)).toBeVisible();
       await page.getByRole("link", { name: "Back to guided setup" }).click();
       await expect(title(page)).toHaveText("Review your business");
     });
