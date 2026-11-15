@@ -1,5 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { AgentViewContext } from "@/lib/contracts/agent";
+import {
+  UiActionListSchema,
+  type UiAction,
+  type AgentViewContext,
+} from "@/lib/contracts/agent";
 import { IntakeRequestSchema } from "@/lib/contracts/intake";
 import { createIntakeSession } from "@/lib/agent/intake";
 import {
@@ -8,6 +13,7 @@ import {
   ModelRuntimeUnavailableError,
   type IntakeRunner,
 } from "@/lib/agent/runtime-loader";
+import { ruleBasedUiActions, type IntakeUiLookups } from "@/lib/agent/ui-tools";
 
 import {
   formatViewContext,
@@ -23,6 +29,9 @@ type Dependencies = {
   projectExists: (projectId: string) => Promise<boolean>;
   runAgent?: IntakeRunner;
   viewContextLookups?: ViewContextLookups;
+  /** HAC-144: trusted ID checks for the UI tools. Without them no UI tools are bound. */
+  uiLookups?: IntakeUiLookups;
+  newActionId?: () => string;
   onCompleted?: (
     projectId: string,
     input: z.infer<typeof IntakeRequestSchema>,
@@ -127,8 +136,10 @@ export function createIntakeHandler(dependencies: Dependencies) {
       return unavailable();
     }
     let session;
+    let wasComplete: boolean;
     try {
       session = createIntakeSession(projectId, input.state);
+      wasComplete = session.snapshot().profile !== null;
       if (input.patch) session.saveProfile(input.patch);
     } catch (error) {
       return invalid(error);
@@ -137,6 +148,9 @@ export function createIntakeHandler(dependencies: Dependencies) {
     let assistantMessage =
       session.snapshot().nextQuestion?.question ??
       "Review your profile, assumptions, and findings.";
+    const newId = dependencies.newActionId ?? (() => `ui_${randomUUID()}`);
+    // The per-turn collector the UI tools push to; kept when the step budget runs out.
+    const actions: UiAction[] = [];
     if (input.message) {
       const controller = new AbortController();
       const signal = AbortSignal.any([request.signal, controller.signal]);
@@ -160,7 +174,6 @@ export function createIntakeHandler(dependencies: Dependencies) {
           signal.throwIfAborted();
           validatedView = view;
           const viewContextLine = view ? formatViewContext(view) : undefined;
-          // SDK loading follows validation; ownership failure never spends a model call.
           const runAgent = dependencies.runAgent ?? (await loadIntakeRunner());
           signal.throwIfAborted();
           return runAgent({
@@ -168,6 +181,17 @@ export function createIntakeHandler(dependencies: Dependencies) {
             message: input.message!,
             signal,
             viewContextLine,
+            ...(dependencies.uiLookups
+              ? {
+                  ui: {
+                    projectId,
+                    lookups: dependencies.uiLookups,
+                    view,
+                    actions,
+                    newId,
+                  },
+                }
+              : {}),
           });
         };
         assistantMessage = await Promise.race([runTurn(), aborted]);
@@ -215,6 +239,15 @@ export function createIntakeHandler(dependencies: Dependencies) {
         clearTimeout(timeout);
         if (onAbort) signal.removeEventListener("abort", onAbort);
       }
+    } else {
+      // No model runs this turn: a rule moves a newly completed profile to the spaces.
+      actions.push(
+        ...ruleBasedUiActions({
+          wasComplete,
+          isComplete: session.snapshot().profile !== null,
+          newId,
+        }),
+      );
     }
     if (dependencies.onCompleted) {
       try {
@@ -236,6 +269,13 @@ export function createIntakeHandler(dependencies: Dependencies) {
         );
       }
     }
-    return json({ ...session.snapshot(), assistantMessage }, 200);
+    return json(
+      {
+        ...session.snapshot(),
+        assistantMessage,
+        actions: UiActionListSchema.parse(actions),
+      },
+      200,
+    );
   };
 }

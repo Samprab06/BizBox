@@ -38,7 +38,7 @@ or version fields in a patch is rejected.
 
 Responses contain `persisted: false`, `draft`, `assumptions`, `profile`,
 `missingRequiredFields`, `findings`, `questions`, `nextQuestion`, `defaultSources`,
-and `assistantMessage`. This endpoint is **stateless**: the caller must carry the
+`assistantMessage` and `actions` (HAC-144: zero to three `UiAction`s, see below). This endpoint is **stateless**: the caller must carry the
 returned state into the next request. It does not create durable profile snapshots
 or update the existing browser intake UI. The [investigation orchestrator](../../docs/investigation-orchestrator.md)
 uses `saveProfile` and persists validated snapshots through its database workflow.
@@ -51,8 +51,9 @@ disable caching.
 
 ## Conversation runner
 
-`runner.ts` binds `save_profile` to the installed JavaScript `deepagents` graph.
-The runner exposes only that tool, with no filesystem or delegation tools.
+`runner.ts` binds `save_profile` to the installed JavaScript `deepagents` graph,
+plus the `ui` tool group below when the handler has trusted lookups (the route always
+does). It has no filesystem or delegation tools.
 Natural-language requests require `OPENAI_API_KEY` in private server environment
 configuration. Structured patches do not require a model key.
 
@@ -60,8 +61,9 @@ The default model is [`gpt-6-luna`](https://developers.openai.com/api/docs/model
 confirmed in official OpenAI documentation on November 14, 2026. `OPENAI_MODEL`
 optionally selects another compatible tool-calling model. Reasoning is set to
 `none` so temperature 0 is supported. The runner keeps a 1,500-token response cap,
-no provider retries, at most two save calls per turn (one is normal) and a graph
-recursion limit of twelve. If the limit is hit, the turn still succeeds: the draft keeps
+no provider retries, at most two save calls per turn (one is normal), at most three UI
+actions per turn and a graph recursion limit of sixteen (twelve before HAC-144; the
+extra steps leave room for UI tool calls). If the limit is hit, the turn still succeeds: the draft keeps
 what was saved and the reply says so and asks the next question.
 Requests have a 20-second intake deadline; the route allows 30 seconds. No paid
 provider fallback is selected. These bounds limit each request's work; they do not
@@ -75,6 +77,34 @@ know" that answers the question just asked. Other unknowns are dropped, the fiel
 undefined, and the tool result tells the model so. The model-facing tool schema omits
 server-owned `origin` and `evidenceIds` (about half the size), the draft context and tool
 results are compact, and each turn logs one `intake_turn` line with token counts only.
+
+## UI-action tools (HAC-144)
+
+The consultant moves the founder through the app with eight tools (`ui-tools.ts`):
+`show_step` (a `navigate` action to any `AgentStage`), `open_site`, `focus_map`,
+`show_comparison`, `open_simulator`, `open_interior`, `show_plan` and `highlight`. Their
+arguments are the `UiAction` shapes in `lib/contracts/agent.ts` without `id`/`type`,
+which the server sets. Each call:
+
+1. validates the arguments against the contract (`highlight` only takes the named anchors);
+2. checks every ID against trusted server data, through `IntakeUiLookups`
+   (`app/api/projects/[projectId]/intake/ui-lookups.ts`): a site must be a CoStar suite
+   (`listingId:spaceId`) or property in the inventory and, once the draft has a city, in
+   that city; a comparison or investigation must belong to the path project. Spoofed or
+   foreign IDs return a tool error and queue nothing. A failed lookup is a tool error too,
+   never a failed turn;
+3. pushes the action into the turn's collector and returns a short confirmation.
+
+Duplicate actions are skipped, and a fourth action is refused. The request's optional
+`view` (`AgentViewContext`) is shown to the model as the founder's screen, so it can use
+the candidate IDs there. The prompt's "do not call other services" rule has one
+exception: these tools. The handler returns the collected actions, including when the
+step budget runs out (`GraphRecursionError`). The client parses `actions` but does not
+dispatch them yet (AGT-16).
+
+Without a model (a structured-patch request with no `message`), a rule applies: the
+request that completes the profile returns `navigate` to `map` (the candidate spaces).
+Later syncs of an already complete profile return no actions.
 
 The provider runner is guarded by `server-only`. `next.config.ts` loads
 `deepagents`, `@langchain/core` and `@langchain/openai` as
@@ -156,6 +186,6 @@ and fingerprints it to discard speech captured before the screen changed. Spoken
 transcripts use the same intake endpoint/validation as typing. Realtime remains a
 transcription/read-aloud transport and receives no business context instructions.
 
-HAC-144 action-tool integration is a separate dependency. When that change lands,
-retain the server-validated `viewContextLine` path and remove any raw `request.view`
-prompt append; do not send both representations to the model.
+The merged HAC-144 UI tools receive only the resolved view through `ui.view` and
+retain their existing action collection and ID checks. The model sees only the
+bounded `viewContextLine`; the previous raw screen JSON prompt append is removed.

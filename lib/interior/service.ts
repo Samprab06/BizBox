@@ -16,6 +16,8 @@ export type InteriorSite = {
     spaceId: string | null;
     hasExterior: boolean | null;
     displayApproved: boolean;
+    /** Public/unlisted embed check result (HAC-137); null when never checked. */
+    isPublic: boolean | null;
     dimensions: InteriorDimensions | null;
     source: InteriorProvenance;
   }[];
@@ -49,7 +51,10 @@ export async function resolveInterior(
     const model = site.models
       .filter(
         (model) =>
+          // Without Enterprise Private Model Embed only public/unlisted scans
+          // can be shown, and a public scan still needs explicit approval.
           model.displayApproved &&
+          model.isPublic === true &&
           (model.spaceId === siteId || model.spaceId === null),
       )
       .sort(
@@ -138,7 +143,7 @@ export async function resolveInterior(
       description: "Modeled layout fallback; no scanned dimensions claimed",
       limitations: [
         options.allowLicensedAssets
-          ? "No approved scan or usable floor plan is available"
+          ? "No approved public scan or usable floor plan is available"
           : "Licensed interior display remains gated pending HAC-14 access and terms",
       ],
     },

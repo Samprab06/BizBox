@@ -1,42 +1,24 @@
-import { AIMessage, type BaseMessage } from "@langchain/core/messages";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { formatViewContext } from "./view-context";
+import { AgentViewContextSchema } from "@/lib/contracts/agent";
+import { AIMessage } from "@langchain/core/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { UiAction } from "@/lib/contracts/agent";
+import {
+  fixtureUiLookups,
+  ScriptedModel,
+  UI_FIXTURE,
+} from "./__fixtures__/scripted-model";
 import { createIntakeSession } from "./intake";
-import { createDeepIntakeRunner, PATCH_JSON_SCHEMA } from "./runner";
+import {
+  createDeepIntakeRunner,
+  INTAKE_MAX_SAVES,
+  INTAKE_RECURSION_LIMIT,
+  PATCH_JSON_SCHEMA,
+} from "./runner";
+import { UI_TOOL_NAMES } from "./ui-tools";
 
 vi.mock("server-only", () => ({}));
 afterEach(() => vi.restoreAllMocks());
-
-class ScriptedModel extends BaseChatModel {
-  boundNames: string[] = [];
-  /** Messages received on each model call, in order. */
-  calls: BaseMessage[][] = [];
-  constructor(private readonly responses: AIMessage[]) {
-    super({});
-  }
-  _llmType() {
-    return "intake-test-model";
-  }
-  bindTools(tools: Parameters<NonNullable<BaseChatModel["bindTools"]>>[0]) {
-    this.boundNames = tools.map((entry) =>
-      "name" in entry ? String(entry.name) : "",
-    );
-    return this;
-  }
-  async _generate(messages: BaseMessage[]) {
-    this.calls.push(messages);
-    const message = this.responses.shift();
-    if (!message) throw new Error("Unexpected extra model invocation");
-    return {
-      generations: [
-        {
-          text: typeof message.content === "string" ? message.content : "",
-          message,
-        },
-      ],
-    };
-  }
-}
 
 const unknown = (unit = "cents") => ({
   value: null,
@@ -88,6 +70,7 @@ describe("deepagents intake binding", () => {
     );
     expect(session.snapshot().profile).toBeNull();
     expect(reply).toContain("business name");
+    // Without UI context (no trusted lookups) only save_profile is bound.
     expect(model.boundNames).toEqual(["save_profile"]);
   });
 
@@ -254,6 +237,180 @@ describe("deepagents intake binding", () => {
   });
 });
 
+const uiCall = (
+  calls: { id: string; name: string; args: Record<string, unknown> }[],
+  content = "",
+) => new AIMessage({ content, tool_calls: calls });
+const runWithUi = (
+  model: ScriptedModel,
+  message: string,
+  options: { city?: "Houston" | "Los Angeles"; view?: object } = {},
+) => {
+  const session = createIntakeSession(UI_FIXTURE.projectId);
+  if (options.city) session.saveProfile({ city: options.city });
+  const actions: UiAction[] = [];
+  let n = 0;
+  const lookups = fixtureUiLookups();
+  const reply = createDeepIntakeRunner(model)({
+    session,
+    message,
+    signal: new AbortController().signal,
+    viewContextLine: options.view
+      ? formatViewContext(AgentViewContextSchema.parse(options.view))
+      : undefined,
+    ui: {
+      projectId: UI_FIXTURE.projectId,
+      lookups,
+      view: options.view as never,
+      actions,
+      newId: () => `ui_${++n}`,
+    },
+  });
+  return { session, actions, reply, lookups };
+};
+const toolResults = (model: ScriptedModel) =>
+  (model.calls.at(-1) ?? [])
+    .filter((entry) => entry.type === "tool")
+    .map((entry) => String(entry.content));
+
+describe("HAC-144 UI tool group", () => {
+  it("binds save_profile plus the eight UI tools, with deliberate limits", async () => {
+    const model = new ScriptedModel([new AIMessage("Hello!")]);
+    const { reply } = runWithUi(model, "Hi");
+    await reply;
+    expect(model.boundNames).toEqual(["save_profile", ...UI_TOOL_NAMES]);
+    expect(UI_TOOL_NAMES).toEqual([
+      "show_step",
+      "open_site",
+      "focus_map",
+      "show_comparison",
+      "open_simulator",
+      "open_interior",
+      "show_plan",
+      "highlight",
+    ]);
+    expect(INTAKE_RECURSION_LIMIT).toBe(16);
+    expect(INTAKE_MAX_SAVES).toBe(2);
+    const system = JSON.stringify(model.calls[0]?.[0]?.content);
+    expect(system).toContain("only other service you may call");
+  });
+
+  it('"show me spaces in Montrose" produces show_step plus open_site with a valid site ID', async () => {
+    const view = {
+      stage: "workspace",
+      candidateIds: [UI_FIXTURE.montroseSiteId, UI_FIXTURE.heightsSiteId],
+    };
+    const model = new ScriptedModel([
+      uiCall([
+        { id: "ui-1", name: "show_step", args: { stage: "map" } },
+        {
+          id: "ui-2",
+          name: "open_site",
+          args: { siteId: UI_FIXTURE.montroseSiteId },
+        },
+      ]),
+      new AIMessage("Here are the spaces; I opened the Montrose suite."),
+    ]);
+    const { actions, reply } = runWithUi(model, "show me spaces in Montrose", {
+      city: "Houston",
+      view,
+    });
+    expect(await reply).toContain("Montrose");
+    expect(actions).toEqual([
+      { id: "ui_1", type: "navigate", stage: "map" },
+      { id: "ui_2", type: "open_site", siteId: UI_FIXTURE.montroseSiteId },
+    ]);
+    // The model saw the founder's screen, so it had real candidate IDs to use.
+    expect(String(model.calls[0]?.at(-1)?.content)).toContain(
+      UI_FIXTURE.montroseSiteId,
+    );
+    expect(toolResults(model).every((text) => text.startsWith("Queued"))).toBe(
+      true,
+    );
+  });
+
+  it("rejects spoofed and foreign IDs server-side and queues nothing for them", async () => {
+    const model = new ScriptedModel([
+      uiCall([
+        { id: "a", name: "open_site", args: { siteId: "L-fake:S-9" } },
+        {
+          id: "b",
+          name: "open_site",
+          args: { siteId: UI_FIXTURE.losAngelesSiteId },
+        },
+        {
+          id: "c",
+          name: "show_plan",
+          args: { comparisonId: UI_FIXTURE.foreignComparisonId },
+        },
+        {
+          id: "d",
+          name: "show_comparison",
+          args: { investigationId: "inv_other" },
+        },
+        {
+          id: "e",
+          name: "focus_map",
+          args: { siteIds: [UI_FIXTURE.montroseSiteId, "L-fake:S-9"] },
+        },
+      ]),
+      new AIMessage("I couldn't find those."),
+    ]);
+    const { actions, reply } = runWithUi(model, "open everything", {
+      city: "Houston",
+    });
+    await reply;
+    expect(actions).toEqual([]);
+    const results = toolResults(model);
+    expect(results).toHaveLength(5);
+    expect(results.every((text) => text.startsWith("Error:"))).toBe(true);
+    expect(results.join(" ")).toContain("not in Houston");
+    expect(results.join(" ")).toContain("does not belong to this project");
+  });
+
+  it("caps UI actions at three per turn and keeps them when the step budget runs out", async () => {
+    const targets = ["map", "candidate_list", "site_summary", "assumptions"];
+    const model = new ScriptedModel(
+      Array.from({ length: 20 }, (_, index) =>
+        uiCall([
+          {
+            id: `h-${index}`,
+            name: "highlight",
+            args: { target: targets[index % targets.length] },
+          },
+        ]),
+      ),
+    );
+    const { actions, reply } = runWithUi(model, "point at things");
+    expect(await reply).toContain("business name");
+    expect(actions.map((action) => action.type)).toEqual([
+      "highlight",
+      "highlight",
+      "highlight",
+    ]);
+    expect(String(model.calls.at(-1)?.at(-1)?.content)).toMatch(
+      /limit \(3\) reached|Already queued/,
+    );
+  });
+
+  it("reports invalid arguments as tool errors instead of failing the run", async () => {
+    const model = new ScriptedModel([
+      uiCall([
+        { id: "a", name: "highlight", args: { target: "#root" } },
+        { id: "b", name: "show_step", args: { stage: "site" } },
+      ]),
+      new AIMessage("Sorry."),
+    ]);
+    const { actions, reply } = runWithUi(model, "highlight the root");
+    expect(await reply).toBe("Sorry.");
+    expect(actions).toEqual([]);
+    // LangChain rejects schema-invalid arguments; the executor rejects a site step with no site.
+    const [badTarget, noSite] = toolResults(model);
+    expect(badTarget).toMatch(/^Error/);
+    expect(noSite).toContain("needs a siteId");
+  });
+});
+
 it("HAC-149 includes only the bounded validated view line and logs its size", async () => {
   const log = vi.spyOn(console, "info").mockImplementation(() => {});
   const { resolveViewContext, formatViewContext } =
@@ -281,6 +438,7 @@ it("HAC-149 includes only the bounded validated view line and logs its size", as
     .map((message) => String(message.content))
     .join("\n");
   expect(messages).toContain(line);
+  expect(messages).not.toContain("Founder's screen");
   const entries = log.mock.calls.map(([entry]) => JSON.parse(String(entry)));
   expect(entries.at(-1)).toMatchObject({
     viewContextBytes: new TextEncoder().encode(line).length,

@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/client";
 import { projects } from "@/lib/db/schema";
 import { createIntakeCapabilitiesHandler } from "./capabilities";
 import { createIntakeHandler } from "./handler";
+import { createPostgresIntakeUiLookups } from "./ui-lookups";
 import { createIntakeThreadRecorder } from "@/lib/agent/copilot-intake";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ export const POST = createIntakeHandler({
       .limit(1);
     return rows.length === 1;
   },
+  uiLookups: createPostgresIntakeUiLookups(),
 });
 
 export const GET = createIntakeCapabilitiesHandler();

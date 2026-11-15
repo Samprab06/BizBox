@@ -40,10 +40,6 @@ export function parseIntakeSession(raw: string | null): IntakeSession | null {
   }
 }
 
-/**
- * The body both surfaces send: round-tripped state, pending form edits and the message. The
- * message is omitted for a form-only sync of committed edits.
- */
 /** Keep every explicit live leaf, including null/unknown; fill only absent form-derived data. */
 function fillMissing(current: unknown, fallback: unknown): unknown {
   if (current === undefined) return fallback;
@@ -84,6 +80,10 @@ function currentViewState(
   };
 }
 
+/**
+ * Both surfaces send the existing state/patch/message contract and the active screen.
+ * A completed browser form seeds missing state only when selected-site context needs it.
+ */
 export function intakeRequestBody(
   session: IntakeSession,
   text?: string,
@@ -111,6 +111,7 @@ export function withFounderMessage(
   };
 }
 
+/** A successful outcome carries the reply UI actions (HAC-144). */
 export type IntakeOutcome =
   | { ok: true; result: IntakeResponse }
   | { ok: false; message: string; retryable: boolean };
