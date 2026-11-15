@@ -32,9 +32,11 @@ The existing intake observer handles same-tab saves and cross-tab storage update
 
 The underlying search applies city, active-for-lease status in the supplied kit, retail use, explicit size bounds, known base-rent ceiling and supported ground-floor/corner-or-endcap/frontage/parking requirements. Unknown rents remain labeled unknown. Typed area/customer notes are preserved but do not become geographic or audience filters; staffing, price tier and operating economics belong to later comparisons. This does not verify current broker availability, zoning, licensed use or demand.
 
-### Local development data connection
+### Production and local development
 
-When a populated development database is available, configure its existing `DATABASE_URL` normally. This always takes precedence. For the current local preview, the existing deployed app already serves the read-only CoStar search, so ignored `.env.local` may instead contain:
+Open the live BizBox workspace at https://usebizbox.app.
+
+When a populated development database is available, configure its existing `DATABASE_URL` normally. This always takes precedence. For a local preview without a database, ignored `.env.local` may instead point to the approved read-only CoStar search proxy origin:
 
 ```dotenv
 SITE_SEARCH_DEV_ORIGIN=https://hackprincetonweb.vercel.app
