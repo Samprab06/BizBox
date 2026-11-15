@@ -241,6 +241,7 @@ export function createIntakeHandler(dependencies: Dependencies) {
             session,
             message: input.message ?? "",
             ...(event ? { event } : {}),
+            ...(input.history?.length ? { history: input.history } : {}),
             signal,
             viewContextLine,
             ...(dependencies.uiLookups
