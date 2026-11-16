@@ -171,12 +171,14 @@ test.describe("deep links", () => {
   }
 
   for (const { id } of FLOW_STEPS.filter((step) => step.id !== "questions")) {
-    test(`the ${id} deep link identifies its guided step without saved results`, async ({
+    test(`the ${id} deep link safely starts at locations without a completed brief`, async ({
       page,
       projectId,
     }) => {
       await page.goto(flowStepHref(projectId, id));
-      await expectCurrentStep(page, id);
+      await expect(page.getByText("Complete your brief")).toBeVisible();
+      await expect(page).toHaveURL(flowStepHref(projectId, "locations"));
+      await expectCurrentStep(page, "locations");
       await expect(
         stepItem(page, "questions").getByRole("link"),
       ).toHaveAttribute("href", flowStepHref(projectId, "questions"));
