@@ -335,10 +335,14 @@ test.describe("bad input", () => {
   ]) {
     test(`workspace handles ${query}`, async ({ page, projectId }) => {
       await page.goto(`/projects/${projectId}/workspace?${query}`);
-      await expectCurrentStep(
-        page,
-        query.startsWith("step=compare") ? "compare" : "locations",
+      // No completed brief exists, so the repeated later step is guarded;
+      // invalid and questionnaire steps render locations without rewriting the URL.
+      await expect(page).toHaveURL(
+        query.startsWith("step=compare")
+          ? flowStepHref(projectId, "locations")
+          : `/projects/${projectId}/workspace?${query}`,
       );
+      await expectCurrentStep(page, "locations");
       await expect(
         page.getByRole("heading", { level: 1, name: "Workspace" }),
       ).toBeVisible();
@@ -373,6 +377,9 @@ test.describe("responsive layout", () => {
       }) => {
         await page.setViewportSize({ width, height: 900 });
         await gotoView(view, view === "site" ? DEFAULT_SITE : undefined);
+        // The Suspense fallback is replaced by the hydrated stepper. Measure
+        // the settled navigation, not handles to elements being replaced.
+        await page.waitForLoadState("networkidle");
         await expect(
           page.getByRole("heading", { level: 1, name: viewHeading(view) }),
         ).toBeVisible();
@@ -394,7 +401,8 @@ test.describe("responsive layout", () => {
           : nav.getByRole("list", { name: "Tasks" }).getByRole("link");
         if (guided) await expect(items).toHaveCount(FLOW_STEPS.length);
         const boxes = [];
-        for (const item of await items.all()) {
+        for (let index = 0; index < await items.count(); index++) {
+          const item = items.nth(index);
           await item.scrollIntoViewIfNeeded();
           await expect(item).toBeVisible();
           const box = await item.boundingBox();
