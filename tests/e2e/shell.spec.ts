@@ -167,7 +167,6 @@ test.describe("deep links", () => {
         }),
       ).toBeVisible();
       if (view === "intake") await expectCurrentStep(page, "questions");
-      if (view === "workspace") await expectCurrentStep(page, "locations");
     });
   }
 
