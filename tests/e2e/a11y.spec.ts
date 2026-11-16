@@ -120,15 +120,15 @@ test.describe("page structure", () => {
       );
       await expect(page.getByRole("main")).toHaveCount(1);
       await expect(page.getByRole("banner")).toHaveCount(1);
-      await expect(
-        page.getByRole("navigation", { name: "Project views" }),
-      ).toHaveCount(1);
-      // The nav and the h1 live inside <main>.
-      await expect(
-        page
-          .getByRole("main")
-          .getByRole("navigation", { name: "Project views" }),
-      ).toBeVisible();
+      if (["intake", "workspace", "plan"].includes(view)) {
+        // The guided flow owns navigation on these pages; its stepper lives in the banner.
+        await expect(page.getByRole("navigation", { name: "Progress" })).toHaveCount(1);
+        await expect(page.getByRole("navigation", { name: "Project views" })).toHaveCount(0);
+        await expect(page.getByRole("banner").getByRole("navigation", { name: "Progress" })).toBeVisible();
+      } else {
+        await expect(page.getByRole("navigation", { name: "Project views" })).toHaveCount(1);
+        await expect(page.getByRole("main").getByRole("navigation", { name: "Project views" })).toBeVisible();
+      }
       await expect(
         page.getByRole("main").getByRole("heading", { level: 1 }),
       ).toBeVisible();
@@ -168,9 +168,9 @@ test.describe("keyboard and focus", () => {
 
     const first = page.locator(":focus");
     await expect(first).toBeVisible();
-    const name = (await first.textContent())?.trim() ?? "";
-    // A skip link ("Skip to ...") is ideal; the header's home link is also a sensible first stop.
-    expect(name).toMatch(/^(skip to|bizbox$)/i);
+    // The header brand is an image link: its accessible name comes from the
+    // image alt text (not from textContent). A skip link is also valid.
+    await expect(first).toHaveAccessibleName(/^(skip to|bizbox$)/i);
   });
 
   for (const width of [375, 1280]) {
@@ -245,6 +245,22 @@ test.describe("keyboard and focus", () => {
       );
       await gotoView(view, siteFor(view));
       await expandProjectNavigation(page);
+
+      if (["intake", "workspace", "plan"].includes(view)) {
+        const links = page.getByRole("navigation", { name: "Progress" }).getByRole("link");
+        await expect(links.first()).toBeVisible();
+        for (const link of await links.all()) {
+          await link.focus();
+          const focus = await focusedOutline(page);
+          expect(focus, "stepper link is focused").not.toBeNull();
+          expect(
+            (focus!.outlineStyle !== "none" && focus!.outlineWidth > 0) ||
+              focus!.boxShadow !== "none",
+            `focus indicator on "${focus!.text}"`,
+          ).toBe(true);
+        }
+        return;
+      }
 
       // Walk every stop up to the last one in the nav: the Next step, or the plan link when
       // there is no next step. The context bar adds its own stops before the nav.
