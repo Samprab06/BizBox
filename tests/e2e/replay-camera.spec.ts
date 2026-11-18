@@ -157,10 +157,16 @@ test("replay camera orbits, zooms, and resets with the keyboard", async ({
   const reset = floor.getByRole("button", { name: "Reset camera" });
   await expect(reset).toBeVisible();
   await canvas.scrollIntoViewIfNeeded();
+  // The reset button can render before R3F has sized the canvas and attached
+  // OrbitControls. A drag sent during that gap is lost, even though the button
+  // and canvas are already visible.
+  await expect(canvas).toHaveCSS("touch-action", "none");
   const box = (await canvas.boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
-  const baseline = await canvas.screenshot();
+  const baseline = await settledScreenshot(canvas);
+  const originalCamera = await canvas.getAttribute("data-camera-state");
+  expect(originalCamera).toBeTruthy();
   await info.attach("original camera", {
     body: baseline,
     contentType: "image/png",
@@ -170,9 +176,8 @@ test("replay camera orbits, zooms, and resets with the keyboard", async ({
   await page.mouse.down();
   await page.mouse.move(x + 55, y + 20, { steps: 5 });
   await page.mouse.up();
-  await expect
-    .poll(async () => (await canvas.screenshot()).equals(baseline))
-    .toBe(false);
+  await expect(canvas).not.toHaveAttribute("data-camera-state", originalCamera!);
+  const orbitedCamera = await canvas.getAttribute("data-camera-state");
   const orbited = await canvas.screenshot();
   await info.attach("orbited camera", {
     body: orbited,
@@ -181,9 +186,7 @@ test("replay camera orbits, zooms, and resets with the keyboard", async ({
 
   const scroll = await page.evaluate(() => scrollY);
   await page.mouse.wheel(0, -180);
-  await expect
-    .poll(async () => (await canvas.screenshot()).equals(orbited))
-    .toBe(false);
+  await expect(canvas).not.toHaveAttribute("data-camera-state", orbitedCamera!);
   expect(await page.evaluate(() => scrollY)).toBe(scroll);
   await info.attach("zoomed camera", {
     body: await canvas.screenshot(),
@@ -194,7 +197,5 @@ test("replay camera orbits, zooms, and resets with the keyboard", async ({
   await page.keyboard.press("Enter");
   await expect(reset).toBeFocused();
   await reset.blur();
-  await expect
-    .poll(async () => (await canvas.screenshot()).equals(baseline))
-    .toBe(true);
+  await expect(canvas).toHaveAttribute("data-camera-state", originalCamera!);
 });

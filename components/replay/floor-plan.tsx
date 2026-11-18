@@ -88,8 +88,23 @@ function ReplayCamera({
     controls.minPolarAngle = 0.1;
     controls.maxPolarAngle = Math.PI / 2 - 0.15;
     controls.saveState();
+    // The camera transform remains observable even when a headless browser's
+    // WebGL canvas cannot be captured. Keep the interaction contract independent
+    // of GPU readback and publish each OrbitControls change for diagnostics.
+    const publishCamera = () => {
+      if (!controls.domElement) return;
+      controls.domElement.dataset.cameraState = JSON.stringify({
+        position: camera.position.toArray(),
+        quaternion: camera.quaternion.toArray(),
+        zoom: camera.zoom,
+      });
+    };
+    controls.addEventListener("change", publishCamera);
+    publishCamera();
     controlsRef.current = controls;
     return () => {
+      controls.removeEventListener("change", publishCamera);
+      if (controls.domElement) delete controls.domElement.dataset.cameraState;
       controlsRef.current = null;
       controls.dispose();
     };
