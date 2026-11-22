@@ -1,0 +1,151 @@
+.page {
+  min-height: 100svh;
+  padding: 0 max(5vw, calc((100vw - 1080px) / 2)) 72px;
+  background: #1d1b1e;
+  color: #fffefa;
+  font-family: var(--font-bizbox-sans), sans-serif;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-block: 24px;
+}
+
+.header > a:first-child {
+  width: 110px;
+}
+
+.primary {
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #e6bd8d;
+  color: #271d15;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.intro {
+  padding-block: clamp(32px, 7vw, 84px) 36px;
+}
+
+.intro h1 {
+  max-width: 17ch;
+  font-size: clamp(38px, 6.4vw, 76px);
+  font-weight: 650;
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.intro p,
+.details p {
+  max-width: 66ch;
+  margin-top: 14px;
+  color: #e1d8d1;
+  line-height: 1.6;
+}
+
+.intro p {
+  font-size: clamp(16px, 1.7vw, 20px);
+}
+
+.cities,
+.steps {
+  display: grid;
+  gap: 16px;
+}
+
+.cities {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.city {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  background: #322c2d;
+}
+
+.city img {
+  object-fit: cover;
+}
+
+.city figcaption {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  border-radius: 6px;
+  padding: 4px 9px;
+  background: #252024;
+  font-weight: 700;
+}
+
+.credit {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.credit a,
+.details a {
+  color: #f4cda5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.details {
+  margin-top: 44px;
+  border-top: 1px solid #51444a;
+  padding-top: 24px;
+}
+
+.details h2 {
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 650;
+}
+
+.steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.steps article {
+  border: 1px solid #51444a;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.steps h3 {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.steps p {
+  margin-top: 8px;
+}
+
+.details .assumptions {
+  max-width: none;
+  font-size: 14px;
+}
+
+.details > a {
+  display: inline-block;
+  margin-top: 16px;
+}
+
+.page a:focus-visible {
+  outline: 2px solid #f4cda5;
+  outline-offset: 4px;
+}
+
+@media (max-width: 620px) {
+  .cities,
+  .steps {
+    grid-template-columns: 1fr;
+  }
+}

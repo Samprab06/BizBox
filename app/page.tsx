@@ -4,7 +4,7 @@ import LandingStoryPage from "./landing-story/page";
 export const metadata: Metadata = {
   title: "BizBox — Test your business before you commit.",
   description:
-    "Compare locations, understand the tradeoffs and simulate business decisions before you commit.",
+    "Compare real storefronts in Houston and Los Angeles and simulate business decisions before signing a lease.",
   robots: { index: true, follow: true },
 };
 

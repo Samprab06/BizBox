@@ -2,15 +2,23 @@
 
 **Find the right storefront before you sign the lease.**
 
-BizBox helps someone opening a **service business** (a coffee shop, quick-service food,
-a salon or barber, or a fitness studio) choose a retail space to lease in **Houston** or
-**Los Angeles**. Instead of gut feel and a broker's pitch, it ranks real for-lease spaces
-for that founder's business and shows why each one ranks where it does.
+BizBox helps founders compare real storefronts in **Houston** and **Los Angeles**
+before signing a lease. Start with a business brief, compare spaces against
+local demand and operating constraints, then simulate changes like adding a
+second service counter. The result is a ranked comparison and a printable
+location plan with the assumptions behind it.
 
-**Live app:** https://usebizbox.app (built for HackPrinceton).
+[Open BizBox](https://usebizbox.app) · [HackPrinceton submission](https://devpost.com/software/bizbox)
 
-The output is a **ranking with ranges, never a sales forecast**. Every number records where
-it came from: `costar`, `public`, `founder` or `default`.
+## See the app
+
+![BizBox homepage, introducing the storefront decision and the guided café demo](docs/screenshots/bizbox-home.jpg)
+
+The homepage walks through a Houston coffee shop example. The location scene
+compares two neighborhoods using illustrative rents and sizes, then the
+story moves into demand, queues, and the one-versus-two-counter experiment.
+
+![BizBox location scene comparing two Houston neighborhoods for a café](docs/screenshots/bizbox-locations.jpg)
 
 ## How it works
 
@@ -26,6 +34,24 @@ it came from: `costar`, `public`, `founder` or `default`.
    and a queue simulation plays out a day at the shop and its monthly economics.
 6. **Decision.** Spaces are compared with ranges and sensitivity tests, station and staffing
    experiments are run, and a grounded location plan is written from the results.
+
+## What we built at HackPrinceton
+
+- **Location analysis grounded in real places.** We combined commercial listings
+  from CoStar with Census demographics, LODES workplace data, and nearby
+  businesses from Overture Maps. Each space gets evaluated for the founder’s
+  concept and operating constraints.
+- **A replay that explains the numbers.** The seeded simulation connects
+  customer arrivals, queues, and abandoned visits to operating metrics. The
+  3D replay makes it possible to see where a bottleneck comes from and test
+  what happens when you add capacity.
+- **Traceable assumptions.** Results use ranges, sensitivity tests, and source
+  labels such as `costar`, `public`, `founder`, and `default`. The consultant
+  explains tool results, and the simulation calculates the numbers.
+- **The workflow we used to build it.** We built
+  [Agentorch](https://github.com/Samprab06/agentorch) to coordinate coding
+  agents across the team. Linear held the tickets and shared board. An Oracle
+  server ran jobs, and Hermes let us check status and steer work from Telegram.
 
 ## What you can do in the app
 
@@ -45,6 +71,8 @@ The seeded example project is `houston-coffee`. A first visit to `/start` create
 ## Landing design checkpoint
 
 The **BizBox** homepage at `/` presents the café decision story: business setup, two Houston locations, the modeled morning, consultant tradeoffs, an interior preview and the one/two-counter experiment. **Open BizBox** goes through `/start` to create or resume the visitor’s own project.
+
+`/about` explains the workflow and includes credited photos of both supported cities.
 
 `/landing-story` mirrors the story for review; `/landing-demo` and the earlier `/landing-preview/index.html` remain available. See the [current landing handoff](design/landing/guided-demo/location-story.md) for motion behavior, illustrative data assumptions and verification.
 

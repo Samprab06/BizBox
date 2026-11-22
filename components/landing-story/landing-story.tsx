@@ -445,9 +445,14 @@ export function LandingStory({
             Test a decision
           </button>
         </nav>
-        <Link className={base.navStart} href={entryHref} prefetch={false}>
-          Get started <Icon name="arrow" />
-        </Link>
+        <div className={styles.navActions}>
+          <Link className={styles.aboutLink} href="/about" prefetch={false}>
+            About BizBox
+          </Link>
+          <Link className={base.navStart} href={entryHref} prefetch={false}>
+            Get started <Icon name="arrow" />
+          </Link>
+        </div>
       </Glass>
       <div
         className={`${base.heroCopy} ${styles.heroCopy}`}
@@ -461,6 +466,10 @@ export function LandingStory({
           text="Test your business"
           lineTwo="before you commit."
         />
+        <p className={styles.heroDescription}>
+          Compare real storefronts and simulate how your business could run
+          before signing a lease.
+        </p>
       </div>
       {!failedFrame && (
         <picture>

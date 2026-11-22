@@ -71,6 +71,38 @@ async function openHome(page: Page) {
   ).toBeVisible();
 }
 
+test("the homepage links to the BizBox overview and city photos", async ({
+  page,
+}) => {
+  await openHome(page);
+  await page.getByRole("link", { name: "About BizBox" }).click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Test the business before you sign the lease.",
+    }),
+  ).toBeVisible();
+  for (const photo of [
+    page.getByRole("img", { name: "Downtown Houston skyline" }),
+    page.getByRole("img", {
+      name: "Los Angeles at night from Griffith Observatory",
+    }),
+  ]) {
+    await photo.scrollIntoViewIfNeeded();
+    await expect(photo).toHaveJSProperty("complete", true);
+    await expect
+      .poll(() =>
+        photo.evaluate((image: HTMLImageElement) => image.naturalWidth),
+      )
+      .toBeGreaterThan(0);
+  }
+  await expect(page.getByRole("link", { name: "Open BizBox" })).toHaveAttribute(
+    "href",
+    "/start",
+  );
+});
+
 async function finalAction(page: Page) {
   await page.keyboard.press("End");
   await expect(page.locator("[data-story-chapter]")).toHaveAttribute(
