@@ -21,6 +21,33 @@
   letter-spacing: -0.045em;
   text-wrap: balance;
 }
+.heroDescription {
+  margin: 12px auto 0;
+  max-width: 36ch;
+  font-size: clamp(13px, 1.5vw, 17px);
+  line-height: 1.4;
+  color: #fffefa;
+  text-wrap: balance;
+  text-shadow: 0 1px 8px #171217;
+}
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.3vw, 18px);
+}
+.aboutLink {
+  padding-block: 8px;
+  color: #fffefa;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.aboutLink:focus-visible {
+  outline: 2px solid #fffefa;
+  outline-offset: 3px;
+}
 .root .finishCopy {
   top: 14svh;
   width: min(90vw, 760px);
